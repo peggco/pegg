@@ -220,6 +220,10 @@ func (a *AskPicker) enterConfirm() {
 			return
 		}
 	}
+	if len(a.states) == 1 {
+		a.finalSubmit()
+		return
+	}
 	a.confirming = true
 }
 
@@ -343,7 +347,7 @@ func (a *AskPicker) Height() int {
 		if n < 1 {
 			n = 1
 		}
-		return n + 4
+		return 2*n + 4
 	}
 	st := a.current()
 	if st == nil {
@@ -467,12 +471,21 @@ func (a *AskPicker) Draw(s tcell.Screen, bounds layout.Region) {
 		a.drawOptions(s, st, body)
 	}
 
-	hint := "Tab next · ↑/↓ choose · Space select · ⏎ confirm · Esc cancel"
+	multi := len(a.states) > 1
+	nav := "Tab next · "
+	if !multi {
+		nav = ""
+	}
+	action := "⏎ confirm"
+	if !multi {
+		action = "⏎ submit"
+	}
+	hint := nav + "↑/↓ choose · Space select · " + action + " · Esc cancel"
 	switch st.q.Type {
 	case "text":
-		hint = "Tab next · ⇧⏎ newline · ⏎ confirm · Esc cancel"
+		hint = nav + "⇧⏎ newline · " + action + " · Esc cancel"
 	case "multiselect":
-		hint = "Tab next · ↑/↓ move · Space toggle · ⏎ confirm · Esc cancel"
+		hint = nav + "↑/↓ move · Space toggle · " + action + " · Esc cancel"
 	}
 	hintStyle := th.Base().Foreground(th.Hint).Background(th.InputBg)
 	if st.err != "" {
@@ -559,22 +572,25 @@ func (a *AskPicker) drawConfirm(s tcell.Screen, inner layout.Region, th styles.T
 	footerY := inner.Bottom() - 1
 	qStyle := th.Base().Foreground(th.Muted).Background(th.InputBg)
 	aStyle := th.Base().Foreground(th.InputText).Background(th.InputBg)
-	half := inner.Width / 2
-	if half < 8 {
-		half = 8
-	}
+	headStyle := th.Base().Foreground(th.Accent).Background(th.InputBg)
+
 	y := inner.Top
-	for _, st := range a.states {
-		if y >= footerY {
+	if y < footerY {
+		DrawText(s, inner.Left, y, TruncateTo("Review your answers", inner.Width), headStyle)
+		y++
+	}
+	for i, st := range a.states {
+		if y+1 >= footerY {
 			break
 		}
-		DrawText(s, inner.Left, y, TruncateTo(st.q.Question, half), qStyle)
+		label := fmt.Sprintf("%d. %s", i+1, st.q.Question)
+		DrawText(s, inner.Left, y, TruncateTo(label, inner.Width), qStyle)
 		ans := a.answerOf(st)
 		if ans == "" {
 			ans = "—"
 		}
-		DrawText(s, inner.Left+half+1, y, TruncateTo(ans, inner.Width-half-1), aStyle)
-		y++
+		DrawText(s, inner.Left+3, y+1, TruncateTo(ans, inner.Width-3), aStyle)
+		y += 2
 	}
 	DrawText(s, inner.Left, footerY, TruncateTo("Esc back · ⏎ submit", inner.Width),
 		th.Base().Foreground(th.Hint).Background(th.InputBg))

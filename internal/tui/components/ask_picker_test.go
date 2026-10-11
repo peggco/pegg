@@ -36,15 +36,49 @@ func TestAskPickerReasonFlow(t *testing.T) {
 	})
 
 	p.HandleKey(askKey(tcell.KeyEnter))
+	if p.Active() {
+		t.Fatal("a single question should submit without a confirm page")
+	}
+	if got == nil || got["decision"] != "Allow" {
+		t.Fatalf("answers = %v, want decision=Allow", got)
+	}
+}
+
+func TestAskPickerSingleQuestionSkipsConfirm(t *testing.T) {
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "decision", Question: "Allow?", Type: "select", Options: []string{"Allow", "Reject"}, Required: true},
+	})
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if p.confirming {
+		t.Fatal("single question must not enter the confirm page")
+	}
+	if p.Active() {
+		t.Fatal("single question should submit on the first Enter")
+	}
+}
+
+func TestAskPickerMultiQuestionConfirms(t *testing.T) {
+	p := NewAskPicker()
+	var got map[string]string
+	p.SetOnSend(func(answers map[string]string) { got = answers })
+	p.SetQuestions([]AskQuestion{
+		{ID: "a", Question: "First?", Type: "select", Options: []string{"A1", "A2"}, Required: true},
+		{ID: "b", Question: "Second?", Type: "select", Options: []string{"B1", "B2"}, Required: true},
+	})
+	p.HandleKey(askKey(tcell.KeyEnter))
 	if !p.Active() || !p.confirming {
-		t.Fatal("Enter should open the confirm page")
+		t.Fatal("multiple questions should open the confirm page")
+	}
+	if got != nil {
+		t.Fatalf("must not submit before confirming, got %v", got)
 	}
 	p.HandleKey(askKey(tcell.KeyEnter))
 	if p.Active() {
 		t.Fatal("picker should close after confirming")
 	}
-	if got == nil || got["decision"] != "Allow" {
-		t.Fatalf("answers = %v, want decision=Allow", got)
+	if got["a"] != "A1" || got["b"] != "B1" {
+		t.Fatalf("answers = %v, want a=A1 b=B1", got)
 	}
 }
 
@@ -72,7 +106,6 @@ func TestAskPickerSingleTextReason(t *testing.T) {
 		t.Fatalf("value = %q, want %q", v, "not today")
 	}
 
-	p.HandleKey(askKey(tcell.KeyEnter))
 	p.HandleKey(askKey(tcell.KeyEnter))
 	if p.Active() {
 		t.Fatal("picker should close after confirming")
@@ -194,7 +227,6 @@ func TestAskPickerUnknownTypeFallsBackToText(t *testing.T) {
 		p.HandleKey(askRune(r))
 	}
 	p.HandleKey(askKey(tcell.KeyEnter))
-	p.HandleKey(askKey(tcell.KeyEnter))
 	if p.Active() {
 		t.Fatal("picker should close after confirming")
 	}
@@ -254,7 +286,6 @@ func TestAskPickerMultiSelect(t *testing.T) {
 	p.HandleKey(askKey(tcell.KeyDown))
 	p.HandleKey(askRune(' '))
 	p.HandleKey(askKey(tcell.KeyEnter))
-	p.HandleKey(askKey(tcell.KeyEnter))
 
 	if p.Active() {
 		t.Fatal("picker should close after confirming")
@@ -288,7 +319,6 @@ func TestAskPickerBoolean(t *testing.T) {
 	})
 
 	p.HandleKey(askKey(tcell.KeyEnter))
-	p.HandleKey(askKey(tcell.KeyEnter))
 	if p.Active() {
 		t.Fatal("picker should close after confirming")
 	}
@@ -299,7 +329,10 @@ func TestAskPickerBoolean(t *testing.T) {
 
 func TestAskPickerConfirmEscGoesBack(t *testing.T) {
 	p := NewAskPicker()
-	p.SetQuestions([]AskQuestion{{ID: "a", Question: "First?", Type: "text"}})
+	p.SetQuestions([]AskQuestion{
+		{ID: "a", Question: "First?", Type: "text"},
+		{ID: "b", Question: "Second?", Type: "text"},
+	})
 	p.HandleKey(askRune('x'))
 
 	p.HandleKey(askKey(tcell.KeyEnter))
@@ -321,6 +354,35 @@ func TestAskPickerConfirmEscGoesBack(t *testing.T) {
 	}
 }
 
+func TestAskPickerConfirmShowsQuestionsAndAnswers(t *testing.T) {
+	s := tcell.NewSimulationScreen("UTF-8")
+	if err := s.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Fini()
+	s.SetSize(100, 30)
+
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "a", Question: "First?", Type: "select", Options: []string{"A1", "A2"}},
+		{ID: "b", Question: "Second?", Type: "select", Options: []string{"B1", "B2"}},
+	})
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if !p.confirming {
+		t.Fatal("multiple questions should open the confirm page")
+	}
+
+	bounds := layout.Region{Left: 4, Top: 2, Width: 60, Height: p.Height()}
+	p.Draw(s, bounds)
+
+	all := askScreenText(s, 100, 30)
+	for _, want := range []string{"Review your answers", "1. First?", "A1", "2. Second?", "B1"} {
+		if !strings.Contains(all, want) {
+			t.Fatalf("confirm page missing %q:\n%s", want, all)
+		}
+	}
+}
+
 func TestAskPickerSelectUsesSpace(t *testing.T) {
 	p := NewAskPicker()
 	p.SetQuestions([]AskQuestion{
@@ -328,7 +390,6 @@ func TestAskPickerSelectUsesSpace(t *testing.T) {
 	})
 	p.HandleKey(askKey(tcell.KeyDown))
 	p.HandleKey(askRune(' '))
-	p.HandleKey(askKey(tcell.KeyEnter))
 	p.HandleKey(askKey(tcell.KeyEnter))
 	if p.states[0].answer != "Green" {
 		t.Fatalf("answer = %q, want Green", p.states[0].answer)
