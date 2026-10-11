@@ -172,9 +172,6 @@ func (m *Middleware) isPermissionError(ctx context.Context, call llm.ToolCall, e
 func (m *Middleware) gate(ctx context.Context, call llm.ToolCall, next agentmw.ToolInvoker, mode Mode, permErr error) (string, error) {
 	if m.store != nil {
 		key := m.store.Key(call.Function.Name, call.Function.Arguments)
-		if reason, ok := m.store.RejectionReason(key); ok {
-			return "", &DeniedError{ToolName: call.Function.Name, Reason: "previously rejected: " + reason}
-		}
 		if m.store.IsAllowed(key) {
 			return m.runApproved(ctx, call, next, permErr)
 		}
@@ -192,9 +189,6 @@ func (m *Middleware) gate(ctx context.Context, call llm.ToolCall, next agentmw.T
 			m.store.Allow(call.Function.Name, call.Function.Arguments)
 		}
 		return m.runApproved(ctx, call, next, permErr)
-	}
-	if m.store != nil {
-		m.store.Reject(call.Function.Name, call.Function.Arguments, dec.Reason)
 	}
 	return "", &DeniedError{ToolName: call.Function.Name, Reason: dec.Reason}
 }
