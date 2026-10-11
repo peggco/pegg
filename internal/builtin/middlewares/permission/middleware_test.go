@@ -247,7 +247,7 @@ func TestAllowAllPersistsAndAutoApproves(t *testing.T) {
 	}
 }
 
-func TestRejectedStoredAndAutoRejected(t *testing.T) {
+func TestRejectionNotStoredAndReasks(t *testing.T) {
 	fs := newFS(t)
 	a, bus := testAgent(t, readSpec(fs))
 	ctx := agent.WithAgent(context.Background(), a)
@@ -264,16 +264,20 @@ func TestRejectedStoredAndAutoRejected(t *testing.T) {
 	if _, err := m.InvokeTool(ctx, call, next); err == nil {
 		t.Fatal("expected rejection")
 	}
+	if _, ok := m.store.RejectionReason(m.store.Key(call.Function.Name, call.Function.Arguments)); ok {
+		t.Fatal("user rejection must not be persisted")
+	}
+
 	_, err := m.InvokeTool(ctx, call, next)
 	var denied *DeniedError
 	if !errors.As(err, &denied) {
 		t.Fatalf("expected DeniedError, got %v", err)
 	}
-	if denied.Reason != "previously rejected: no" {
-		t.Fatalf("stored reason = %q, want %q", denied.Reason, "previously rejected: no")
+	if denied.Reason != "no" {
+		t.Fatalf("reason = %q, want %q", denied.Reason, "no")
 	}
-	if asks != 2 {
-		t.Fatalf("asks = %d, want 2 (decision + reason, second call auto-rejected)", asks)
+	if asks != 4 {
+		t.Fatalf("asks = %d, want 4 (retry must re-prompt decision + reason)", asks)
 	}
 }
 

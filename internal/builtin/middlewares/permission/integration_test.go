@@ -131,8 +131,8 @@ func TestAgentRunPermissionFlow(t *testing.T) {
 	if res.Output != "done" {
 		t.Fatalf("output = %q, want done", res.Output)
 	}
-	if askCount != 3 {
-		t.Fatalf("asks = %d, want 3 (decision + reason; repeat call auto-rejected)", askCount)
+	if askCount != 4 {
+		t.Fatalf("asks = %d, want 4 (rejected, then retry re-prompts and is allowed)", askCount)
 	}
 
 	var denials, approvals int
@@ -149,10 +149,10 @@ func TestAgentRunPermissionFlow(t *testing.T) {
 			approvals++
 		}
 	}
-	if denials != 2 {
-		t.Fatalf("denials in history = %d, want 2 (rejected + auto-rejected repeat)", denials)
+	if denials != 1 {
+		t.Fatalf("denials in history = %d, want 1 (only the first rejection)", denials)
 	}
-	if approvals != 1 {
-		t.Fatalf("approved tool results in history = %d, want 1", approvals)
+	if approvals != 2 {
+		t.Fatalf("approved tool results in history = %d, want 2", approvals)
 	}
 }
