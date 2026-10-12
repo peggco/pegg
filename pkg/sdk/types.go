@@ -140,6 +140,7 @@ const (
 const (
 	AttachmentTypeImage = llm.AttachmentTypeImage
 	AttachmentTypeAudio = llm.AttachmentTypeAudio
+	AttachmentTypeVideo = llm.AttachmentTypeVideo
 	AttachmentTypeFile  = llm.AttachmentTypeFile
 )
 
