@@ -91,21 +91,8 @@ func TestContentToWire_File(t *testing.T) {
 	if err := json.Unmarshal(raw, &blocks); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(blocks) != 2 {
-		t.Fatalf("blocks len = %d, want 2", len(blocks))
-	}
-	if blocks[1]["type"] != "input_file" {
-		t.Fatalf("second block type = %v, want input_file", blocks[1]["type"])
-	}
-	file, ok := blocks[1]["file"].(map[string]any)
-	if !ok {
-		t.Fatalf("input_file block missing file: %v", blocks[1])
-	}
-	if file["filename"] != "doc.pdf" {
-		t.Errorf("filename = %v, want doc.pdf", file["filename"])
-	}
-	if file["file_data"] != "data:application/pdf;base64,QUJD" {
-		t.Errorf("file_data = %v, want data URL", file["file_data"])
+	if len(blocks) != 1 || blocks[0]["type"] != "text" {
+		t.Fatalf("blocks = %v, want only the text block", blocks)
 	}
 }
 

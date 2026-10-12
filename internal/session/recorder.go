@@ -236,15 +236,36 @@ func (r *Recorder) handleInput(e agent.AgentInput) {
 		return
 	}
 	first := r.isFirstMessage(id)
-	if _, err := r.mgr.AppendMessage(id, llm.UserMessage(e.Input)); err != nil {
+	input := llm.UserMessage(e.Input)
+	if len(e.Attachments) > 0 {
+		input = llm.UserMessage(llm.ContentWithAttachments(e.Input, e.Attachments))
+	}
+	if _, err := r.mgr.AppendMessage(id, input); err != nil {
 		r.log.Fdebug("session recorder: append input: %v", err)
 		return
 	}
 
 	if first {
 		if info, ok := r.getSessionInfo(e.AgentID); ok && info.provider != nil && !info.subagent {
-			go r.generateTitle(id, info.provider, info.model, e.Input)
+			go r.generateTitle(id, info.provider, info.model, stripAttachmentsBlock(e.Input))
 		}
+	}
+}
+
+func stripAttachmentsBlock(text string) string {
+	const open = "<attachments>"
+	const close = "</attachments>"
+	for {
+		start := strings.Index(text, open)
+		if start < 0 {
+			return strings.TrimSpace(text)
+		}
+		rest := text[start+len(open):]
+		end := strings.Index(rest, close)
+		if end < 0 {
+			return strings.TrimSpace(text[:start])
+		}
+		text = text[:start] + rest[end+len(close):]
 	}
 }
 
