@@ -285,7 +285,7 @@ each model this includes:
 | `max_input_tokens`, `max_output_tokens`, `max_tokens` | Context-window usage indicator and request limits |
 | `input_cost_per_token`, `output_cost_per_token`, `cache_read_cost_per_token` | Cost display in the TUI status bar and session usage |
 | `supports_reasoning`, `reasoning_options` | The TUI **Reasoning** setting (`default`, `low`, `medium`, `high`) |
-| `modalities.input` | Whether image/audio attachments are allowed |
+| `modalities.input` | Whether image/audio/video attachments are allowed |
 | `tool_call`, `structured_output`, `temperature` | Capability checks |
 
 Lookup tries `provider/model` first, then the bare model ID, then a substring
@@ -299,9 +299,10 @@ is persisted with the session and shown in the status bar.
 
 ## Attachments
 
-Image and audio attachments are validated against the model's input modalities before
-sending. If the model does not support them, Pegg refuses the attachment with an
-error instead of failing at the API. See
+Image, audio, and video attachments are validated against the model's input
+modalities before sending. Media the model does not support is never sent inline
+(the agent still gets the file by path). Non-media files — PDFs, text, CSV, and so
+on — are always referenced by path rather than uploaded. See
 [Adding Context](features/adding-context.md).
 
 ## Failures and retries

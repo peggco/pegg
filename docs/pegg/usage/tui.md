@@ -109,12 +109,14 @@ paste. When you paste:
 - In a multi-line paste, every line that is an existing file path is attached.
 - Text longer than 100 characters is inserted as a collapsible **long text** chip.
 
-Attachments appear in the attachment bar with type icons (image, audio, file) and
-pagination dots. Focus the bar with ++tab++, navigate with ++left++/++right++, and
-remove with ++backspace++ or ++delete++.
+Attachments appear in the attachment bar with type icons (image, audio, video,
+file) and pagination dots. Focus the bar with ++tab++, navigate with
+++left++/++right++, and remove with ++backspace++ or ++delete++.
 
-Image and audio attachments are rejected if the active model's metadata does not
-list that input modality.
+Files are copied into the attachment store (`os.TempDir()/pegg`); the agent is told
+their paths and reads non-media files (PDF, text, archives, …) from there. Image and
+audio attachments are rejected if the active model's metadata does not list that
+input modality.
 
 ## Chat items
 

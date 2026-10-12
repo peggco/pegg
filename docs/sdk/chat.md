@@ -26,7 +26,7 @@ resp, err := eng.Chat(ctx, sdk.ChatRequest{
 | `History` | Extra prior messages, prepended before any session messages |
 | `Provider` | Provider to use; empty auto-selects |
 | `Model` | Model to use; empty auto-selects |
-| `Files` | Local file paths, read and attached (images or files) |
+| `Files` | Local file paths; copied into the attachment store (`os.TempDir()/pegg`) |
 | `Attachments` | Direct `Attachment` values |
 | `Tools` | Names of registered tools to enable for the run |
 | `SystemPrompt` | Overrides the orchestrator system prompt |
@@ -140,7 +140,11 @@ names       := eng.Providers()               // all registered provider names
 sdk.NewImageAttachmentFromBase64("image/png", data)
 sdk.NewImageAttachmentFromURL(url)
 sdk.NewAudioAttachmentFromBase64("audio/mpeg", data)
+sdk.NewVideoAttachmentFromBase64("video/mp4", data)
 sdk.NewFileAttachmentFromBase64("application/pdf", data, "doc.pdf")
 ```
 
-Image and audio attachments are validated against the model's input modalities.
+`Files` are copied into the attachment store and the agent is told their paths.
+Image, audio, and video the model supports are also sent inline; other files are
+referenced by path. Image, audio, and video attachments are validated against the
+model's input modalities — unsupported media is never sent inline.
