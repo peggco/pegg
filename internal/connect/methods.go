@@ -5,4 +5,5 @@ func (c *Connector) registerAllMethods() {
 	c.registerChatMethods()
 	c.registerSessionMethods()
 	c.registerSettingsMethods()
+	c.registerMentionMethods()
 }

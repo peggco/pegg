@@ -39,6 +39,7 @@ func TestSettingsHandlersSmoke(t *testing.T) {
 		{"settings.rules.list", c.handleRulesList},
 		{"settings.plugins.list", c.handlePluginsList},
 		{"settings.system.get", c.handleSystemGet},
+		{"mentions.list", c.handleMentionsList},
 	}
 	for _, tc := range cases {
 		func() {
