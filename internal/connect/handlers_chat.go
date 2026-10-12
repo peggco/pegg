@@ -1,6 +1,10 @@
 package connect
 
-import "context"
+import (
+	"context"
+
+	"github.com/peggco/pegg/internal/llm"
+)
 
 func (c *Connector) registerChatMethods() {
 	c.dispatch.register("chat.send", ScopeChat, c.handleChatSend)
@@ -10,12 +14,13 @@ func (c *Connector) registerChatMethods() {
 }
 
 type chatSendParams struct {
-	Message         string   `json:"message"`
-	SessionID       string   `json:"session_id"`
-	Provider        string   `json:"provider"`
-	Model           string   `json:"model"`
-	ReasoningEffort string   `json:"reasoning_effort"`
-	Files           []string `json:"files"`
+	Message         string           `json:"message"`
+	SessionID       string           `json:"session_id"`
+	Provider        string           `json:"provider"`
+	Model           string           `json:"model"`
+	ReasoningEffort string           `json:"reasoning_effort"`
+	Files           []string         `json:"files"`
+	Attachments     []llm.Attachment `json:"attachments"`
 }
 
 func (c *Connector) handleChatSend(_ context.Context, req *Request) (any, error) {
@@ -33,6 +38,7 @@ func (c *Connector) handleChatSend(_ context.Context, req *Request) (any, error)
 		Model:           p.Model,
 		ReasoningEffort: p.ReasoningEffort,
 		Files:           p.Files,
+		Attachments:     p.Attachments,
 	})
 	if err != nil {
 		return nil, err

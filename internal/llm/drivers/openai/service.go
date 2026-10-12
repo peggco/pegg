@@ -474,23 +474,6 @@ func contentToWire(content llm.Content) json.RawMessage {
 					"image_url": map[string]any{"url": url},
 				})
 			}
-		case llm.AttachmentTypeFile:
-			var fileData string
-			if att.URL != "" {
-				fileData = att.URL
-			} else if att.Data != "" {
-				fileData = "data:" + att.MediaType + ";base64," + att.Data
-			}
-			if fileData != "" {
-				file := map[string]any{"file_data": fileData}
-				if att.FileName != "" {
-					file["filename"] = att.FileName
-				}
-				blocks = append(blocks, map[string]any{
-					"type": "input_file",
-					"file": file,
-				})
-			}
 		}
 	}
 

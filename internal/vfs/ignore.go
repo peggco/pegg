@@ -37,6 +37,12 @@ func isGlobalWritable(abs string) bool {
 	return clean == skills || strings.HasPrefix(clean, skills+string(filepath.Separator))
 }
 
+func isTempStorePath(abs string) bool {
+	root := filepath.Join(os.TempDir(), "pegg")
+	clean := filepath.Clean(abs)
+	return clean == root || strings.HasPrefix(clean, root+string(filepath.Separator))
+}
+
 func isPeggPath(rel string) bool {
 	return rel == peggDir || strings.HasPrefix(rel, peggDir+"/")
 }

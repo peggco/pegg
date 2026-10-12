@@ -7,6 +7,7 @@ type AttachmentType string
 const (
 	AttachmentTypeImage AttachmentType = "image"
 	AttachmentTypeAudio AttachmentType = "audio"
+	AttachmentTypeVideo AttachmentType = "video"
 	AttachmentTypeFile  AttachmentType = "file"
 )
 
@@ -16,6 +17,7 @@ type Attachment struct {
 	Data      string         `json:"data,omitempty"`
 	URL       string         `json:"url,omitempty"`
 	FileName  string         `json:"file_name,omitempty"`
+	Path      string         `json:"path,omitempty"`
 }
 
 func NewAttachmentFromBase64(attType AttachmentType, mediaType, data string) Attachment {
@@ -48,6 +50,14 @@ func NewAudioAttachmentFromBase64(mediaType, data string) Attachment {
 
 func NewAudioAttachmentFromURL(url string) Attachment {
 	return NewAttachmentFromURL(AttachmentTypeAudio, "", url)
+}
+
+func NewVideoAttachmentFromBase64(mediaType, data string) Attachment {
+	return NewAttachmentFromBase64(AttachmentTypeVideo, mediaType, data)
+}
+
+func NewVideoAttachmentFromURL(url string) Attachment {
+	return NewAttachmentFromURL(AttachmentTypeVideo, "", url)
 }
 
 func NewFileAttachmentFromBase64(mediaType, data, fileName string) Attachment {

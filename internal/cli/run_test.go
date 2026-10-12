@@ -787,25 +787,37 @@ func TestRunCommandFileAttachment(t *testing.T) {
 	if prov.lastReq == nil {
 		t.Fatal("provider did not receive a request")
 	}
-	content, ok := prov.lastReq.Messages[1].Content.(llm.Content)
+
+	var userMsg *llm.Message
+	for i := range prov.lastReq.Messages {
+		if prov.lastReq.Messages[i].Role == llm.RoleUser {
+			userMsg = &prov.lastReq.Messages[i]
+		}
+	}
+	if userMsg == nil {
+		t.Fatal("provider did not receive a user message")
+	}
+	content, ok := userMsg.Content.(llm.Content)
 	if !ok {
-		t.Fatalf("user message content = %T, want llm.Content", prov.lastReq.Messages[1].Content)
+		t.Fatalf("user message content = %T, want llm.Content", userMsg.Content)
 	}
-	if content.Text != "hello" {
-		t.Fatalf("content text = %q, want hello", content.Text)
+	if !strings.HasPrefix(content.Text, "hello") {
+		t.Fatalf("content text = %q, want it to start with hello", content.Text)
 	}
-	if len(content.Attachments) != 2 {
-		t.Fatalf("attachments = %d, want 2", len(content.Attachments))
+	if !strings.Contains(content.Text, "<attachments>") ||
+		!strings.Contains(content.Text, `name="pic.png"`) ||
+		!strings.Contains(content.Text, `name="notes.txt"`) {
+		t.Fatalf("attachments block missing files: %q", content.Text)
 	}
-	imgAtt, txtAtt := content.Attachments[0], content.Attachments[1]
+	if len(content.Attachments) != 1 {
+		t.Fatalf("attachments = %d, want 1 (media only)", len(content.Attachments))
+	}
+	imgAtt := content.Attachments[0]
 	if imgAtt.Type != llm.AttachmentTypeImage || imgAtt.MediaType != "image/png" || imgAtt.FileName != "pic.png" {
 		t.Fatalf("image attachment = %+v, want image/png pic.png", imgAtt)
 	}
-	if txtAtt.Type != llm.AttachmentTypeFile || txtAtt.MediaType != "text/plain" || txtAtt.FileName != "notes.txt" {
-		t.Fatalf("file attachment = %+v, want text/plain notes.txt", txtAtt)
-	}
-	if imgAtt.Data == "" || txtAtt.Data == "" {
-		t.Fatalf("attachments must carry base64 data")
+	if imgAtt.Data == "" {
+		t.Fatalf("image attachment must carry base64 data")
 	}
 
 	out := buf.String()

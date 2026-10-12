@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/agent/reminder"
 	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/llm"
@@ -23,11 +24,12 @@ type runState struct {
 }
 
 func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*RunResult, error) {
-	if strings.TrimSpace(input) == "" {
+	if strings.TrimSpace(input) == "" && len(a.Attachments) == 0 {
 		return nil, a.fail(ctx, ErrEmptyInput)
 	}
 	mi := expandInput(input)
 	input = mi.Text
+	messageText := a.messageWithAttachments(input)
 	if err := a.resolveToolNames(); err != nil {
 		return nil, a.fail(ctx, err)
 	}
@@ -61,7 +63,7 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 		AgentID:     a.ID,
 		AgentName:   a.Name,
 		Model:       a.Model,
-		Input:       input,
+		Input:       messageText,
 		Attachments: a.Attachments,
 	})
 
@@ -73,8 +75,8 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 		state.history = append(state.history, llm.SystemMessage(a.SystemPrompt))
 	}
 	state.history = appendSystemReminders(state.history, mi.SystemReminders)
-	if strings.TrimSpace(input) != "" {
-		state.history = append(state.history, a.userMessage(input))
+	if strings.TrimSpace(messageText) != "" {
+		state.history = append(state.history, a.userMessage(messageText))
 	}
 	if len(mi.Calls) > 0 {
 		if err := a.resolveInputCalls(ctx, state, mi.Calls); err != nil {
@@ -86,11 +88,12 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 }
 
 func (a *Agent) resume(ctx context.Context, input string, history []llm.Message, stream StreamHandler) (*RunResult, error) {
-	if strings.TrimSpace(input) == "" {
+	if strings.TrimSpace(input) == "" && len(a.Attachments) == 0 {
 		return nil, a.fail(ctx, ErrEmptyInput)
 	}
 	mi := expandInput(input)
 	input = mi.Text
+	messageText := a.messageWithAttachments(input)
 	if err := a.resolveToolNames(); err != nil {
 		return nil, a.fail(ctx, err)
 	}
@@ -124,7 +127,7 @@ func (a *Agent) resume(ctx context.Context, input string, history []llm.Message,
 		AgentID:     a.ID,
 		AgentName:   a.Name,
 		Model:       a.Model,
-		Input:       input,
+		Input:       messageText,
 		Attachments: a.Attachments,
 	})
 
@@ -134,8 +137,8 @@ func (a *Agent) resume(ctx context.Context, input string, history []llm.Message,
 
 	state.history = append(state.history, history...)
 	state.history = appendSystemReminders(state.history, mi.SystemReminders)
-	if strings.TrimSpace(input) != "" {
-		state.history = append(state.history, a.userMessage(input))
+	if strings.TrimSpace(messageText) != "" {
+		state.history = append(state.history, a.userMessage(messageText))
 	}
 	if len(mi.Calls) > 0 {
 		if err := a.resolveInputCalls(ctx, state, mi.Calls); err != nil {
@@ -232,11 +235,23 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 	return result, nil
 }
 
+func (a *Agent) messageWithAttachments(input string) string {
+	block := attach.Block(a.Attachments)
+	if block == "" {
+		return input
+	}
+	if strings.TrimSpace(input) == "" {
+		return block
+	}
+	return input + "\n\n" + block
+}
+
 func (a *Agent) userMessage(input string) llm.Message {
-	if len(a.Attachments) == 0 {
+	atts := attach.MediaAttachments(a.Attachments, a.Model)
+	if len(atts) == 0 {
 		return llm.UserMessage(input)
 	}
-	return llm.UserMessage(llm.ContentWithAttachments(input, a.Attachments))
+	return llm.UserMessage(llm.ContentWithAttachments(input, atts))
 }
 
 func (a *Agent) resolveInputCalls(ctx context.Context, state *runState, calls []llm.ToolCall) error {

@@ -14,9 +14,10 @@ attachments, `@` mentions, project instructions, rules, and skills.
 - **Paste a path** — pasting a single line that is an existing file path attaches
   that file. In a multi-line paste, every line that is a file path is attached.
 - **Attachment bar** — attachments appear above the input as cards with type icons
-  (image, audio, file). Focus it with ++tab++, navigate with ++left++/++right++, and
+  (image, audio, video, file). Focus it with ++tab++, navigate with ++left++/++right++, and
   remove with ++backspace++/++delete++.
-- Attachments are sent with your next message.
+- Attachments are sent with your next message and are persisted with it, so they
+  reappear as chips when you resume the session.
 
 ### In the CLI
 
@@ -24,21 +25,36 @@ attachments, `@` mentions, project instructions, rules, and skills.
 pegg run --file screenshot.png --file notes.md "What's wrong with my UI?"
 ```
 
-`--file` is repeatable. The MIME type is inferred from the extension:
+`--file` is repeatable. The type is inferred from the extension:
 
-| Extension | Attachment |
+| Extension | Type |
 |---|---|
-| `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` | image |
-| `.mp3`, `.wav` | audio |
-| `.pdf`, `.txt`, `.md`, `.json`, `.csv`, `.xml`, `.zip`, `.tar`, `.gz` | file (typed) |
-| anything else | `application/octet-stream` |
+| `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.svg` | image |
+| `.mp3`, `.wav`, `.ogg`, `.m4a` | audio |
+| `.mp4`, `.webm`, `.mov` | video |
+| everything else | file |
+
+### Where attachments go
+
+Every attachment is copied into the attachment store at `os.TempDir()/pegg`
+(`/tmp/pegg` on Linux). The agent is told each file's name, media type, size, and
+path in an `<attachments>` block appended to your message, so it can open the file
+with its tools (for example `read`).
+
+Only **media** the active model accepts (image/audio/video) is also sent to the
+model inline. Everything else — PDFs, text, JSON, CSV, archives, and so on — is
+**not** uploaded to the model; the agent reads it from the store path instead. This
+keeps the request valid for chat-completions providers that reject arbitrary file
+uploads. Because the block is part of the message, earlier attachments stay
+available to the agent when you resume a session.
 
 ### Validation
 
-Image and audio attachments are checked against the active model's input modalities.
-If the model does not advertise that modality, the attachment is rejected with
-*"Model does not support image/audio attachments"* instead of failing at the API.
-File attachments are accepted by all models.
+Image, audio, and video are checked against the active model's input modalities
+before being sent inline; media the model does not support is never uploaded. In the
+TUI, unsupported images and audio are refused at attach time. Either way the file is
+stored and the agent can still read it by path. Non-media files are always accepted
+and referenced by path.
 
 ## `@` mentions
 

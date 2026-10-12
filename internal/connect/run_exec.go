@@ -3,12 +3,12 @@ package connect
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/llm"
 )
 
@@ -160,24 +160,42 @@ func (m *runManager) handleStream(r *run, ev agent.StreamEvent) {
 	}
 }
 
-func loadAttachments(paths []string) ([]llm.Attachment, error) {
-	var out []llm.Attachment
+func prepareAttachments(incoming []llm.Attachment, paths []string) ([]llm.Attachment, error) {
+	out := make([]llm.Attachment, 0, len(incoming)+len(paths))
+	for _, att := range incoming {
+		switch {
+		case att.Path != "":
+			out = append(out, att)
+		case att.Data != "":
+			name := att.FileName
+			if name == "" {
+				name = "file"
+			}
+			stored, err := attach.FromBase64(name, att.Data)
+			if err != nil {
+				return nil, err
+			}
+			if att.MediaType != "" {
+				stored.MediaType = att.MediaType
+				stored.Type = attach.Kind(att.MediaType)
+			}
+			if att.FileName != "" {
+				stored.FileName = att.FileName
+			}
+			out = append(out, stored)
+		case att.URL != "":
+			out = append(out, att)
+		}
+	}
 	for _, p := range paths {
 		clean := filepath.Clean(p)
 		if clean == "." || strings.HasPrefix(clean, "..") {
 			return nil, fmt.Errorf("invalid attachment path: %q", p)
 		}
-		data, err := os.ReadFile(clean)
+		att, err := attach.FromPath(clean)
 		if err != nil {
-			return nil, fmt.Errorf("read attachment %q: %w", p, err)
+			return nil, err
 		}
-		mediaType := "application/octet-stream"
-		attType := llm.AttachmentTypeFile
-		if strings.HasPrefix(mediaType, "image/") {
-			attType = llm.AttachmentTypeImage
-		}
-		att := llm.NewAttachmentFromBase64(attType, mediaType, llm.EncodeFileToBase64(data))
-		att.FileName = filepath.Base(clean)
 		out = append(out, att)
 	}
 	return out, nil

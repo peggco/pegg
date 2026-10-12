@@ -8,13 +8,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
@@ -247,17 +246,10 @@ func (s *Server) resolveModel(provider, model string) (llm.Provider, llm.Model, 
 func loadAttachments(paths []string) ([]llm.Attachment, error) {
 	var out []llm.Attachment
 	for _, p := range paths {
-		data, err := os.ReadFile(p)
+		att, err := attach.FromPath(p)
 		if err != nil {
-			return nil, fmt.Errorf("read attachment %q: %w", p, err)
+			return nil, err
 		}
-		mediaType := "application/octet-stream"
-		attType := llm.AttachmentTypeFile
-		if strings.HasPrefix(mediaType, "image/") {
-			attType = llm.AttachmentTypeImage
-		}
-		att := llm.NewAttachmentFromBase64(attType, mediaType, llm.EncodeFileToBase64(data))
-		att.FileName = filepath.Base(p)
 		out = append(out, att)
 	}
 	return out, nil

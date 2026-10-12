@@ -86,8 +86,9 @@ driver).
 
 ??? question "`Model does not support image/audio attachments`"
 
-    The selected model's metadata does not list the attachment modality as an input.
-    Choose a multimodal model, or remove the attachment.
+    The selected model's metadata does not list that input modality (image, audio, or
+    video). Choose a multimodal model, or remove the attachment. Elsewhere the file is
+    still stored and handed to the agent by path, so it can read it with its tools.
 
 ??? question "A tool is blocked by a permission prompt or denied"
 

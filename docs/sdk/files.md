@@ -7,7 +7,9 @@ icon: lucide/file-code-2
 The engine mounts a **sandboxed filesystem** at the workspace root. All file
 operations use virtual paths relative to that root, `~` expands to the home
 directory, and `.gitignore` / `.peggignore` rules are respected. Attempting to
-escape the root returns `sdk.ErrOutOfBounds` (wrapped as `OutOfBoundsError`).
+escape the root returns `sdk.ErrOutOfBounds` (wrapped as `OutOfBoundsError`), except
+for the global config (`~/.pegg`) and the attachment store (`os.TempDir()/pegg`),
+which the agent may read.
 
 ## Reading
 

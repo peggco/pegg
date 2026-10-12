@@ -17,10 +17,11 @@ type StartParams struct {
 	Model           string
 	ReasoningEffort string
 	Files           []string
+	Attachments     []llm.Attachment
 }
 
 func (m *runManager) Start(p StartParams) (RunInfo, error) {
-	if strings.TrimSpace(p.Message) == "" {
+	if strings.TrimSpace(p.Message) == "" && len(p.Files) == 0 && len(p.Attachments) == 0 {
 		return RunInfo{}, &FrameError{Code: ErrCodeBadRequest, Message: "message is required"}
 	}
 	if m.c.deps.Sessions == nil {
@@ -57,12 +58,14 @@ func (m *runManager) Start(p StartParams) (RunInfo, error) {
 		orch.ReasoningEffort = p.ReasoningEffort
 	}
 
-	if len(p.Files) > 0 {
-		atts, aerr := loadAttachments(p.Files)
+	if len(p.Files) > 0 || len(p.Attachments) > 0 {
+		atts, aerr := prepareAttachments(p.Attachments, p.Files)
 		if aerr != nil {
 			return RunInfo{}, &FrameError{Code: ErrCodeBadRequest, Message: aerr.Error()}
 		}
-		orch.Attachments = atts
+		if len(atts) > 0 {
+			orch.Attachments = atts
+		}
 	}
 
 	var (

@@ -85,10 +85,10 @@ Exit words: `exit`, `quit`, `/exit`, `/quit`, `bye`.
 
 ### Attachments
 
-`--file` can be repeated. The MIME type is inferred from the extension — images
-(`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) and audio (`.mp3`, `.wav`) are sent as
-attachments, PDFs and text files as files. See
-[Adding Context](../features/adding-context.md).
+`--file` can be repeated. Files are copied into the attachment store
+(`os.TempDir()/pegg`) and the agent is told their paths; image/audio/video that the
+model supports are also sent inline. PDFs and text files are referenced by path
+instead. See [Adding Context](../features/adding-context.md).
 
 ### Session selection
 

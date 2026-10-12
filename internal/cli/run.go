@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/builtin/middlewares/compaction"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/llm"
@@ -72,12 +72,12 @@ func (c *CLI) runRun(out io.Writer, in io.Reader, message string, opts runOption
 		return fmt.Errorf("cli: create orchestrator: %w", err)
 	}
 
+	var fileAttachments []llm.Attachment
 	if len(opts.files) > 0 {
-		atts, err := loadAttachments(opts.files)
+		fileAttachments, err = loadAttachments(opts.files)
 		if err != nil {
 			return err
 		}
-		orch.Attachments = atts
 	}
 
 	resume, err := c.resolveSession(opts)
@@ -107,6 +107,10 @@ func (c *CLI) runRun(out io.Writer, in io.Reader, message string, opts runOption
 	}
 	orch.SetModelProvider(mdl, prov)
 	orch.Bus = c.bus
+
+	if len(fileAttachments) > 0 {
+		orch.Attachments = fileAttachments
+	}
 
 	renderer := newRunRenderer(out, in, orch.ID, opts.showThinking, opts.showSubagent)
 	renderer.bus = c.bus
@@ -341,55 +345,13 @@ func isChatExit(line string) bool {
 func loadAttachments(paths []string) ([]llm.Attachment, error) {
 	var out []llm.Attachment
 	for _, p := range paths {
-		data, err := os.ReadFile(p)
+		att, err := attach.FromPath(p)
 		if err != nil {
-			return nil, fmt.Errorf("cli: read attachment %q: %w", p, err)
+			return nil, fmt.Errorf("cli: %w", err)
 		}
-		mediaType := mediaTypeFor(p)
-		attType := llm.AttachmentTypeFile
-		if strings.HasPrefix(mediaType, "image/") {
-			attType = llm.AttachmentTypeImage
-		}
-		att := llm.NewAttachmentFromBase64(attType, mediaType, llm.EncodeFileToBase64(data))
-		att.FileName = filepath.Base(p)
 		out = append(out, att)
 	}
 	return out, nil
-}
-
-func mediaTypeFor(path string) string {
-	ext := strings.ToLower(filepath.Ext(path))
-	switch ext {
-	case ".png":
-		return "image/png"
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".gif":
-		return "image/gif"
-	case ".webp":
-		return "image/webp"
-	case ".pdf":
-		return "application/pdf"
-	case ".txt", ".md":
-		return "text/plain"
-	case ".json":
-		return "application/json"
-	case ".csv":
-		return "text/csv"
-	case ".xml":
-		return "application/xml"
-	case ".zip":
-		return "application/zip"
-	case ".tar":
-		return "application/x-tar"
-	case ".gz":
-		return "application/gzip"
-	case ".mp3":
-		return "audio/mpeg"
-	case ".wav":
-		return "audio/wav"
-	}
-	return "application/octet-stream"
 }
 
 type modelChoice struct {

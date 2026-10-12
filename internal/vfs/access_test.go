@@ -248,3 +248,31 @@ func TestIgnoreDoesNotApplyOutsideWorkspace(t *testing.T) {
 		t.Fatalf("allowed write outside workspace must bypass ignore rules, got %v", err)
 	}
 }
+
+func TestTempStorePathAllowed(t *testing.T) {
+	fs := newTestFS(t)
+
+	store := filepath.Join(os.TempDir(), "pegg")
+	if err := os.MkdirAll(store, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inside := filepath.Join(store, "vfs-access-test.txt")
+	if err := os.WriteFile(inside, []byte("ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(inside) })
+
+	if _, err := fs.Resolve(inside); err != nil {
+		t.Fatalf("attachment store path should resolve, got %v", err)
+	}
+
+	outside := filepath.Join(os.TempDir(), "vfs-access-test-outside.txt")
+	if err := os.WriteFile(outside, []byte("no"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(outside) })
+
+	if _, err := fs.Resolve(outside); !errors.Is(err, ErrOutOfBounds) {
+		t.Fatalf("non-store temp path should be denied, got %v", err)
+	}
+}

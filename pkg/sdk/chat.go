@@ -3,14 +3,13 @@ package sdk
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
@@ -117,15 +116,17 @@ func (e *Engine) chat(ctx context.Context, req ChatRequest, handler func(ChatEve
 	if len(req.Tools) > 0 {
 		orch.ToolNames = req.Tools
 	}
-	if len(req.Attachments) > 0 {
-		orch.Attachments = append(orch.Attachments, req.Attachments...)
-	}
+	var allAttachments []llm.Attachment
+	allAttachments = append(allAttachments, req.Attachments...)
 	if len(req.Files) > 0 {
 		atts, err := loadFileAttachments(req.Files)
 		if err != nil {
 			return ChatResponse{}, fmt.Errorf("sdk: load attachments: %w", err)
 		}
-		orch.Attachments = append(orch.Attachments, atts...)
+		allAttachments = append(allAttachments, atts...)
+	}
+	if len(allAttachments) > 0 {
+		orch.Attachments = allAttachments
 	}
 
 	history := append([]Message(nil), req.History...)
@@ -297,31 +298,11 @@ func (e *Engine) providerModels(ctx context.Context, name string) ([]Model, erro
 func loadFileAttachments(paths []string) ([]llm.Attachment, error) {
 	var out []llm.Attachment
 	for _, p := range paths {
-		data, err := os.ReadFile(p)
+		att, err := attach.FromPath(p)
 		if err != nil {
-			return nil, fmt.Errorf("read attachment %q: %w", p, err)
+			return nil, err
 		}
-		mediaType := mediaTypeFor(p)
-		attType := llm.AttachmentTypeFile
-		if isImageMediaType(mediaType) {
-			attType = llm.AttachmentTypeImage
-		}
-		att := llm.NewAttachmentFromBase64(attType, mediaType, llm.EncodeFileToBase64(data))
-		att.FileName = filepath.Base(p)
 		out = append(out, att)
 	}
 	return out, nil
-}
-
-func mediaTypeFor(path string) string {
-	switch filepath.Ext(path) {
-	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp":
-		return "image/" + filepath.Ext(path)[1:]
-	default:
-		return "application/octet-stream"
-	}
-}
-
-func isImageMediaType(mt string) bool {
-	return len(mt) >= 6 && mt[:6] == "image/"
 }

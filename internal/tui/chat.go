@@ -620,13 +620,14 @@ func (a *App) addToolItem(t *agentTranscript, call llm.ToolCall, agentID string)
 
 func (a *App) submitMessage(input string) {
 	input = strings.TrimSpace(input)
-	if input == "" {
-		return
-	}
 
 	a.chatMu.Lock()
 	attachments := make([]llm.Attachment, len(a.home.AttachmentBar().Attachments()))
 	copy(attachments, a.home.AttachmentBar().Attachments())
+	if input == "" && len(attachments) == 0 {
+		a.chatMu.Unlock()
+		return
+	}
 	a.home.AttachmentBar().Clear()
 	a.refreshMentionItemsLocked()
 	a.refreshHomeLocked()
@@ -1102,7 +1103,7 @@ func messagesToItems(msgs []session.Message) []*components.ChatItem {
 		switch m.Role {
 		case llm.RoleUser:
 			flushAssistant()
-			out = append(out, &components.ChatItem{Kind: components.ItemUser, Text: messageText(m), MsgID: m.ID, MsgSessionID: m.SessionID})
+			out = append(out, &components.ChatItem{Kind: components.ItemUser, Text: messageText(m), Attachments: messageAttachments(m), MsgID: m.ID, MsgSessionID: m.SessionID})
 		case llm.RoleAssistant:
 			pendingReasoning += messageReasoning(m)
 			pendingText += messageText(m)

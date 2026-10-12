@@ -43,7 +43,7 @@ That's it. The next time you open the website, your agent is already connected.
 
 | Page | What it gives you |
 |---|---|
-| **Connect** | Chat with the agent — sessions, streaming answers, reasoning blocks, tool cards, diffs, and a composer that can stop a run |
+| **Connect** | Chat with the agent — sessions, streaming answers, reasoning blocks, tool cards, diffs, file attachments, and a composer that can stop a run |
 | **Agents** | Every machine connected to your team: online/offline state, workspace, rename, granted scopes, revoke, re-enable, delete |
 | **Agent settings** | Change the provider, model, reasoning effort, permissions, compaction, memory, MCP servers, skills, rules, plugins — the same settings as the TUI, saved on the machine |
 | **Plan & Billing** | How many agents your plan allows, what is connected right now, and one-click **Add agents** |
@@ -120,6 +120,9 @@ at your deployment.
   again — `pegg connect status` shows it masked.
 - **No transcripts leave your machine.** The website receives messages over the relay
   and keeps none of them.
+- **Attachments stay on your machine.** Files you attach in the browser are relayed
+  and written to the local attachment store (`os.TempDir()/pegg`); the agent reads
+  them there and the website keeps no copy.
 
 Avoid `--auto-approve` unless the machine is unattended: it removes the local
 confirmation step for anything the website asks for.
