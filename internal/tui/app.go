@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"mime"
 	"os"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/update"
@@ -753,9 +755,36 @@ func seqFloor(msgs []session.Message) int {
 }
 
 func messageText(m session.Message) string {
+	return stripAttachmentsBlock(messageRawText(m))
+}
+
+func stripAttachmentsBlock(text string) string {
+	const open = "<attachments>"
+	const close = "</attachments>"
+	for {
+		start := strings.Index(text, open)
+		if start < 0 {
+			return text
+		}
+		rest := text[start+len(open):]
+		end := strings.Index(rest, close)
+		if end < 0 {
+			return strings.TrimRight(text[:start], " \t\r\n")
+		}
+		text = text[:start] + rest[end+len(close):]
+	}
+}
+
+func messageRawText(m session.Message) string {
 	switch c := m.Content.(type) {
 	case string:
 		return c
+	case llm.Content:
+		return c.Text
+	case map[string]any:
+		if text, ok := c["text"].(string); ok {
+			return text
+		}
 	case []any:
 		for _, item := range c {
 			if mm, ok := item.(map[string]any); ok {
@@ -768,6 +797,30 @@ func messageText(m session.Message) string {
 		}
 	}
 	return ""
+}
+
+func messageAttachments(m session.Message) []llm.Attachment {
+	var raw any
+	switch c := m.Content.(type) {
+	case llm.Content:
+		return c.Attachments
+	case map[string]any:
+		raw = c["attachments"]
+	default:
+		return nil
+	}
+	if raw == nil {
+		return nil
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil
+	}
+	var atts []llm.Attachment
+	if err := json.Unmarshal(data, &atts); err != nil {
+		return nil
+	}
+	return atts
 }
 
 func (a *App) draw() {
@@ -889,28 +942,11 @@ func (a *App) tryAttachFile(path string) {
 		return
 	}
 
-	data, err := os.ReadFile(path)
+	att, err := attach.FromPath(path)
 	if err != nil {
+		a.showError("Could not attach file: " + err.Error())
 		return
 	}
-
-	mediaType := mime.TypeByExtension(filepath.Ext(path))
-	if mediaType == "" {
-		mediaType = "application/octet-stream"
-	}
-
-	var attType llm.AttachmentType
-	switch {
-	case strings.HasPrefix(mediaType, "image/"):
-		attType = llm.AttachmentTypeImage
-	case strings.HasPrefix(mediaType, "audio/"):
-		attType = llm.AttachmentTypeAudio
-	default:
-		attType = llm.AttachmentTypeFile
-	}
-
-	att := llm.NewFileAttachmentFromBase64(mediaType, llm.EncodeFileToBase64(data), filepath.Base(path))
-	att.Type = attType
 
 	a.chatMu.Lock()
 	if a.home != nil {
