@@ -17,6 +17,7 @@ files. There is no YAML or TOML variant.
 | Project | `<project>/.lsp.json` | Project language servers |
 | Global | `~/.pegg/permissions.json` | Remembered tool approvals and rejections |
 | Global | `~/.pegg/schedules.json` | Recurring schedules. Run history lives in `~/.pegg/schedule_runs/` |
+| Global | `~/.pegg/vfs/` | Per-workspace read-hash snapshots backing read-before-edit |
 
 The global file is created with defaults on first run. A missing file is not an
 error — Pegg falls back to built-in defaults. An unparsable file is an error.

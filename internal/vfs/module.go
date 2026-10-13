@@ -12,5 +12,13 @@ func VFSModule(log *logger.Logger) (*VFS, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: get working directory: %w", err)
 	}
-	return New(cwd, Options{Log: log})
+	opts := Options{Log: log}
+	if path, err := DefaultSnapshotPath(cwd); err != nil {
+		if log != nil {
+			log.Fwarn("vfs: resolve snapshot store path: %v", err)
+		}
+	} else {
+		opts.SnapshotPath = path
+	}
+	return New(cwd, opts)
 }

@@ -150,7 +150,11 @@ func (e *Engine) init() error {
 		}
 	}
 
-	fs, err := vfs.New(e.workspaceRoot(), vfs.Options{Log: e.log})
+	fsOpts := vfs.Options{Log: e.log}
+	if path, err := vfs.SnapshotPathIn(e.configDir(), e.workspaceRoot()); err == nil {
+		fsOpts.SnapshotPath = path
+	}
+	fs, err := vfs.New(e.workspaceRoot(), fsOpts)
 	if err != nil {
 		return fmt.Errorf("sdk: mount workspace: %w", err)
 	}
@@ -307,6 +311,17 @@ func (e *Engine) workspaceRoot() string {
 		return "."
 	}
 	return cwd
+}
+
+func (e *Engine) configDir() string {
+	if e.opts.ConfigDir != "" {
+		return e.opts.ConfigDir
+	}
+	dir, err := config.GetConfigDir()
+	if err != nil {
+		return ""
+	}
+	return dir
 }
 
 func (e *Engine) openSessionStore() (session.Store, error) {

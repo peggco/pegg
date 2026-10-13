@@ -149,6 +149,7 @@ Run `pegg files` to print the resolved paths and whether each exists.
 | Global skills | `~/.pegg/skills/` |
 | Global rules | `~/.pegg/rules/` |
 | Downloaded LSP binaries | `~/.pegg/lsps/` |
+| Read-hash snapshots | `~/.pegg/vfs/` (one file per workspace) |
 | Project data | `<project>/.pegg/` |
 | Project MCP config | `<project>/.mcp.json` |
 | Project LSP config | `<project>/.lsp.json` |

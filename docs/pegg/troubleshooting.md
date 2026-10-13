@@ -168,6 +168,7 @@ Remove pieces selectively, or everything:
 
 ```bash
 rm ~/.pegg/permissions.json    # forget tool approvals
+rm -rf ~/.pegg/vfs             # forget read-before-edit state
 pegg cache clear               # rebuild model cache
 rm ~/.peggco/pegg.json         # regenerate default config (loses providers)
 rm -rf ~/.pegg                 # full reset: config, sessions, logs, cache

@@ -53,11 +53,14 @@ func (c *CLI) runFiles(out io.Writer) error {
 
 	lspsPath, _ := config.GetConfigPath("lsps")
 
+	vfsPath, _ := config.GetConfigPath("vfs")
+
 	printFile(out, "config", configPath)
 	printFile(out, "logs", logPath)
 	printFile(out, "cache", cachePath)
 	printFile(out, "sessions", sessionsPath)
 	printFile(out, "lsps", lspsPath)
+	printFile(out, "vfs", vfsPath)
 	return nil
 }
 

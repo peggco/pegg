@@ -15,7 +15,8 @@ import (
 )
 
 type Options struct {
-	Log *logger.Logger
+	Log          *logger.Logger
+	SnapshotPath string
 }
 
 type VFS struct {
@@ -24,7 +25,7 @@ type VFS struct {
 	wscope    string
 	writeOnly string
 	mu        sync.RWMutex
-	snapshots map[string]string
+	snapshots *snapshotStore
 	ignorer   *Ignorer
 	hooks     vfsHooks
 	log       *logger.Logger
@@ -47,7 +48,7 @@ func New(root string, opts Options) (*VFS, error) {
 	}
 	return &VFS{
 		root:      filepath.Clean(abs),
-		snapshots: make(map[string]string),
+		snapshots: newSnapshotStore(opts.SnapshotPath, filepath.Clean(abs), opts.Log),
 		ignorer:   newIgnorer(filepath.Clean(abs)),
 		hooks:     newHooks(),
 		log:       opts.Log,
@@ -455,11 +456,7 @@ func (v *VFS) Snapshot(vpath string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	rel := v.Virtual(phys)
-	v.mu.RLock()
-	defer v.mu.RUnlock()
-	hash, ok := v.snapshots[rel]
-	return hash, ok
+	return v.snapshots.get(v.Virtual(phys))
 }
 
 func (v *VFS) Forget(vpath string) {
@@ -467,16 +464,11 @@ func (v *VFS) Forget(vpath string) {
 	if err != nil {
 		return
 	}
-	rel := v.Virtual(phys)
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	delete(v.snapshots, rel)
+	v.snapshots.delete(v.Virtual(phys))
 }
 
 func (v *VFS) setSnapshot(rel, hash string) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	v.snapshots[rel] = hash
+	v.snapshots.set(rel, hash)
 }
 
 func hashBytes(data []byte) string {
