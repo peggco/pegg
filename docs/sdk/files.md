@@ -24,7 +24,8 @@ content, err := eng.ReadFile("src/main.go")
 ```
 
 A missing file returns `sdk.ErrNotFound`. Every read records a content hash used by
-`EditFile`'s change detection.
+`EditFile`'s change detection. Hashes are persisted per workspace under `~/.pegg/vfs/`,
+so they survive across process restarts.
 
 ## Writing
 
@@ -41,7 +42,8 @@ existing file permissions.
 
 `EditFile` applies a text replacement. The file must have been read first, and its
 hash must still match — an external change returns `sdk.ErrFileChanged` and requires
-a fresh read.
+a fresh read. The recorded hash persists across restarts, so an unchanged file read in
+an earlier run does not need to be read again.
 
 ```go
 out, err := eng.EditFile("notes.md", "# Notes", "# Updated notes", false)

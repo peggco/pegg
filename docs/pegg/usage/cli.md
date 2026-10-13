@@ -334,6 +334,7 @@ logs    exists   /home/user/.pegg/logs.db
 cache   exists   /home/user/.pegg/cache.db
 sessions exists  /home/user/.pegg/sessions.db
 lsps    missing  /home/user/.pegg/lsps
+vfs     missing  /home/user/.pegg/vfs
 ```
 
 ## `pegg mcp`

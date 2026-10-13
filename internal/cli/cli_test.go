@@ -330,7 +330,7 @@ func TestFilesCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, label := range []string{"config", "logs", "cache", "sessions"} {
+	for _, label := range []string{"config", "logs", "cache", "sessions", "vfs"} {
 		if !strings.Contains(out, label) {
 			t.Fatalf("output missing %q: %q", label, out)
 		}

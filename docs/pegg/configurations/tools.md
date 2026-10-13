@@ -27,7 +27,8 @@ Read a file with line numbers plus metadata (path, SHA-256 hash, size, line coun
 | `limit` | integer | no | Maximum number of lines to return |
 
 Reading records a snapshot hash. LSP diagnostics are appended when a language server
-is available.
+is available. The hash is persisted per workspace under `~/.pegg/vfs/`, so a read is
+remembered across restarts.
 
 ### `write`
 
@@ -42,7 +43,9 @@ are atomic (temp file + rename), preserving existing permissions.
 ### `edit`
 
 Apply a text replacement. The file must have been read (or written) first; a hash
-mismatch after an external change returns an error and requires a fresh read.
+mismatch after an external change returns an error and requires a fresh read. Because
+read hashes are persisted, a read from a previous run still counts as long as the file
+is unchanged.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

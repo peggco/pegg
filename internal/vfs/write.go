@@ -47,9 +47,7 @@ func (v *VFS) EditCtx(ctx context.Context, vpath, oldString, newString string, r
 		return "", err
 	}
 
-	v.mu.RLock()
-	snapshot, ok := v.snapshots[rel]
-	v.mu.RUnlock()
+	snapshot, ok := v.snapshots.get(rel)
 	if !ok {
 		return "", ErrReadRequired
 	}
@@ -115,9 +113,7 @@ func (v *VFS) DeleteCtx(ctx context.Context, vpath string) error {
 	if err := os.Remove(phys); err != nil {
 		return err
 	}
-	v.mu.Lock()
-	delete(v.snapshots, rel)
-	v.mu.Unlock()
+	v.snapshots.delete(rel)
 	v.debug("vfs: deleted %s", rel)
 	return nil
 }
