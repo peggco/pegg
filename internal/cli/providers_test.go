@@ -345,7 +345,10 @@ func TestProviderAddCustomEndpointInteractive(t *testing.T) {
 	p.selectProvider = func() (string, error) { return customEndpointOption, nil }
 	p.selectDriver = func() (string, error) { return "testdrv-int", nil }
 	p.promptString = func(label string) (string, error) {
-		if label == "Base URL" {
+		switch label {
+		case "Provider name":
+			return "my-endpoint", nil
+		case "Base URL":
 			return "http://127.0.0.1:9/v1", nil
 		}
 		return "", nil
@@ -369,7 +372,7 @@ func TestProviderAddCustomEndpointInteractive(t *testing.T) {
 		t.Fatalf("providers = %+v, want 1 entry", loaded.Providers)
 	}
 	pv := loaded.Providers[0]
-	if pv.Provider != "" || pv.Driver != "testdrv-int" {
+	if pv.Provider != "my-endpoint" || pv.Driver != "testdrv-int" {
 		t.Fatalf("provider = %+v", pv)
 	}
 	if pv.BaseURL != "http://127.0.0.1:9/v1" || pv.APIKey != "k" {
@@ -377,6 +380,36 @@ func TestProviderAddCustomEndpointInteractive(t *testing.T) {
 	}
 	if pv.Headers["X-Test"] != "1" || len(pv.Headers) != 1 {
 		t.Fatalf("headers = %+v", pv.Headers)
+	}
+}
+
+func TestProviderAddCustomEndpointRequiresName(t *testing.T) {
+	c, _ := newTestCLI(t)
+	registerTestDriver(t, "testdrv-noname")
+
+	p := stubPrompts(nil)
+	p.selectProvider = func() (string, error) { return customEndpointOption, nil }
+	p.promptString = func(string) (string, error) { return "   ", nil }
+
+	var out bytes.Buffer
+	err := c.runProviderAdd(&out, &providerAddFlags{}, p)
+	if err == nil || !strings.Contains(err.Error(), "provider name is required") {
+		t.Fatalf("err = %v, want provider name required", err)
+	}
+}
+
+func TestProviderAddCustomEndpointRejectsRegisteredName(t *testing.T) {
+	c, _ := newTestCLI(t)
+	registerTestProvider(t, "testprov-taken")
+
+	p := stubPrompts(nil)
+	p.selectProvider = func() (string, error) { return customEndpointOption, nil }
+	p.promptString = func(string) (string, error) { return "testprov-taken", nil }
+
+	var out bytes.Buffer
+	err := c.runProviderAdd(&out, &providerAddFlags{}, p)
+	if err == nil || !strings.Contains(err.Error(), "is a registered provider") {
+		t.Fatalf("err = %v, want registered provider rejection", err)
 	}
 }
 
