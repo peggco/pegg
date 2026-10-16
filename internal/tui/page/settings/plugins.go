@@ -9,6 +9,7 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/plugin"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 )
 
@@ -22,7 +23,7 @@ type pluginData struct {
 }
 
 func newPlugins(s *Settings) *pluginsTab {
-	t := &pluginsTab{settings: s, list: components.NewList("Plugins")}
+	t := &pluginsTab{settings: s, list: components.NewList(i18n.T("settings.plugins.title"))}
 	t.rebuild()
 	t.list.SetOnSelect(func(_ int, item components.ListItem) {
 		if pd, ok := item.Data.(pluginData); ok {
@@ -38,7 +39,7 @@ func (t *pluginsTab) rebuild() {
 	pluginDir, err := plugin.GetPluginDir()
 	if err != nil {
 		items = append(items, components.ListItem{
-			Label:    "failed to get plugin directory",
+			Label:    i18n.T("settings.plugins.failedDir"),
 			Detail:   err.Error(),
 			Disabled: true,
 		})
@@ -67,14 +68,14 @@ func (t *pluginsTab) rebuild() {
 	if err != nil {
 		if os.IsNotExist(err) {
 			items = append(items, components.ListItem{
-				Label:    "(no plugins installed)",
+				Label:    i18n.T("settings.plugins.none"),
 				Disabled: true,
 			})
 			t.list.SetItems(items)
 			return
 		}
 		items = append(items, components.ListItem{
-			Label:    "failed to read plugin directory",
+			Label:    i18n.T("settings.plugins.failedRead"),
 			Detail:   err.Error(),
 			Disabled: true,
 		})
@@ -102,9 +103,9 @@ func (t *pluginsTab) rebuild() {
 
 		name := entry.Name()
 		disabled := excludeSet[name] || !globalEnabled
-		status := "enabled"
+		status := i18n.T("settings.plugins.enabled")
 		if disabled {
-			status = "excluded"
+			status = i18n.T("settings.plugins.excluded")
 		}
 
 		if p, ok := loadedMap[name]; ok {
@@ -126,7 +127,7 @@ func (t *pluginsTab) rebuild() {
 
 	if len(items) == 0 {
 		items = append(items, components.ListItem{
-			Label:    "(no plugins installed)",
+			Label:    i18n.T("settings.plugins.none"),
 			Disabled: true,
 		})
 	}
@@ -137,7 +138,7 @@ func (t *pluginsTab) rebuild() {
 func (t *pluginsTab) toggle(name string) {
 	_, err := config.TogglePlugin(name)
 	if err != nil {
-		t.settings.errMsg = "failed to toggle plugin: " + err.Error()
+		t.settings.errMsg = i18n.Tf("settings.plugins.errToggle", err.Error())
 		return
 	}
 	t.settings.errMsg = ""

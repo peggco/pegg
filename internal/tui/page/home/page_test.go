@@ -172,7 +172,7 @@ func TestRandomHintIsFromPool(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		h := randomHint()
 		found := false
-		for _, want := range defaultHints {
+		for _, want := range defaultHints() {
 			if h == want {
 				found = true
 				break

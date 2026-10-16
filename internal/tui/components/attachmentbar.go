@@ -7,6 +7,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 
 	"github.com/peggco/pegg/internal/llm"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -265,7 +266,7 @@ func (ab *AttachmentBar) fileName(att llm.Attachment) string {
 	if att.URL != "" {
 		return filepath.Base(att.URL)
 	}
-	return "attachment"
+	return i18n.T("home.attachment")
 }
 
 func (ab *AttachmentBar) drawPagination(s tcell.Screen, bounds layout.Region, y int) {

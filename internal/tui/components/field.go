@@ -3,6 +3,7 @@ package components
 import (
 	"github.com/gdamore/tcell/v2"
 
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -161,6 +162,6 @@ func (f *Field) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 		s.SetContent(cx, cy, ch, nil, th.Base().Foreground(th.InputBg).Background(th.Cursor))
 	}
 
-	DrawText(s, bounds.Left, bounds.Bottom()-1, "Enter save  ·  Esc cancel",
+	DrawText(s, bounds.Left, bounds.Bottom()-1, i18n.T("common.enterSaveEscCancel"),
 		th.Base().Foreground(th.Hint).Background(th.InputBg))
 }

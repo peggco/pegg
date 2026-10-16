@@ -217,6 +217,7 @@ type Config struct {
 	Notification    NotificationConfig              `json:"notification"`
 	Server          ServerConfig                    `json:"server,omitempty"`
 	Theme           string                          `json:"theme,omitempty"`
+	Language        string                          `json:"language,omitempty"`
 	Permission      *PermissionConfig               `json:"permission,omitempty"`
 	Compaction      *CompactionConfig               `json:"compaction,omitempty"`
 	SmartRouter     *SmartRouterConfig              `json:"smart_router,omitempty"`
@@ -253,7 +254,8 @@ func DefaultConfig() *Config {
 			Host: "127.0.0.1",
 			Port: 8080,
 		},
-		Theme: "dark",
+		Theme:    "dark",
+		Language: "en",
 		Permission: &PermissionConfig{
 			Default: "semi-ask",
 			Rules: map[string]string{
@@ -485,6 +487,15 @@ func SaveTheme(theme string) error {
 		return err
 	}
 	cfg.Theme = theme
+	return Save(cfg)
+}
+
+func SaveLanguage(language string) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	cfg.Language = language
 	return Save(cfg)
 }
 

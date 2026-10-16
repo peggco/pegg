@@ -14,6 +14,7 @@ import (
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/page/settings"
 )
 
@@ -166,7 +167,7 @@ func (a *App) onAgentStarted(e agent.AgentStarted) {
 		return
 	}
 	if a.main == nil {
-		a.main = newTranscript(a.agent.ID, "orchestrator")
+		a.main = newTranscript(a.agent.ID, i18n.T("chat.orchestrator"))
 	}
 	sub := &components.ChatItem{
 		Kind:           components.ItemSubagent,
@@ -259,21 +260,21 @@ func formatActivity(call llm.ToolCall) string {
 			FilePath string `json:"filePath"`
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.FilePath != "" {
-			return "Reading " + p.FilePath
+			return i18n.Tf("chat.activity.reading", p.FilePath)
 		}
 	case "write":
 		var p struct {
 			FilePath string `json:"filePath"`
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.FilePath != "" {
-			return "Writing " + p.FilePath
+			return i18n.Tf("chat.activity.writing", p.FilePath)
 		}
 	case "edit":
 		var p struct {
 			FilePath string `json:"filePath"`
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.FilePath != "" {
-			return "Editing " + p.FilePath
+			return i18n.Tf("chat.activity.editing", p.FilePath)
 		}
 	case "bash":
 		var p struct {
@@ -284,35 +285,35 @@ func formatActivity(call llm.ToolCall) string {
 			if len(cmd) > 50 {
 				cmd = cmd[:50] + "…"
 			}
-			return "Running " + cmd
+			return i18n.Tf("chat.activity.running", cmd)
 		}
 	case "glob":
 		var p struct {
 			Pattern string `json:"pattern"`
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.Pattern != "" {
-			return "Finding " + p.Pattern
+			return i18n.Tf("chat.activity.finding", p.Pattern)
 		}
 	case "grep":
 		var p struct {
 			Pattern string `json:"pattern"`
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.Pattern != "" {
-			return "Searching " + p.Pattern
+			return i18n.Tf("chat.activity.searching", p.Pattern)
 		}
 	case "list":
 		var p struct {
 			Path string `json:"path"`
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.Path != "" {
-			return "Listing " + p.Path
+			return i18n.Tf("chat.activity.listing", p.Path)
 		}
 	case "webfetch":
 		var p struct {
 			URL string `json:"url"`
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.URL != "" {
-			return "Fetching " + p.URL
+			return i18n.Tf("chat.activity.fetching", p.URL)
 		}
 	}
 	return name
@@ -435,7 +436,7 @@ func (a *App) onCompactionFinished(e compaction.Event) {
 	a.chatMu.Lock()
 	defer a.chatMu.Unlock()
 	t := a.transcriptFor(e.AgentID, e.AgentName)
-	text := fmt.Sprintf("↻ Context compacted (%s) — %d messages, %d tokens", e.Strategy, e.Messages, e.Tokens)
+	text := i18n.Tf("chat.compaction", e.Strategy, e.Messages, e.Tokens)
 	it := &components.ChatItem{Kind: components.ItemCompaction, ID: e.AgentID, Text: text}
 	a.appendItem(t, it)
 	if a.viewID == t.id {
@@ -807,9 +808,9 @@ func (a *App) openUserMenu(it *components.ChatItem) {
 	}
 	text := it.Text
 	items := []components.MenuItem{
-		{Label: "Copy text", OnSelect: func() { a.copyText(text) }},
-		{Label: "Revert message", OnSelect: func() { a.doRevert(sid, mid, it) }},
-		{Label: "Fork message", OnSelect: func() { a.forkMessage(sid, mid, it) }},
+		{Label: i18n.T("chat.menu.copy"), OnSelect: func() { a.copyText(text) }},
+		{Label: i18n.T("chat.menu.revert"), OnSelect: func() { a.doRevert(sid, mid, it) }},
+		{Label: i18n.T("chat.menu.fork"), OnSelect: func() { a.forkMessage(sid, mid, it) }},
 	}
 	a.showMenu(items)
 }
@@ -888,7 +889,7 @@ func (a *App) doRevert(sid, mid string, it *components.ChatItem) {
 		return
 	}
 	if _, _, err := a.deps.Sessions.RevertFrom(sid, mid); err != nil {
-		a.showError("revert failed: " + err.Error())
+		a.showError(i18n.Tf("chat.error.revert", err.Error()))
 		return
 	}
 	info, ok := a.sessionInfoFor(sid)
@@ -906,7 +907,7 @@ func (a *App) forkMessage(sid, mid string, it *components.ChatItem) {
 	}
 	fork, err := a.deps.Sessions.ForkBefore(sid, mid)
 	if err != nil {
-		a.showError("fork failed: " + err.Error())
+		a.showError(i18n.Tf("chat.error.fork", err.Error()))
 		return
 	}
 	info, ok := a.sessionInfoFor(fork.ID)
@@ -920,12 +921,12 @@ func (a *App) forkMessage(sid, mid string, it *components.ChatItem) {
 func (a *App) sessionInfoFor(id string) (settings.SessionInfo, bool) {
 	sess, err := a.deps.Sessions.Get(id)
 	if err != nil {
-		a.showError("load session failed: " + err.Error())
+		a.showError(i18n.Tf("chat.error.loadSession", err.Error()))
 		return settings.SessionInfo{}, false
 	}
 	msgs, err := a.deps.Sessions.Messages(id)
 	if err != nil {
-		a.showError("load messages failed: " + err.Error())
+		a.showError(i18n.Tf("chat.error.loadMessages", err.Error()))
 		return settings.SessionInfo{}, false
 	}
 	return settings.SessionInfo{
@@ -1045,7 +1046,7 @@ func (a *App) loadParentSessionLocked() {
 		return
 	}
 	a.loadedFloor = msgs[0].Seq
-	divider := &components.ChatItem{Kind: components.ItemCompactionDivider, Text: "context compacted"}
+	divider := &components.ChatItem{Kind: components.ItemCompactionDivider, Text: i18n.T("chat.compactedDivider")}
 	items := append([]*components.ChatItem{divider}, messagesToItems(msgs)...)
 	a.main.items = append(items, a.main.items...)
 	a.chat.PrependItems(items)

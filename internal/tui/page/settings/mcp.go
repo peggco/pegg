@@ -9,6 +9,7 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/mcp"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 )
 
@@ -18,7 +19,7 @@ type mcpTab struct {
 }
 
 func newMCP(s *Settings) *mcpTab {
-	t := &mcpTab{settings: s, list: components.NewList("MCP servers")}
+	t := &mcpTab{settings: s, list: components.NewList(i18n.T("settings.mcp.serversTitle"))}
 	t.rebuild()
 	return t
 }
@@ -35,7 +36,7 @@ func (t *mcpTab) rebuild() {
 		servers, err = mcp.ConfiguredServers(nil)
 	}
 	if err != nil {
-		items = append(items, components.ListItem{Label: "failed to load servers", Detail: err.Error()})
+		items = append(items, components.ListItem{Label: i18n.T("settings.mcp.failedLoad"), Detail: err.Error()})
 		t.list.SetItems(items)
 		return
 	}
@@ -47,18 +48,18 @@ func (t *mcpTab) rebuild() {
 
 	for _, name := range names {
 		toolCount := len(mcp.ToolsForServer(name))
-		status := "not connected"
+		status := i18n.T("settings.mcp.notConnected")
 		if t.settings.deps.MCP != nil && t.settings.deps.MCP.Clients()[name] != nil {
-			status = "connected"
+			status = i18n.T("settings.mcp.connected")
 		}
 		items = append(items, components.ListItem{
 			Label:  name,
-			Detail: strconv.Itoa(toolCount) + " tools · " + status,
+			Detail: i18n.Tf("settings.mcp.toolsStatus", strconv.Itoa(toolCount), status),
 			Data:   name,
 		})
 	}
 	if len(items) == 0 {
-		items = append(items, components.ListItem{Label: "(no MCP servers configured)"})
+		items = append(items, components.ListItem{Label: i18n.T("settings.mcp.noServers")})
 	}
 	t.list.SetItems(items)
 	t.list.SetOnSelect(func(_ int, item components.ListItem) {

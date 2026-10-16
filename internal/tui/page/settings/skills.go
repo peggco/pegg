@@ -5,6 +5,7 @@ import (
 
 	"github.com/peggco/pegg/internal/skill"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 )
 
@@ -14,7 +15,7 @@ type skillsTab struct {
 }
 
 func newSkills(s *Settings) *skillsTab {
-	t := &skillsTab{settings: s, list: components.NewList("Skills")}
+	t := &skillsTab{settings: s, list: components.NewList(i18n.T("settings.skills.title"))}
 	t.rebuild()
 	return t
 }
@@ -29,7 +30,7 @@ func (t *skillsTab) rebuild() {
 		items = append(items, components.ListItem{Label: sk.Name, Detail: detail, Data: sk.Path})
 	}
 	if len(items) == 0 {
-		items = append(items, components.ListItem{Label: "(no skills loaded)"})
+		items = append(items, components.ListItem{Label: i18n.T("settings.skills.none")})
 	}
 	t.list.SetItems(items)
 }

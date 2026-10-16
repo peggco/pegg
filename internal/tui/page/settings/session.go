@@ -11,6 +11,7 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 	"github.com/peggco/pegg/internal/utils/query"
@@ -250,10 +251,10 @@ func (t *sessionTab) Draw(screen tcell.Screen, bounds layout.Region, _ bool) {
 	rows := []struct {
 		label, value string
 	}{
-		{"Load session", t.activeValue()},
-		{"New session", ""},
-		{"Delete session", ""},
-		{"Change title", ""},
+		{i18n.T("settings.session.load"), t.activeValue()},
+		{i18n.T("settings.session.new"), ""},
+		{i18n.T("settings.session.delete"), ""},
+		{i18n.T("settings.session.changeTitle"), ""},
 	}
 	for i, r := range rows {
 		y := bounds.Top + i
@@ -268,7 +269,7 @@ func (t *sessionTab) Draw(screen tcell.Screen, bounds layout.Region, _ bool) {
 		}
 		label := r.label
 		if !enabled {
-			label += " (no active session)"
+			label += " " + i18n.T("settings.session.noActive")
 		}
 		components.DrawText(screen, bounds.Left+1, y, marker+label, style)
 		if r.value != "" {
@@ -278,13 +279,13 @@ func (t *sessionTab) Draw(screen tcell.Screen, bounds layout.Region, _ bool) {
 
 	sepY := bounds.Top + sessionRowCount + 1
 	sepStyle := th.Base().Foreground(th.Muted).Background(th.InputBg)
-	components.DrawText(screen, bounds.Left+1, sepY, "── Compaction ──────────────────────────", sepStyle)
+	components.DrawText(screen, bounds.Left+1, sepY, i18n.T("settings.session.compaction"), sepStyle)
 
 	compRows := []struct {
 		label string
 		value string
 	}{
-		{"Enabled", t.enabledLabel()},
+		{i18n.T("settings.session.enabled"), t.enabledLabel()},
 	}
 	for i, name := range compStrategies {
 		cb := "[ ]"
@@ -301,9 +302,9 @@ func (t *sessionTab) Draw(screen tcell.Screen, bounds layout.Region, _ bool) {
 			label string
 			value string
 		}{
-			{"Threshold", fmt.Sprintf("%d%%", t.compThresh)},
-			{"Max messages", fmt.Sprintf("%d", t.compMaxMsg)},
-			{"Max tool output", fmt.Sprintf("%d chars", t.compMaxTool)},
+			{i18n.T("settings.session.threshold"), fmt.Sprintf("%d%%", t.compThresh)},
+			{i18n.T("settings.session.maxMessages"), fmt.Sprintf("%d", t.compMaxMsg)},
+			{i18n.T("settings.session.maxToolOutput"), i18n.Tf("settings.session.chars", t.compMaxTool)},
 		}...,
 	)
 	for i, r := range compRows {
@@ -324,9 +325,9 @@ func (t *sessionTab) Draw(screen tcell.Screen, bounds layout.Region, _ bool) {
 
 func (t *sessionTab) enabledLabel() string {
 	if t.compEnabled {
-		return "on"
+		return i18n.T("common.on")
 	}
-	return "off"
+	return i18n.T("common.off")
 }
 
 func (t *sessionTab) activeValue() string {
@@ -340,10 +341,10 @@ func (s *Settings) hasSessions() bool { return s.deps.Sessions != nil }
 
 func (s *Settings) openSessionList() {
 	if !s.hasSessions() {
-		s.errMsg = "session store unavailable"
+		s.errMsg = i18n.T("settings.session.errStoreUnavailable")
 		return
 	}
-	l := components.NewList("Load session")
+	l := components.NewList(i18n.T("settings.session.load"))
 
 	var items []components.ListItem
 	sessions, _, err := s.deps.Sessions.List(query.Query{
@@ -371,10 +372,10 @@ func (s *Settings) openSessionList() {
 			})
 		}
 	} else {
-		s.errMsg = "failed to list sessions: " + err.Error()
+		s.errMsg = i18n.Tf("settings.session.errList", err.Error())
 	}
 	if len(items) == 0 {
-		items = append(items, components.ListItem{Label: "(no sessions in this project)"})
+		items = append(items, components.ListItem{Label: i18n.T("settings.session.noSessions")})
 	}
 	l.SetItems(items)
 	l.SetOnSelect(func(_ int, item components.ListItem) {
@@ -384,12 +385,12 @@ func (s *Settings) openSessionList() {
 			s.back()
 		}
 	})
-	s.openSub(&listModal{title: "Sessions", list: l, onBack: s.back})
+	s.openSub(&listModal{title: i18n.T("settings.session.modalTitle"), list: l, onBack: s.back})
 }
 
 func (s *Settings) loadSession(id string) {
 	if !s.hasSessions() {
-		s.errMsg = "session store unavailable"
+		s.errMsg = i18n.T("settings.session.errStoreUnavailable")
 		s.back()
 		return
 	}
@@ -397,7 +398,7 @@ func (s *Settings) loadSession(id string) {
 	if err != nil {
 		latest, err = s.deps.Sessions.Get(id)
 		if err != nil {
-			s.errMsg = "failed to load session: " + err.Error()
+			s.errMsg = i18n.Tf("settings.session.errLoad", err.Error())
 			s.back()
 			return
 		}
@@ -405,7 +406,7 @@ func (s *Settings) loadSession(id string) {
 	sess := latest
 	msgs, err := s.deps.Sessions.Messages(sess.ID)
 	if err != nil {
-		s.errMsg = "failed to load messages: " + err.Error()
+		s.errMsg = i18n.Tf("settings.session.errMessages", err.Error())
 		s.back()
 		return
 	}
@@ -448,14 +449,14 @@ func (s *Settings) openDeleteConfirm() {
 	if s.active == nil {
 		return
 	}
-	l := components.NewList("Delete session")
+	l := components.NewList(i18n.T("settings.session.delete"))
 	title := s.active.Title
 	if title == "" {
-		title = "(untitled)"
+		title = i18n.T("settings.session.untitled")
 	}
 	l.SetItems([]components.ListItem{
-		{Label: "Delete", Detail: "session \"" + title + "\" will be permanently removed"},
-		{Label: "Cancel", Detail: "keep the session"},
+		{Label: i18n.T("settings.session.deleteLabel"), Detail: i18n.Tf("settings.session.deleteDetail", title)},
+		{Label: i18n.T("settings.session.cancel"), Detail: i18n.T("settings.session.cancelDetail")},
 	})
 	l.SetOnSelect(func(i int, _ components.ListItem) {
 		if i == 0 {
@@ -464,7 +465,7 @@ func (s *Settings) openDeleteConfirm() {
 			s.back()
 		}
 	})
-	s.openSub(&listModal{title: "Confirm deletion", list: l, onBack: s.back})
+	s.openSub(&listModal{title: i18n.T("settings.session.confirmDeletion"), list: l, onBack: s.back})
 }
 
 func (s *Settings) deleteSession() {
@@ -475,7 +476,7 @@ func (s *Settings) deleteSession() {
 	id := s.active.ID
 	s.active = nil
 	if err := s.deps.Sessions.Delete(id); err != nil {
-		s.errMsg = "failed to delete session: " + err.Error()
+		s.errMsg = i18n.Tf("settings.session.errDelete", err.Error())
 	} else {
 		s.errMsg = ""
 	}
@@ -489,13 +490,13 @@ func (s *Settings) openTitle() {
 	if s.active == nil {
 		return
 	}
-	f := components.NewField("Session title")
-	f.SetPlaceholder("enter a title")
+	f := components.NewField(i18n.T("settings.session.titleTitle"))
+	f.SetPlaceholder(i18n.T("settings.session.titlePlaceholder"))
 	f.SetText(s.active.Title)
 	f.Focus()
 	f.SetOnEnter(func(title string) { s.saveTitle(strings.TrimSpace(title)) })
 	f.SetOnCancel(s.back)
-	s.openSub(&fieldModal{title: "Change title", field: f})
+	s.openSub(&fieldModal{title: i18n.T("settings.session.changeTitle"), field: f})
 }
 
 func (s *Settings) saveTitle(title string) {
@@ -504,7 +505,7 @@ func (s *Settings) saveTitle(title string) {
 		return
 	}
 	if err := s.deps.Sessions.SetTitle(s.active.ID, title); err != nil {
-		s.errMsg = "failed to save title: " + err.Error()
+		s.errMsg = i18n.Tf("settings.session.errSaveTitle", err.Error())
 		s.back()
 		return
 	}

@@ -1,7 +1,6 @@
 package settings
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -12,6 +11,7 @@ import (
 	"github.com/peggco/pegg/internal/llm/subscription"
 	"github.com/peggco/pegg/internal/router"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -23,7 +23,7 @@ type generalTab struct {
 
 func newGeneral(s *Settings) *generalTab { return &generalTab{settings: s} }
 
-const generalRowCount = 4
+const generalRowCount = 5
 
 func (g *generalTab) rowEnabled(i int) bool {
 	if i == 3 {
@@ -79,13 +79,14 @@ func (g *generalTab) rows() []genRow {
 	s := g.settings
 	effort := s.reasoningEffort
 	if effort == "" {
-		effort = "default"
+		effort = i18n.T("settings.general.effortDefault")
 	}
 	return []genRow{
-		{label: "Provider", value: s.providerValue(), action: s.openProviders},
-		{label: "Model", value: s.modelDisplay(), action: s.openModels},
-		{label: "Theme", value: styles.Name(), action: s.openThemes},
-		{label: "Reasoning", value: effort, action: s.openReasoning},
+		{label: i18n.T("settings.general.provider"), value: s.providerValue(), action: s.openProviders},
+		{label: i18n.T("settings.general.model"), value: s.modelDisplay(), action: s.openModels},
+		{label: i18n.T("settings.general.theme"), value: styles.Name(), action: s.openThemes},
+		{label: i18n.T("settings.general.reasoning"), value: effort, action: s.openReasoning},
+		{label: i18n.T("settings.general.language"), value: i18n.DisplayName(i18n.Current()), action: s.openLanguages},
 	}
 }
 
@@ -105,7 +106,7 @@ func (g *generalTab) Draw(screen tcell.Screen, bounds layout.Region, _ bool) {
 		}
 		label := r.label
 		if !enabled {
-			label += " (not supported)"
+			label += " " + i18n.T("settings.general.notSupported")
 		}
 		components.DrawText(screen, bounds.Left+1, y, marker+label, style)
 		if enabled || i == g.index {
@@ -128,23 +129,23 @@ func (s *Settings) configured(name string) (config.LLMConfig, bool) {
 
 func (s *Settings) providerValue() string {
 	if s.deps.Config == nil || len(s.deps.Config.Providers) == 0 {
-		return "none configured"
+		return i18n.T("settings.provider.none")
 	}
 	first := s.deps.Config.Providers[0].Provider
 	if len(s.deps.Config.Providers) > 1 {
-		return fmt.Sprintf("%s +%d", first, len(s.deps.Config.Providers)-1)
+		return i18n.Tf("settings.provider.plus", first, len(s.deps.Config.Providers)-1)
 	}
 	return first
 }
 
 func (s *Settings) openProviders() {
-	l := components.NewList("Select provider")
+	l := components.NewList(i18n.T("settings.provider.selectTitle"))
 	l.SetSearchable(true)
 	var items []components.ListItem
 	for _, name := range llm.ListProviders() {
-		detail, marked := "not configured", false
+		detail, marked := i18n.T("settings.provider.notConfigured"), false
 		if _, ok := s.configured(name); ok {
-			detail, marked = "configured", true
+			detail, marked = i18n.T("settings.provider.configured"), true
 		}
 		items = append(items, components.ListItem{Label: name, Detail: detail, Marked: marked, Data: name})
 	}
@@ -161,16 +162,16 @@ func (s *Settings) openProviders() {
 			s.openAPIKey(name)
 		}
 	})
-	s.openSub(&listModal{title: "Providers (type to search)", list: l, onBack: s.back})
+	s.openSub(&listModal{title: i18n.T("settings.provider.selectSearch"), list: l, onBack: s.back})
 }
 
 func (s *Settings) openSubscription(name string, info subscription.Info) {
 	if !info.Status().LoggedIn {
-		l := components.NewList("Sign in required")
+		l := components.NewList(i18n.T("settings.provider.signInRequired"))
 		l.SetItems([]components.ListItem{
 			{Label: info.Hint, Disabled: true},
-			{Label: "Retry", Detail: "re-check credentials"},
-			{Label: "Cancel", Detail: "go back"},
+			{Label: i18n.T("settings.provider.retry"), Detail: i18n.T("settings.provider.retryDetail")},
+			{Label: i18n.T("settings.provider.cancel"), Detail: i18n.T("settings.provider.cancelDetail")},
 		})
 		l.SelectFirstEnabled()
 		l.SetOnSelect(func(i int, _ components.ListItem) {
@@ -180,13 +181,13 @@ func (s *Settings) openSubscription(name string, info subscription.Info) {
 				s.back()
 			}
 		})
-		s.openSub(&listModal{title: name + " — not signed in", list: l, onBack: s.back})
+		s.openSub(&listModal{title: i18n.Tf("settings.provider.notSignedIn", name), list: l, onBack: s.back})
 		return
 	}
 
 	cfg := config.LLMConfig{Provider: name}
 	if err := config.UpsertProvider(cfg); err != nil {
-		s.errMsg = "failed to save provider: " + err.Error()
+		s.errMsg = i18n.Tf("settings.provider.saveError", err.Error())
 		s.back()
 		return
 	}
@@ -201,10 +202,10 @@ func (s *Settings) openSubscription(name string, info subscription.Info) {
 }
 
 func (s *Settings) openProviderChoice(name string) {
-	l := components.NewList("Provider: " + name)
+	l := components.NewList(i18n.Tf("settings.provider.choiceTitle", name))
 	l.SetItems([]components.ListItem{
-		{Label: "Use existing configuration", Detail: "keep the current API key"},
-		{Label: "Configure again", Detail: "re-enter the API key"},
+		{Label: i18n.T("settings.provider.useExisting"), Detail: i18n.T("settings.provider.useExistingDetail")},
+		{Label: i18n.T("settings.provider.configureAgain"), Detail: i18n.T("settings.provider.configureAgainDetail")},
 	})
 	l.SetOnSelect(func(i int, _ components.ListItem) {
 		if i == 1 {
@@ -213,17 +214,17 @@ func (s *Settings) openProviderChoice(name string) {
 			s.back()
 		}
 	})
-	s.openSub(&listModal{title: "Already configured", list: l, onBack: s.back})
+	s.openSub(&listModal{title: i18n.T("settings.provider.alreadyConfigured"), list: l, onBack: s.back})
 }
 
 func (s *Settings) openAPIKey(name string) {
-	f := components.NewField("API key for " + name)
+	f := components.NewField(i18n.Tf("settings.provider.apiKeyTitle", name))
 	f.SetMask('*')
-	f.SetPlaceholder("paste your API key here")
+	f.SetPlaceholder(i18n.T("settings.provider.apiKeyPlaceholder"))
 	f.Focus()
 	f.SetOnEnter(func(key string) { s.saveProvider(name, strings.TrimSpace(key)) })
 	f.SetOnCancel(s.back)
-	s.openSub(&fieldModal{title: "Configure provider", field: f})
+	s.openSub(&fieldModal{title: i18n.T("settings.provider.configureTitle"), field: f})
 }
 
 func (s *Settings) saveProvider(name, apiKey string) {
@@ -234,7 +235,7 @@ func (s *Settings) saveProvider(name, apiKey string) {
 	cfg.APIKey = apiKey
 
 	if err := config.UpsertProvider(cfg); err != nil {
-		s.errMsg = "failed to save provider: " + err.Error()
+		s.errMsg = i18n.Tf("settings.provider.saveError", err.Error())
 		s.back()
 		return
 	}
@@ -251,10 +252,10 @@ func (s *Settings) saveProvider(name, apiKey string) {
 
 func (s *Settings) modelDisplay() string {
 	if s.model.provider == router.SmartRouterModel {
-		return "Smart Router"
+		return i18n.T("settings.model.smartRouter")
 	}
 	if s.model.provider == "" {
-		return "—"
+		return i18n.T("settings.model.none")
 	}
 	name := s.model.model.ID
 	if s.model.model.Name != "" {
@@ -269,7 +270,7 @@ type modelData struct {
 }
 
 func (s *Settings) openModels() {
-	l := components.NewList("Select model")
+	l := components.NewList(i18n.T("settings.model.selectTitle"))
 	l.SetSearchable(true)
 
 	var items []components.ListItem
@@ -312,11 +313,11 @@ func (s *Settings) openModels() {
 		}
 		s.back()
 	})
-	s.openSub(&listModal{title: "Models (type to search)", list: l, onBack: s.back})
+	s.openSub(&listModal{title: i18n.T("settings.model.selectSearch"), list: l, onBack: s.back})
 }
 
 func (s *Settings) openThemes() {
-	l := components.NewList("Select theme")
+	l := components.NewList(i18n.T("settings.theme.title"))
 	var items []components.ListItem
 	for _, name := range styles.Names() {
 		items = append(items, components.ListItem{Label: name, Marked: name == styles.Name()})
@@ -329,5 +330,25 @@ func (s *Settings) openThemes() {
 		}
 		s.back()
 	})
-	s.openSub(&listModal{title: "Theme", list: l, onBack: s.back})
+	s.openSub(&listModal{title: i18n.T("settings.theme.title"), list: l, onBack: s.back})
+}
+
+func (s *Settings) openLanguages() {
+	l := components.NewList(i18n.T("settings.language.title"))
+	var items []components.ListItem
+	for _, code := range i18n.Names() {
+		items = append(items, components.ListItem{Label: i18n.DisplayName(code), Detail: code, Marked: code == i18n.Current(), Data: code})
+	}
+	l.SetItems(items)
+	l.SetOnSelect(func(_ int, item components.ListItem) {
+		code, _ := item.Data.(string)
+		if i18n.Set(code) {
+			if s.onLanguageChange != nil {
+				s.onLanguageChange()
+			}
+			s.rebuildTabs()
+		}
+		s.back()
+	})
+	s.openSub(&listModal{title: i18n.T("settings.language.title"), list: l, onBack: s.back})
 }

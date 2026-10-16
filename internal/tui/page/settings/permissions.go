@@ -13,6 +13,7 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/decision"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -28,6 +29,21 @@ const (
 )
 
 var presetNames = []string{"Custom", "Auto", "Manual", "Judge", "Recommended"}
+
+func presetLabel(p permPreset) string {
+	switch p {
+	case presetAuto:
+		return i18n.T("settings.permissions.preset.auto")
+	case presetManual:
+		return i18n.T("settings.permissions.preset.manual")
+	case presetJudge:
+		return i18n.T("settings.permissions.preset.judge")
+	case presetRecommended:
+		return i18n.T("settings.permissions.preset.recommended")
+	default:
+		return i18n.T("settings.permissions.preset.custom")
+	}
+}
 
 var presetModes = map[permPreset]map[string]string{
 	presetAuto: {
@@ -313,7 +329,7 @@ func (t *permissionsTab) Draw(screen tcell.Screen, bounds layout.Region, focused
 	th := styles.Current()
 
 	presetY := bounds.Top
-	presetLabel := fmt.Sprintf("  %s  ", presetNames[t.presetIdx])
+	presetText := fmt.Sprintf("  %s  ", presetLabel(permPreset(t.presetIdx)))
 
 	presetFocused := focused && t.focus == permFocusPresets
 	presetStyle := th.Base().Foreground(th.Accent).Background(th.InputBg)
@@ -323,8 +339,8 @@ func (t *permissionsTab) Draw(screen tcell.Screen, bounds layout.Region, focused
 
 	arrowLeft := "◄ "
 	components.DrawText(screen, bounds.Left+2, presetY, arrowLeft, presetStyle)
-	presetX := bounds.Left + (bounds.Width-len(presetLabel))/2
-	components.DrawText(screen, presetX, presetY, presetLabel, presetStyle)
+	presetX := bounds.Left + (bounds.Width-len(presetText))/2
+	components.DrawText(screen, presetX, presetY, presetText, presetStyle)
 	arrowRight := " ►"
 	components.DrawText(screen, bounds.Right()-4, presetY, arrowRight, presetStyle)
 
@@ -334,7 +350,7 @@ func (t *permissionsTab) Draw(screen tcell.Screen, bounds layout.Region, focused
 	if modelFocused {
 		modelStyle = th.Base().Foreground(th.InputText).Background(th.Selection)
 	}
-	components.DrawText(screen, bounds.Left+2, modelY, "Judge model", modelStyle)
+	components.DrawText(screen, bounds.Left+2, modelY, i18n.T("settings.permissions.judgeModel"), modelStyle)
 	judgeVal := t.judgeDisplay()
 	components.DrawText(screen, bounds.Right()-len(judgeVal)-3, modelY, judgeVal, modelStyle)
 
@@ -347,9 +363,9 @@ func (t *permissionsTab) Draw(screen tcell.Screen, bounds layout.Region, focused
 	} else if !decEnabled {
 		thresholdStyle = th.Base().Foreground(th.Placeholder).Background(th.InputBg)
 	}
-	label := "Threshold"
+	label := i18n.T("settings.permissions.threshold")
 	if !decEnabled {
-		label += " (decision only)"
+		label += " " + i18n.T("common.decisionOnly")
 	}
 	components.DrawText(screen, bounds.Left+2, thresholdY, label, thresholdStyle)
 	thrVal := t.thresholdDisplay()
@@ -376,8 +392,8 @@ func (t *permissionsTab) Draw(screen tcell.Screen, bounds layout.Region, focused
 	}
 
 	headerStyle := th.Base().Foreground(th.Muted).Background(th.InputBg)
-	components.DrawText(screen, bounds.Left+2, listTop, "Tool", headerStyle)
-	components.DrawText(screen, bounds.Right()-14, listTop, "Mode", headerStyle)
+	components.DrawText(screen, bounds.Left+2, listTop, i18n.T("settings.permissions.tool"), headerStyle)
+	components.DrawText(screen, bounds.Right()-14, listTop, i18n.T("settings.permissions.mode"), headerStyle)
 	listTop++
 
 	for i := 0; i < visible-1; i++ {
@@ -538,7 +554,7 @@ func (t *permissionsTab) judgeDisplay() string {
 	if t.judgeModel != "" {
 		return t.judgeProvider + "/" + t.judgeModel
 	}
-	return t.judgeProvider + " (default)"
+	return i18n.Tf("common.defaultSuffix", t.judgeProvider)
 }
 
 func (t *permissionsTab) thresholdDisplay() string {
@@ -579,7 +595,7 @@ func (t *permissionsTab) saveThreshold() {
 }
 
 func (t *permissionsTab) openJudgeModels() {
-	l := components.NewList("Select judge model")
+	l := components.NewList(i18n.T("settings.permissions.selectJudge"))
 	l.SetSearchable(true)
 
 	var items []components.ListItem
@@ -597,14 +613,14 @@ func (t *permissionsTab) openJudgeModels() {
 				(t.judgeModel == model || (t.judgeModel == "" && model == decision.DefaultModel(p.Provider)))
 			decisionItems = append(decisionItems, components.ListItem{
 				Label:  model,
-				Detail: p.Provider + " · decision",
+				Detail: i18n.Tf("common.decisionDetail", p.Provider),
 				Marked: marked,
 				Data:   judgePick{provider: p.Provider, model: model},
 			})
 			if t.judgeProvider == p.Provider && t.judgeModel != "" && t.judgeModel != model {
 				decisionItems = append(decisionItems, components.ListItem{
 					Label:  t.judgeModel,
-					Detail: p.Provider + " · decision",
+					Detail: i18n.Tf("common.decisionDetail", p.Provider),
 					Marked: true,
 					Data:   judgePick{provider: p.Provider, model: t.judgeModel},
 				})
@@ -635,15 +651,15 @@ func (t *permissionsTab) openJudgeModels() {
 	}
 
 	if len(decisionItems) > 0 {
-		items = append(items, components.ListItem{Label: "Decisions", Disabled: true})
+		items = append(items, components.ListItem{Label: i18n.T("common.decisions"), Disabled: true})
 		items = append(items, decisionItems...)
 	}
 	if len(llmItems) > 0 {
-		items = append(items, components.ListItem{Label: "LLM models", Disabled: true})
+		items = append(items, components.ListItem{Label: i18n.T("common.llmModels"), Disabled: true})
 		items = append(items, llmItems...)
 	}
 	if len(items) == 0 {
-		items = append(items, components.ListItem{Label: "(no models available)"})
+		items = append(items, components.ListItem{Label: i18n.T("common.noModels")})
 	}
 
 	l.SetItems(items)
@@ -657,13 +673,13 @@ func (t *permissionsTab) openJudgeModels() {
 		}
 		t.settings.back()
 	})
-	t.settings.openSub(&listModal{title: "Judge Model", list: l, onBack: t.settings.back})
+	t.settings.openSub(&listModal{title: i18n.T("settings.permissions.judgeTitle"), list: l, onBack: t.settings.back})
 }
 
 func (t *permissionsTab) setJudgeModel(provider, model string) {
 	cfg, err := config.Load()
 	if err != nil {
-		t.settings.errMsg = "failed to load config: " + err.Error()
+		t.settings.errMsg = i18n.Tf("settings.permissions.errLoad", err.Error())
 		t.settings.back()
 		return
 	}
@@ -675,7 +691,7 @@ func (t *permissionsTab) setJudgeModel(provider, model string) {
 	perm.JudgeModel = model
 	cfg.Permission = perm
 	if err := config.Save(cfg); err != nil {
-		t.settings.errMsg = "failed to save config: " + err.Error()
+		t.settings.errMsg = i18n.Tf("settings.permissions.errSave", err.Error())
 		t.settings.back()
 		return
 	}

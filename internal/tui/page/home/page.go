@@ -9,6 +9,7 @@ import (
 
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -54,14 +55,20 @@ func New() *Page {
 		chat:          components.NewChat(),
 		attachmentBar: components.NewAttachmentBar(),
 		hint:          randomHint(),
-		skillPicker:   components.NewPicker("Skills — type to filter"),
-		mentionPicker: components.NewPicker("Mentions — type to filter"),
+		skillPicker:   components.NewPicker(i18n.T("home.picker.skills")),
+		mentionPicker: components.NewPicker(i18n.T("home.picker.mentions")),
 		askPicker:     components.NewAskPicker(),
 		focus:         focusInput,
 		pickTokenAt:   -1,
 	}
 	p.input.Focus()
 	return p
+}
+
+func (p *Page) RefreshTranslations() {
+	p.hint = randomHint()
+	p.skillPicker.SetTitle(i18n.T("home.picker.skills"))
+	p.mentionPicker.SetTitle(i18n.T("home.picker.mentions"))
 }
 
 func (p *Page) SetSkills(items []components.ListItem) {
@@ -72,25 +79,28 @@ func (p *Page) SetMentionItems(items []components.ListItem) {
 	p.mentionPicker.SetAll(items)
 }
 
-var defaultHints = []string{
-	"use '@' to mention files, folders, or agents",
-	"use '/' to run a skill",
-	"use '/init' to create an AGENTS.md for this project",
-	"use '/rule' to save a rule Pegg always follows",
-	"use '/skillify' to turn this session into a reusable skill",
-	"use '/review' to review a pull request",
-	"use '/batch' to change many files at once",
-	"press Ctrl+P for settings",
-	"press Ctrl+T to cycle the theme",
-	"press Esc twice to stop a running agent",
-	"paste or drop a file to attach it",
+func defaultHints() []string {
+	return []string{
+		i18n.T("home.hint.mention"),
+		i18n.T("home.hint.skill"),
+		i18n.T("home.hint.init"),
+		i18n.T("home.hint.rule"),
+		i18n.T("home.hint.skillify"),
+		i18n.T("home.hint.review"),
+		i18n.T("home.hint.batch"),
+		i18n.T("home.hint.settings"),
+		i18n.T("home.hint.theme"),
+		i18n.T("home.hint.stop"),
+		i18n.T("home.hint.attach"),
+	}
 }
 
 func randomHint() string {
-	if len(defaultHints) == 0 {
+	hints := defaultHints()
+	if len(hints) == 0 {
 		return ""
 	}
-	return defaultHints[rand.Intn(len(defaultHints))]
+	return hints[rand.Intn(len(hints))]
 }
 
 func (p *Page) PickOpen() bool { return p.pickKind != pickNone }

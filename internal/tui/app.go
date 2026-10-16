@@ -27,6 +27,7 @@ import (
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/skill"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/page/home"
 	"github.com/peggco/pegg/internal/tui/page/settings"
@@ -102,7 +103,7 @@ type activeSession struct {
 
 func (a *App) modelDisplay() string {
 	if a.model.provider == router.SmartRouterModel {
-		return "Smart Router"
+		return i18n.T("settings.model.smartRouter")
 	}
 	if a.model.provider == "" {
 		return ""
@@ -217,6 +218,10 @@ func (a *App) build() {
 
 	if a.deps.Config != nil && a.deps.Config.Theme != "" {
 		styles.Set(a.deps.Config.Theme)
+	}
+
+	if a.deps.Config != nil && a.deps.Config.Language != "" {
+		i18n.Set(a.deps.Config.Language)
 	}
 
 	a.selectPreferred()
@@ -588,6 +593,17 @@ func (a *App) openSettings() {
 			go config.SaveTheme(styles.Name())
 		}
 	})
+	s.SetOnLanguageChange(func() {
+		a.chat.Invalidate()
+		if a.home != nil {
+			a.home.RefreshTranslations()
+		}
+		a.requestRedraw()
+		if a.deps.Config != nil {
+			a.deps.Config.Language = i18n.Current()
+			go config.SaveLanguage(i18n.Current())
+		}
+	})
 	s.SetOnRequestUpdate(func() {
 		a.setOverlay(nil)
 		rel, found, err := update.DetectLatest(context.Background())
@@ -664,7 +680,7 @@ func (a *App) refreshMentionItemsLocked() {
 	for _, att := range a.home.AttachmentBar().Attachments() {
 		name := att.FileName
 		if name == "" {
-			name = "attachment"
+			name = i18n.T("home.attachment")
 		}
 		name = strings.ReplaceAll(name, " ", "_")
 		items = append(items, components.ListItem{Label: name, Detail: string(att.Type), Data: "attachment"})
@@ -705,7 +721,7 @@ func (a *App) loadSessionIntoChatLocked() {
 		if a.agent != nil {
 			id = a.agent.ID
 		}
-		a.main = newTranscript(id, "orchestrator")
+		a.main = newTranscript(id, i18n.T("chat.orchestrator"))
 	}
 	a.usage = a.session.info.Usage
 	msgs := a.session.info.Messages
@@ -850,7 +866,7 @@ func (a *App) drawLocked() {
 	case a.errorMsg != "" && a.getOverlay() == nil:
 		components.DrawText(a.screen, 2, hintY, a.errorMsg, style)
 	case a.escHint && a.getOverlay() == nil:
-		components.DrawText(a.screen, 2, hintY, "Press Esc to interrupt", style)
+		components.DrawText(a.screen, 2, hintY, i18n.T("app.escInterrupt"), style)
 	}
 	a.screen.Show()
 }
@@ -944,7 +960,7 @@ func (a *App) tryAttachFile(path string) {
 
 	att, err := attach.FromPath(path)
 	if err != nil {
-		a.showError("Could not attach file: " + err.Error())
+		a.showError(i18n.Tf("app.error.attach", err.Error()))
 		return
 	}
 
@@ -969,12 +985,12 @@ func (a *App) validateFileForModel(path string) bool {
 	switch {
 	case strings.HasPrefix(mediaType, "image/"):
 		if config.Modalities == nil || !strings.Contains(strings.Join(config.Modalities.Input, ","), "image") {
-			a.showError("Model does not support image attachments")
+			a.showError(i18n.T("app.error.noImage"))
 			return false
 		}
 	case strings.HasPrefix(mediaType, "audio/"):
 		if config.Modalities == nil || !strings.Contains(strings.Join(config.Modalities.Input, ","), "audio") {
-			a.showError("Model does not support audio attachments")
+			a.showError(i18n.T("app.error.noAudio"))
 			return false
 		}
 	}

@@ -3,6 +3,7 @@ package components
 import (
 	"github.com/gdamore/tcell/v2"
 
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 	"github.com/peggco/pegg/internal/utils/search"
@@ -19,6 +20,8 @@ type Picker struct {
 func NewPicker(title string) *Picker {
 	return &Picker{title: title}
 }
+
+func (p *Picker) SetTitle(title string) { p.title = title }
 
 func (p *Picker) SetAll(items []ListItem) {
 	p.all = items
@@ -74,7 +77,7 @@ func (p *Picker) Draw(s tcell.Screen, bounds layout.Region) {
 
 	inner := DrawCenteredBox(s, bounds, bounds.Width, bounds.Height, p.title)
 	if len(p.filtered) == 0 {
-		DrawText(s, inner.Left+1, inner.Top+1, "(no matching items)", th.Base().Foreground(th.Placeholder).Background(th.InputBg))
+		DrawText(s, inner.Left+1, inner.Top+1, i18n.T("common.noMatching"), th.Base().Foreground(th.Placeholder).Background(th.InputBg))
 		return
 	}
 
