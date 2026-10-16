@@ -10,6 +10,7 @@ import (
 	"github.com/peggco/pegg/internal/llm/credentials"
 	"github.com/peggco/pegg/internal/llm/subscription"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -138,8 +139,43 @@ func TestSettingsGeneralRowSelection(t *testing.T) {
 	for i := 0; i < 6; i++ {
 		s.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
 	}
-	if g.index != 3 {
-		t.Errorf("index should clamp at 3, got %d", g.index)
+	if g.index != generalRowCount-1 {
+		t.Errorf("index should clamp at %d, got %d", generalRowCount-1, g.index)
+	}
+}
+
+func TestSettingsLanguageRow(t *testing.T) {
+	t.Cleanup(func() { i18n.Set(i18n.English) })
+
+	s := New(Deps{})
+	rows := s.general.rows()
+	if len(rows) != generalRowCount {
+		t.Fatalf("general rows = %d, want %d", len(rows), generalRowCount)
+	}
+	last := rows[len(rows)-1].label
+	if last != i18n.T("settings.general.language") {
+		t.Fatalf("last row label = %q, want language", last)
+	}
+
+	changed := false
+	s.SetOnLanguageChange(func() { changed = true })
+
+	s.openLanguages()
+	modal, ok := s.sub.(*listModal)
+	if !ok {
+		t.Fatalf("openLanguages did not open a list modal: %T", s.sub)
+	}
+	modal.list.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
+	modal.list.HandleKey(tcell.NewEventKey(tcell.KeyEnter, 0, 0))
+
+	if i18n.Current() != i18n.Turkish {
+		t.Errorf("current language = %q, want %q", i18n.Current(), i18n.Turkish)
+	}
+	if !changed {
+		t.Error("onLanguageChange was not fired")
+	}
+	if s.sub != nil {
+		t.Error("language picker should close after selection")
 	}
 }
 
@@ -156,7 +192,7 @@ func TestSettingsAllTabsDraw(t *testing.T) {
 	styles.RegisterDefaults()
 	styles.Set("dark")
 	s := New(Deps{})
-	for i := 0; i < len(tabNames); i++ {
+	for i := 0; i < tabKindCount; i++ {
 		s.tab = tabKind(i)
 		drawSettings(t, 80, 24, s)
 		drawSettings(t, 110, 32, s)
@@ -197,7 +233,7 @@ func TestSettingsSelectedModelEmptyDisplay(t *testing.T) {
 func TestSettingsAllTabsMouseSmoke(t *testing.T) {
 	styles.RegisterDefaults()
 	styles.Set("dark")
-	for i := 0; i < len(tabNames); i++ {
+	for i := 0; i < tabKindCount; i++ {
 		s := New(Deps{})
 		s.tab = tabKind(i)
 		s.tabs.SetActive(i)

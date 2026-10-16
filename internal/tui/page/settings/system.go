@@ -9,6 +9,7 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/update"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -61,7 +62,7 @@ func (t *systemTab) HandleMouse(x, y int, bounds layout.Region, buttons tcell.Bu
 
 func (t *systemTab) checkUpdate() {
 	t.checking = true
-	t.status = "Checking..."
+	t.status = i18n.T("settings.system.checking")
 	if t.settings.requestRedraw != nil {
 		t.settings.requestRedraw()
 	}
@@ -70,7 +71,7 @@ func (t *systemTab) checkUpdate() {
 		current := config.AppVersion
 		rel, found, err := update.DetectLatest(context.Background())
 		if err != nil {
-			t.status = "Error: " + err.Error()
+			t.status = i18n.Tf("settings.system.error", err.Error())
 			t.checking = false
 			if t.settings.requestRedraw != nil {
 				t.settings.requestRedraw()
@@ -78,7 +79,7 @@ func (t *systemTab) checkUpdate() {
 			return
 		}
 		if !found {
-			t.status = "No release found"
+			t.status = i18n.T("settings.system.noRelease")
 			t.checking = false
 			if t.settings.requestRedraw != nil {
 				t.settings.requestRedraw()
@@ -86,7 +87,7 @@ func (t *systemTab) checkUpdate() {
 			return
 		}
 		if !update.IsNewerThan(current, rel.Version) {
-			t.status = "Already up to date"
+			t.status = i18n.T("settings.system.upToDate")
 			t.checking = false
 			if t.settings.requestRedraw != nil {
 				t.settings.requestRedraw()
@@ -108,11 +109,11 @@ type sysRow struct {
 
 func (t *systemTab) rows() []sysRow {
 	return []sysRow{
-		{label: "App", value: config.AppName},
-		{label: "Version", value: config.AppVersion},
-		{label: "OS", value: runtime.GOOS},
-		{label: "Arch", value: runtime.GOARCH},
-		{label: "Update", value: "check for updates"},
+		{label: i18n.T("settings.system.app"), value: config.AppName},
+		{label: i18n.T("settings.system.version"), value: config.AppVersion},
+		{label: i18n.T("settings.system.os"), value: runtime.GOOS},
+		{label: i18n.T("settings.system.arch"), value: runtime.GOARCH},
+		{label: i18n.T("settings.system.update"), value: i18n.T("settings.system.checkUpdates")},
 	}
 }
 
@@ -129,7 +130,7 @@ func (t *systemTab) Draw(screen tcell.Screen, bounds layout.Region, _ bool) {
 		}
 		if i == systemRowCount-1 {
 			components.DrawText(screen, bounds.Left+1, y, marker+r.label, style)
-			btn := "[ Check for updates ]"
+			btn := i18n.T("settings.system.checkButton")
 			components.DrawText(screen, bounds.Right()-len(btn)-2, y, btn, style)
 		} else {
 			components.DrawText(screen, bounds.Left+1, y, marker+r.label, style)

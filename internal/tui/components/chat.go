@@ -9,6 +9,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/peggco/pegg/internal/llm"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -582,7 +583,7 @@ func (c *Chat) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 
 	if c.back && bounds.Height > 2 {
 		headerStyle := th.Base().Foreground(th.Accent).Bold(true).Background(th.Background)
-		backText := "← back to main chat (Esc)"
+		backText := i18n.T("common.back")
 		DrawText(s, bounds.Left+1, bounds.Top, backText, headerStyle)
 		c.backVisible = true
 		c.backX0 = bounds.Left + 1
@@ -638,7 +639,7 @@ func (c *Chat) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 	c.indicatorVisible = false
 	below := total - (offset + visible)
 	if below > 0 {
-		label := fmt.Sprintf(" ↓ %d ", below)
+		label := i18n.Tf("chat.moreDown", below)
 		labelCells := LineFromSegments([]Segment{
 			{Text: label, Style: th.Base().Foreground(th.Accent).Background(th.Surface)},
 		}, len(label))
@@ -786,7 +787,7 @@ func (c *Chat) itemLines(it *ChatItem, width int) []Line {
 	case ItemError:
 		th := styles.Current()
 		lines = WrapSegments([]Segment{
-			{Text: "✖ error: " + it.Text, Style: th.Base().Foreground(th.Error).Bold(true).Background(th.Background)},
+			{Text: i18n.Tf("chat.errorPrefix", it.Text), Style: th.Base().Foreground(th.Error).Bold(true).Background(th.Background)},
 		}, width)
 	case ItemCompaction:
 		th := styles.Current()
@@ -919,7 +920,7 @@ func (c *Chat) thinkingLines(it *ChatItem, width int) []Line {
 		markStyle = th.Base().Foreground(th.Accent).Background(th.Background)
 	}
 
-	label := "Thinking"
+	label := i18n.T("chat.thinking")
 	labelStyle := th.Base().Foreground(th.TextDim).Background(th.Background)
 	if active {
 		labelStyle = th.Base().Foreground(lerpColor(th.ThinkingDim, th.ThinkingGlow, glowT(c.now))).Background(th.Background)
@@ -980,13 +981,13 @@ func (c *Chat) toolLines(it *ChatItem, width int) []Line {
 	isRunning := it.ToolErr == "" && it.ToolOutput == ""
 
 	if isRunning {
-		left := c.toolStatusLine(it, width, '◌', th.Running, fmt.Sprintf(" %c running", spinnerAt(c.now)))
+		left := c.toolStatusLine(it, width, '◌', th.Running, " "+string(spinnerAt(c.now))+" "+i18n.T("chat.status.running"))
 		return []Line{left}
 	}
 
 	if it.ToolErr != "" {
 		if it.Expanded {
-			left := c.toolStatusLine(it, width, '✖', th.Error, " ✖ "+formatDuration(it.Duration))
+			left := c.toolStatusLine(it, width, '✖', th.Error, " ✖ "+formatDuration(it.Duration)+"  "+i18n.T("common.collapse"))
 			var lines []Line
 			lines = append(lines, left)
 			bodyStyle := th.Base().Foreground(th.Error).Background(th.Background)
@@ -997,11 +998,11 @@ func (c *Chat) toolLines(it *ChatItem, width int) []Line {
 				lines = append(lines, row)
 			}
 			lines = append(lines, LineFromSegments([]Segment{
-				{Text: "  [Enter] Collapse", Style: th.Base().Foreground(th.Muted).Background(th.Background)},
+				{Text: "  " + i18n.T("common.collapse"), Style: th.Base().Foreground(th.Muted).Background(th.Background)},
 			}, width))
 			return lines
 		}
-		left := c.toolStatusLine(it, width, '✖', th.Error, " ✖ "+formatDuration(it.Duration)+"  [Enter] Expand")
+		left := c.toolStatusLine(it, width, '✖', th.Error, " ✖ "+formatDuration(it.Duration)+"  "+i18n.T("common.expand"))
 		return []Line{left}
 	}
 
@@ -1025,7 +1026,7 @@ func (c *Chat) toolLines(it *ChatItem, width int) []Line {
 
 	hasOutput := it.ToolOutput != ""
 	if it.Expanded && hasOutput {
-		left := c.toolStatusLine(it, width, '✔', th.Success, " ✔ "+formatDuration(it.Duration))
+		left := c.toolStatusLine(it, width, '✔', th.Success, " ✔ "+formatDuration(it.Duration)+"  "+i18n.T("common.collapse"))
 		var lines []Line
 		lines = append(lines, left)
 		bodyStyle := th.Base().Foreground(th.TextDim).Background(th.Background)
@@ -1041,17 +1042,17 @@ func (c *Chat) toolLines(it *ChatItem, width int) []Line {
 		}
 		if len(wrapped) == maxOutputLines {
 			lines = append(lines, LineFromSegments([]Segment{
-				{Text: "  … output truncated", Style: th.Base().Foreground(th.Muted).Background(th.Background)},
+				{Text: i18n.T("chat.tool.outputTruncated"), Style: th.Base().Foreground(th.Muted).Background(th.Background)},
 			}, width))
 		}
 		lines = append(lines, LineFromSegments([]Segment{
-			{Text: "  [Enter] Collapse", Style: th.Base().Foreground(th.Muted).Background(th.Background)},
+			{Text: "  " + i18n.T("common.collapse"), Style: th.Base().Foreground(th.Muted).Background(th.Background)},
 		}, width))
 		return lines
 	}
 
 	if hasOutput {
-		lines := []Line{c.toolStatusLine(it, width, '✔', th.Success, " ✔ "+formatDuration(it.Duration)+"  [Enter] Expand")}
+		lines := []Line{c.toolStatusLine(it, width, '✔', th.Success, " ✔ "+formatDuration(it.Duration)+"  "+i18n.T("common.expand"))}
 		return lines
 	}
 
@@ -1121,7 +1122,7 @@ func (c *Chat) todoCardLines(it *ChatItem, width int) []Line {
 
 	top := Line{{R: '╭', S: border}}
 	top = append(top, Cell{R: '─', S: border})
-	for _, r := range " TODO " {
+	for _, r := range i18n.T("chat.card.todo") {
 		top = append(top, Cell{R: r, S: accent})
 	}
 	for top.Width() < width-1 {
@@ -1159,7 +1160,7 @@ func (c *Chat) todoCardLines(it *ChatItem, width int) []Line {
 			lines = append(lines, row)
 			sep := cardSep(border, width)
 			lines = append(lines, sep)
-			lines = append(lines, cardFooter(border, dim, th.Base(), width, fmt.Sprintf("0 / 0 completed")))
+			lines = append(lines, cardFooter(border, dim, th.Base(), width, i18n.Tf("chat.todo.completed", 0, 0)))
 			return lines
 		}
 
@@ -1288,7 +1289,7 @@ func (c *Chat) todoCardLines(it *ChatItem, width int) []Line {
 
 	sep := cardSep(border, width)
 	lines = append(lines, sep)
-	lines = append(lines, cardFooter(border, dim, th.Base(), width, fmt.Sprintf("%d / %d completed", completed, total)))
+	lines = append(lines, cardFooter(border, dim, th.Base(), width, i18n.Tf("chat.todo.completed", completed, total)))
 	lines = append(lines, bottomEdge(border, width))
 
 	return lines
@@ -1345,7 +1346,7 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 
 	top := Line{{R: '╭', S: border}}
 	top = append(top, Cell{R: '─', S: border})
-	for _, r := range " BASH " {
+	for _, r := range i18n.T("chat.card.bash") {
 		top = append(top, Cell{R: r, S: accent})
 	}
 
@@ -1394,7 +1395,7 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 
 	output := it.ToolOutput
 	if output == "" {
-		output = "(no output)"
+		output = i18n.T("chat.bash.noOutput")
 	}
 
 	rawLines := strings.Split(output, "\n")
@@ -1438,7 +1439,7 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 
 	if it.Expanded {
 		moreLine := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
-		msg := fmt.Sprintf("··· showing all %d lines — click to collapse", len(rawLines))
+		msg := i18n.Tf("chat.tool.showingAll", len(rawLines))
 		for _, r := range msg {
 			moreLine = append(moreLine, Cell{R: r, S: dim})
 		}
@@ -1457,17 +1458,17 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 	lines = append(lines, sep2)
 
 	footer := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
-	exitStr := "exit code: 0"
+	exitStr := i18n.Tf("chat.bash.exitCode", 0)
 	if it.ToolErr != "" {
-		exitStr = "exit code: 1"
+		exitStr = i18n.Tf("chat.bash.exitCode", 1)
 	}
 	for _, r := range exitStr {
 		footer = append(footer, Cell{R: r, S: muted})
 	}
 
-	expandHint := "[Enter] Expand"
+	expandHint := i18n.T("common.expand")
 	if it.Expanded {
-		expandHint = "[Enter] Collapse"
+		expandHint = i18n.T("common.collapse")
 	}
 	for footer.Width()+DisplayWidth(expandHint)+4 < width {
 		footer = append(footer, Cell{R: ' ', S: th.Base()})
@@ -1517,7 +1518,7 @@ func (c *Chat) editCardLines(it *ChatItem, width int) []Line {
 
 	top := Line{{R: '┌', S: border}}
 	top = append(top, Cell{R: '─', S: border})
-	for _, r := range " DIFF " {
+	for _, r := range i18n.T("chat.card.diff") {
 		top = append(top, Cell{R: r, S: accent})
 	}
 	for top.Width() < width-1 {
@@ -1604,7 +1605,7 @@ func (c *Chat) editCardLines(it *ChatItem, width int) []Line {
 
 	if it.Expanded {
 		moreLine := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
-		msg := fmt.Sprintf("··· showing all %d lines — click to collapse", allLines)
+		msg := i18n.Tf("chat.tool.showingAll", allLines)
 		for _, r := range msg {
 			moreLine = append(moreLine, Cell{R: r, S: dim})
 		}
@@ -1660,7 +1661,7 @@ func (c *Chat) writeCardLines(it *ChatItem, width int) []Line {
 
 	top := Line{{R: '┌', S: border}}
 	top = append(top, Cell{R: '─', S: border})
-	for _, r := range " WRITE " {
+	for _, r := range i18n.T("chat.card.write") {
 		top = append(top, Cell{R: r, S: accent})
 	}
 	for top.Width() < width-1 {
@@ -1688,7 +1689,7 @@ func (c *Chat) writeCardLines(it *ChatItem, width int) []Line {
 
 	content := it.WriteContent
 	if content == "" {
-		content = "(empty)"
+		content = i18n.T("chat.write.empty")
 	}
 
 	rawLines := strings.Split(content, "\n")
@@ -1732,7 +1733,7 @@ func (c *Chat) writeCardLines(it *ChatItem, width int) []Line {
 	if it.Expanded {
 		total := len(rawLines)
 		moreLine := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
-		msg := fmt.Sprintf("··· showing all %d lines — click to collapse", total)
+		msg := i18n.Tf("chat.tool.showingAll", total)
 		for _, r := range msg {
 			moreLine = append(moreLine, Cell{R: r, S: dim})
 		}
@@ -1800,7 +1801,7 @@ func (c *Chat) askCardLines(it *ChatItem, width int) []Line {
 
 	top := Line{{R: '╭', S: border}}
 	top = append(top, Cell{R: '─', S: border})
-	for _, r := range " ASK " {
+	for _, r := range i18n.T("chat.card.ask") {
 		top = append(top, Cell{R: r, S: accent})
 	}
 	for top.Width() < width-1 {
@@ -1826,7 +1827,7 @@ func (c *Chat) askCardLines(it *ChatItem, width int) []Line {
 
 		a := answers[q.ID]
 		if a == "" {
-			a = "(unanswered)"
+			a = i18n.T("chat.ask.unanswered")
 		}
 		atext := a
 		if len(atext) > width-6 {
@@ -1857,7 +1858,7 @@ func (c *Chat) askCardLines(it *ChatItem, width int) []Line {
 		}
 	}
 	footer := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
-	summary := fmt.Sprintf("%d / %d answered", nAnswered, len(qs))
+	summary := i18n.Tf("chat.ask.answered", nAnswered, len(qs))
 	for _, r := range summary {
 		footer = append(footer, Cell{R: r, S: dim})
 	}
@@ -1911,7 +1912,7 @@ func (c *Chat) subagentLines(it *ChatItem, width int) []Line {
 	top = append(top, Cell{R: ' ', S: th.Base()})
 	top = append(top, Cell{R: mark, S: subagentColor})
 	top = append(top, Cell{R: ' ', S: th.Base()})
-	historyHint := "History"
+	historyHint := i18n.T("chat.history")
 	maxName := width - 13
 	if maxName < 1 {
 		maxName = 1
@@ -1999,7 +2000,7 @@ func (c *Chat) subagentLines(it *ChatItem, width int) []Line {
 		if truncated {
 			remaining := len(outputLines) - maxOutputLines
 			moreLine := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
-			msg := fmt.Sprintf("··· %d more lines — click to expand", remaining)
+			msg := i18n.Tf("chat.tool.moreLines", remaining)
 			for _, r := range msg {
 				moreLine = append(moreLine, Cell{R: r, S: dim})
 			}
@@ -2011,7 +2012,7 @@ func (c *Chat) subagentLines(it *ChatItem, width int) []Line {
 		}
 		if it.Expanded {
 			moreLine := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
-			msg := fmt.Sprintf("··· showing all %d lines — click to collapse", len(outputLines))
+			msg := i18n.Tf("chat.tool.showingAll", len(outputLines))
 			for _, r := range msg {
 				moreLine = append(moreLine, Cell{R: r, S: dim})
 			}

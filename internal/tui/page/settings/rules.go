@@ -10,6 +10,7 @@ import (
 
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 )
 
@@ -19,7 +20,7 @@ type rulesTab struct {
 }
 
 func newRules(s *Settings) *rulesTab {
-	t := &rulesTab{settings: s, list: components.NewList("Rules")}
+	t := &rulesTab{settings: s, list: components.NewList(i18n.T("settings.rules.title"))}
 	t.rebuild()
 	return t
 }
@@ -34,7 +35,7 @@ func (t *rulesTab) rebuild() {
 	for _, name := range globalRules {
 		items = append(items, components.ListItem{
 			Label:  name,
-			Detail: "global",
+			Detail: i18n.T("settings.rules.global"),
 			Data:   filepath.Join(globalDir, name),
 		})
 	}
@@ -43,13 +44,13 @@ func (t *rulesTab) rebuild() {
 	for _, name := range projectRules {
 		items = append(items, components.ListItem{
 			Label:  name,
-			Detail: "project",
+			Detail: i18n.T("settings.rules.project"),
 			Data:   filepath.Join(projectDir, name),
 		})
 	}
 
 	if len(items) == 0 {
-		items = append(items, components.ListItem{Label: "(no rules found)"})
+		items = append(items, components.ListItem{Label: i18n.T("settings.rules.none")})
 	}
 	t.list.SetItems(items)
 }

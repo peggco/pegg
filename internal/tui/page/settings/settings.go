@@ -9,6 +9,7 @@ import (
 	"github.com/peggco/pegg/internal/mcp"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -27,7 +28,21 @@ const (
 	tabSystem
 )
 
-var tabNames = []string{"General", "Session", "MCP", "Skills", "Rules", "Plugins", "Permissions", "Memory", "System"}
+func tabNames() []string {
+	return []string{
+		i18n.T("settings.tab.general"),
+		i18n.T("settings.tab.session"),
+		i18n.T("settings.tab.mcp"),
+		i18n.T("settings.tab.skills"),
+		i18n.T("settings.tab.rules"),
+		i18n.T("settings.tab.plugins"),
+		i18n.T("settings.tab.permissions"),
+		i18n.T("settings.tab.memory"),
+		i18n.T("settings.tab.system"),
+	}
+}
+
+const tabKindCount = 9
 
 type settingsFocus int
 
@@ -87,12 +102,13 @@ type Settings struct {
 	onSessionChange         func(info SessionInfo)
 	onSessionClear          func()
 	onThemeChange           func()
+	onLanguageChange        func()
 }
 
 var _ components.MouseComponent = (*Settings)(nil)
 
 func New(deps Deps) *Settings {
-	s := &Settings{deps: deps, tabs: components.NewTabs(tabNames)}
+	s := &Settings{deps: deps, tabs: components.NewTabs(tabNames())}
 	s.tabs.SetFocused(true)
 	s.general = newGeneral(s)
 	s.mcp = newMCP(s)
@@ -141,9 +157,10 @@ func (s *Settings) modelConfigSummary() string {
 }
 
 func (s *Settings) openReasoning() {
-	l := components.NewList("Reasoning effort")
+	defLabel := i18n.T("settings.general.effortDefault")
+	l := components.NewList(i18n.T("settings.reasoning.title"))
 	var items []components.ListItem
-	items = append(items, components.ListItem{Label: "default", Detail: "use provider default", Marked: s.reasoningEffort == ""})
+	items = append(items, components.ListItem{Label: defLabel, Detail: i18n.T("settings.general.useProviderDefault"), Marked: s.reasoningEffort == ""})
 	if s.model.model.Config != nil {
 		for _, opt := range s.model.model.Config.ReasoningOptions {
 			if opt.Type == "effort" {
@@ -155,7 +172,7 @@ func (s *Settings) openReasoning() {
 	}
 	l.SetItems(items)
 	l.SetOnSelect(func(_ int, item components.ListItem) {
-		if item.Label == "default" {
+		if item.Label == defLabel {
 			s.reasoningEffort = ""
 		} else {
 			s.reasoningEffort = item.Label
@@ -165,7 +182,7 @@ func (s *Settings) openReasoning() {
 		}
 		s.back()
 	})
-	s.openSub(&listModal{title: "Reasoning Effort", list: l, onBack: s.back})
+	s.openSub(&listModal{title: i18n.T("settings.reasoning.modal"), list: l, onBack: s.back})
 }
 
 func (s *Settings) HasSub() bool { return s.sub != nil }
@@ -180,6 +197,8 @@ func (s *Settings) SetOnSessionClear(fn func()) { s.onSessionClear = fn }
 
 func (s *Settings) SetOnThemeChange(fn func()) { s.onThemeChange = fn }
 
+func (s *Settings) SetOnLanguageChange(fn func()) { s.onLanguageChange = fn }
+
 func (s *Settings) SetOnRequestUpdate(fn func()) { s.onRequestUpdate = fn }
 
 func (s *Settings) SetRequestRedraw(fn func()) { s.requestRedraw = fn }
@@ -187,13 +206,21 @@ func (s *Settings) SetRequestRedraw(fn func()) { s.requestRedraw = fn }
 func (s *Settings) CloseRequested() bool { return false }
 
 func (s *Settings) nextTab() {
-	s.tab = tabKind((int(s.tab) + 1) % len(tabNames))
+	s.tab = tabKind((int(s.tab) + 1) % tabKindCount)
 	s.tabs.SetActive(int(s.tab))
 }
 
 func (s *Settings) prevTab() {
-	s.tab = tabKind((int(s.tab) - 1 + len(tabNames)) % len(tabNames))
+	s.tab = tabKind((int(s.tab) - 1 + tabKindCount) % tabKindCount)
 	s.tabs.SetActive(int(s.tab))
+}
+
+func (s *Settings) rebuildTabs() {
+	active := s.tabs.Active()
+	focused := s.tabs.Focused()
+	s.tabs = components.NewTabs(tabNames())
+	s.tabs.SetActive(active)
+	s.tabs.SetFocused(focused)
 }
 
 func (s *Settings) back() { s.sub = nil }
@@ -201,16 +228,16 @@ func (s *Settings) back() { s.sub = nil }
 func (s *Settings) openSub(c components.Component) { s.sub = c }
 
 func (s *Settings) openTools(server string) {
-	l := components.NewList("Tools: " + server)
+	l := components.NewList(i18n.Tf("settings.mcp.toolsTitle", server))
 	var items []components.ListItem
 	for _, tool := range mcp.ToolsForServer(server) {
 		items = append(items, components.ListItem{Label: tool.Name, Detail: tool.Description})
 	}
 	if len(items) == 0 {
-		items = append(items, components.ListItem{Label: "(no tools registered)"})
+		items = append(items, components.ListItem{Label: i18n.T("settings.mcp.noTools")})
 	}
 	l.SetItems(items)
-	s.openSub(&listModal{title: "MCP tools", list: l, onBack: s.back})
+	s.openSub(&listModal{title: i18n.T("settings.mcp.toolsModal"), list: l, onBack: s.back})
 }
 
 func (s *Settings) HandleKey(ev *tcell.EventKey) bool {
@@ -304,13 +331,13 @@ func (s *Settings) Draw(screen tcell.Screen, bounds layout.Region, focused bool)
 	s.bounds = bounds
 
 	w, h := settingsBoxSize(bounds)
-	inner := components.DrawCenteredBox(screen, bounds, w, h, "Settings")
+	inner := components.DrawCenteredBox(screen, bounds, w, h, i18n.T("settings.title"))
 
 	s.tabs.Draw(screen, inner.Left+1, inner.Top, inner.Width-2, s.focus == settingsFocusTabs)
 
 	if s.sub != nil {
 		s.sub.Draw(screen, inner, true)
-		components.DrawFooter(screen, inner, "↑/↓ navigate  Enter select  Esc back")
+		components.DrawFooter(screen, inner, i18n.T("common.footer.list"))
 		return
 	}
 
@@ -342,9 +369,9 @@ func (s *Settings) Draw(screen tcell.Screen, bounds layout.Region, focused bool)
 			th.Base().Foreground(tcell.ColorRed).Background(th.InputBg))
 	}
 	if s.focus == settingsFocusTabs {
-		components.DrawFooter(screen, inner, "←/→ switch tab  ↓ content  Esc close")
+		components.DrawFooter(screen, inner, i18n.T("common.footer.settings.tabs"))
 	} else {
-		components.DrawFooter(screen, inner, "↑ tabs  Esc close")
+		components.DrawFooter(screen, inner, i18n.T("common.footer.settings.body"))
 	}
 }
 

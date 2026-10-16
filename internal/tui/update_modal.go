@@ -4,6 +4,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -114,18 +115,18 @@ func (m *UpdateModal) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 }
 
 func (m *UpdateModal) drawConfirm(s tcell.Screen, bounds layout.Region, w, h int, th styles.Theme, modalBg tcell.Style) {
-	inner := components.DrawCenteredBox(s, bounds, w, h, "Update Available")
+	inner := components.DrawCenteredBox(s, bounds, w, h, i18n.T("update.titleConfirm"))
 
 	y := inner.Top + 1
-	msg := "A new version (" + m.version + ") is available."
+	msg := i18n.Tf("update.available", m.version)
 	components.DrawText(s, inner.Left, y, msg, modalBg.Foreground(th.Foreground))
 
 	y += 2
-	components.DrawText(s, inner.Left, y, "Do you want to update?", modalBg.Foreground(th.Foreground))
+	components.DrawText(s, inner.Left, y, i18n.T("update.prompt"), modalBg.Foreground(th.Foreground))
 
 	y += 2
-	updateLabel := "[ Update ]"
-	skipLabel := "[ Later ]"
+	updateLabel := i18n.T("update.updateLabel")
+	skipLabel := i18n.T("update.laterLabel")
 
 	if m.selected == 0 {
 		components.DrawText(s, inner.Left+5, y, updateLabel, modalBg.Foreground(th.Accent))
@@ -135,38 +136,38 @@ func (m *UpdateModal) drawConfirm(s tcell.Screen, bounds layout.Region, w, h int
 		components.DrawText(s, inner.Left+25, y, skipLabel, modalBg.Foreground(th.Accent))
 	}
 
-	components.DrawFooter(s, inner, "←/→ select  Enter confirm  Esc skip")
+	components.DrawFooter(s, inner, i18n.T("update.footerConfirm"))
 }
 
 func (m *UpdateModal) drawUpdating(s tcell.Screen, bounds layout.Region, w, h int, th styles.Theme, modalBg tcell.Style) {
-	inner := components.DrawCenteredBox(s, bounds, w, h, "Updating...")
+	inner := components.DrawCenteredBox(s, bounds, w, h, i18n.T("update.titleUpdating"))
 
 	y := inner.Top + 2
-	components.DrawText(s, inner.Left, y, "Downloading and installing...", modalBg.Foreground(th.Foreground))
+	components.DrawText(s, inner.Left, y, i18n.T("update.downloading"), modalBg.Foreground(th.Foreground))
 
-	components.DrawFooter(s, inner, "Please wait")
+	components.DrawFooter(s, inner, i18n.T("update.pleaseWait"))
 }
 
 func (m *UpdateModal) drawDone(s tcell.Screen, bounds layout.Region, w, h int, th styles.Theme, modalBg tcell.Style) {
-	inner := components.DrawCenteredBox(s, bounds, w, h, "Update Complete")
+	inner := components.DrawCenteredBox(s, bounds, w, h, i18n.T("update.titleDone"))
 
 	y := inner.Top + 1
-	components.DrawText(s, inner.Left, y, "Updated to version "+m.version, modalBg.Foreground(th.Success))
+	components.DrawText(s, inner.Left, y, i18n.Tf("update.updated", m.version), modalBg.Foreground(th.Success))
 
 	y += 2
-	components.DrawText(s, inner.Left, y, "Please restart to use the new version.", modalBg.Foreground(th.Foreground))
+	components.DrawText(s, inner.Left, y, i18n.T("update.restart"), modalBg.Foreground(th.Foreground))
 
-	components.DrawFooter(s, inner, "Enter close")
+	components.DrawFooter(s, inner, i18n.T("update.enterClose"))
 }
 
 func (m *UpdateModal) drawError(s tcell.Screen, bounds layout.Region, w, h int, th styles.Theme, modalBg tcell.Style) {
-	inner := components.DrawCenteredBox(s, bounds, w, h, "Update Failed")
+	inner := components.DrawCenteredBox(s, bounds, w, h, i18n.T("update.titleError"))
 
 	y := inner.Top + 1
 	components.DrawText(s, inner.Left, y, m.errMsg, modalBg.Foreground(th.Error))
 
 	y += 2
-	components.DrawText(s, inner.Left, y, "Please try again later.", modalBg.Foreground(th.Foreground))
+	components.DrawText(s, inner.Left, y, i18n.T("update.errorRetry"), modalBg.Foreground(th.Foreground))
 
-	components.DrawFooter(s, inner, "Enter close")
+	components.DrawFooter(s, inner, i18n.T("update.enterClose"))
 }

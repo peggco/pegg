@@ -6,6 +6,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -78,7 +79,7 @@ func (a *AskPicker) SetQuestions(qs []AskQuestion) {
 				a.textState(st)
 			}
 		case "boolean":
-			st.q.Options = []string{"Yes", "No"}
+			st.q.Options = []string{i18n.T("ask.yes"), i18n.T("ask.no")}
 			st.values = []string{"yes", "no"}
 		default:
 			a.textState(st)
@@ -92,7 +93,7 @@ func (a *AskPicker) textState(st *askState) {
 	st.q.Type = "text"
 	in := NewInput()
 	in.SetRows(1, 2)
-	in.Placeholder = "Type your answer…"
+	in.Placeholder = i18n.T("ask.placeholder")
 	st.input = in
 }
 
@@ -213,7 +214,7 @@ func (a *AskPicker) enterConfirm() {
 	answers := a.collect()
 	for i, st := range a.states {
 		if st.q.Required && answers[st.q.ID] == "" {
-			st.err = "This answer is required"
+			st.err = i18n.T("ask.required")
 			a.tab = i
 			a.confirming = false
 			a.focusCurrent()
@@ -395,9 +396,9 @@ func (a *AskPicker) Draw(s tcell.Screen, bounds layout.Region) {
 	FillRegion(s, bounds, ' ', th.Base().Background(th.InputBg))
 	DrawBox(s, bounds, th.Base().Foreground(th.Border))
 
-	title := fmt.Sprintf(" Ask · Q%d/%d ", a.tab+1, len(a.states))
+	title := i18n.Tf("ask.title", a.tab+1, len(a.states))
 	if a.confirming {
-		title = " Ask · Confirm "
+		title = i18n.T("ask.confirm")
 	}
 	DrawText(s, bounds.Left+2, bounds.Top, title, th.Base().Foreground(th.Accent).Background(th.InputBg))
 
@@ -472,20 +473,21 @@ func (a *AskPicker) Draw(s tcell.Screen, bounds layout.Region) {
 	}
 
 	multi := len(a.states) > 1
-	nav := "Tab next · "
+	nav := i18n.T("ask.footer.nav")
 	if !multi {
 		nav = ""
 	}
-	action := "⏎ confirm"
+	action := i18n.T("ask.footer.confirm")
 	if !multi {
-		action = "⏎ submit"
+		action = i18n.T("ask.footer.submit")
 	}
-	hint := nav + "↑/↓ choose · Space select · " + action + " · Esc cancel"
+	cancel := i18n.T("ask.footer.cancel")
+	hint := nav + i18n.T("ask.footer.select") + action + cancel
 	switch st.q.Type {
 	case "text":
-		hint = nav + "⇧⏎ newline · " + action + " · Esc cancel"
+		hint = nav + i18n.T("ask.footer.newline") + action + cancel
 	case "multiselect":
-		hint = nav + "↑/↓ move · Space toggle · " + action + " · Esc cancel"
+		hint = nav + i18n.T("ask.footer.move") + action + cancel
 	}
 	hintStyle := th.Base().Foreground(th.Hint).Background(th.InputBg)
 	if st.err != "" {
@@ -576,7 +578,7 @@ func (a *AskPicker) drawConfirm(s tcell.Screen, inner layout.Region, th styles.T
 
 	y := inner.Top
 	if y < footerY {
-		DrawText(s, inner.Left, y, TruncateTo("Review your answers", inner.Width), headStyle)
+		DrawText(s, inner.Left, y, TruncateTo(i18n.T("ask.review"), inner.Width), headStyle)
 		y++
 	}
 	for i, st := range a.states {
@@ -592,6 +594,6 @@ func (a *AskPicker) drawConfirm(s tcell.Screen, inner layout.Region, th styles.T
 		DrawText(s, inner.Left+3, y+1, TruncateTo(ans, inner.Width-3), aStyle)
 		y += 2
 	}
-	DrawText(s, inner.Left, footerY, TruncateTo("Esc back · ⏎ submit", inner.Width),
+	DrawText(s, inner.Left, footerY, TruncateTo(i18n.T("ask.confirm.footer"), inner.Width),
 		th.Base().Foreground(th.Hint).Background(th.InputBg))
 }

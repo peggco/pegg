@@ -3,6 +3,7 @@ package components
 import (
 	"github.com/gdamore/tcell/v2"
 
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 	"github.com/peggco/pegg/internal/utils/search"
@@ -259,13 +260,13 @@ func (l *List) Draw(s tcell.Screen, bounds layout.Region, _ bool) {
 	l.drawRegion = bounds
 	top := bounds.Top
 	if l.search && len(l.filter) > 0 {
-		DrawText(s, bounds.Left+1, top, "search: "+string(l.filter), th.Base().Foreground(th.Accent).Background(th.InputBg))
+		DrawText(s, bounds.Left+1, top, i18n.T("common.search")+string(l.filter), th.Base().Foreground(th.Accent).Background(th.InputBg))
 		top++
 	}
 	l.drawTop = top
 
 	if len(l.filtered) == 0 {
-		DrawText(s, bounds.Left+1, top, "(no items)", th.Base().Foreground(th.Placeholder).Background(th.InputBg))
+		DrawText(s, bounds.Left+1, top, i18n.T("common.noItems"), th.Base().Foreground(th.Placeholder).Background(th.InputBg))
 		l.drawVisible = 0
 		return
 	}

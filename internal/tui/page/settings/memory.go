@@ -9,6 +9,7 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/decision"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -323,13 +324,13 @@ func (t *memoryTab) Draw(screen tcell.Screen, bounds layout.Region, focused bool
 		label string
 		value string
 	}{
-		{"Enabled", t.boolLabel(t.enabled)},
-		{"Observer", t.observerDisplay()},
-		{"Relevance gating", t.gateDisplay()},
-		{"Relevance threshold", t.thresholdDisplay()},
-		{"Context budget", fmt.Sprintf("%d chars", t.budget)},
-		{"Max results", fmt.Sprintf("%d", t.maxResults)},
-		{"Consolidate", t.boolLabel(t.consolidate)},
+		{i18n.T("settings.memory.enabled"), t.boolLabel(t.enabled)},
+		{i18n.T("settings.memory.observer"), t.observerDisplay()},
+		{i18n.T("settings.memory.gate"), t.gateDisplay()},
+		{i18n.T("settings.memory.threshold"), t.thresholdDisplay()},
+		{i18n.T("settings.memory.budget"), i18n.Tf("settings.memory.chars", t.budget)},
+		{i18n.T("settings.memory.maxResults"), fmt.Sprintf("%d", t.maxResults)},
+		{i18n.T("settings.memory.consolidate"), t.boolLabel(t.consolidate)},
 	}
 	for i, r := range rows {
 		y := bounds.Top + i
@@ -344,7 +345,7 @@ func (t *memoryTab) Draw(screen tcell.Screen, bounds layout.Region, focused bool
 		}
 		label := r.label
 		if f == memoryFocusThreshold && !t.gateUsesThreshold() {
-			label += " (decision only)"
+			label += " " + i18n.T("common.decisionOnly")
 		}
 		components.DrawText(screen, bounds.Left+1, y, marker+label, style)
 		if r.value != "" {
@@ -354,15 +355,15 @@ func (t *memoryTab) Draw(screen tcell.Screen, bounds layout.Region, focused bool
 
 	sepY := bounds.Top + len(rows) + 1
 	sepStyle := th.Base().Foreground(th.Muted).Background(th.InputBg)
-	components.DrawText(screen, bounds.Left+1, sepY, "── Memory ─────────────────────────────", sepStyle)
+	components.DrawText(screen, bounds.Left+1, sepY, i18n.T("settings.memory.section"), sepStyle)
 
 	stats := []struct {
 		label string
 		value string
 		focus memoryFocus
 	}{
-		{"Entries", fmt.Sprintf("%d", t.entries), memoryFocusEntries},
-		{"Last entry", t.lastEntry, memoryFocusLastEntry},
+		{i18n.T("settings.memory.entries"), fmt.Sprintf("%d", t.entries), memoryFocusEntries},
+		{i18n.T("settings.memory.lastEntry"), t.lastEntry, memoryFocusLastEntry},
 	}
 	for i, s := range stats {
 		y := sepY + 1 + i
@@ -385,38 +386,38 @@ func (t *memoryTab) Draw(screen tcell.Screen, bounds layout.Region, focused bool
 		clearStyle = th.Base().Foreground(th.InputText).Background(th.Selection)
 		marker = "> "
 	}
-	components.DrawText(screen, bounds.Left+1, clearY, marker+"Clear memory", clearStyle)
+	components.DrawText(screen, bounds.Left+1, clearY, marker+i18n.T("settings.memory.clear"), clearStyle)
 }
 
 func (t *memoryTab) boolLabel(v bool) string {
 	if v {
-		return "on"
+		return i18n.T("common.on")
 	}
-	return "off"
+	return i18n.T("common.off")
 }
 
 func (t *memoryTab) observerDisplay() string {
 	if t.provider == "" {
-		return "default (agent model)"
+		return i18n.T("settings.memory.default")
 	}
 	if t.model != "" {
 		return t.provider + "/" + t.model
 	}
-	return t.provider + " (default)"
+	return i18n.Tf("common.defaultSuffix", t.provider)
 }
 
 func (t *memoryTab) gateDisplay() string {
 	switch t.gate {
 	case config.GateDecision:
-		return "decision (JEV)"
+		return i18n.T("settings.memory.gate.decision")
 	case config.GateLLM:
-		return "llm"
+		return i18n.T("settings.memory.gate.llm")
 	case config.GateScore:
-		return "score (free)"
+		return i18n.T("settings.memory.gate.score")
 	case config.GateOff:
-		return "off"
+		return i18n.T("settings.memory.gate.off")
 	default:
-		return "auto"
+		return i18n.T("settings.memory.gate.auto")
 	}
 }
 
@@ -471,7 +472,7 @@ func (t *memoryTab) save() {
 	cons := t.consolidate
 	cfg.Consolidate = &cons
 	if err := config.UpsertMemory(cfg); err != nil {
-		t.settings.errMsg = "failed to save memory config: " + err.Error()
+		t.settings.errMsg = i18n.Tf("settings.memory.errSave", err.Error())
 		return
 	}
 	t.settings.errMsg = ""
@@ -484,7 +485,7 @@ func (t *memoryTab) save() {
 }
 
 func (t *memoryTab) openObserverModels() {
-	l := components.NewList("Select memory observer")
+	l := components.NewList(i18n.T("settings.memory.selectObserver"))
 	l.SetSearchable(true)
 
 	var items []components.ListItem
@@ -500,7 +501,7 @@ func (t *memoryTab) openObserverModels() {
 			}
 			decisionItems = append(decisionItems, components.ListItem{
 				Label:  model,
-				Detail: p.Provider + " · decision",
+				Detail: i18n.Tf("common.decisionDetail", p.Provider),
 				Marked: t.provider == p.Provider && t.model == model,
 				Data:   memoryPick{provider: p.Provider, model: model},
 			})
@@ -530,21 +531,21 @@ func (t *memoryTab) openObserverModels() {
 	}
 
 	items = append(items, components.ListItem{
-		Label:  "Default (agent model)",
-		Detail: "use the running agent's model",
+		Label:  i18n.T("settings.memory.defaultOption"),
+		Detail: i18n.T("settings.memory.defaultDetail"),
 		Marked: t.provider == "",
 		Data:   memoryPick{provider: "", model: ""},
 	})
 	if len(decisionItems) > 0 {
-		items = append(items, components.ListItem{Label: "Decisions", Disabled: true})
+		items = append(items, components.ListItem{Label: i18n.T("common.decisions"), Disabled: true})
 		items = append(items, decisionItems...)
 	}
 	if len(llmItems) > 0 {
-		items = append(items, components.ListItem{Label: "LLM models", Disabled: true})
+		items = append(items, components.ListItem{Label: i18n.T("common.llmModels"), Disabled: true})
 		items = append(items, llmItems...)
 	}
 	if len(items) == 1 {
-		items = append(items, components.ListItem{Label: "(no models available)"})
+		items = append(items, components.ListItem{Label: i18n.T("common.noModels")})
 	}
 
 	l.SetItems(items)
@@ -559,14 +560,14 @@ func (t *memoryTab) openObserverModels() {
 		}
 		t.settings.back()
 	})
-	t.settings.openSub(&listModal{title: "Memory Observer", list: l, onBack: t.settings.back})
+	t.settings.openSub(&listModal{title: i18n.T("settings.memory.observerTitle"), list: l, onBack: t.settings.back})
 }
 
 func (t *memoryTab) openClearConfirm() {
-	l := components.NewList("Clear memory")
+	l := components.NewList(i18n.T("settings.memory.clear"))
 	l.SetItems([]components.ListItem{
-		{Label: "Clear", Detail: "delete all memory files for this project"},
-		{Label: "Cancel", Detail: "keep the memory"},
+		{Label: i18n.T("settings.memory.clearLabel"), Detail: i18n.T("settings.memory.clearDetail")},
+		{Label: i18n.T("settings.memory.cancel"), Detail: i18n.T("settings.memory.cancelDetail")},
 	})
 	l.SetOnSelect(func(i int, _ components.ListItem) {
 		if i == 0 {
@@ -575,23 +576,23 @@ func (t *memoryTab) openClearConfirm() {
 			t.settings.back()
 		}
 	})
-	t.settings.openSub(&listModal{title: "Confirm clear", list: l, onBack: t.settings.back})
+	t.settings.openSub(&listModal{title: i18n.T("settings.memory.confirmClear"), list: l, onBack: t.settings.back})
 }
 
 func (t *memoryTab) clearMemory() {
 	if t.settings.deps.Memory == nil {
-		t.settings.errMsg = "memory store unavailable"
+		t.settings.errMsg = i18n.T("settings.memory.errStoreUnavailable")
 		t.settings.back()
 		return
 	}
 	store := t.settings.deps.Memory.Store()
 	if store == nil {
-		t.settings.errMsg = "memory store unavailable"
+		t.settings.errMsg = i18n.T("settings.memory.errStoreUnavailable")
 		t.settings.back()
 		return
 	}
 	if err := store.Clear(); err != nil {
-		t.settings.errMsg = "failed to clear memory: " + err.Error()
+		t.settings.errMsg = i18n.Tf("settings.memory.errClear", err.Error())
 	} else {
 		t.settings.errMsg = ""
 		t.loadStats()
