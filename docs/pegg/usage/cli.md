@@ -185,7 +185,7 @@ pegg providers add --driver openai --base-url http://localhost:11434/v1 --api-ke
 
 | Flag | Description |
 |---|---|
-| `--name` | Registered provider name, or a custom name when combined with `--driver`. Interactive picker (with a "Custom endpoint" option) when omitted |
+| `--name` | Registered provider name, or a custom name when combined with `--driver`. Interactive picker when omitted — choosing its "Custom endpoint" option prompts for a name and a driver |
 | `--driver` | Driver for custom endpoints (`openai`, `claude`, `gemini`). Requires `--base-url` |
 | `--api-key` | API key. Masked prompt in interactive mode; may be empty |
 | `--base-url` | Base URL. Required for driver entries |

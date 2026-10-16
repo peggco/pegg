@@ -154,6 +154,17 @@ func (c *CLI) runProviderAdd(out io.Writer, f *providerAddFlags, p providerAddPr
 		}
 		choice = strings.TrimSpace(choice)
 		if choice == customEndpointOption {
+			n, err := p.promptString("Provider name")
+			if err != nil {
+				return err
+			}
+			name = strings.TrimSpace(n)
+			if name == "" {
+				return errors.New("cli: provider name is required for custom endpoints")
+			}
+			if llm.HasProvider(name) {
+				return fmt.Errorf("cli: %q is a registered provider; pick a different name for a custom endpoint", name)
+			}
 			d, err := p.selectDriver()
 			if err != nil {
 				return err
