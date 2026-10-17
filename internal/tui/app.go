@@ -66,6 +66,7 @@ type App struct {
 	session         *activeSession
 	loadedFloor     int
 	reasoningEffort string
+	mode            agent.Mode
 
 	baseMentionItems []components.ListItem
 
@@ -170,6 +171,7 @@ func Run(bus event.Bus, deps settings.Deps) error {
 		subItemByID: make(map[string]*components.ChatItem),
 		ctx:         ctx,
 		cancel:      cancel,
+		mode:        agent.ModeAuto,
 	}
 	return a.start()
 }
@@ -504,6 +506,11 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 		return true
 	}
 
+	if resolveGlobal(kev) == ActionModeNext {
+		a.cycleMode()
+		return true
+	}
+
 	if a.root != nil && a.root.HandleKey(kev) {
 		return true
 	}
@@ -575,8 +582,9 @@ func (a *App) openSettings() {
 		a.usage = llm.Usage{}
 		a.chat.Clear()
 		a.main = nil
+		a.mode = agent.ModeAuto
 		if a.agent != nil {
-			a.agent.DetachReminder()
+			a.agent.SetMode(agent.ModeAuto)
 		}
 		a.refreshHomeLocked()
 		a.chatMu.Unlock()
@@ -656,11 +664,53 @@ func (a *App) refreshHomeLocked() {
 	}
 	a.home.SetModel(a.modelDisplay())
 	a.home.SetReasoningEffort(a.reasoningEffort)
+	a.home.SetMode(string(a.mode))
 	a.home.SetRunning(a.running)
 	a.home.SetUsage(a.usage)
 	if a.model.model.Config != nil {
 		a.home.SetMaxInputTokens(a.model.model.MaxInputTokens())
 	}
+}
+
+func (a *App) cycleMode() {
+	a.chatMu.Lock()
+	running := a.running
+	a.chatMu.Unlock()
+	if running {
+		return
+	}
+	var next agent.Mode
+	switch a.mode {
+	case agent.ModeBuild:
+		next = agent.ModePlan
+	case agent.ModePlan:
+		next = agent.ModeAuto
+	default:
+		next = agent.ModeBuild
+	}
+	a.setMode(next)
+}
+
+func (a *App) setMode(m agent.Mode) {
+	m = agent.NormalizeMode(m)
+	a.chatMu.Lock()
+	a.mode = m
+	if a.agent != nil {
+		a.agent.SetMode(m)
+	}
+	if a.session != nil {
+		a.session.info.Mode = string(m)
+	}
+	a.refreshHomeLocked()
+	sess := a.session
+	a.chatMu.Unlock()
+
+	if sess != nil && a.deps.Sessions != nil {
+		if err := a.deps.Sessions.SetMode(sess.info.ID, string(m)); err != nil {
+			a.showError(i18n.Tf("app.error.mode", err.Error()))
+		}
+	}
+	a.requestRedraw()
 }
 
 func (a *App) refreshMentionItemsLocked() {
@@ -691,10 +741,10 @@ func (a *App) refreshMentionItemsLocked() {
 
 func (a *App) activateSession(info settings.SessionInfo) {
 	a.chatMu.Lock()
-	changed := a.session == nil || a.session.info.ID != info.ID
 	a.session = &activeSession{info: info, viewID: info.ID}
-	if changed && a.agent != nil {
-		a.agent.DetachReminder()
+	a.mode = agent.NormalizeMode(agent.Mode(info.Mode))
+	if a.agent != nil {
+		a.agent.SetMode(a.mode)
 	}
 	a.reasoningEffort = info.ReasoningEffort
 	if a.deps.LLM != nil && info.Provider != "" && info.Model != "" {

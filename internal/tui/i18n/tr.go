@@ -17,6 +17,11 @@ var tr = map[string]string{
 	"app.error.attach":  "Dosya eklenemedi: %s",
 	"app.error.noImage": "Model görsel ekleri desteklemiyor",
 	"app.error.noAudio": "Model ses eklerini desteklemiyor",
+	"app.error.mode":    "Mod kaydedilemedi: %s",
+
+	"mode.build": "build",
+	"mode.plan":  "plan",
+	"mode.auto":  "auto",
 
 	"settings.title":           "Ayarlar",
 	"settings.tab.general":     "Genel",
@@ -83,6 +88,7 @@ var tr = map[string]string{
 	"home.hint.batch":    "birden fazla dosyayı tek seferde değiştirmek için '/batch' kullanın",
 	"home.hint.settings": "ayarlar için Ctrl+P'ye basın",
 	"home.hint.theme":    "temayı değiştirmek için Ctrl+T'ye basın",
+	"home.hint.mode":     "mod değiştirmek için 'Shift+Tab' kullanın",
 	"home.hint.stop":     "çalışan bir ajanı durdurmak için Esc'ye iki kez basın",
 	"home.hint.attach":   "eklemek için bir dosyayı sürükleyin veya yapıştırın",
 

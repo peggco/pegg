@@ -261,3 +261,46 @@ func TestSQLiteStoreList(t *testing.T) {
 		}
 	})
 }
+
+func TestSQLiteStoreMigratesModeColumn(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	_, err = db.Exec("CREATE TABLE sessions (" +
+		"id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', provider TEXT NOT NULL DEFAULT '', " +
+		"model TEXT NOT NULL DEFAULT '', reasoning_effort TEXT NOT NULL DEFAULT '', " +
+		"project_dir TEXT NOT NULL DEFAULT '', parent_id TEXT NOT NULL DEFAULT '', " +
+		"compaction_parent_id TEXT NOT NULL DEFAULT '', created_at DATETIME NOT NULL, " +
+		"updated_at DATETIME NOT NULL, usage TEXT NOT NULL DEFAULT '{}')")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := newSQLiteStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := testSession("s1")
+	sess.Mode = "plan"
+	if err := s.Create(sess); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get("s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Mode != "plan" {
+		t.Fatalf("mode = %q, want plan", got.Mode)
+	}
+
+	list, _, err := s.List(query.Query{})
+	if err != nil {
+		t.Fatalf("list after migration: %v", err)
+	}
+	if len(list) != 1 || list[0].Mode != "plan" {
+		t.Fatalf("list = %+v, want one session with mode plan", list)
+	}
+}

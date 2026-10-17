@@ -16,6 +16,7 @@ const (
 	ActionThemeNext
 	ActionSettings
 	ActionCopy
+	ActionModeNext
 )
 
 var globalBindings = map[keyCombo]keyAction{
@@ -26,6 +27,8 @@ var globalBindings = map[keyCombo]keyAction{
 	{key: tcell.KeyCtrlC, mod: tcell.ModCtrl | tcell.ModShift}:           ActionCopy,
 	{key: tcell.KeyRune, rune: 'c', mod: tcell.ModCtrl | tcell.ModShift}: ActionCopy,
 	{key: tcell.KeyRune, rune: 'C', mod: tcell.ModCtrl | tcell.ModShift}: ActionCopy,
+	{key: tcell.KeyBacktab}:                  ActionModeNext,
+	{key: tcell.KeyTab, mod: tcell.ModShift}: ActionModeNext,
 }
 
 func resolveGlobal(ev *tcell.EventKey) keyAction {

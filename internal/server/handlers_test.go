@@ -453,3 +453,59 @@ func TestWriteErrorEmptyMessage(t *testing.T) {
 		t.Errorf("expected empty error, got %s", resp.Error)
 	}
 }
+
+func TestHandleSetSessionMode(t *testing.T) {
+	srv := newTestServer(t)
+	sess, _ := srv.sessions.Create(session.CreateOptions{Title: "test"})
+
+	req := httptest.NewRequest("PUT", "/api/sessions/"+sess.ID+"/mode", strings.NewReader(`{"mode":"plan"}`))
+	w := httptest.NewRecorder()
+	req.SetPathValue("id", sess.ID)
+	srv.handleSetSessionMode(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp SessionResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Mode != "plan" {
+		t.Fatalf("mode = %q, want plan", resp.Mode)
+	}
+
+	got, err := srv.sessions.Get(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Mode != "plan" {
+		t.Fatalf("persisted mode = %q, want plan", got.Mode)
+	}
+}
+
+func TestHandleSetSessionModeInvalid(t *testing.T) {
+	srv := newTestServer(t)
+	sess, _ := srv.sessions.Create(session.CreateOptions{Title: "test"})
+
+	req := httptest.NewRequest("PUT", "/api/sessions/"+sess.ID+"/mode", strings.NewReader(`{"mode":"nope"}`))
+	w := httptest.NewRecorder()
+	req.SetPathValue("id", sess.ID)
+	srv.handleSetSessionMode(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandleSetSessionModeNotFound(t *testing.T) {
+	srv := newTestServer(t)
+
+	req := httptest.NewRequest("PUT", "/api/sessions/missing/mode", strings.NewReader(`{"mode":"build"}`))
+	w := httptest.NewRecorder()
+	req.SetPathValue("id", "missing")
+	srv.handleSetSessionMode(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}

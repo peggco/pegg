@@ -68,6 +68,11 @@ type SessionCloseParams struct {
 	SessionId SessionId `json:"sessionId"`
 }
 
+type SessionSetModeParams struct {
+	SessionId SessionId `json:"sessionId"`
+	ModeId    string    `json:"modeId"`
+}
+
 type SessionListParams struct {
 	Cursor string `json:"cursor,omitempty"`
 	Limit  int    `json:"limit,omitempty"`
@@ -111,10 +116,12 @@ func (s *Server) handleSessionNew(ctx context.Context, params json.RawMessage) (
 	if orch.Provider != nil {
 		provName = orch.Provider.Name()
 	}
+	mode := orch.CurrentMode()
 	vs, err := s.sessions.Create(session.CreateOptions{
 		Title:      "ACP Session",
 		Provider:   provName,
 		Model:      orch.Model.ID,
+		Mode:       string(mode),
 		ProjectDir: req.Cwd,
 	})
 	if err != nil {
@@ -128,7 +135,8 @@ func (s *Server) handleSessionNew(ctx context.Context, params json.RawMessage) (
 	}
 
 	s.addSession(acpSess)
-	return SessionNewResult{SessionId: SessionId(acpID)}, nil
+	s.notifyMode(acpID, string(mode))
+	return SessionNewResult{SessionId: SessionId(acpID), Mode: string(mode)}, nil
 }
 
 func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) (any, error) {
@@ -146,6 +154,9 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 	if err != nil {
 		return nil, &RPCError{Code: ErrCodeInternal, Message: "failed to create agent: " + err.Error()}
 	}
+
+	mode := agent.NormalizeMode(agent.Mode(vs.Mode))
+	orch.SetMode(mode)
 
 	msgs, err := s.sessions.Messages(vs.ID)
 	if err == nil {
@@ -179,6 +190,8 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 		SessionID: vs.ID,
 	})
 
+	s.notifyMode(string(req.SessionId), string(mode))
+
 	return nil, nil
 }
 
@@ -198,6 +211,9 @@ func (s *Server) handleSessionResume(ctx context.Context, params json.RawMessage
 		return nil, &RPCError{Code: ErrCodeInternal, Message: "failed to create agent: " + err.Error()}
 	}
 
+	mode := agent.NormalizeMode(agent.Mode(vs.Mode))
+	orch.SetMode(mode)
+
 	acpSess := &ACPSession{
 		ID:            string(req.SessionId),
 		Agent:         orch,
@@ -211,6 +227,8 @@ func (s *Server) handleSessionResume(ctx context.Context, params json.RawMessage
 		AgentID:   orch.ID,
 		SessionID: vs.ID,
 	})
+
+	s.notifyMode(string(req.SessionId), string(mode))
 
 	return map[string]any{}, nil
 }
@@ -232,6 +250,30 @@ func (s *Server) handleSessionClose(ctx context.Context, params json.RawMessage)
 		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid session/close params"}
 	}
 	s.removeSession(string(req.SessionId))
+	return map[string]any{}, nil
+}
+
+func (s *Server) handleSessionSetMode(ctx context.Context, params json.RawMessage) (any, error) {
+	var req SessionSetModeParams
+	if err := json.Unmarshal(params, &req); err != nil {
+		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid session/set_mode params"}
+	}
+	acpSess, ok := s.getSession(string(req.SessionId))
+	if !ok {
+		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "session not found"}
+	}
+	m := agent.Mode(req.ModeId)
+	if !m.Valid() {
+		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid mode (want build, plan or auto)"}
+	}
+	m = agent.NormalizeMode(m)
+	if acpSess.Agent != nil {
+		acpSess.Agent.SetMode(m)
+	}
+	if acpSess.PeggSessionID != "" {
+		_ = s.sessions.SetMode(acpSess.PeggSessionID, string(m))
+	}
+	s.notifyMode(acpSess.ID, string(m))
 	return map[string]any{}, nil
 }
 

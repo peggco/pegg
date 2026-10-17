@@ -30,8 +30,8 @@ terminal, or explicitly with `pegg tui`.
 - **Input editor** — up to 6 rows tall, with inline chips for skills, mentions, and
   long pasted text.
 - **Status bar** — a running indicator (`●`), the active model as
-  `name/provider`, reasoning effort when set, context usage, session cost, and a
-  `Ctrl+P` hint.
+  `name/provider`, reasoning effort when set, the current session mode chip
+  (`build`/`plan`/`auto`), context usage, session cost, and a `Ctrl+P` hint.
 - **Hint line** — transient errors and the `Press Esc to interrupt` hint.
 
 ## Global keys
@@ -42,6 +42,7 @@ terminal, or explicitly with `pegg tui`.
 | ++ctrl+t++ | Cycle to the next theme (saved to config) |
 | ++ctrl+p++ | Open Settings |
 | ++ctrl+shift+c++ | Copy the selected chat text (or input selection) |
+| ++shift+tab++ | Cycle session mode: build → plan → auto (saved to the session) |
 | ++esc++ | Interrupt (see below) |
 | ++tab++ | Toggle focus between the input and attachments (when attachments exist) |
 | Mouse wheel | Scroll the chat 3 lines |

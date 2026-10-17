@@ -90,6 +90,7 @@ func defaultHints() []string {
 		i18n.T("home.hint.batch"),
 		i18n.T("home.hint.settings"),
 		i18n.T("home.hint.theme"),
+		i18n.T("home.hint.mode"),
 		i18n.T("home.hint.stop"),
 		i18n.T("home.hint.attach"),
 	}
@@ -156,6 +157,7 @@ func (p *Page) SetModel(m string) {
 
 func (p *Page) SetRunning(r bool)           { p.status.SetRunning(r) }
 func (p *Page) SetReasoningEffort(e string) { p.status.SetReasoningEffort(e) }
+func (p *Page) SetMode(m string)            { p.status.SetMode(m) }
 func (p *Page) SetUsage(u llm.Usage)        { p.status.SetUsage(u) }
 func (p *Page) SetMaxInputTokens(n int)     { p.status.SetMaxInputTokens(n) }
 

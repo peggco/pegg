@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/session"
 )
 
@@ -542,5 +543,69 @@ func TestServeContextCancel(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Serve did not return after context cancel")
+	}
+}
+
+func TestSessionNewReturnsAutoMode(t *testing.T) {
+	srv := newTestServer(t)
+	ctx := context.Background()
+
+	result, err := srv.handleSessionNew(ctx, toJSON(t, SessionNewParams{Cwd: "/tmp"}))
+	if err != nil {
+		t.Fatalf("session/new failed: %v", err)
+	}
+	sr := result.(SessionNewResult)
+	if sr.Mode != string(agent.ModeAuto) {
+		t.Fatalf("mode = %q, want auto", sr.Mode)
+	}
+	acpSess, _ := srv.getSession(string(sr.SessionId))
+	if acpSess.Agent.CurrentMode() != agent.ModeAuto {
+		t.Fatalf("agent mode = %q, want auto", acpSess.Agent.CurrentMode())
+	}
+}
+
+func TestSessionSetMode(t *testing.T) {
+	srv := newTestServer(t)
+	ctx := context.Background()
+
+	result, err := srv.handleSessionNew(ctx, toJSON(t, SessionNewParams{Cwd: "/tmp"}))
+	if err != nil {
+		t.Fatalf("session/new failed: %v", err)
+	}
+	sessID := string(result.(SessionNewResult).SessionId)
+
+	if _, err := srv.handleSessionSetMode(ctx, toJSON(t, SessionSetModeParams{
+		SessionId: SessionId(sessID), ModeId: "plan",
+	})); err != nil {
+		t.Fatalf("session/set_mode failed: %v", err)
+	}
+
+	acpSess, _ := srv.getSession(sessID)
+	if acpSess.Agent.CurrentMode() != agent.ModePlan {
+		t.Fatalf("agent mode = %q, want plan", acpSess.Agent.CurrentMode())
+	}
+	vs, err := srv.sessions.Get(acpSess.PeggSessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if vs.Mode != "plan" {
+		t.Fatalf("persisted mode = %q, want plan", vs.Mode)
+	}
+}
+
+func TestSessionSetModeInvalid(t *testing.T) {
+	srv := newTestServer(t)
+	ctx := context.Background()
+
+	result, err := srv.handleSessionNew(ctx, toJSON(t, SessionNewParams{Cwd: "/tmp"}))
+	if err != nil {
+		t.Fatalf("session/new failed: %v", err)
+	}
+	sessID := string(result.(SessionNewResult).SessionId)
+
+	if _, err := srv.handleSessionSetMode(ctx, toJSON(t, SessionSetModeParams{
+		SessionId: SessionId(sessID), ModeId: "nope",
+	})); err == nil {
+		t.Fatal("expected error for invalid mode")
 	}
 }

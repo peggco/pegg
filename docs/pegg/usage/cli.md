@@ -44,10 +44,27 @@ pegg run --session 3f2b1c... "Continue where we left off"
 | `--show-thinking` | `false` | Print raw reasoning content instead of a `Thinking...` indicator |
 | `--show-subagent` | `false` | Print subagent messages instead of a `Subagent` indicator |
 | `--chat` | `false` | Keep chatting after the first run ends |
+| `--plan` | `false` | Start in plan mode (read-only planning) |
+| `--build` | `false` | Start in build mode (execute without plan tools) |
+| `--auto` | `false` | Start in auto mode, letting the agent plan on its own (default) |
 
 Model resolution follows the rules in
 [Providers & Models](../providers-and-models.md#model-selection). When resuming a
 session without an explicit provider/model, the session's stored model is reused.
+
+### Modes
+
+Sessions run in a **mode** that controls planning behaviour:
+
+| Mode | Plan reminder | `enterplanmode`/`exitplanmode` |
+|---|---|---|
+| `build` | no | hidden |
+| `plan` | yes (read-only, writes limited to `.pegg/plans`) | hidden |
+| `auto` | only if the model enters plan mode | available |
+
+Pass exactly one of `--plan`, `--build` or `--auto`; the default is `auto`. When
+resuming a session without a mode flag, the session's stored mode is reused. The
+chosen mode is persisted to the session.
 
 ### Output
 

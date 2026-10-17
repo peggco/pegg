@@ -33,6 +33,7 @@ type Session struct {
 	Provider           string
 	Model              string
 	ReasoningEffort    string
+	Mode               string
 	ProjectDir         string
 	ParentID           string
 	CompactionParentID string
@@ -90,5 +91,6 @@ type CreateOptions struct {
 	Provider        string
 	Model           string
 	ReasoningEffort string
+	Mode            string
 	ProjectDir      string
 }

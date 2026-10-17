@@ -237,3 +237,26 @@ func TestSubscribeEvents(t *testing.T) {
 type baseMiddleware struct {
 	BaseMiddleware
 }
+
+func TestSessionMode(t *testing.T) {
+	eng := openTestEngine(t, "sdk-mode")
+
+	s, err := eng.CreateSession(CreateSessionOptions{Title: "modes", Provider: "sdk-mode", Model: "mock-model", Mode: ModePlan})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if s.Mode != string(ModePlan) {
+		t.Fatalf("Mode = %q, want plan", s.Mode)
+	}
+
+	if err := eng.SetSessionMode(s.ID, ModeBuild); err != nil {
+		t.Fatalf("SetSessionMode: %v", err)
+	}
+	got, err := eng.GetSession(s.ID)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got.Mode != string(ModeBuild) {
+		t.Fatalf("Mode after SetSessionMode = %q, want build", got.Mode)
+	}
+}

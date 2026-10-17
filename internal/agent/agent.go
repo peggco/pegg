@@ -52,6 +52,10 @@ type Agent struct {
 	pendingNotifications []reminder.Reminder
 	attachedReminder     *reminder.Reminder
 	notificationsMu      sync.Mutex
+
+	modeMu         sync.RWMutex
+	mode           Mode
+	modeController ModeController
 }
 
 func New(name string, opts ...Option) *Agent {
@@ -64,6 +68,7 @@ func New(name string, opts ...Option) *Agent {
 		Tools:         tool.NewRegistry(),
 		MaxIterations: DefaultMaxIterations,
 		chain:         middleware.NewChain(),
+		mode:          ModeAuto,
 	}
 	for _, opt := range opts {
 		opt(a)
@@ -91,6 +96,8 @@ func (a *Agent) Clone(name string) *Agent {
 	c.log = a.log
 	c.RouterManaged = a.RouterManaged
 	c.chain = a.chain.Clone()
+	c.mode = a.CurrentMode()
+	c.modeController = a.modeController
 	for _, t := range a.Tools.List() {
 		_ = c.Tools.Register(t)
 	}
@@ -205,6 +212,31 @@ func WithLogger(l *logger.Logger) Option {
 
 func WithReasoningEffort(effort string) Option {
 	return func(a *Agent) { a.ReasoningEffort = effort }
+}
+
+func WithModeController(c ModeController) Option {
+	return func(a *Agent) { a.modeController = c }
+}
+
+func (a *Agent) CurrentMode() Mode {
+	a.modeMu.RLock()
+	defer a.modeMu.RUnlock()
+	return NormalizeMode(a.mode)
+}
+
+func (a *Agent) SetMode(m Mode) {
+	m = NormalizeMode(m)
+	a.modeMu.Lock()
+	a.mode = m
+	c := a.modeController
+	a.modeMu.Unlock()
+	if c != nil {
+		c(a, m)
+	}
+}
+
+func (a *Agent) planToolsEnabled() bool {
+	return a.CurrentMode() == ModeAuto
 }
 
 func WithStructuredOutput(name string, schema any) Option {

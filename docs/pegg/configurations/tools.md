@@ -181,17 +181,23 @@ performs a partial update. Dependencies are stored and displayed but not enforce
 
 ## Plan mode
 
+Sessions run in one of three modes: `build`, `plan`, or `auto`. In `auto` (the
+default) the agent may enter and leave plan mode itself using the tools below.
+In `plan` the plan-mode reminder is attached and writes are restricted to
+`.pegg/plans` for the whole session. In `build` no reminder is attached. The
+plan tools are only exposed to the model in `auto` mode.
+
 ### `enterplanmode`
 
 Enter plan mode: attaches a standing **plan-mode reminder** that is injected into
 every LLM request until `exitplanmode` is called. While active the agent is
 read-only and must only research and plan. The tool call itself requires user
-approval (`ask` by default).
+approval (`ask` by default). Only available in `auto` mode.
 
 ### `exitplanmode`
 
 Leave plan mode: removes the standing plan-mode reminder. Requires user approval
-(`ask` by default).
+(`ask` by default). Only available in `auto` mode.
 
 ## Skills
 

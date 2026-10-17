@@ -17,6 +17,11 @@ var en = map[string]string{
 	"app.error.attach":  "Could not attach file: %s",
 	"app.error.noImage": "Model does not support image attachments",
 	"app.error.noAudio": "Model does not support audio attachments",
+	"app.error.mode":    "Could not save mode: %s",
+
+	"mode.build": "build",
+	"mode.plan":  "plan",
+	"mode.auto":  "auto",
 
 	"settings.title":           "Settings",
 	"settings.tab.general":     "General",
@@ -83,6 +88,7 @@ var en = map[string]string{
 	"home.hint.batch":    "use '/batch' to change many files at once",
 	"home.hint.settings": "press Ctrl+P for settings",
 	"home.hint.theme":    "press Ctrl+T to cycle the theme",
+	"home.hint.mode":     "use 'Shift+Tab' to change mode",
 	"home.hint.stop":     "press Esc twice to stop a running agent",
 	"home.hint.attach":   "paste or drop a file to attach it",
 

@@ -5,6 +5,7 @@ import (
 	"github.com/peggco/pegg/internal/agent/agents"
 	_ "github.com/peggco/pegg/internal/builtin/middlewares"
 	"github.com/peggco/pegg/internal/builtin/tools/file"
+	"github.com/peggco/pegg/internal/builtin/tools/plan"
 	"github.com/peggco/pegg/internal/vfs"
 )
 
@@ -26,6 +27,9 @@ func newOrchestratorAgent(fs *vfs.VFS) (*agent.Agent, error) {
 		agent.WithTools(file.Tools(fs)...),
 		agent.WithToolNames("askuserquestion", "bash", "task", "taskstatus", "todoread", "todowrite", "webfetch", "websearch", "loadskill", "enterplanmode", "exitplanmode", "mem-search", "mem-read", "schedule"),
 		agent.WithMiddlewareNames("loop-detector", "redaction", "retry", "permission", "compaction"),
+		agent.WithModeController(func(a *agent.Agent, m agent.Mode) {
+			plan.ApplyMode(a, fs, m)
+		}),
 	)
 
 	return main, nil

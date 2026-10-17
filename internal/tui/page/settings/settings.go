@@ -62,6 +62,7 @@ type SessionInfo struct {
 	Provider           string
 	Model              string
 	ReasoningEffort    string
+	Mode               string
 	CompactionParentID string
 	Messages           []session.Message
 	Usage              llm.Usage

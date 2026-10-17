@@ -500,7 +500,7 @@ func (a *App) onSessionAttached(e session.SessionAttached) {
 		return
 	}
 	if a.session == nil {
-		a.session = &activeSession{info: settings.SessionInfo{ID: e.SessionID}, viewID: e.SessionID}
+		a.session = &activeSession{info: settings.SessionInfo{ID: e.SessionID, Mode: string(a.mode)}, viewID: e.SessionID}
 		a.refreshHomeLocked()
 	}
 }
@@ -935,6 +935,7 @@ func (a *App) sessionInfoFor(id string) (settings.SessionInfo, bool) {
 		Provider:           sess.Provider,
 		Model:              sess.Model,
 		ReasoningEffort:    sess.ReasoningEffort,
+		Mode:               sess.Mode,
 		CompactionParentID: sess.CompactionParentID,
 		Messages:           msgs,
 		Usage:              sess.Usage,

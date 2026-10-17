@@ -22,37 +22,6 @@ func init() {
 	})
 }
 
-var createTableSQL = "CREATE TABLE IF NOT EXISTS sessions (" +
-	"id TEXT PRIMARY KEY," +
-	"title TEXT NOT NULL DEFAULT ''," +
-	"provider TEXT NOT NULL DEFAULT ''," +
-	"model TEXT NOT NULL DEFAULT ''," +
-	"reasoning_effort TEXT NOT NULL DEFAULT ''," +
-	"project_dir TEXT NOT NULL DEFAULT ''," +
-	"parent_id TEXT NOT NULL DEFAULT ''," +
-	"compaction_parent_id TEXT NOT NULL DEFAULT ''," +
-	"created_at DATETIME NOT NULL," +
-	"updated_at DATETIME NOT NULL," +
-	"usage TEXT NOT NULL DEFAULT '{}');" +
-	"CREATE TABLE IF NOT EXISTS session_messages (" +
-	"id TEXT PRIMARY KEY," +
-	"session_id TEXT NOT NULL," +
-	"seq INTEGER NOT NULL," +
-	"role TEXT NOT NULL," +
-	"content TEXT NOT NULL DEFAULT ''," +
-	"reasoning TEXT NOT NULL DEFAULT ''," +
-	"name TEXT NOT NULL DEFAULT ''," +
-	"tool_call_id TEXT NOT NULL DEFAULT ''," +
-	"tool_calls TEXT NOT NULL DEFAULT ''," +
-	"created_at DATETIME NOT NULL);" +
-	"CREATE INDEX IF NOT EXISTS idx_session_messages_session_seq ON session_messages (session_id, seq);" +
-	"CREATE TABLE IF NOT EXISTS session_snapshots (" +
-	"id TEXT PRIMARY KEY," +
-	"session_id TEXT NOT NULL," +
-	"head_message_id TEXT NOT NULL," +
-	"created_at DATETIME NOT NULL," +
-	"messages TEXT NOT NULL);"
-
 type SQLiteStore struct {
 	db      *sql.DB
 	builder *query.Builder
@@ -89,24 +58,24 @@ func sqliteDSN(path string) string {
 }
 
 func newSQLiteStore(db *sql.DB) (*SQLiteStore, error) {
-	if _, err := db.Exec(createTableSQL); err != nil {
+	if err := migrateSchema(db); err != nil {
 		db.Close()
 		return nil, err
 	}
 
+	columns := columnNames(sessionColumns)
 	return &SQLiteStore{
 		db: db,
-		builder: query.NewBuilder("sessions",
-			"id", "title", "provider", "model", "reasoning_effort", "project_dir",
-			"parent_id", "compaction_parent_id", "created_at", "updated_at",
-		).DefaultSort("created_at", query.Desc),
+		builder: query.NewBuilder("sessions", columns...).
+			SelectColumns(columns...).
+			DefaultSort("created_at", query.Desc),
 	}, nil
 }
 
 func (s *SQLiteStore) Create(sess Session) error {
 	_, err := s.db.Exec(
-		"INSERT INTO sessions (id, title, provider, model, reasoning_effort, project_dir, parent_id, compaction_parent_id, created_at, updated_at, usage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		sess.ID, sess.Title, sess.Provider, sess.Model, sess.ReasoningEffort, sess.ProjectDir,
+		"INSERT INTO sessions (id, title, provider, model, reasoning_effort, mode, project_dir, parent_id, compaction_parent_id, created_at, updated_at, usage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		sess.ID, sess.Title, sess.Provider, sess.Model, sess.ReasoningEffort, sess.Mode, sess.ProjectDir,
 		sess.ParentID, sess.CompactionParentID, sess.CreatedAt, sess.UpdatedAt, marshalJSON(sess.Usage),
 	)
 	return err
@@ -114,8 +83,8 @@ func (s *SQLiteStore) Create(sess Session) error {
 
 func (s *SQLiteStore) Update(sess Session) error {
 	res, err := s.db.Exec(
-		"UPDATE sessions SET title = ?, provider = ?, model = ?, reasoning_effort = ?, project_dir = ?, parent_id = ?, compaction_parent_id = ?, created_at = ?, updated_at = ?, usage = ? WHERE id = ?",
-		sess.Title, sess.Provider, sess.Model, sess.ReasoningEffort, sess.ProjectDir,
+		"UPDATE sessions SET title = ?, provider = ?, model = ?, reasoning_effort = ?, mode = ?, project_dir = ?, parent_id = ?, compaction_parent_id = ?, created_at = ?, updated_at = ?, usage = ? WHERE id = ?",
+		sess.Title, sess.Provider, sess.Model, sess.ReasoningEffort, sess.Mode, sess.ProjectDir,
 		sess.ParentID, sess.CompactionParentID, sess.CreatedAt, sess.UpdatedAt, marshalJSON(sess.Usage), sess.ID,
 	)
 	if err != nil {
@@ -129,13 +98,13 @@ func (s *SQLiteStore) Update(sess Session) error {
 
 func (s *SQLiteStore) Get(id string) (*Session, error) {
 	row := s.db.QueryRow(
-		"SELECT id, title, provider, model, reasoning_effort, project_dir, parent_id, compaction_parent_id, created_at, updated_at, usage FROM sessions WHERE id = ?", id,
+		"SELECT id, title, provider, model, reasoning_effort, project_dir, parent_id, compaction_parent_id, created_at, updated_at, usage, mode FROM sessions WHERE id = ?", id,
 	)
 	var sess Session
 	var usage string
 	if err := row.Scan(
 		&sess.ID, &sess.Title, &sess.Provider, &sess.Model, &sess.ReasoningEffort, &sess.ProjectDir,
-		&sess.ParentID, &sess.CompactionParentID, &sess.CreatedAt, &sess.UpdatedAt, &usage,
+		&sess.ParentID, &sess.CompactionParentID, &sess.CreatedAt, &sess.UpdatedAt, &usage, &sess.Mode,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrNotFound
@@ -182,7 +151,7 @@ func (s *SQLiteStore) List(q query.Query) ([]Session, int, error) {
 		var usage string
 		if err := rows.Scan(
 			&sess.ID, &sess.Title, &sess.Provider, &sess.Model, &sess.ReasoningEffort, &sess.ProjectDir,
-			&sess.ParentID, &sess.CompactionParentID, &sess.CreatedAt, &sess.UpdatedAt, &usage,
+			&sess.ParentID, &sess.CompactionParentID, &sess.CreatedAt, &sess.UpdatedAt, &usage, &sess.Mode,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -445,7 +414,7 @@ func (s *SQLiteStore) Close() error {
 
 func (s *SQLiteStore) CompactionChildren(sessionID string) ([]Session, error) {
 	rows, err := s.db.Query(
-		"SELECT id, title, provider, model, reasoning_effort, project_dir, parent_id, compaction_parent_id, created_at, updated_at, usage FROM sessions WHERE compaction_parent_id = ? ORDER BY created_at ASC",
+		"SELECT id, title, provider, model, reasoning_effort, project_dir, parent_id, compaction_parent_id, created_at, updated_at, usage, mode FROM sessions WHERE compaction_parent_id = ? ORDER BY created_at ASC",
 		sessionID,
 	)
 	if err != nil {
@@ -459,7 +428,7 @@ func (s *SQLiteStore) CompactionChildren(sessionID string) ([]Session, error) {
 		var usage string
 		if err := rows.Scan(
 			&sess.ID, &sess.Title, &sess.Provider, &sess.Model, &sess.ReasoningEffort, &sess.ProjectDir,
-			&sess.ParentID, &sess.CompactionParentID, &sess.CreatedAt, &sess.UpdatedAt, &usage,
+			&sess.ParentID, &sess.CompactionParentID, &sess.CreatedAt, &sess.UpdatedAt, &usage, &sess.Mode,
 		); err != nil {
 			return nil, err
 		}
