@@ -1024,38 +1024,6 @@ func (c *Chat) toolLines(it *ChatItem, width int) []Line {
 		return c.askCardLines(it, width)
 	}
 
-	hasOutput := it.ToolOutput != ""
-	if it.Expanded && hasOutput {
-		left := c.toolStatusLine(it, width, '✔', th.Success, " ✔ "+formatDuration(it.Duration)+"  "+i18n.T("common.collapse"))
-		var lines []Line
-		lines = append(lines, left)
-		bodyStyle := th.Base().Foreground(th.TextDim).Background(th.Background)
-		wrapped := WrapText(it.ToolOutput, bodyStyle, width-4)
-		const maxOutputLines = 100
-		if len(wrapped) > maxOutputLines {
-			wrapped = wrapped[:maxOutputLines]
-		}
-		for _, ln := range wrapped {
-			row := Line{{R: ' ', S: th.Base()}, {R: ' ', S: th.Base()}}
-			row = append(row, ln...)
-			lines = append(lines, row)
-		}
-		if len(wrapped) == maxOutputLines {
-			lines = append(lines, LineFromSegments([]Segment{
-				{Text: i18n.T("chat.tool.outputTruncated"), Style: th.Base().Foreground(th.Muted).Background(th.Background)},
-			}, width))
-		}
-		lines = append(lines, LineFromSegments([]Segment{
-			{Text: "  " + i18n.T("common.collapse"), Style: th.Base().Foreground(th.Muted).Background(th.Background)},
-		}, width))
-		return lines
-	}
-
-	if hasOutput {
-		lines := []Line{c.toolStatusLine(it, width, '✔', th.Success, " ✔ "+formatDuration(it.Duration)+"  "+i18n.T("common.expand"))}
-		return lines
-	}
-
 	return []Line{c.toolStatusLine(it, width, '✔', th.Success, " ✔ "+formatDuration(it.Duration))}
 }
 
@@ -1400,7 +1368,8 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 
 	rawLines := strings.Split(output, "\n")
 	const maxBashLines = 30
-	truncated := len(rawLines) > maxBashLines && !it.Expanded
+	hasMore := len(rawLines) > maxBashLines
+	truncated := hasMore && !it.Expanded
 	shown := rawLines
 	if truncated {
 		shown = rawLines[:maxBashLines]
@@ -1437,7 +1406,7 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 		lines = append(lines, moreLine)
 	}
 
-	if it.Expanded {
+	if it.Expanded && hasMore {
 		moreLine := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
 		msg := i18n.Tf("chat.tool.showingAll", len(rawLines))
 		for _, r := range msg {
@@ -1470,14 +1439,13 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 	if it.Expanded {
 		expandHint = i18n.T("common.collapse")
 	}
-	for footer.Width()+DisplayWidth(expandHint)+4 < width {
-		footer = append(footer, Cell{R: ' ', S: th.Base()})
-	}
-	for footer.Width() < width-1-DisplayWidth(expandHint) {
-		footer = append(footer, Cell{R: ' ', S: th.Base()})
-	}
-	for _, r := range expandHint {
-		footer = append(footer, Cell{R: r, S: dim})
+	if hasMore {
+		for footer.Width() < width-1-DisplayWidth(expandHint) {
+			footer = append(footer, Cell{R: ' ', S: th.Base()})
+		}
+		for _, r := range expandHint {
+			footer = append(footer, Cell{R: r, S: dim})
+		}
 	}
 	for footer.Width() < width-1 {
 		footer = append(footer, Cell{R: ' ', S: th.Base()})
@@ -1665,7 +1633,8 @@ func (c *Chat) editCardLines(it *ChatItem, width int) []Line {
 	}
 
 	const maxDiffRows = 30
-	truncated := totalRows > maxDiffRows && !it.Expanded
+	hasMore := totalRows > maxDiffRows
+	truncated := hasMore && !it.Expanded
 	emitted, skipped := 0, 0
 
 	for _, h := range it.Diff {
@@ -1682,7 +1651,7 @@ func (c *Chat) editCardLines(it *ChatItem, width int) []Line {
 	if skipped > 0 {
 		lines = append(lines, borderedText(i18n.Tf("chat.tool.moreLines", skipped), muted))
 	}
-	if it.Expanded {
+	if it.Expanded && hasMore {
 		lines = append(lines, borderedText(i18n.Tf("chat.tool.showingAll", totalRows), muted))
 	}
 
@@ -1701,15 +1670,17 @@ func (c *Chat) editCardLines(it *ChatItem, width int) []Line {
 		footer = append(footer, Cell{R: r, S: delStyle})
 	}
 
-	expandHint := i18n.T("common.expand")
-	if it.Expanded {
-		expandHint = i18n.T("common.collapse")
-	}
-	for footer.Width() < width-1-DisplayWidth(expandHint) {
-		footer = append(footer, Cell{R: ' ', S: th.Base()})
-	}
-	for _, r := range expandHint {
-		footer = append(footer, Cell{R: r, S: muted})
+	if hasMore {
+		expandHint := i18n.T("common.expand")
+		if it.Expanded {
+			expandHint = i18n.T("common.collapse")
+		}
+		for footer.Width() < width-1-DisplayWidth(expandHint) {
+			footer = append(footer, Cell{R: ' ', S: th.Base()})
+		}
+		for _, r := range expandHint {
+			footer = append(footer, Cell{R: r, S: muted})
+		}
 	}
 	for footer.Width() < width-1 {
 		footer = append(footer, Cell{R: ' ', S: th.Base()})
@@ -1748,7 +1719,8 @@ func (c *Chat) writeCardLines(it *ChatItem, width int) []Line {
 
 	rawLines := strings.Split(content, "\n")
 	const maxWriteLines = 30
-	truncated := len(rawLines) > maxWriteLines && !it.Expanded
+	hasMore := len(rawLines) > maxWriteLines
+	truncated := hasMore && !it.Expanded
 	shown := rawLines
 	if truncated {
 		shown = rawLines[:maxWriteLines]
@@ -1858,7 +1830,7 @@ func (c *Chat) writeCardLines(it *ChatItem, width int) []Line {
 		lines = append(lines, borderedText(i18n.Tf("chat.tool.moreLines", remaining)))
 	}
 
-	if it.Expanded {
+	if it.Expanded && hasMore {
 		lines = append(lines, borderedText(i18n.Tf("chat.tool.showingAll", len(rawLines))))
 	}
 
@@ -1868,15 +1840,17 @@ func (c *Chat) writeCardLines(it *ChatItem, width int) []Line {
 	for _, r := range i18n.Tf("chat.write.lines", len(rawLines)) {
 		footer = append(footer, Cell{R: r, S: muted})
 	}
-	expandHint := i18n.T("common.expand")
-	if it.Expanded {
-		expandHint = i18n.T("common.collapse")
-	}
-	for footer.Width() < width-1-DisplayWidth(expandHint) {
-		footer = append(footer, Cell{R: ' ', S: th.Base()})
-	}
-	for _, r := range expandHint {
-		footer = append(footer, Cell{R: r, S: muted})
+	if hasMore {
+		expandHint := i18n.T("common.expand")
+		if it.Expanded {
+			expandHint = i18n.T("common.collapse")
+		}
+		for footer.Width() < width-1-DisplayWidth(expandHint) {
+			footer = append(footer, Cell{R: ' ', S: th.Base()})
+		}
+		for _, r := range expandHint {
+			footer = append(footer, Cell{R: r, S: muted})
+		}
 	}
 	for footer.Width() < width-1 {
 		footer = append(footer, Cell{R: ' ', S: th.Base()})
@@ -2113,7 +2087,8 @@ func (c *Chat) subagentLines(it *ChatItem, width int) []Line {
 	} else if it.SubagentOutput != "" && !isRunning {
 		outputLines := strings.Split(it.SubagentOutput, "\n")
 		const maxOutputLines = 15
-		truncated := len(outputLines) > maxOutputLines && !it.Expanded
+		hasMore := len(outputLines) > maxOutputLines
+		truncated := hasMore && !it.Expanded
 		shown := outputLines
 		if truncated {
 			shown = outputLines[:maxOutputLines]
@@ -2145,7 +2120,7 @@ func (c *Chat) subagentLines(it *ChatItem, width int) []Line {
 			moreLine = append(moreLine, Cell{R: '│', S: border})
 			lines = append(lines, moreLine)
 		}
-		if it.Expanded {
+		if it.Expanded && hasMore {
 			moreLine := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
 			msg := i18n.Tf("chat.tool.showingAll", len(outputLines))
 			for _, r := range msg {
