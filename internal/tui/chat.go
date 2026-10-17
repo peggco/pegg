@@ -622,6 +622,8 @@ func (a *App) addToolItem(t *agentTranscript, call llm.ToolCall, agentID string)
 func (a *App) submitMessage(input string) {
 	input = strings.TrimSpace(input)
 
+	a.recordPrompt(input)
+
 	a.chatMu.Lock()
 	attachments := make([]llm.Attachment, len(a.home.AttachmentBar().Attachments()))
 	copy(attachments, a.home.AttachmentBar().Attachments())
