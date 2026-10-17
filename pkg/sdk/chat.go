@@ -27,6 +27,7 @@ type ChatRequest struct {
 	SystemPrompt    string
 	MaxIterations   int
 	ReasoningEffort string
+	Mode            Mode
 	Timeout         time.Duration
 }
 
@@ -103,6 +104,18 @@ func (e *Engine) chat(ctx context.Context, req ChatRequest, handler func(ChatEve
 		return ChatResponse{}, err
 	}
 	orch.SetModelProvider(mdl, prov)
+
+	mode := req.Mode
+	if mode == "" && req.SessionID != "" {
+		if sess, err := e.sessions.Get(req.SessionID); err == nil {
+			mode = Mode(sess.Mode)
+		}
+	}
+	mode = agent.NormalizeMode(mode)
+	orch.SetMode(mode)
+	if req.Mode != "" && req.SessionID != "" {
+		_ = e.sessions.SetMode(req.SessionID, string(mode))
+	}
 
 	if req.SystemPrompt != "" {
 		orch.SystemPrompt = req.SystemPrompt

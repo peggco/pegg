@@ -62,9 +62,10 @@ handler does not apply the HTTP API's auth or CORS middleware.
 | Method | Params | Result |
 |---|---|---|
 | `initialize` | `protocolVersion`, `clientCapabilities?`, `clientInfo?` | Capabilities and agent info |
-| `session/new` | `cwd` (required), `mcpServers?`, `additionalDirectories?` | `{ "sessionId": "..." }` |
+| `session/new` | `cwd` (required), `mcpServers?`, `additionalDirectories?` | `{ "sessionId": "...", "mode": "auto" }` |
 | `session/load` | `sessionId`, `cwd`, `mcpServers?`, `additionalDirectories?` | `null` (replays history as notifications) |
 | `session/resume` | same as `session/load` | `{}` (no replay) |
+| `session/set_mode` | `sessionId`, `modeId` (`build`/`plan`/`auto`) | `{}` |
 | `session/prompt` | `sessionId`, `prompt` | `{ "stopReason": "..." }` |
 | `session/delete` | `sessionId` | `null` |
 | `session/close` | `sessionId` | `{}` |
@@ -73,6 +74,11 @@ handler does not apply the HTTP API's auth or CORS middleware.
 | `$/cancelRequest` | — | no response (no-op) |
 
 Unknown methods return `-32601`.
+
+Sessions run in a **mode** (`build`, `plan`, `auto`; default `auto`). The mode is
+persisted with the session and restored by `session/load`/`session/resume`. Change
+it with `session/set_mode`; the server confirms with a `session/update`
+notification whose `update` is `{ "sessionUpdate": "current_mode_update", "mode": "..." }`.
 
 ### `initialize`
 

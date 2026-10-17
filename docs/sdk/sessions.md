@@ -14,6 +14,7 @@ s, err := eng.CreateSession(sdk.CreateSessionOptions{
 	Title:  "demo",
 	Provider: "openai",
 	Model:  "gpt-4o",
+	Mode:   sdk.ModeAuto, // sdk.ModeBuild | sdk.ModePlan | sdk.ModeAuto
 })
 if err != nil {
 	return err
@@ -23,6 +24,20 @@ got, err := eng.GetSession(s.ID)   // sdk.ErrNoSession if missing
 ```
 
 An empty `Title` produces `"New Session <timestamp>"`.
+
+## Modes
+
+Sessions run in a mode that controls planning: `build` (no plan reminder, no plan
+tools), `plan` (read-only planning), or `auto` (default; the agent may plan on its
+own). Set it when creating (`CreateSessionOptions.Mode`), override it per run with
+`ChatRequest.Mode`, or update it later:
+
+```go
+err = eng.SetSessionMode(s.ID, sdk.ModePlan)
+```
+
+When `ChatRequest.Mode` is empty and `SessionID` is set, the session's stored mode
+is used.
 
 ## Using a session in a chat
 
@@ -91,7 +106,7 @@ session's history.
 
 ## Types
 
-`Session` fields: `ID`, `Title`, `Provider`, `Model`, `ReasoningEffort`,
+`Session` fields: `ID`, `Title`, `Provider`, `Model`, `ReasoningEffort`, `Mode`,
 `ProjectDir`, `ParentID`, `CreatedAt`, `UpdatedAt`, `Usage`.
 
 `SessionSnapshot` fields: `ID`, `SessionID`, `HeadMessageID`, `CreatedAt`,

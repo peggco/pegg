@@ -10,6 +10,7 @@ type CreateSessionOptions struct {
 	Provider        string
 	Model           string
 	ReasoningEffort string
+	Mode            Mode
 	ProjectDir      string
 }
 
@@ -17,7 +18,14 @@ func (e *Engine) CreateSession(opts CreateSessionOptions) (*Session, error) {
 	if err := e.checkOpen(); err != nil {
 		return nil, err
 	}
-	return e.sessions.Create(session.CreateOptions(opts))
+	return e.sessions.Create(session.CreateOptions{
+		Title:           opts.Title,
+		Provider:        opts.Provider,
+		Model:           opts.Model,
+		ReasoningEffort: opts.ReasoningEffort,
+		Mode:            string(opts.Mode),
+		ProjectDir:      opts.ProjectDir,
+	})
 }
 
 func (e *Engine) GetSession(id string) (*Session, error) {
@@ -46,6 +54,13 @@ func (e *Engine) SetSessionTitle(id, title string) error {
 		return err
 	}
 	return e.sessions.SetTitle(id, title)
+}
+
+func (e *Engine) SetSessionMode(id string, mode Mode) error {
+	if err := e.checkOpen(); err != nil {
+		return err
+	}
+	return e.sessions.SetMode(id, string(mode))
 }
 
 func (e *Engine) SessionMessages(id string) ([]SessionMessage, error) {

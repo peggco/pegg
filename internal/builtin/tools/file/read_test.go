@@ -104,6 +104,40 @@ func TestReadToolMissingPath(t *testing.T) {
 	}
 }
 
+func TestFormatReadOutputPlacesDiagnosticsAfterFile(t *testing.T) {
+	vfsOutput := "Path: f.go | Hash: abc | Size: 10 bytes | Lines: 2\n" +
+		"---\n" +
+		"     1: a\n" +
+		"     2: b\n" +
+		"\n" +
+		"<file_diagnostics>\n" +
+		"f.go:0:0: boom [severity=1]\n" +
+		"</file_diagnostics>\n"
+
+	out := formatReadOutput(vfsOutput, 1, 2000)
+
+	fileEnd := containsStr(out, "</file>")
+	diagStart := containsStr(out, "<file_diagnostics>")
+	if !fileEnd || !diagStart {
+		t.Fatalf("expected both </file> and diagnostics, got:\n%s", out)
+	}
+	if idx := indexOf(out, "</file>"); idx < 0 || indexOf(out, "<file_diagnostics>") < idx {
+		t.Fatalf("diagnostics must appear after </file>, got:\n%s", out)
+	}
+	if !contains(t, out, "boom") {
+		t.Fatalf("diagnostics content missing, got:\n%s", out)
+	}
+}
+
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
+
 func contains(t *testing.T, s, substr string) bool {
 	t.Helper()
 	return len(s) >= len(substr) && containsStr(s, substr)

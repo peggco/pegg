@@ -10,8 +10,13 @@ type RunRequest struct {
 	SessionID string   `json:"session_id,omitempty"`
 	Model     string   `json:"model,omitempty"`
 	Provider  string   `json:"provider,omitempty"`
+	Mode      string   `json:"mode,omitempty"`
 	Files     []string `json:"files,omitempty"`
 	Stream    bool     `json:"stream"`
+}
+
+type SetModeRequest struct {
+	Mode string `json:"mode"`
 }
 
 type RunResponse struct {
@@ -29,6 +34,7 @@ type SessionResponse struct {
 	Provider        string    `json:"provider"`
 	Model           string    `json:"model"`
 	ReasoningEffort string    `json:"reasoning_effort,omitempty"`
+	Mode            string    `json:"mode,omitempty"`
 	ProjectDir      string    `json:"project_dir,omitempty"`
 	ParentID        string    `json:"parent_id,omitempty"`
 	CreatedAt       string    `json:"created_at"`
@@ -75,6 +81,7 @@ func toSessionResponse(s *session.Session) SessionResponse {
 		Provider:        s.Provider,
 		Model:           s.Model,
 		ReasoningEffort: s.ReasoningEffort,
+		Mode:            s.Mode,
 		ProjectDir:      s.ProjectDir,
 		ParentID:        s.ParentID,
 		CreatedAt:       s.CreatedAt.Format("2006-01-02T15:04:05Z"),

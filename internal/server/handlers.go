@@ -80,6 +80,17 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 	}
 	orch.SetModelProvider(mdl, prov)
 
+	mode := agent.NormalizeMode(agent.Mode(req.Mode))
+	if req.Mode == "" && req.SessionID != "" {
+		if sess, err := s.sessions.Get(req.SessionID); err == nil {
+			mode = agent.NormalizeMode(agent.Mode(sess.Mode))
+		}
+	}
+	orch.SetMode(mode)
+	if req.Mode != "" && req.SessionID != "" {
+		_ = s.sessions.SetMode(req.SessionID, string(mode))
+	}
+
 	if len(req.Files) > 0 {
 		atts, err := loadAttachments(req.Files)
 		if err != nil {
@@ -346,6 +357,36 @@ func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (s *Server) handleSetSessionMode(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "session id is required")
+		return
+	}
+
+	var req SetModeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if !agent.Mode(req.Mode).Valid() {
+		writeError(w, http.StatusBadRequest, "invalid mode (want build, plan or auto)")
+		return
+	}
+
+	if err := s.sessions.SetMode(id, string(agent.NormalizeMode(agent.Mode(req.Mode)))); err != nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+
+	sess, err := s.sessions.Get(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, toSessionResponse(sess))
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

@@ -85,5 +85,6 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", s.handleGetSession)
 	mux.HandleFunc("GET /api/sessions/{id}/messages", s.handleGetSessionMessages)
+	mux.HandleFunc("PUT /api/sessions/{id}/mode", s.handleSetSessionMode)
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.handleDeleteSession)
 }

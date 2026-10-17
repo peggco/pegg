@@ -20,6 +20,7 @@ type (
 	Agent        = agent.Agent
 	RunResult    = agent.RunResult
 	AgentFactory = agents.Factory
+	Mode         = agent.Mode
 
 	Tool             = tool.Tool
 	ToolRegistry     = tool.Registry
@@ -135,6 +136,12 @@ const (
 	FinishReasonContentFilter = llm.FinishReasonContentFilter
 	FinishReasonToolCalls     = llm.FinishReasonToolCalls
 	FinishReasonNull          = llm.FinishReasonNull
+)
+
+const (
+	ModeBuild = agent.ModeBuild
+	ModePlan  = agent.ModePlan
+	ModeAuto  = agent.ModeAuto
 )
 
 const (

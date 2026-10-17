@@ -2,22 +2,71 @@ package lsp
 
 import (
 	"context"
-	json "github.com/goccy/go-json"
 	"sync"
 	"testing"
 	"time"
+
+	json "github.com/goccy/go-json"
 )
 
 type scriptedTransport struct {
 	frames chan []byte
 	closed chan struct{}
+
+	mu       sync.Mutex
+	methods  []string
+	onChange func(version int, text string) []map[string]any
 }
 
 func newScriptedTransport() *scriptedTransport {
 	return &scriptedTransport{
-		frames: make(chan []byte, 16),
+		frames: make(chan []byte, 32),
 		closed: make(chan struct{}),
 	}
+}
+
+func scriptedRange() map[string]any {
+	return map[string]any{
+		"start": map[string]any{"line": 0, "character": 0},
+		"end":   map[string]any{"line": 0, "character": 1},
+	}
+}
+
+func (t *scriptedTransport) record(method, uri string) {
+	entry := method
+	if uri != "" {
+		entry += " " + uri
+	}
+	t.mu.Lock()
+	t.methods = append(t.methods, entry)
+	t.mu.Unlock()
+}
+
+func (t *scriptedTransport) methodOrder() []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]string, len(t.methods))
+	copy(out, t.methods)
+	return out
+}
+
+func (t *scriptedTransport) setOnChange(fn func(version int, text string) []map[string]any) {
+	t.mu.Lock()
+	t.onChange = fn
+	t.mu.Unlock()
+}
+
+type scriptedDoc struct {
+	URI     string `json:"uri"`
+	Version int    `json:"version"`
+}
+
+func documentURI(params json.RawMessage) string {
+	var p struct {
+		TextDocument scriptedDoc `json:"textDocument"`
+	}
+	_ = json.Unmarshal(params, &p)
+	return p.TextDocument.URI
 }
 
 func (t *scriptedTransport) Write(data []byte) error {
@@ -32,6 +81,7 @@ func (t *scriptedTransport) Write(data []byte) error {
 		Params json.RawMessage `json:"params"`
 	}
 	_ = json.Unmarshal(data, &req)
+	t.record(req.Method, documentURI(req.Params))
 	switch req.Method {
 	case MethodInitialize:
 		t.frames <- scriptedResponse(req.ID, map[string]any{
@@ -42,31 +92,51 @@ func (t *scriptedTransport) Write(data []byte) error {
 		t.frames <- scriptedResponse(req.ID, map[string]any{})
 	case MethodDidOpen:
 		var p struct {
-			TextDocument map[string]any `json:"textDocument"`
+			TextDocument struct {
+				URI string `json:"uri"`
+			} `json:"textDocument"`
 		}
 		_ = json.Unmarshal(req.Params, &p)
-		uri := ""
-		if td := p.TextDocument; td != nil {
-			if v, ok := td["uri"]; ok {
-				if s, ok := v.(string); ok {
-					uri = s
-				}
-			}
-		}
 		t.frames <- scriptedNotification(MethodPublishDiagnostics, map[string]any{
-			"uri":     uri,
+			"uri":     p.TextDocument.URI,
 			"version": 1,
 			"diagnostics": []map[string]any{
 				{
 					"severity": 1,
 					"message":  "fake error",
-					"range": map[string]any{
-						"start": map[string]any{"line": 0, "character": 0},
-						"end":   map[string]any{"line": 0, "character": 1},
-					},
+					"range":    scriptedRange(),
 				},
 			},
 		})
+	case MethodDidChange:
+		var p struct {
+			TextDocument   scriptedDoc `json:"textDocument"`
+			ContentChanges []struct {
+				Text string `json:"text"`
+			} `json:"contentChanges"`
+		}
+		_ = json.Unmarshal(req.Params, &p)
+		text := ""
+		if len(p.ContentChanges) > 0 {
+			text = p.ContentChanges[0].Text
+		}
+		t.mu.Lock()
+		fn := t.onChange
+		t.mu.Unlock()
+		var diags []map[string]any
+		if fn != nil {
+			diags = fn(p.TextDocument.Version, text)
+		}
+		if diags == nil {
+			diags = []map[string]any{}
+		}
+		t.frames <- scriptedNotification(MethodPublishDiagnostics, map[string]any{
+			"uri":         p.TextDocument.URI,
+			"version":     p.TextDocument.Version,
+			"diagnostics": diags,
+		})
+	case MethodDidSave:
+		// no-op
 	case MethodExit:
 		_ = t.Close()
 	}
@@ -176,6 +246,25 @@ func TestClientInitializeAndDiagnostics(t *testing.T) {
 	}
 	if collector.diags[0].Severity != 1 || collector.diags[0].Line() != 0 {
 		t.Fatalf("diag = %+v", collector.diags[0])
+	}
+}
+
+func TestClientSendsInitializedNotification(t *testing.T) {
+	tr := newScriptedTransport()
+	c := NewClient(tr, ClientOptions{Name: "fake", Timeout: 2 * time.Second})
+	defer c.Close()
+
+	if _, err := c.Initialize(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, entry := range tr.methodOrder() {
+		if entry == "initialized" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("initialized notification must use the LSP method %q, got %v", "initialized", tr.methodOrder())
 	}
 }
 

@@ -18,49 +18,51 @@ type DiffHunk struct {
 	Lines []DiffLine
 }
 
+const (
+	diffContext  = 3
+	diffMaxCells = 2_000_000
+	diffTabWidth = 4
+)
+
 func ComputeDiff(oldText, newText string) []DiffHunk {
-	oldLines := strings.Split(oldText, "\n")
-	newLines := strings.Split(newText, "\n")
-
-	ops := diffLines(oldLines, newLines)
-
-	const context = 3
-
-	var hunks []DiffHunk
-
-	for i := 0; i < len(ops); {
-		if ops[i].Kind == ' ' {
-			i++
-			continue
-		}
-
-		start := i - context
-		if start < 0 {
-			start = 0
-		}
-
-		end := i
-		for end < len(ops) && ops[end].Kind != ' ' {
-			end++
-		}
-
-		end += context
-		if end > len(ops) {
-			end = len(ops)
-		}
-
-		if len(hunks) > 0 {
-			prev := &hunks[len(hunks)-1]
-			prevEnd := prev.OldStart + prev.OldCount - 1
-			_ = prevEnd
-		}
-
-		hunk := buildHunk(ops[start:end])
-		hunks = append(hunks, hunk)
-		i = end
+	if oldText == newText {
+		return nil
 	}
 
-	return mergeHunks(hunks, context)
+	oldLines := splitDiffLines(oldText)
+	newLines := splitDiffLines(newText)
+
+	prefix := 0
+	for prefix < len(oldLines) && prefix < len(newLines) && oldLines[prefix] == newLines[prefix] {
+		prefix++
+	}
+
+	suffix := 0
+	for suffix < len(oldLines)-prefix && suffix < len(newLines)-prefix &&
+		oldLines[len(oldLines)-1-suffix] == newLines[len(newLines)-1-suffix] {
+		suffix++
+	}
+
+	oldMid := oldLines[prefix : len(oldLines)-suffix]
+	newMid := newLines[prefix : len(newLines)-suffix]
+
+	var mid []diffOp
+	if len(oldMid)*len(newMid) > diffMaxCells {
+		mid = coarseDiff(oldMid, newMid)
+	} else {
+		mid = diffLines(oldMid, newMid)
+	}
+
+	ops := make([]diffOp, 0, len(oldLines)+len(newLines))
+	for i := 0; i < prefix; i++ {
+		ops = append(ops, diffOp{Kind: ' ', Text: oldLines[i]})
+	}
+	ops = append(ops, mid...)
+	for i := len(oldLines) - suffix; i < len(oldLines); i++ {
+		ops = append(ops, diffOp{Kind: ' ', Text: oldLines[i]})
+	}
+
+	return buildHunks(ops, diffContext)
 }
 
 type diffOp struct {
@@ -116,64 +118,124 @@ func diffLines(oldLines, newLines []string) []diffOp {
 	return ops
 }
 
-func buildHunk(ops []diffOp) DiffHunk {
-	var hunk DiffHunk
-
-	oldLine := 1
-	newLine := 1
-
-	for _, op := range ops {
-		if op.Kind != '+' {
-			hunk.OldStart = oldLine
-			break
-		}
+func coarseDiff(oldLines, newLines []string) []diffOp {
+	ops := make([]diffOp, 0, len(oldLines)+len(newLines))
+	for _, l := range oldLines {
+		ops = append(ops, diffOp{Kind: '-', Text: l})
 	}
-
-	for _, op := range ops {
-		if op.Kind != '-' {
-			hunk.NewStart = newLine
-			break
-		}
+	for _, l := range newLines {
+		ops = append(ops, diffOp{Kind: '+', Text: l})
 	}
-
-	if hunk.OldStart == 0 {
-		hunk.OldStart = oldLine
-	}
-	if hunk.NewStart == 0 {
-		hunk.NewStart = newLine
-	}
-
-	for _, op := range ops {
-		line := DiffLine{Kind: op.Kind, Text: op.Text}
-		switch op.Kind {
-		case '-':
-			line.OldLine = oldLine
-			oldLine++
-			hunk.OldCount++
-		case '+':
-			line.NewLine = newLine
-			newLine++
-			hunk.NewCount++
-		default:
-			line.OldLine = oldLine
-			line.NewLine = newLine
-			oldLine++
-			newLine++
-			hunk.OldCount++
-			hunk.NewCount++
-		}
-		hunk.Lines = append(hunk.Lines, line)
-	}
-
-	return hunk
+	return ops
 }
 
-func mergeHunks(hunks []DiffHunk, context int) []DiffHunk {
-	if len(hunks) < 2 {
-		return hunks
+func buildHunks(ops []diffOp, context int) []DiffHunk {
+	n := len(ops)
+	if n == 0 {
+		return nil
 	}
-	_ = context
+
+	oldNo := make([]int, n+1)
+	newNo := make([]int, n+1)
+	ol, nl := 1, 1
+	for i := 0; i < n; i++ {
+		oldNo[i], newNo[i] = ol, nl
+		switch ops[i].Kind {
+		case '-':
+			ol++
+		case '+':
+			nl++
+		default:
+			ol++
+			nl++
+		}
+	}
+	oldNo[n], newNo[n] = ol, nl
+
+	type span struct{ start, end int }
+	var spans []span
+	for i := 0; i < n; {
+		if ops[i].Kind == ' ' {
+			i++
+			continue
+		}
+		j := i
+		for j < n && ops[j].Kind != ' ' {
+			j++
+		}
+		start := i - context
+		if start < 0 {
+			start = 0
+		}
+		end := j + context
+		if end > n {
+			end = n
+		}
+		if len(spans) > 0 && start <= spans[len(spans)-1].end {
+			spans[len(spans)-1].end = end
+		} else {
+			spans = append(spans, span{start: start, end: end})
+		}
+		i = j
+	}
+
+	hunks := make([]DiffHunk, 0, len(spans))
+	for _, sp := range spans {
+		h := DiffHunk{
+			OldStart: oldNo[sp.start],
+			NewStart: newNo[sp.start],
+		}
+		for k := sp.start; k < sp.end; k++ {
+			dl := DiffLine{Kind: ops[k].Kind, Text: ops[k].Text}
+			switch ops[k].Kind {
+			case '-':
+				dl.OldLine = oldNo[k]
+				h.OldCount++
+			case '+':
+				dl.NewLine = newNo[k]
+				h.NewCount++
+			default:
+				dl.OldLine = oldNo[k]
+				dl.NewLine = newNo[k]
+				h.OldCount++
+				h.NewCount++
+			}
+			h.Lines = append(h.Lines, dl)
+		}
+		hunks = append(hunks, h)
+	}
 	return hunks
+}
+
+func splitDiffLines(text string) []string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	lines := strings.Split(text, "\n")
+	for i, l := range lines {
+		if strings.IndexByte(l, '\t') >= 0 {
+			lines[i] = expandDiffTabs(l)
+		}
+	}
+	return lines
+}
+
+func expandDiffTabs(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) + 8)
+	col := 0
+	for _, r := range s {
+		if r == '\t' {
+			n := diffTabWidth - col%diffTabWidth
+			for i := 0; i < n; i++ {
+				b.WriteByte(' ')
+			}
+			col += n
+			continue
+		}
+		b.WriteRune(r)
+		col += cellWidth(r)
+	}
+	return b.String()
 }
 
 func HasDiff(hunks []DiffHunk) bool {

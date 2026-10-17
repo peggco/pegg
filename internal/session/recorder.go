@@ -157,6 +157,9 @@ func (r *Recorder) handleStarted(e agent.AgentStarted) {
 		}
 		opts.Model = e.Model.ID
 		opts.ReasoningEffort = e.ReasoningEffort
+		if e.Agent != nil {
+			opts.Mode = string(e.Agent.CurrentMode())
+		}
 		if dir, err := os.Getwd(); err == nil {
 			opts.ProjectDir = dir
 		}

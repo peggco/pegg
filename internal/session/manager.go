@@ -34,6 +34,7 @@ func (m *Manager) Create(opts CreateOptions) (*Session, error) {
 		Provider:        opts.Provider,
 		Model:           opts.Model,
 		ReasoningEffort: opts.ReasoningEffort,
+		Mode:            opts.Mode,
 		ProjectDir:      opts.ProjectDir,
 		CreatedAt:       now,
 		UpdatedAt:       now,
@@ -84,6 +85,20 @@ func (m *Manager) SetTitle(id, title string) error {
 		return err
 	}
 	s.Title = title
+	s.UpdatedAt = time.Now()
+	if err := m.store.Update(*s); err != nil {
+		return err
+	}
+	m.publish(TopicSessionUpdated, SessionUpdated{SessionID: id})
+	return nil
+}
+
+func (m *Manager) SetMode(id, mode string) error {
+	s, err := m.store.Get(id)
+	if err != nil {
+		return err
+	}
+	s.Mode = mode
 	s.UpdatedAt = time.Now()
 	if err := m.store.Update(*s); err != nil {
 		return err

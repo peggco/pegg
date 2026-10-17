@@ -127,3 +127,17 @@ func TestBuildRejectsInvalidInput(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildSelectColumns(t *testing.T) {
+	b := NewBuilder("sessions", "id", "title", "mode").
+		SelectColumns("id", "title", "mode")
+
+	built, err := b.Build(Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "SELECT id, title, mode FROM sessions LIMIT ? OFFSET ?"
+	if built.SelectSQL != want {
+		t.Errorf("SelectSQL:\n got %q\nwant %q", built.SelectSQL, want)
+	}
+}

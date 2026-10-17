@@ -49,7 +49,10 @@ while True:
         send({"jsonrpc":"2.0","id":msg["id"],"result":{"capabilities":{},"serverInfo":{"name":"fakepy","version":"1.0"}}})
     elif msg.get("method") == "textDocument/didOpen":
         uri = msg["params"]["textDocument"]["uri"]
-        send({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":uri,"diagnostics":[{"severity":1,"message":"fake python error","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}]}})
+        send({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":uri,"version":1,"diagnostics":[{"severity":1,"message":"fake python error","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}]}})
+    elif msg.get("method") == "textDocument/didChange":
+        td = msg["params"]["textDocument"]
+        send({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":td["uri"],"version":td["version"],"diagnostics":[]}})
     elif "id" in msg and msg.get("method") == "shutdown":
         send({"jsonrpc":"2.0","id":msg["id"],"result":{}})
     elif msg.get("method") == "exit":
@@ -102,5 +105,19 @@ while True:
 	}
 	if !strings.Contains(res, "fake python error") {
 		t.Fatalf("read output must contain diagnostic, got %q", res)
+	}
+
+	if _, err := fs.Write("main.py", []byte("print('fixed')\n")); err != nil {
+		t.Fatal(err)
+	}
+	if diags := mgr.Diagnostics("main.py"); len(diags) != 0 {
+		t.Fatalf("diagnostics must be cleared after write, got %+v", diags)
+	}
+	res, err = fs.Read("main.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(res, "fake python error") {
+		t.Fatalf("read output must not contain stale diagnostic, got %q", res)
 	}
 }

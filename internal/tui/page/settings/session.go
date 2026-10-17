@@ -416,6 +416,7 @@ func (s *Settings) loadSession(id string) {
 		Provider:           sess.Provider,
 		Model:              sess.Model,
 		ReasoningEffort:    sess.ReasoningEffort,
+		Mode:               sess.Mode,
 		CompactionParentID: sess.CompactionParentID,
 		Messages:           msgs,
 		Usage:              sess.Usage,

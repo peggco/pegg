@@ -66,9 +66,10 @@ type Built struct {
 }
 
 type Builder struct {
-	table       string
-	allowed     map[string]struct{}
-	defaultSort []Sort
+	table         string
+	allowed       map[string]struct{}
+	defaultSort   []Sort
+	selectColumns []string
 }
 
 var tableNameRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -79,6 +80,11 @@ func NewBuilder(table string, allowedColumns ...string) *Builder {
 		allowed[c] = struct{}{}
 	}
 	return &Builder{table: table, allowed: allowed}
+}
+
+func (b *Builder) SelectColumns(columns ...string) *Builder {
+	b.selectColumns = append(b.selectColumns, columns...)
+	return b
 }
 
 func (b *Builder) DefaultSort(column string, dir Direction) *Builder {
@@ -128,7 +134,11 @@ func (b *Builder) Build(q Query) (Built, error) {
 	}
 
 	size, number := normalizePage(q.Page)
-	selectSQL := "SELECT * FROM " + b.table + whereSQL + orderSQL + " LIMIT ? OFFSET ?"
+	selectList := "*"
+	if len(b.selectColumns) > 0 {
+		selectList = strings.Join(b.selectColumns, ", ")
+	}
+	selectSQL := "SELECT " + selectList + " FROM " + b.table + whereSQL + orderSQL + " LIMIT ? OFFSET ?"
 	selectArgs := append(args, size, (number-1)*size)
 
 	countSQL := "SELECT COUNT(*) FROM " + b.table + whereSQL

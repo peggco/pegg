@@ -42,7 +42,7 @@ func TestRunRendererEvents(t *testing.T) {
 	}
 	defer r.unsubscribe(bus)
 
-	r.banner("p1", "m1")
+	r.banner("p1", "m1", "")
 
 	bus.Publish(agent.TopicAgentStarted, agent.AgentStarted{
 		AgentID: "main-1", AgentName: "orchestrator",
@@ -94,7 +94,7 @@ func TestRunRendererHidesThinking(t *testing.T) {
 	}
 	defer r.unsubscribe(bus)
 
-	r.banner("p1", "m1")
+	r.banner("p1", "m1", "")
 	bus.Publish(agent.TopicAgentToken, agent.AgentToken{AgentID: "main-1", AgentName: "orchestrator", Reasoning: "secret reasoning"})
 	bus.Publish(agent.TopicAgentToken, agent.AgentToken{AgentID: "main-1", AgentName: "orchestrator", Content: "Hello world"})
 
@@ -971,5 +971,31 @@ func TestRootCommandPipedInputStdinOnly(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "> just stdin") {
 		t.Fatalf("stdin message not used: %q", out)
+	}
+}
+
+func TestResolveRunMode(t *testing.T) {
+	cases := []struct {
+		plan, build, auto bool
+		want              agent.Mode
+		explicit          bool
+	}{
+		{false, false, false, agent.ModeAuto, false},
+		{true, false, false, agent.ModePlan, true},
+		{false, true, false, agent.ModeBuild, true},
+		{false, false, true, agent.ModeAuto, true},
+	}
+	for _, c := range cases {
+		got, explicit, err := resolveRunMode(c.plan, c.build, c.auto)
+		if err != nil {
+			t.Fatalf("resolveRunMode(%v,%v,%v): %v", c.plan, c.build, c.auto, err)
+		}
+		if got != c.want || explicit != c.explicit {
+			t.Fatalf("resolveRunMode(%v,%v,%v) = (%q,%v), want (%q,%v)",
+				c.plan, c.build, c.auto, got, explicit, c.want, c.explicit)
+		}
+	}
+	if _, _, err := resolveRunMode(true, true, false); err == nil {
+		t.Fatal("expected error when multiple mode flags are set")
 	}
 }

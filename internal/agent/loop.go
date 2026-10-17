@@ -548,10 +548,25 @@ func (a *Agent) buildRequest(state *runState) *llm.Request {
 	if a.structuredName != "" && a.structuredSchema != nil {
 		req.WithStructuredOutput(a.structuredName, a.structuredSchema)
 	}
-	if tools := a.Tools.LLMTools(); len(tools) > 0 {
+	if tools := a.visibleTools(); len(tools) > 0 {
 		req.Tools = tools
 	}
 	return req
+}
+
+func (a *Agent) visibleTools() []llm.Tool {
+	tools := a.Tools.LLMTools()
+	if len(tools) == 0 || a.planToolsEnabled() {
+		return tools
+	}
+	out := tools[:0]
+	for _, t := range tools {
+		if isPlanTool(t.Function.Name) {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
 }
 
 func (a *Agent) fail(ctx context.Context, err error) error {

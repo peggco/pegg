@@ -40,10 +40,13 @@ type runOptions struct {
 	showThinking  bool
 	showSubagent  bool
 	chat          bool
+	mode          agent.Mode
+	modeSet       bool
 }
 
 func (c *CLI) newRunCommand() *cobra.Command {
 	var opts runOptions
+	var modePlan, modeBuild, modeAuto bool
 
 	cmd := &cobra.Command{
 		Use:   "run [message]",
@@ -51,6 +54,12 @@ func (c *CLI) newRunCommand() *cobra.Command {
 		Long:  "Run the orchestrator agent on the given message, streaming its progress, tools, thinking and responses live. Without a message (or with --chat), starts an interactive chat with the agent in the same session. Use --session or --select-session to continue an existing session.",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			mode, explicit, err := resolveRunMode(modePlan, modeBuild, modeAuto)
+			if err != nil {
+				return err
+			}
+			opts.mode = mode
+			opts.modeSet = explicit
 			return c.runRun(cmd.OutOrStdout(), cmd.InOrStdin(), strings.Join(args, " "), opts)
 		},
 	}
@@ -63,7 +72,31 @@ func (c *CLI) newRunCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.showThinking, "show-thinking", false, "show the model's raw thinking (reasoning) content instead of a Thinking indicator")
 	cmd.Flags().BoolVar(&opts.showSubagent, "show-subagent", false, "show subagent messages (their content) instead of a Subagent indicator")
 	cmd.Flags().BoolVar(&opts.chat, "chat", false, "keep chatting with the agent after the run finishes (type exit/quit to end)")
+	cmd.Flags().BoolVar(&modePlan, "plan", false, "start in plan mode (read-only planning)")
+	cmd.Flags().BoolVar(&modeBuild, "build", false, "start in build mode (execute without planning tools)")
+	cmd.Flags().BoolVar(&modeAuto, "auto", false, "start in auto mode, letting the agent plan on its own (default)")
 	return cmd
+}
+
+func resolveRunMode(plan, build, auto bool) (agent.Mode, bool, error) {
+	n := 0
+	for _, b := range []bool{plan, build, auto} {
+		if b {
+			n++
+		}
+	}
+	if n > 1 {
+		return "", false, errors.New("cli: only one of --plan, --build or --auto may be set")
+	}
+	switch {
+	case plan:
+		return agent.ModePlan, true, nil
+	case build:
+		return agent.ModeBuild, true, nil
+	case auto:
+		return agent.ModeAuto, true, nil
+	}
+	return agent.ModeAuto, false, nil
 }
 
 func (c *CLI) runRun(out io.Writer, in io.Reader, message string, opts runOptions) error {
@@ -108,6 +141,15 @@ func (c *CLI) runRun(out io.Writer, in io.Reader, message string, opts runOption
 	orch.SetModelProvider(mdl, prov)
 	orch.Bus = c.bus
 
+	mode := opts.mode
+	if !opts.modeSet && resume != nil {
+		mode = agent.NormalizeMode(agent.Mode(resume.Mode))
+	}
+	orch.SetMode(mode)
+	if opts.modeSet && resume != nil {
+		_ = c.sessions.SetMode(resume.ID, string(mode))
+	}
+
 	if len(fileAttachments) > 0 {
 		orch.Attachments = fileAttachments
 	}
@@ -124,7 +166,11 @@ func (c *CLI) runRun(out io.Writer, in io.Reader, message string, opts runOption
 	if mdl.Name != "" {
 		modelName = mdl.Name
 	}
-	renderer.banner(prov.Name(), modelName)
+	bannerMode := ""
+	if mode != agent.ModeAuto {
+		bannerMode = string(mode)
+	}
+	renderer.banner(prov.Name(), modelName, bannerMode)
 	if len(opts.files) > 0 {
 		renderer.attachments(opts.files)
 	}
@@ -839,7 +885,11 @@ func (r *runRenderer) agentTag(agentID, agentName string) string {
 	return r.dim("[" + agentName + "] ")
 }
 
-func (r *runRenderer) banner(provider, model string) {
+func (r *runRenderer) banner(provider, model, mode string) {
+	if mode != "" {
+		r.write("\n%s %s (%s/%s, %s)\n\n", r.bold("Running"), r.bold("orchestrator"), provider, model, mode)
+		return
+	}
 	r.write("\n%s %s (%s/%s)\n\n", r.bold("Running"), r.bold("orchestrator"), provider, model)
 }
 

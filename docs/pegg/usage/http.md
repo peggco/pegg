@@ -111,6 +111,7 @@ Request body:
 | `provider` | string | no | Provider to use |
 | `model` | string | no | Model to use |
 | `session_id` | string | no | Resume an existing session |
+| `mode` | string | no | Session mode: `build`, `plan` or `auto` (default, or the session's stored mode when resuming) |
 | `files` | string[] | no | Server-side file paths to attach |
 | `stream` | bool | no | `true` for SSE, `false` (default) for a single JSON response |
 
@@ -222,6 +223,11 @@ curl http://127.0.0.1:8080/api/sessions/3f2b1c8e-.../messages
 # Delete
 curl -X DELETE http://127.0.0.1:8080/api/sessions/3f2b1c8e-...
 # {"status":"deleted"}
+
+# Set a session's mode (build | plan | auto)
+curl -X PUT http://127.0.0.1:8080/api/sessions/3f2b1c8e-.../mode \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"plan"}'
 ```
 
 Sessions are sorted by `updated_at` descending.
@@ -235,6 +241,7 @@ Session object:
   "provider": "openai",
   "model": "gpt-4o",
   "reasoning_effort": "medium",
+  "mode": "auto",
   "project_dir": "/home/user/project",
   "parent_id": "",
   "created_at": "2026-09-10T09:15:00Z",

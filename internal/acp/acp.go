@@ -161,6 +161,8 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleSessionDelete(ctx, params)
 	case "session/close":
 		result, handlerErr = s.handleSessionClose(ctx, params)
+	case "session/set_mode":
+		result, handlerErr = s.handleSessionSetMode(ctx, params)
 	case "session/list":
 		result, handlerErr = s.handleSessionList(ctx, params)
 	case "session/cancel":
@@ -249,6 +251,10 @@ func (s *Server) notify(sessionID string, update SessionUpdate) {
 	if s.transport != nil {
 		s.transport.Send(Message{SessionId: sessionID, Body: raw})
 	}
+}
+
+func (s *Server) notifyMode(sessionID, mode string) {
+	s.notify(sessionID, SessionUpdate{SessionUpdate: "current_mode_update", Mode: mode})
 }
 
 func (s *Server) HTTPHandler() http.Handler {

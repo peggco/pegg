@@ -67,6 +67,33 @@ func TestManagerCreateEvents(t *testing.T) {
 	}
 }
 
+func TestManagerSetMode(t *testing.T) {
+	mgr, bus := newTestManager(t)
+	var updated *SessionUpdated
+	_ = bus.Subscribe(TopicSessionUpdated, func(e SessionUpdated) { updated = &e })
+
+	s, err := mgr.Create(CreateOptions{Title: "t", Mode: "plan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Mode != "plan" {
+		t.Fatalf("created mode = %q, want plan", s.Mode)
+	}
+	if err := mgr.SetMode(s.ID, "build"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := mgr.Get(s.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Mode != "build" {
+		t.Fatalf("mode after SetMode = %q, want build", got.Mode)
+	}
+	if updated == nil || updated.SessionID != s.ID {
+		t.Fatalf("updated event = %+v", updated)
+	}
+}
+
 func TestManagerAppendMessageSeqAndUsage(t *testing.T) {
 	mgr, bus := newTestManager(t)
 	s, _ := newSessionWithMessages(t, mgr, "t", 3)

@@ -6,6 +6,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 
 	"github.com/peggco/pegg/internal/llm"
+	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
 )
@@ -15,6 +16,7 @@ type StatusBar struct {
 	modelName       string
 	provider        string
 	reasoningEffort string
+	mode            string
 	usage           llm.Usage
 	maxInputTokens  int
 }
@@ -25,6 +27,7 @@ func (sb *StatusBar) SetRunning(r bool)           { sb.running = r }
 func (sb *StatusBar) SetModelName(n string)       { sb.modelName = n }
 func (sb *StatusBar) SetProvider(p string)        { sb.provider = p }
 func (sb *StatusBar) SetReasoningEffort(e string) { sb.reasoningEffort = e }
+func (sb *StatusBar) SetMode(m string)            { sb.mode = m }
 func (sb *StatusBar) SetUsage(u llm.Usage)        { sb.usage = u }
 func (sb *StatusBar) SetMaxInputTokens(n int)     { sb.maxInputTokens = n }
 
@@ -42,6 +45,12 @@ func (sb *StatusBar) Draw(s tcell.Screen, bounds layout.Region, _ bool) {
 	}
 
 	leftX := bounds.Left + 1
+
+	if sb.mode != "" {
+		label := i18n.T("mode." + sb.mode)
+		DrawText(s, leftX, y, label, base.Foreground(modeColor(sb.mode)).Bold(true))
+		leftX += len(label) + 1
+	}
 
 	if sb.running {
 		DrawText(s, leftX, y, "●", base.Foreground(th.Accent).Bold(true))
@@ -94,5 +103,18 @@ func (sb *StatusBar) Draw(s tcell.Screen, bounds layout.Region, _ bool) {
 			}
 			rightX -= 1
 		}
+	}
+}
+
+func modeColor(mode string) tcell.Color {
+	switch mode {
+	case "plan":
+		return tcell.ColorGold
+	case "build":
+		return tcell.ColorDodgerBlue
+	case "auto":
+		return tcell.ColorMediumSpringGreen
+	default:
+		return tcell.ColorGray
 	}
 }

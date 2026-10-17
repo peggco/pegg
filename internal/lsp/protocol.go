@@ -2,11 +2,18 @@ package lsp
 
 import (
 	"fmt"
+	"net/url"
+	"path/filepath"
 
 	json "github.com/goccy/go-json"
 
 	"github.com/peggco/pegg/internal/lsp/diagnostic"
 )
+
+func pathToFileURI(abs string) string {
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
+	return u.String()
+}
 
 type Diagnostic = diagnostic.Diagnostic
 
@@ -14,7 +21,7 @@ const (
 	JSONRPC = "2.0"
 
 	MethodInitialize         = "initialize"
-	MethodInitialized        = "notifications/initialized"
+	MethodInitialized        = "initialized"
 	MethodShutdown           = "shutdown"
 	MethodExit               = "exit"
 	MethodDidOpen            = "textDocument/didOpen"

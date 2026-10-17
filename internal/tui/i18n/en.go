@@ -8,8 +8,8 @@ var en = map[string]string{
 	"common.noItems":              "(no items)",
 	"common.noMatching":           "(no matching items)",
 	"common.enterSaveEscCancel":   "Enter save  ·  Esc cancel",
-	"common.expand":               "[Enter] Expand",
-	"common.collapse":             "[Enter] Collapse",
+	"common.expand":               "Expand",
+	"common.collapse":             "Collapse",
 	"common.back":                 "← back to main chat (Esc)",
 	"common.navigate":             "↑/↓ navigate  Enter select  Esc back",
 
@@ -17,6 +17,11 @@ var en = map[string]string{
 	"app.error.attach":  "Could not attach file: %s",
 	"app.error.noImage": "Model does not support image attachments",
 	"app.error.noAudio": "Model does not support audio attachments",
+	"app.error.mode":    "Could not save mode: %s",
+
+	"mode.build": "build",
+	"mode.plan":  "plan",
+	"mode.auto":  "auto",
 
 	"settings.title":           "Settings",
 	"settings.tab.general":     "General",
@@ -83,6 +88,7 @@ var en = map[string]string{
 	"home.hint.batch":    "use '/batch' to change many files at once",
 	"home.hint.settings": "press Ctrl+P for settings",
 	"home.hint.theme":    "press Ctrl+T to cycle the theme",
+	"home.hint.mode":     "use 'Shift+Tab' to change mode",
 	"home.hint.stop":     "press Esc twice to stop a running agent",
 	"home.hint.attach":   "paste or drop a file to attach it",
 
@@ -122,6 +128,7 @@ var en = map[string]string{
 	"chat.bash.noOutput":        "(no output)",
 	"chat.bash.exitCode":        "exit code: %d",
 	"chat.write.empty":          "(empty)",
+	"chat.write.lines":          "%d lines",
 	"chat.ask.unanswered":       "(unanswered)",
 	"chat.ask.answered":         "%d / %d answered",
 	"chat.todo.completed":       "%d / %d completed",
