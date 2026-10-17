@@ -128,6 +128,7 @@ var tr = map[string]string{
 	"chat.bash.noOutput":        "(çıktı yok)",
 	"chat.bash.exitCode":        "çıkış kodu: %d",
 	"chat.write.empty":          "(boş)",
+	"chat.write.lines":          "%d satır",
 	"chat.ask.unanswered":       "(yanıtlanmadı)",
 	"chat.ask.answered":         "%d / %d yanıtlandı",
 	"chat.todo.completed":       "%d / %d tamamlandı",

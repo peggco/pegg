@@ -128,6 +128,7 @@ var en = map[string]string{
 	"chat.bash.noOutput":        "(no output)",
 	"chat.bash.exitCode":        "exit code: %d",
 	"chat.write.empty":          "(empty)",
+	"chat.write.lines":          "%d lines",
 	"chat.ask.unanswered":       "(unanswered)",
 	"chat.ask.answered":         "%d / %d answered",
 	"chat.todo.completed":       "%d / %d completed",

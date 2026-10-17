@@ -1325,33 +1325,6 @@ func bottomEdge(border tcell.Style, width int) Line {
 	return bottom
 }
 
-func cardTop(title string, border, titleStyle tcell.Style, width int) Line {
-	line := Line{{R: '╭', S: border}, {R: '─', S: border}}
-	for _, r := range title {
-		line = append(line, Cell{R: r, S: titleStyle})
-	}
-	for line.Width() < width-1 {
-		line = append(line, Cell{R: '─', S: border})
-	}
-	line = append(line, Cell{R: '╮', S: border})
-	return line
-}
-
-func cardTextRow(border, fill tcell.Style, width int, content Line) Line {
-	row := Line{{R: '│', S: border}, {R: ' ', S: fill}}
-	for _, c := range content {
-		if row.Width() >= width-1 {
-			break
-		}
-		row = append(row, c)
-	}
-	for row.Width() < width-1 {
-		row = append(row, Cell{R: ' ', S: fill})
-	}
-	row = append(row, Cell{R: '│', S: border})
-	return row
-}
-
 func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 	th := styles.Current()
 	if width < 12 {
@@ -1760,25 +1733,13 @@ func (c *Chat) writeCardLines(it *ChatItem, width int) []Line {
 		filePath = filePath[idx+1:]
 	}
 
-	border := th.Base().Foreground(th.Border).Background(th.CodeBg)
-	accent := th.Base().Foreground(th.Accent).Background(th.CodeBg)
-	dim := th.Base().Foreground(th.TextDim).Background(th.CodeBg)
-	codeBg := th.Base().Background(th.CodeBg)
-
-	var lines []Line
-
-	lines = append(lines, cardTop(i18n.T("chat.card.write"), border, accent, width))
-
-	pathLine := Line{{R: '│', S: border}, {R: ' ', S: codeBg}}
-	for _, r := range truncateToDisplayWidth(filePath, width-4) {
-		pathLine = append(pathLine, Cell{R: r, S: accent.Bold(true)})
-	}
-	for pathLine.Width() < width-1 {
-		pathLine = append(pathLine, Cell{R: ' ', S: codeBg})
-	}
-	pathLine = append(pathLine, Cell{R: '│', S: border})
-	lines = append(lines, pathLine)
-	lines = append(lines, cardSep(border, width))
+	border := th.Base().Foreground(th.Border).Background(th.Background)
+	accent := th.Base().Foreground(th.Accent).Background(th.Background)
+	muted := th.Base().Foreground(th.Muted).Background(th.Background)
+	fore := th.Base().Foreground(th.Foreground).Background(th.Background)
+	success := th.Base().Foreground(th.Success).Background(th.Background)
+	fill := th.Base().Background(th.Background)
+	ctxBase := th.Base().Foreground(th.TextDim).Background(th.Background)
 
 	content := it.WriteContent
 	if content == "" {
@@ -1793,22 +1754,135 @@ func (c *Chat) writeCardLines(it *ChatItem, width int) []Line {
 		shown = rawLines[:maxWriteLines]
 	}
 
-	for _, ln := range shown {
-		lines = append(lines, cardTextRow(border, codeBg, width, highlightLine(ln, filePath, th, dim)))
+	numW := len(strconv.Itoa(len(rawLines)))
+	if numW > 6 {
+		numW = 6
+	}
+	if maxW := width - 7; numW > maxW {
+		numW = maxW
+	}
+	if numW < 1 {
+		numW = 1
+	}
+
+	numCell := func(n int) Line {
+		s := strconv.Itoa(n)
+		if len(s) > numW {
+			s = s[len(s)-numW:]
+		}
+		var out Line
+		for i := len(s); i < numW; i++ {
+			out = append(out, Cell{R: ' ', S: muted})
+		}
+		for _, r := range s {
+			out = append(out, Cell{R: r, S: muted})
+		}
+		return out
+	}
+
+	var lines []Line
+
+	top := Line{{R: '╭', S: border}, {R: '─', S: border}}
+	for _, r := range i18n.T("chat.card.write") {
+		top = append(top, Cell{R: r, S: accent})
+	}
+
+	statusText := " ✓ " + formatDuration(it.Duration)
+	statusStyle := success.Bold(true)
+
+	pathLabel := filePath
+	needed := top.Width() + DisplayWidth(pathLabel) + 2 + DisplayWidth(statusText)
+	for needed > width-2 && len(pathLabel) > 4 {
+		pathLabel = pathLabel[:len(pathLabel)-1]
+		needed = top.Width() + DisplayWidth(pathLabel) + 2 + DisplayWidth(statusText)
+	}
+	for _, r := range pathLabel {
+		top = append(top, Cell{R: r, S: fore})
+	}
+	topPad := width - 2 - top.Width() - DisplayWidth(statusText)
+	if topPad < 1 {
+		topPad = 1
+	}
+	for i := 0; i < topPad; i++ {
+		top = append(top, Cell{R: ' ', S: th.Base()})
+	}
+	for _, r := range statusText {
+		top = append(top, Cell{R: r, S: statusStyle})
+	}
+	top = append(top, Cell{R: ' ', S: th.Base()})
+	for top.Width() < width-1 {
+		top = append(top, Cell{R: '─', S: border})
+	}
+	top = append(top, Cell{R: '╮', S: border})
+	lines = append(lines, top)
+
+	lines = append(lines, cardSep(border, width))
+
+	borderedText := func(text string) Line {
+		row := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
+		for _, r := range text {
+			if row.Width() >= width-2 {
+				break
+			}
+			row = append(row, Cell{R: r, S: muted})
+		}
+		for row.Width() < width-1 {
+			row = append(row, Cell{R: ' ', S: th.Base()})
+		}
+		row = append(row, Cell{R: '│', S: border})
+		return row
+	}
+
+	for i, ln := range shown {
+		if strings.IndexByte(ln, '\t') >= 0 {
+			ln = expandDiffTabs(ln)
+		}
+		row := Line{{R: '│', S: border}, {R: ' ', S: fill}}
+		row = append(row, numCell(i+1)...)
+		row = append(row, Cell{R: ' ', S: fill}, Cell{R: ' ', S: fill}, Cell{R: ' ', S: fill})
+		for _, cell := range highlightLine(ln, filePath, th, ctxBase) {
+			if row.Width() >= width-1 {
+				break
+			}
+			row = append(row, cell)
+		}
+		for row.Width() < width-1 {
+			row = append(row, Cell{R: ' ', S: fill})
+		}
+		row = append(row, Cell{R: '│', S: border})
+		lines = append(lines, row)
 	}
 
 	if truncated {
 		remaining := len(rawLines) - maxWriteLines
-		lines = append(lines, cardTextRow(border, codeBg, width, LineFromSegments([]Segment{
-			{Text: i18n.Tf("chat.tool.moreLines", remaining), Style: dim},
-		}, width-3)))
+		lines = append(lines, borderedText(i18n.Tf("chat.tool.moreLines", remaining)))
 	}
 
 	if it.Expanded {
-		lines = append(lines, cardTextRow(border, codeBg, width, LineFromSegments([]Segment{
-			{Text: i18n.Tf("chat.tool.showingAll", len(rawLines)), Style: dim},
-		}, width-3)))
+		lines = append(lines, borderedText(i18n.Tf("chat.tool.showingAll", len(rawLines))))
 	}
+
+	lines = append(lines, cardSep(border, width))
+
+	footer := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
+	for _, r := range i18n.Tf("chat.write.lines", len(rawLines)) {
+		footer = append(footer, Cell{R: r, S: muted})
+	}
+	expandHint := i18n.T("common.expand")
+	if it.Expanded {
+		expandHint = i18n.T("common.collapse")
+	}
+	for footer.Width() < width-1-DisplayWidth(expandHint) {
+		footer = append(footer, Cell{R: ' ', S: th.Base()})
+	}
+	for _, r := range expandHint {
+		footer = append(footer, Cell{R: r, S: muted})
+	}
+	for footer.Width() < width-1 {
+		footer = append(footer, Cell{R: ' ', S: th.Base()})
+	}
+	footer = append(footer, Cell{R: '│', S: border})
+	lines = append(lines, footer)
 
 	lines = append(lines, bottomEdge(border, width))
 

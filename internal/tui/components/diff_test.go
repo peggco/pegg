@@ -205,3 +205,54 @@ func TestEditCardRendersUnifiedDiff(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteCardMatchesDiffStyle(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+
+	c := NewChat()
+	it := &ChatItem{
+		Kind:         ItemTool,
+		ToolName:     "write:cmd/demo/main.go",
+		WriteContent: "package main\n\nfunc main() {}\n",
+		ToolOutput:   "ok",
+	}
+	lines := c.writeCardLines(it, 70)
+	if len(lines) == 0 {
+		t.Fatal("expected rendered write card")
+	}
+
+	joined := make([]string, len(lines))
+	for i, l := range lines {
+		var b strings.Builder
+		for _, cell := range l {
+			b.WriteRune(cell.R)
+		}
+		joined[i] = b.String()
+	}
+
+	if !strings.Contains(joined[0], "╭") || !strings.Contains(joined[0], "WRITE") {
+		t.Errorf("expected bordered WRITE header, got %q", joined[0])
+	}
+	if !strings.Contains(joined[len(joined)-1], "╯") {
+		t.Errorf("expected bottom border, got %q", joined[len(joined)-1])
+	}
+	if !strings.Contains(strings.Join(joined, "\n"), "main.go") {
+		t.Error("write card should show the file path")
+	}
+
+	_, wantBg, _ := lines[1][1].S.Decompose()
+	if wantBg == styles.Current().CodeBg {
+		t.Error("write card should use the background colour, not CodeBg")
+	}
+	for li, l := range lines {
+		if len(l) < 3 {
+			continue
+		}
+		for ci := 1; ci < len(l)-1; ci++ {
+			if _, bg, _ := l[ci].S.Decompose(); bg != wantBg {
+				t.Fatalf("line %d cell %d background mismatch", li, ci)
+			}
+		}
+	}
+}
