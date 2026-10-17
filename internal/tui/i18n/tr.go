@@ -8,8 +8,8 @@ var tr = map[string]string{
 	"common.noItems":              "(öğe yok)",
 	"common.noMatching":           "(eşleşen öğe yok)",
 	"common.enterSaveEscCancel":   "Enter kaydet  ·  Esc iptal",
-	"common.expand":               "[Enter] Genişlet",
-	"common.collapse":             "[Enter] Daralt",
+	"common.expand":               "Genişlet",
+	"common.collapse":             "Daralt",
 	"common.back":                 "← ana sohbete dön (Esc)",
 	"common.navigate":             "↑/↓ yön  Enter seç  Esc geri",
 

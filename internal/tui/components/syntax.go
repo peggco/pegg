@@ -82,24 +82,23 @@ func tokenTypeToThemeColor(tt chroma.TokenType, th styles.Theme) tcell.Color {
 	return th.Foreground
 }
 
-func highlightLine(text string, filePath string, th styles.Theme, contentStyle tcell.Style) Line {
+func highlightLine(text string, filePath string, th styles.Theme, baseStyle tcell.Style) Line {
 	lang := langFromFilename(filePath)
 	l := getCachedLexer(lang)
-	return highlightWithLexer(l, text, th, contentStyle)
+	return highlightWithLexer(l, text, th, baseStyle)
 }
 
-func highlightByLangName(text string, lang string, th styles.Theme, contentStyle tcell.Style) Line {
+func highlightByLangName(text string, lang string, th styles.Theme, baseStyle tcell.Style) Line {
 	l := getCachedLexer(lang)
-	return highlightWithLexer(l, text, th, contentStyle)
+	return highlightWithLexer(l, text, th, baseStyle)
 }
 
-func highlightWithLexer(l chroma.Lexer, text string, th styles.Theme, contentStyle tcell.Style) Line {
+func highlightWithLexer(l chroma.Lexer, text string, th styles.Theme, baseStyle tcell.Style) Line {
 	iterator, err := l.Tokenise(nil, text)
 	if err != nil {
-		return lineFromPlain(text, contentStyle)
+		return lineFromPlain(text, baseStyle)
 	}
 
-	baseStyle := th.Base().Background(th.Background)
 	var out Line
 	for _, tok := range iterator.Tokens() {
 		colour := tokenTypeToThemeColor(tok.Type, th)
@@ -109,7 +108,7 @@ func highlightWithLexer(l chroma.Lexer, text string, th styles.Theme, contentSty
 		}
 	}
 	if len(out) == 0 {
-		return lineFromPlain(text, contentStyle)
+		return lineFromPlain(text, baseStyle)
 	}
 	return out
 }

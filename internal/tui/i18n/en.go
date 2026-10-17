@@ -8,8 +8,8 @@ var en = map[string]string{
 	"common.noItems":              "(no items)",
 	"common.noMatching":           "(no matching items)",
 	"common.enterSaveEscCancel":   "Enter save  ·  Esc cancel",
-	"common.expand":               "[Enter] Expand",
-	"common.collapse":             "[Enter] Collapse",
+	"common.expand":               "Expand",
+	"common.collapse":             "Collapse",
 	"common.back":                 "← back to main chat (Esc)",
 	"common.navigate":             "↑/↓ navigate  Enter select  Esc back",
 
