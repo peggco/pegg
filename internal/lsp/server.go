@@ -9,6 +9,11 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 )
 
+type docState struct {
+	opened  bool
+	version int
+}
+
 type Server struct {
 	name string
 	cfg  config.LanguageServerConfig
@@ -18,7 +23,8 @@ type Server struct {
 	started  bool
 	failed   bool
 	starting bool
-	opened   map[string]bool
+	docs     map[string]*docState
+	pending  map[string]bool
 	lastUsed time.Time
 }
 
@@ -26,7 +32,8 @@ func NewServer(name string, cfg config.LanguageServerConfig) *Server {
 	return &Server{
 		name:     name,
 		cfg:      cfg,
-		opened:   make(map[string]bool),
+		docs:     make(map[string]*docState),
+		pending:  make(map[string]bool),
 		lastUsed: time.Now(),
 	}
 }
@@ -71,6 +78,64 @@ func (s *Server) IsFailed() bool {
 	return s.failed
 }
 
+func (s *Server) openDoc(item TextDocumentItem) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, err := s.openLocked(item); err != nil {
+		return 0, err
+	}
+	s.lastUsed = time.Now()
+	return s.docs[item.URI].version, nil
+}
+
+func (s *Server) syncDocs(item TextDocumentItem) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ds, err := s.openLocked(item)
+	if err != nil {
+		return 0, err
+	}
+	ds.version++
+	version := ds.version
+	if err := s.client.DidChange(context.Background(), item.URI, version, item.Text); err != nil {
+		return 0, err
+	}
+	if err := s.client.DidSave(context.Background(), item.URI, item.Text); err != nil {
+		return 0, err
+	}
+	s.lastUsed = time.Now()
+	return version, nil
+}
+
+func (s *Server) openLocked(item TextDocumentItem) (*docState, error) {
+	if s.client == nil || !s.started {
+		return nil, ErrNotRunning
+	}
+	if ds := s.docs[item.URI]; ds != nil && ds.opened {
+		return ds, nil
+	}
+	open := item
+	open.Version = 1
+	if err := s.client.DidOpen(context.Background(), open); err != nil {
+		return nil, err
+	}
+	ds := &docState{opened: true, version: 1}
+	s.docs[item.URI] = ds
+	return ds, nil
+}
+
+func (s *Server) openURIs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, 0, len(s.docs))
+	for uri := range s.docs {
+		out = append(out, uri)
+	}
+	return out
+}
+
 func (s *Server) stop() {
 	s.mu.Lock()
 	c := s.client
@@ -86,7 +151,8 @@ func (s *Server) stop() {
 	s.mu.Lock()
 	s.client = nil
 	s.started = false
-	s.opened = make(map[string]bool)
+	s.docs = make(map[string]*docState)
+	s.pending = make(map[string]bool)
 	s.mu.Unlock()
 }
 

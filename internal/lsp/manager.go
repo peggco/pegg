@@ -3,6 +3,7 @@ package lsp
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,17 +24,22 @@ type Manager struct {
 	fs               *vfs.VFS
 	log              *logger.Logger
 	closed           bool
-	nextDoc          int
 	idleTimeout      time.Duration
+	diagTimeout      time.Duration
 	done             chan struct{}
 	transportFactory func(StdioOptions) (Transport, error)
 }
 
-const DefaultIdleTimeout = 10 * time.Minute
+const (
+	DefaultIdleTimeout = 10 * time.Minute
+	DefaultDiagTimeout = 2 * time.Second
+	diagPollInterval   = 20 * time.Millisecond
+)
 
 type diagEntry struct {
-	version int
-	diags   []diagnostic.Diagnostic
+	seq        int
+	docVersion int
+	diags      []diagnostic.Diagnostic
 }
 
 func NewManager(fs *vfs.VFS, log *logger.Logger) *Manager {
@@ -47,6 +53,7 @@ func NewManager(fs *vfs.VFS, log *logger.Logger) *Manager {
 			return NewStdioTransport(opts)
 		},
 		idleTimeout: DefaultIdleTimeout,
+		diagTimeout: DefaultDiagTimeout,
 		done:        make(chan struct{}),
 	}
 	m.registerHooks()
@@ -66,6 +73,25 @@ func (m *Manager) SetIdleTimeout(d time.Duration) {
 	} else {
 		m.idleTimeout = DefaultIdleTimeout
 	}
+}
+
+func (m *Manager) SetDiagTimeout(d time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if d > 0 {
+		m.diagTimeout = d
+	} else {
+		m.diagTimeout = DefaultDiagTimeout
+	}
+}
+
+func (m *Manager) diagWait() time.Duration {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.diagTimeout <= 0 {
+		return DefaultDiagTimeout
+	}
+	return m.diagTimeout
 }
 
 func (m *Manager) startReaper() {
@@ -111,6 +137,7 @@ func (m *Manager) reapIdle() {
 		if m.log != nil {
 			m.log.Fdebug("lsp: closing idle server %q", srv.name)
 		}
+		m.clearServerDiagnostics(srv)
 		srv.stop()
 	}
 }
@@ -126,7 +153,7 @@ func (m *Manager) Start(servers map[string]config.LanguageServerConfig) {
 func (m *Manager) registerHooks() {
 	m.fs.OnBeforeRead(func(path, content string) string {
 		m.touch(path)
-		diags := m.Diagnostics(path)
+		diags := m.readDiagnostics(path)
 		if len(diags) == 0 {
 			return content
 		}
@@ -184,6 +211,7 @@ func (m *Manager) ensureRunning(name, path string) {
 		m.servers[name] = srv
 		srv.mu.Lock()
 		srv.starting = true
+		srv.pending[path] = true
 		srv.mu.Unlock()
 		m.mu.Unlock()
 		go m.startServer(srv, path)
@@ -191,12 +219,14 @@ func (m *Manager) ensureRunning(name, path string) {
 	}
 	srv.mu.Lock()
 	if srv.starting {
+		srv.pending[path] = true
 		srv.mu.Unlock()
 		m.mu.Unlock()
 		return
 	}
 	if srv.client == nil && !srv.failed {
 		srv.starting = true
+		srv.pending[path] = true
 		srv.mu.Unlock()
 		m.mu.Unlock()
 		go m.startServer(srv, path)
@@ -236,7 +266,7 @@ func (m *Manager) startServer(srv *Server, path string) {
 		return
 	}
 
-	client := NewClient(tr, ClientOptions{Name: srv.name, OnDiag: m.onDiagnostics})
+	client := NewClient(tr, ClientOptions{Name: srv.name, Root: root, OnDiag: m.onDiagnostics})
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if _, err := client.Initialize(ctx); err != nil {
@@ -254,72 +284,116 @@ func (m *Manager) startServer(srv *Server, path string) {
 	if m.log != nil {
 		m.log.Finfo("lsp: server %q started (root %s)", srv.name, root)
 	}
-	m.openIfNeeded(srv, path)
+	m.openPending(srv, path)
+}
+
+func (m *Manager) openPending(srv *Server, path string) {
+	srv.mu.Lock()
+	paths := make([]string, 0, len(srv.pending)+1)
+	paths = append(paths, path)
+	for p := range srv.pending {
+		if p != path {
+			paths = append(paths, p)
+		}
+	}
+	srv.pending = make(map[string]bool)
+	srv.mu.Unlock()
+
+	for _, p := range paths {
+		m.openIfNeeded(srv, p)
+	}
 }
 
 func (m *Manager) openIfNeeded(srv *Server, path string) {
-	srv.mu.Lock()
-	if srv.client == nil || !srv.started {
-		srv.mu.Unlock()
-		return
-	}
-	if srv.opened[path] {
-		srv.mu.Unlock()
-		return
-	}
-	srv.opened[path] = true
-	client := srv.client
-	srv.mu.Unlock()
-
 	item := m.buildTextDocument(path)
-	if item != nil {
-		go func() { _ = client.DidOpen(context.Background(), *item) }()
+	if item == nil {
+		return
+	}
+	if _, err := srv.openDoc(*item); err != nil && m.log != nil {
+		m.log.Fdebug("lsp: open %q on %q: %v", path, srv.name, err)
 	}
 }
 
 func (m *Manager) notifyDiagnostics(path string) []diagnostic.Diagnostic {
-	before := m.diagVersion(path)
-	notified := false
+	deadline := time.Now().Add(m.diagWait())
+	beforeSeq := m.diagSeq(path)
+
+	minTarget := 0
+	synced := false
 	for _, srv := range m.snapshotServers() {
-		if !srv.IsRunning() || !srv.Matches(path) {
+		if !srv.Matches(path) || srv.IsFailed() {
 			continue
 		}
-		if content, ok := m.readContent(path); ok {
-			m.sendSaveChange(srv, path, content)
-			notified = true
-		}
-	}
-	if !notified {
-		deadline := time.After(5 * time.Second)
-		for {
-			diags := m.Diagnostics(path)
-			if len(diags) > 0 {
-				return diags
-			}
-			select {
-			case <-deadline:
-				return m.Diagnostics(path)
-			case <-time.After(100 * time.Millisecond):
+		if !srv.IsRunning() {
+			m.waitServerRunning(srv, deadline)
+			if !srv.IsRunning() {
+				continue
 			}
 		}
+		item := m.buildTextDocument(path)
+		if item == nil {
+			continue
+		}
+		version, err := srv.syncDocs(*item)
+		if err != nil {
+			if m.log != nil {
+				m.log.Fdebug("lsp: sync %q on %q: %v", path, srv.name, err)
+			}
+			continue
+		}
+		synced = true
+		if version > 0 && (minTarget == 0 || version < minTarget) {
+			minTarget = version
+		}
 	}
-	return m.waitDiagnostics(path, before)
+	if !synced {
+		return m.Diagnostics(path)
+	}
+	return m.waitDiagnostics(path, minTarget, beforeSeq, deadline)
 }
 
-func (m *Manager) sendSaveChange(srv *Server, path, content string) {
-	uri := m.fileURI(path)
-	version := m.nextDocVersion()
-	ctx := context.Background()
-	srv.mu.Lock()
-	client := srv.client
-	srv.mu.Unlock()
-	if client == nil {
+func (m *Manager) waitServerRunning(srv *Server, deadline time.Time) {
+	for !srv.IsRunning() {
+		if srv.IsFailed() || !time.Now().Before(deadline) {
+			return
+		}
+		time.Sleep(diagPollInterval)
+	}
+}
+
+func (m *Manager) readDiagnostics(path string) []diagnostic.Diagnostic {
+	if m.diagSeq(path) > 0 {
+		return m.Diagnostics(path)
+	}
+
+	deadline := time.Now().Add(m.diagWait())
+	running := false
+	for _, srv := range m.snapshotServers() {
+		if !srv.Matches(path) || srv.IsFailed() {
+			continue
+		}
+		m.waitServerRunning(srv, deadline)
+		if srv.IsRunning() {
+			running = true
+			m.openIfNeeded(srv, path)
+		}
+	}
+	if !running {
+		return nil
+	}
+	return m.waitDiagnostics(path, 0, 0, deadline)
+}
+
+func (m *Manager) clearServerDiagnostics(srv *Server) {
+	uris := srv.openURIs()
+	if len(uris) == 0 {
 		return
 	}
-	go func() {
-		_ = client.DidChange(ctx, uri, version, content)
-		_ = client.DidSave(ctx, uri, content)
-	}()
+	m.mu.Lock()
+	for _, uri := range uris {
+		delete(m.diags, m.virtualPath(uri))
+	}
+	m.mu.Unlock()
 }
 
 func (m *Manager) deleteDoc(path string) {
@@ -341,17 +415,15 @@ func (m *Manager) deleteDoc(path string) {
 	}
 }
 
-func (m *Manager) onDiagnostics(uri string, _ int, diags []diagnostic.Diagnostic) {
+func (m *Manager) onDiagnostics(uri string, version int, diags []diagnostic.Diagnostic) {
 	path := m.virtualPath(uri)
 	if path == "" {
 		return
 	}
 	m.mu.Lock()
-	var entry diagEntry
-	if existing, ok := m.diags[path]; ok {
-		entry = existing
-	}
-	entry.version++
+	entry := m.diags[path]
+	entry.seq++
+	entry.docVersion = version
 	entry.diags = diags
 	m.diags[path] = entry
 	m.mu.Unlock()
@@ -379,30 +451,24 @@ func (m *Manager) Running() []string {
 	return out
 }
 
-func (m *Manager) diagVersion(path string) int {
+func (m *Manager) diagSeq(path string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if entry, ok := m.diags[path]; ok {
-		return entry.version
-	}
-	return 0
+	return m.diags[path].seq
 }
 
-func (m *Manager) waitDiagnostics(path string, before int) []diagnostic.Diagnostic {
-	deadline := time.After(2 * time.Second)
+func (m *Manager) waitDiagnostics(path string, minTarget, beforeSeq int, deadline time.Time) []diagnostic.Diagnostic {
 	for {
 		m.mu.Lock()
 		entry, ok := m.diags[path]
-		changed := ok && entry.version > before
 		m.mu.Unlock()
-		if changed {
+		if ok && entry.seq > beforeSeq && (entry.docVersion == 0 || minTarget == 0 || entry.docVersion >= minTarget) {
 			return m.Diagnostics(path)
 		}
-		select {
-		case <-deadline:
-			return m.Diagnostics(path)
-		case <-time.After(50 * time.Millisecond):
+		if !time.Now().Before(deadline) {
+			return nil
 		}
+		time.Sleep(diagPollInterval)
 	}
 }
 
@@ -446,39 +512,23 @@ func (m *Manager) buildTextDocument(path string) *TextDocumentItem {
 	}
 }
 
-func (m *Manager) readContent(path string) (string, bool) {
-	phys, err := m.fs.Resolve(path)
-	if err != nil {
-		return "", false
-	}
-	data, err := os.ReadFile(phys)
-	if err != nil {
-		return "", false
-	}
-	return string(data), true
-}
-
 func (m *Manager) fileURI(path string) string {
 	phys, err := m.fs.Resolve(path)
 	if err != nil {
 		return "file://" + filepath.ToSlash(path)
 	}
-	return "file://" + filepath.ToSlash(phys)
+	return pathToFileURI(phys)
 }
 
 func (m *Manager) virtualPath(uri string) string {
 	if strings.HasPrefix(uri, "file://") {
 		uri = uri[len("file://"):]
 	}
+	if unescaped, err := url.PathUnescape(uri); err == nil {
+		uri = unescaped
+	}
 	uri = filepath.FromSlash(uri)
 	return m.fs.Virtual(uri)
-}
-
-func (m *Manager) nextDocVersion() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.nextDoc++
-	return m.nextDoc
 }
 
 func (m *Manager) snapshotServers() []*Server {
@@ -522,6 +572,7 @@ func (m *Manager) Close() error {
 	m.mu.Unlock()
 
 	for _, srv := range servers {
+		m.clearServerDiagnostics(srv)
 		srv.stop()
 	}
 	if m.log != nil {

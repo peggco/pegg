@@ -37,24 +37,12 @@ func TestManagerLazyStartAndDiagnostics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(res, "<file_diagnostics>") {
-		t.Fatalf("cold read must not have diagnostics, got %q", res)
+	if !strings.Contains(res, "fake error") {
+		t.Fatalf("read must include diagnostics from the lazily started server, got %q", res)
 	}
 
-	deadline := time.After(5 * time.Second)
-	var diags []diagnostic.Diagnostic
-	for {
-		diags = mgr.Diagnostics("main.go")
-		if len(diags) > 0 {
-			break
-		}
-		select {
-		case <-deadline:
-			t.Fatalf("no diagnostics; running=%v", mgr.Running())
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
-	if diags[0].Message != "fake error" {
+	diags := mgr.Diagnostics("main.go")
+	if len(diags) == 0 || diags[0].Message != "fake error" {
 		t.Fatalf("diags = %+v", diags)
 	}
 
@@ -64,6 +52,107 @@ func TestManagerLazyStartAndDiagnostics(t *testing.T) {
 	}
 	if !strings.Contains(res2, "fake error") {
 		t.Fatalf("res2 must contain diagnostics 'fake error', got %q", res2)
+	}
+}
+
+func waitDiagnosticsCount(t *testing.T, mgr *Manager, path string, want int) []diagnostic.Diagnostic {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		diags := mgr.Diagnostics(path)
+		if len(diags) == want {
+			return diags
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("diags for %q = %+v, want %d", path, diags, want)
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
+}
+
+func TestWriteDiagnosticsAreVersionCorrelated(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n// fake error\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	fs, err := vfs.New(root, vfs.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tr := newScriptedTransport()
+	mgr := NewManager(fs, nil)
+	mgr.SetTransportFactory(func(opts StdioOptions) (Transport, error) { return tr, nil })
+	defer mgr.Close()
+	mgr.Start(map[string]config.LanguageServerConfig{
+		"gopls": {Command: "/bin/true", FileTypes: []string{"go"}, RootMarkers: []string{"go.mod"}},
+	})
+
+	if _, err := fs.Read("main.go"); err != nil {
+		t.Fatal(err)
+	}
+	waitDiagnosticsCount(t, mgr, "main.go", 1)
+
+	tr.setOnChange(func(version int, text string) []map[string]any {
+		if version < 2 {
+			t.Errorf("didChange version = %d, want >= 2", version)
+		}
+		return nil
+	})
+
+	start := time.Now()
+	out, err := fs.Edit("main.go", "// fake error", "// fixed", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed > mgr.diagWait()+time.Second {
+		t.Fatalf("write took %s, expected it to return after diagnostics", elapsed)
+	}
+	if strings.Contains(out, "fake error") {
+		t.Fatalf("write returned stale diagnostics: %q", out)
+	}
+	waitDiagnosticsCount(t, mgr, "main.go", 0)
+
+	uri := mgr.fileURI("main.go")
+	order := tr.methodOrder()
+	openIdx, changeIdx := -1, -1
+	for i, entry := range order {
+		if entry == MethodDidOpen+" "+uri && openIdx == -1 {
+			openIdx = i
+		}
+		if entry == MethodDidChange+" "+uri && changeIdx == -1 {
+			changeIdx = i
+		}
+	}
+	if openIdx == -1 || changeIdx == -1 {
+		t.Fatalf("missing didOpen/didChange for %s: %v", uri, order)
+	}
+	if openIdx > changeIdx {
+		t.Fatalf("didOpen must precede didChange, order=%v", order)
+	}
+}
+
+func TestWriteWithoutMatchingServerDoesNotStall(t *testing.T) {
+	root := t.TempDir()
+	fs, err := vfs.New(root, vfs.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := newScriptedTransport()
+	mgr := NewManager(fs, nil)
+	mgr.SetTransportFactory(func(opts StdioOptions) (Transport, error) { return tr, nil })
+	defer mgr.Close()
+	mgr.Start(map[string]config.LanguageServerConfig{
+		"gopls": {Command: "/bin/true", FileTypes: []string{"go"}},
+	})
+
+	start := time.Now()
+	if _, err := fs.Write("notes.txt", []byte("hello\n")); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("write with no matching server took %s", elapsed)
 	}
 }
 

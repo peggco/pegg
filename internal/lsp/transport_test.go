@@ -5,6 +5,7 @@ import (
 	json "github.com/goccy/go-json"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -55,8 +56,25 @@ func TestStdioCloseKillsProcess(t *testing.T) {
 	}
 }
 
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 func TestStdioStderrGoesToWriter(t *testing.T) {
-	var stderr bytes.Buffer
+	var stderr lockedBuffer
 	tr, err := NewStdioTransport(StdioOptions{
 		Command: "sh",
 		Args:    []string{"-c", "echo server-noise 1>&2; sleep 0.2"},

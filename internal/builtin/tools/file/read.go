@@ -116,6 +116,18 @@ func formatReadOutput(vfsOutput string, offset, limit int) string {
 		contentLines = contentLines[:len(contentLines)-1]
 	}
 
+	var diagnostics []string
+	for i, line := range contentLines {
+		if strings.TrimSpace(line) == "<file_diagnostics>" {
+			diagnostics = contentLines[i:]
+			contentLines = contentLines[:i]
+			for len(contentLines) > 0 && contentLines[len(contentLines)-1] == "" {
+				contentLines = contentLines[:len(contentLines)-1]
+			}
+			break
+		}
+	}
+
 	var b strings.Builder
 	b.WriteString("<file>\n")
 
@@ -131,5 +143,11 @@ func formatReadOutput(vfsOutput string, offset, limit int) string {
 	}
 
 	b.WriteString("</file>")
+
+	if len(diagnostics) > 0 {
+		b.WriteString("\n")
+		b.WriteString(strings.Join(diagnostics, "\n"))
+	}
+
 	return b.String()
 }

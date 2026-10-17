@@ -11,8 +11,10 @@ right where it can act on them.
 ## How it works
 
 - Language servers start **lazily**: the first file access matching a server's
-  `filetypes` triggers the server for that project root.
-- Before every file read, cached diagnostics are appended to the returned content:
+  `filetypes` triggers the server for that project root. The first read of a file
+  waits (up to ~2s) for that server to publish, so diagnostics are included right
+  away; later reads use the cache.
+- Before every file read, cached diagnostics are appended after the file block:
 
   ```
   ---
@@ -20,8 +22,11 @@ right where it can act on them.
     src/main.go:12:5: undefined: Foo [severity=1]
   ```
 
-- After every file write, diagnostics for the written file are appended the same
-  way. When a file is deleted, its diagnostics are dropped.
+- After every file write, the document is synced with a monotonically increasing
+  version and Pegg waits (up to ~2s) for diagnostics that match the version it
+  sent, so stale pre-edit diagnostics are never shown. If the server does not
+  publish in time, no diagnostics are returned. When a file is deleted, its
+  diagnostics are dropped.
 - Idle servers are stopped after **10 minutes** to save resources.
 
 This requires a language server that matches the file type. Without one, reads and

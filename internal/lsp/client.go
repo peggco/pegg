@@ -3,18 +3,22 @@ package lsp
 import (
 	"context"
 	"fmt"
-	json "github.com/goccy/go-json"
+	"path/filepath"
 	"sync"
 	"time"
+
+	json "github.com/goccy/go-json"
 )
 
 type Client struct {
 	name      string
+	root      string
 	transport Transport
 	timeout   time.Duration
 	onDiag    func(uri string, version int, diags []Diagnostic)
 
 	mu        sync.Mutex
+	writeMu   sync.Mutex
 	nextID    int
 	pending   map[int]chan *Response
 	closeCh   chan struct{}
@@ -26,6 +30,7 @@ type Client struct {
 
 type ClientOptions struct {
 	Name    string
+	Root    string
 	Timeout time.Duration
 	OnDiag  func(uri string, version int, diags []Diagnostic)
 }
@@ -36,6 +41,7 @@ func NewClient(transport Transport, opts ClientOptions) *Client {
 	}
 	c := &Client{
 		name:      opts.Name,
+		root:      opts.Root,
 		transport: transport,
 		timeout:   opts.Timeout,
 		onDiag:    opts.OnDiag,
@@ -50,9 +56,19 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) {
 	c.initOnce.Do(func() {
 		var result InitializeResult
 		params := map[string]any{
-			"processId":    -1,
-			"clientInfo":   map[string]any{"name": "pegg", "version": "0.1.0"},
-			"capabilities": map[string]any{},
+			"processId":  -1,
+			"clientInfo": map[string]any{"name": "pegg", "version": "0.1.0"},
+			"capabilities": map[string]any{
+				"workspace": map[string]any{"workspaceFolders": true},
+			},
+		}
+		if c.root != "" {
+			uri := pathToFileURI(c.root)
+			params["rootUri"] = uri
+			params["rootPath"] = c.root
+			params["workspaceFolders"] = []map[string]any{
+				{"uri": uri, "name": filepath.Base(c.root)},
+			}
 		}
 		err := c.call(ctx, MethodInitialize, params, &result)
 		if err != nil {
@@ -64,7 +80,7 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) {
 			c.initErr = err
 			return
 		}
-		if err := c.transport.Write(notif); err != nil {
+		if err := c.write(notif); err != nil {
 			c.initErr = err
 			return
 		}
@@ -119,6 +135,12 @@ func (c *Client) notify(method string, params any) error {
 	if err != nil {
 		return err
 	}
+	return c.write(payload)
+}
+
+func (c *Client) write(payload []byte) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	return c.transport.Write(payload)
 }
 
@@ -128,7 +150,7 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.transport.Write(notif)
+	return c.write(notif)
 }
 
 func (c *Client) Close() error {
@@ -163,7 +185,7 @@ func (c *Client) call(ctx context.Context, method string, params any, result any
 		return err
 	}
 
-	if err := c.transport.Write(payload); err != nil {
+	if err := c.write(payload); err != nil {
 		c.dropPending(id)
 		return err
 	}
