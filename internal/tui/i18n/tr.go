@@ -91,6 +91,7 @@ var tr = map[string]string{
 	"home.hint.mode":     "mod değiştirmek için 'Tab' kullanın",
 	"home.hint.stop":     "çalışan bir ajanı durdurmak için Esc'ye iki kez basın",
 	"home.hint.attach":   "eklemek için bir dosyayı sürükleyin veya yapıştırın",
+	"home.hint.focus":    "Mesajda ek varsa odak değiştirmek için 'Shift+Tab' kullanın",
 
 	"home.picker.skills":   "Beceriler — filtrelemek için yazın",
 	"home.picker.mentions": "Etiketler — filtrelemek için yazın",

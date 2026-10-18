@@ -91,6 +91,7 @@ var en = map[string]string{
 	"home.hint.mode":     "use 'Tab' to change mode",
 	"home.hint.stop":     "press Esc twice to stop a running agent",
 	"home.hint.attach":   "paste or drop a file to attach it",
+	"home.hint.focus":    "use 'Shift+Tab' to focus attachments (when the message has attachments)",
 
 	"home.picker.skills":   "Skills — type to filter",
 	"home.picker.mentions": "Mentions — type to filter",
