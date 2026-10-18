@@ -104,6 +104,7 @@ type Settings struct {
 	onSessionClear          func()
 	onThemeChange           func()
 	onLanguageChange        func()
+	onSTTChange             func()
 }
 
 var _ components.MouseComponent = (*Settings)(nil)
@@ -199,6 +200,8 @@ func (s *Settings) SetOnSessionClear(fn func()) { s.onSessionClear = fn }
 func (s *Settings) SetOnThemeChange(fn func()) { s.onThemeChange = fn }
 
 func (s *Settings) SetOnLanguageChange(fn func()) { s.onLanguageChange = fn }
+
+func (s *Settings) SetOnSTTChange(fn func()) { s.onSTTChange = fn }
 
 func (s *Settings) SetOnRequestUpdate(fn func()) { s.onRequestUpdate = fn }
 

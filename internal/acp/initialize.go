@@ -111,7 +111,7 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 		LoadSession: true,
 		PromptCapabilities: &PromptCaps{
 			Image:           true,
-			Audio:           false,
+			Audio:           true,
 			EmbeddedContext: true,
 		},
 		MCPCapabilities: &MCPCaps{

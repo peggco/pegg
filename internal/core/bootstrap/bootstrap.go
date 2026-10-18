@@ -28,6 +28,7 @@ import (
 	"github.com/peggco/pegg/internal/schedule"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/skill"
+	_ "github.com/peggco/pegg/internal/stt/providers"
 	"github.com/peggco/pegg/internal/utils/query"
 	"github.com/peggco/pegg/internal/vfs"
 )

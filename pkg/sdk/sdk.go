@@ -25,6 +25,7 @@ import (
 	_ "github.com/peggco/pegg/internal/decision/providers"
 	_ "github.com/peggco/pegg/internal/llm/drivers"
 	_ "github.com/peggco/pegg/internal/llm/providers"
+	_ "github.com/peggco/pegg/internal/stt/providers"
 )
 
 type Options struct {

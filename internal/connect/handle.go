@@ -27,6 +27,10 @@ func (c *Connector) subscribeBus(bus event.Bus) error {
 	_ = bus.Subscribe(session.TopicSessionUpdated, c.onSessionUpdated)
 	_ = bus.Subscribe(session.TopicSessionCreated, c.onSessionCreated)
 	_ = bus.Subscribe(session.TopicSessionDeleted, c.onSessionDeleted)
+	_ = bus.Subscribe(event.TopicSTTStarted, c.onSTTStarted)
+	_ = bus.Subscribe(event.TopicSTTPartial, c.onSTTPartial)
+	_ = bus.Subscribe(event.TopicSTTFinished, c.onSTTFinished)
+	_ = bus.Subscribe(event.TopicSTTError, c.onSTTError)
 	return nil
 }
 
@@ -40,6 +44,43 @@ func (c *Connector) onSessionCreated(e session.SessionCreated) {
 
 func (c *Connector) onSessionDeleted(e session.SessionDeleted) {
 	c.emit(eventSessionUpdate, e.SessionID, "", map[string]any{"id": e.SessionID, "deleted": true})
+}
+
+func (c *Connector) onSTTStarted(e event.STTEvent) {
+	source := e.Source
+	if source == "" {
+		source = "tui"
+	}
+	c.emit(eventSTTStarted, "", "", map[string]any{"source": source})
+}
+
+func (c *Connector) onSTTPartial(e event.STTEvent) {
+	source := e.Source
+	if source == "" {
+		source = "tui"
+	}
+	c.emit(eventSTTPartial, "", "", map[string]any{
+		"source":    source,
+		"stream_id": e.StreamID,
+		"text":      e.Text,
+		"final":     e.Final,
+	})
+}
+
+func (c *Connector) onSTTFinished(e event.STTEvent) {
+	source := e.Source
+	if source == "" {
+		source = "tui"
+	}
+	c.emit(eventSTTFinished, "", "", map[string]any{"source": source, "duration_ms": e.DurationMS})
+}
+
+func (c *Connector) onSTTError(e event.STTEvent) {
+	source := e.Source
+	if source == "" {
+		source = "tui"
+	}
+	c.emit(eventSTTError, "", "", map[string]any{"source": source, "message": e.Message})
 }
 
 func (c *Connector) handleRequest(ctx context.Context, f *Frame) {

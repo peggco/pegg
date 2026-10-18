@@ -165,6 +165,8 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleSessionSetMode(ctx, params)
 	case "session/list":
 		result, handlerErr = s.handleSessionList(ctx, params)
+	case "stt/transcribe":
+		result, handlerErr = s.handleSTTTranscribe(ctx, params)
 	case "session/cancel":
 		handlerErr = s.handleSessionCancel(ctx, params)
 		if handlerErr == nil {

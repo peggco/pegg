@@ -38,6 +38,16 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 	}
 
 	input := extractPromptText(req.Prompt)
+	if input == "" {
+		text, err := s.transcribeAudioBlocks(ctx, req.Prompt)
+		if err != nil {
+			return nil, err
+		}
+		input = text
+	}
+	if input == "" {
+		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "prompt contains no text or audio"}
+	}
 
 	promptCtx, cancel := context.WithCancel(ctx)
 	acpSess.SetCancel(cancel, id)

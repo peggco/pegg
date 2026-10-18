@@ -42,6 +42,7 @@ terminal, or explicitly with `pegg tui`.
 | ++ctrl+c++ | Clear the input; on an empty input, press again within 2 seconds to quit |
 | ++ctrl+t++ | Cycle to the next theme (saved to config) |
 | ++ctrl+p++ | Open Settings |
+| ++ctrl+g++ | Start / stop voice input (see [Voice input](#voice-input)) |
 | ++ctrl+shift+c++ | Copy the selected chat text (or input selection) |
 | ++tab++ | Cycle session mode: build → plan → auto (saved to the session) |
 | ++esc++ | Interrupt (see below) |
@@ -109,6 +110,26 @@ messages, so the shortcuts also work after resuming a session. In the input:
 - ++ctrl+j++ moves the cursor to the end of the input and starts a new line,
   useful for appending to a multi-line message.
 - Submitting or clearing the input resets history browsing.
+
+## Voice input
+
+Press ++ctrl+g++ or click the `[mic Ctrl+G]` button on the input border. The first
+press starts recording; the next press (or the configured maximum duration) stops
+it and inserts the transcript at the cursor.
+
+- Streaming models show live partial text above the input as you speak.
+- Final turns are appended to the input as they are recognized.
+- ++esc++ cancels recording or transcription.
+- The spoken language follows the app language; there is no separate STT language
+  setting.
+- A recorder must be available: `sox`, `arecord`, or `ffmpeg`. Override it with
+  `stt.record_command` in `~/.peggco/pegg.json`; use `{output}` for the file path
+  for non-streaming recording, or omit it to write raw PCM to stdout for streaming.
+- `stt.max_duration_secs` bounds the recording length and is config-only.
+
+Voice input is available whenever an STT provider and model are selected under
+**Settings → General**. There is no separate enable/disable toggle. See
+[Voice input](../features/voice.md) for provider setup.
 
 ## Skills and mentions
 
@@ -225,7 +246,7 @@ to choose it, click the field to place the cursor, or click outside to go back.
 
 | Tab | Contents |
 |---|---|
-| **General** | Provider (add or reconfigure), Model (searchable list), Theme, Reasoning effort |
+| **General** | Provider (add or reconfigure), Model (searchable list), STT provider, STT model, Theme, Reasoning effort |
 | **Session** | Load/New/Delete session, Change title, Compaction settings |
 | **MCP** | Connected MCP servers and their tools |
 | **Skills** | Loaded skills with descriptions |
@@ -241,6 +262,12 @@ to choose it, click the field to place the cursor, or click outside to go back.
   [smart router](../providers-and-models.md#smart-router) is enabled, a **Smart
   Router** entry appears at the top of the list: it auto-selects the best model
   for each task and agent at run time.
+- **STT provider** — choose an STT provider. If it has no saved key, a masked
+  API-key prompt appears; if it is already configured, choose **Use existing** or
+  **Configure again**. Keys are stored per provider under `stt.providers`.
+- **STT model** — lists models from every configured STT provider. Streaming-capable
+  models show a muted **stream** label on the right; choosing one makes Pegg use
+  streaming automatically. Selecting a model enables voice input.
 - **Reasoning** — available only for models that advertise reasoning options.
 - **Session → Load** — sessions from the current directory, newest first. Loading
   restores the last 50 messages; scrolling to the top loads older messages in

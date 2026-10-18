@@ -17,6 +17,7 @@ const (
 	ActionSettings
 	ActionCopy
 	ActionModeNext
+	ActionVoiceToggle
 )
 
 var globalBindings = map[keyCombo]keyAction{
@@ -24,6 +25,7 @@ var globalBindings = map[keyCombo]keyAction{
 	{key: tcell.KeyCtrlQ}: ActionQuit,
 	{key: tcell.KeyCtrlT}: ActionThemeNext,
 	{key: tcell.KeyCtrlP}: ActionSettings,
+	{key: tcell.KeyCtrlG}: ActionVoiceToggle,
 	{key: tcell.KeyCtrlC, mod: tcell.ModCtrl | tcell.ModShift}:           ActionCopy,
 	{key: tcell.KeyRune, rune: 'c', mod: tcell.ModCtrl | tcell.ModShift}: ActionCopy,
 	{key: tcell.KeyRune, rune: 'C', mod: tcell.ModCtrl | tcell.ModShift}: ActionCopy,

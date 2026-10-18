@@ -23,10 +23,10 @@ type generalTab struct {
 
 func newGeneral(s *Settings) *generalTab { return &generalTab{settings: s} }
 
-const generalRowCount = 5
+const generalRowCount = 7
 
 func (g *generalTab) rowEnabled(i int) bool {
-	if i == 3 {
+	if i == 5 {
 		return g.settings.modelSupportsReasoning()
 	}
 	return true
@@ -84,6 +84,8 @@ func (g *generalTab) rows() []genRow {
 	return []genRow{
 		{label: i18n.T("settings.general.provider"), value: s.providerValue(), action: s.openProviders},
 		{label: i18n.T("settings.general.model"), value: s.modelDisplay(), action: s.openModels},
+		{label: i18n.T("settings.general.sttProvider"), value: s.sttProviderValue(), action: s.openSTTProviders},
+		{label: i18n.T("settings.general.sttModel"), value: s.sttModelValue(), action: s.openSTTModels},
 		{label: i18n.T("settings.general.theme"), value: styles.Name(), action: s.openThemes},
 		{label: i18n.T("settings.general.reasoning"), value: effort, action: s.openReasoning},
 		{label: i18n.T("settings.general.language"), value: i18n.DisplayName(i18n.Current()), action: s.openLanguages},

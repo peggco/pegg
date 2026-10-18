@@ -106,6 +106,7 @@ engine may be open per process** — a second `Open` returns `sdk.ErrAlreadyOpen
 | Component | Where to read |
 |---|---|
 | Chat & completions | [Chat](chat.md) |
+| Speech-to-text | [Speech-to-Text](stt.md) |
 | Sessions | [Sessions](sessions.md) |
 | Scheduling | [Scheduling](../pegg/features/scheduling.md#sdk) |
 | File operations | [Files](files.md) |
