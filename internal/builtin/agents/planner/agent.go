@@ -11,7 +11,14 @@ import (
 	"github.com/peggco/pegg/internal/vfs"
 )
 
-const plansScope = vfs.PlansDir
+const (
+	plansScope = vfs.PlansDir
+
+	agentTemperature   = 0.4
+	agentTopP          = 0.95
+	agentMaxTokens     = 8192
+	agentMaxIterations = 150
+)
 
 func Register(fs *vfs.VFS) {
 	agents.Register(func() (*agent.Agent, error) {
@@ -35,7 +42,11 @@ func newPlannerAgent(fs *vfs.VFS) (*agent.Agent, error) {
 		}),
 		agent.WithTools(file.Tools(plans)...),
 		agent.WithToolNames("bash", "webfetch", "websearch", "todoread", "todowrite", "mem-search", "mem-read"),
-		agent.WithMiddlewareNames("loop-detector", "redaction", "retry", "permission", "compaction"),
+		agent.WithMiddlewareNames("loop-detector", "retry", "permission", "compaction"),
+		agent.WithTemperature(agentTemperature),
+		agent.WithTopP(agentTopP),
+		agent.WithMaxTokens(agentMaxTokens),
+		agent.WithMaxIterations(agentMaxIterations),
 	)
 	main.AttachReminder(plan.PlanModeReminder())
 

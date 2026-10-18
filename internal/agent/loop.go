@@ -162,7 +162,7 @@ func appendSystemReminders(history []llm.Message, reminders []string) []llm.Mess
 
 func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*RunResult, error) {
 	finished := false
-	for state.iterations < a.MaxIterations {
+	for a.MaxIterations <= 0 || state.iterations < a.MaxIterations {
 		select {
 		case <-ctx.Done():
 			return a.partialResult(state), a.fail(ctx, ctx.Err())
@@ -211,7 +211,7 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 		FinishReason: state.finishReason,
 	}
 
-	if !finished {
+	if !finished && a.MaxIterations > 0 {
 		err := fmt.Errorf("%w (%d iterations)", ErrMaxIterations, state.iterations)
 		a.debugf("agent %q hit max iterations", a.Name)
 		a.publish(TopicAgentError, AgentError{AgentID: a.ID, AgentName: a.Name, Model: a.Model, Err: err})

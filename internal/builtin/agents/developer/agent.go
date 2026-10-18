@@ -14,6 +14,13 @@ func Register(fs *vfs.VFS) {
 	})
 }
 
+const (
+	agentTemperature   = 0.2
+	agentTopP          = 0.9
+	agentMaxTokens     = 8192
+	agentMaxIterations = 150
+)
+
 func newDeveloperAgent(fs *vfs.VFS) (*agent.Agent, error) {
 	main := agent.New("developer",
 		agent.WithSystemPromptFn(func(providerID, modelID string) string {
@@ -25,7 +32,11 @@ func newDeveloperAgent(fs *vfs.VFS) (*agent.Agent, error) {
 		}),
 		agent.WithTools(file.Tools(fs)...),
 		agent.WithToolNames("bash", "webfetch", "websearch", "todoread", "todowrite", "mem-search", "mem-read"),
-		agent.WithMiddlewareNames("loop-detector", "redaction", "retry", "permission", "compaction"),
+		agent.WithMiddlewareNames("loop-detector", "retry", "permission", "compaction"),
+		agent.WithTemperature(agentTemperature),
+		agent.WithTopP(agentTopP),
+		agent.WithMaxTokens(agentMaxTokens),
+		agent.WithMaxIterations(agentMaxIterations),
 	)
 
 	return main, nil

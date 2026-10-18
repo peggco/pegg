@@ -26,7 +26,22 @@ status, the [skills list](../configurations/skills.md), [AGENTS.md and rules](..
 requires code references in `file:line` format. Every agent runs the same middleware
 chain: loop detection, secret redaction, retry, and permissions.
 
-By default an agent may run up to **150 iterations** per turn.
+## Sampling and limits
+
+| Agent | Temperature | Top-p | Max tokens | Max iterations |
+|---|---|---|---|---|
+| `orchestrator` | 0.2 | 0.9 | 4096 | unlimited |
+| `planner` | 0.4 | 0.95 | 8192 | 150 |
+| `explorer` | 0.1 | 0.9 | 4096 | 150 |
+| `developer` | 0.2 | 0.9 | 8192 | 150 |
+
+Sampling stays close to deterministic for tool routing, file research, and code
+changes (`orchestrator`, `explorer`, `developer`), and moves into the reasoning
+range for planning (`planner`). Top-p remains near the provider default; the
+primary dial is temperature. Iteration caps are guardrails against runaway tool
+loops, not targets. The orchestrator is intentionally unlimited because it
+coordinates subagents and long multi-step tasks; `planner`, `explorer`, and
+`developer` keep a finite cap.
 
 ## Spawning subagents
 

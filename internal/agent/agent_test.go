@@ -323,6 +323,22 @@ func TestRunMaxIterations(t *testing.T) {
 	}
 }
 
+func TestRunUnlimitedIterations(t *testing.T) {
+	a, prov := newTestAgent(t, WithMaxIterations(UnlimitedIterations))
+	if a.MaxIterations != UnlimitedIterations {
+		t.Fatalf("max iterations = %d, want unlimited", a.MaxIterations)
+	}
+	prov.responses = []mockResponse{{content: "done"}}
+
+	res, err := a.Run(context.Background(), "go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res == nil || res.Iterations != 1 {
+		t.Fatalf("result = %+v, want one iteration", res)
+	}
+}
+
 func TestRunToolCallInsideMaxIteration(t *testing.T) {
 	a, prov := newTestAgent(t, WithMaxIterations(3), WithTool(echoTool()))
 	prov.responses = []mockResponse{
