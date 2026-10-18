@@ -13,11 +13,12 @@ are produced for Linux, macOS, and Windows on both `amd64` and `arm64`.
 |---|---|
 | **Runtime** | None — the binary is self-contained (`CGO_ENABLED=0`) |
 | **Build from source** | Go 1.26.5 or newer |
+| **Windows installer** | Windows PowerShell 5.1+ or PowerShell 7+ |
 | **Terminal** | Any modern terminal. The TUI uses 24-bit color and mouse/paste support when available |
 
 ## Install
 
-=== "Install script"
+=== "Install script (macOS / Linux)"
 
     ```bash
     curl -fsSL https://pegg.dev/install | bash
@@ -25,6 +26,33 @@ are produced for Linux, macOS, and Windows on both `amd64` and `arm64`.
 
     Downloads the latest release binary for your platform and installs it to a
     directory on your `PATH`.
+
+=== "Install script (Windows)"
+
+    ```powershell
+    irm https://pegg.dev/install.ps1 | iex
+    ```
+
+    From `cmd.exe`:
+
+    ```bat
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://pegg.dev/install.ps1 | iex"
+    ```
+
+    Installs `pegg.exe` to `%LOCALAPPDATA%\Programs\pegg` and adds that directory
+    to your user `PATH`. Override the location with `PREFIX`:
+
+    ```powershell
+    $env:PREFIX = "$env:USERPROFILE\bin"
+    irm https://pegg.dev/install.ps1 | iex
+    ```
+
+    Pin a release with `VERSION`, or skip the `PATH` update with `PEGG_NO_PATH`:
+
+    ```powershell
+    $env:VERSION = 'v0.1.8'
+    irm https://pegg.dev/install.ps1 | iex
+    ```
 
 === "npm"
 
@@ -154,12 +182,27 @@ Run `pegg files` to print the resolved paths and whether each exists.
 | Project MCP config | `<project>/.mcp.json` |
 | Project LSP config | `<project>/.lsp.json` |
 
+On Windows, `~` resolves to `%USERPROFILE%`.
+
 ## Uninstall
 
-```bash
-rm "$(command -v pegg)"    # remove the binary
-rm -rf ~/.pegg             # remove config, sessions, logs, cache, skills, rules
-```
+=== "macOS / Linux"
+
+    ```bash
+    rm "$(command -v pegg)"    # remove the binary
+    rm -rf ~/.pegg             # remove config, sessions, logs, cache, skills, rules
+    ```
+
+=== "Windows"
+
+    ```powershell
+    Remove-Item "$env:LOCALAPPDATA\Programs\pegg" -Recurse -Force
+    Remove-Item "$env:USERPROFILE\.pegg" -Recurse -Force
+    Remove-Item "$env:USERPROFILE\.peggco" -Recurse -Force   # provider credentials
+    ```
+
+    If you used a custom `PREFIX`, remove that directory instead. You can also
+    remove the install directory from your user `PATH`.
 
 Project-local data lives in each project's `.pegg/` directory and can be removed
 individually.

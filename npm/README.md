@@ -27,7 +27,16 @@ Run it in your terminal. Run it headless in CI. Embed it in your own tool. Point
 The full experience. A terminal UI built on tcell with streaming markdown, syntax-highlighted diffs, live context/cost tracking, and 26 themes.
 
 ```bash
+# macOS / Linux
 curl -fsSL https://pegg.dev/install | bash
+```
+
+```powershell
+# Windows
+irm https://pegg.dev/install.ps1 | iex
+```
+
+```bash
 pegg
 ```
 
@@ -136,9 +145,16 @@ Always use table-driven tests. Never use external test fixtures.
 ## Quick Start
 
 ```bash
-# Install
+# macOS / Linux
 curl -fsSL https://pegg.dev/install | bash
+```
 
+```powershell
+# Windows (PowerShell)
+irm https://pegg.dev/install.ps1 | iex
+```
+
+```bash
 # Add your first provider
 pegg login
 
