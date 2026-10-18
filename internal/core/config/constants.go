@@ -2,7 +2,7 @@ package config
 
 const (
 	AppName    = "pegg"
-	AppVersion = "0.1.7"
+	AppVersion = "0.1.8"
 	AppUrl     = "https://github.com/peggco/pegg"
 
 	GlobalConfigDirName  = ".pegg"
