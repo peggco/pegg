@@ -94,6 +94,9 @@ func defaultHints() []string {
 		i18n.T("home.hint.stop"),
 		i18n.T("home.hint.attach"),
 		i18n.T("home.hint.focus"),
+		i18n.T("home.hint.history"),
+		i18n.T("home.hint.newline"),
+		i18n.T("home.hint.clear"),
 	}
 }
 

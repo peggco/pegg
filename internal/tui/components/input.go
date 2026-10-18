@@ -42,6 +42,10 @@ type Input struct {
 	mentions  []string
 	longTexts map[rune]string
 
+	history      []string
+	historyPos   int
+	historyDraft string
+
 	focused      bool
 	blinkOn      bool
 	lastActivity time.Time
@@ -856,6 +860,13 @@ func (in *Input) home(extend bool) {
 func (in *Input) End()      { in.end(false) }
 func (in *Input) ShiftEnd() { in.end(true) }
 
+func (in *Input) EndOfInput() {
+	in.clearSelection()
+	in.row = len(in.lines) - 1
+	in.col = lineWidth(in.lines[in.row])
+	in.ensureCursorVisible()
+}
+
 func (in *Input) end(extend bool) {
 	if !extend {
 		in.clearSelection()
@@ -1044,16 +1055,23 @@ func (in *Input) Redo() {
 }
 
 func (in *Input) Submit() {
-	if strings.TrimSpace(in.Value()) == "" {
+	v := in.Value()
+	if strings.TrimSpace(v) == "" {
 		return
 	}
 	if in.OnSubmit != nil {
-		in.OnSubmit(in.Value())
+		in.OnSubmit(v)
 	}
+	in.AddHistory(v)
 	in.Clear()
 }
 
 func (in *Input) Clear() {
+	in.resetContent()
+	in.resetHistoryNav()
+}
+
+func (in *Input) resetContent() {
 	in.lines = []string{""}
 	in.row, in.col, in.scroll, in.hscroll = 0, 0, 0, 0
 	in.anchor = nil
@@ -1061,6 +1079,86 @@ func (in *Input) Clear() {
 	in.chips = nil
 	in.mentions = nil
 	in.longTexts = make(map[rune]string)
+}
+
+const maxInputHistory = 200
+
+func (in *Input) AddHistory(text string) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return
+	}
+	if n := len(in.history); n > 0 && in.history[n-1] == text {
+		in.resetHistoryNav()
+		return
+	}
+	in.history = append(in.history, text)
+	if len(in.history) > maxInputHistory {
+		in.history = in.history[len(in.history)-maxInputHistory:]
+	}
+	in.resetHistoryNav()
+}
+
+func (in *Input) HistoryLen() int { return len(in.history) }
+
+func (in *Input) SetHistory(items []string) {
+	in.history = nil
+	in.resetHistoryNav()
+	for _, item := range items {
+		in.AddHistory(item)
+	}
+}
+
+func (in *Input) resetHistoryNav() {
+	in.historyPos = len(in.history)
+	in.historyDraft = ""
+}
+
+func (in *Input) historyPrev() bool {
+	if len(in.history) == 0 || in.anchor != nil {
+		return false
+	}
+	if in.historyPos > len(in.history) {
+		in.historyPos = len(in.history)
+	}
+	if in.historyPos == len(in.history) {
+		in.historyDraft = in.Value()
+	}
+	if in.historyPos == 0 {
+		return true
+	}
+	in.historyPos--
+	in.loadHistory(in.history[in.historyPos])
+	return true
+}
+
+func (in *Input) historyNext() bool {
+	if in.historyPos >= len(in.history) || in.anchor != nil {
+		return false
+	}
+	in.historyPos++
+	if in.historyPos >= len(in.history) {
+		in.historyPos = len(in.history)
+		in.loadHistory(in.historyDraft)
+		in.historyDraft = ""
+		return true
+	}
+	in.loadHistory(in.history[in.historyPos])
+	return true
+}
+
+func (in *Input) loadHistory(text string) {
+	in.resetContent()
+	if text == "" {
+		in.lastActivity = time.Now()
+		in.ensureCursorVisible()
+		return
+	}
+	in.lines = strings.Split(text, "\n")
+	in.row = len(in.lines) - 1
+	in.col = len([]rune(in.lines[in.row]))
+	in.lastActivity = time.Now()
+	in.ensureCursorVisible()
 }
 
 func (in *Input) SetValue(text string) {
@@ -1166,6 +1264,12 @@ func (in *Input) HandleKey(ev *tcell.EventKey) bool {
 		case tcell.KeyRight:
 			in.WordRight()
 			return true
+		case tcell.KeyUp:
+			in.historyPrev()
+			return true
+		case tcell.KeyDown:
+			in.historyNext()
+			return true
 		case tcell.KeyBackspace, tcell.KeyBackspace2:
 			in.DeleteWord()
 			return true
@@ -1199,6 +1303,10 @@ func (in *Input) HandleKey(ev *tcell.EventKey) bool {
 		} else {
 			in.MoveRight()
 		}
+		return true
+	case tcell.KeyCtrlJ:
+		in.EndOfInput()
+		in.Newline()
 		return true
 	case tcell.KeyUp:
 		if shift {

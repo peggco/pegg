@@ -14,6 +14,7 @@ var tr = map[string]string{
 	"common.navigate":             "↑/↓ yön  Enter seç  Esc geri",
 
 	"app.escInterrupt":  "İşlemi iptal etmek için Esc'ye basın",
+	"app.ctrlCQuit":     "Çıkmak için Ctrl+C'ye tekrar basın",
 	"app.error.attach":  "Dosya eklenemedi: %s",
 	"app.error.noImage": "Model görsel ekleri desteklemiyor",
 	"app.error.noAudio": "Model ses eklerini desteklemiyor",
@@ -92,6 +93,9 @@ var tr = map[string]string{
 	"home.hint.stop":     "çalışan bir ajanı durdurmak için Esc'ye iki kez basın",
 	"home.hint.attach":   "eklemek için bir dosyayı sürükleyin veya yapıştırın",
 	"home.hint.focus":    "Mesajda ek varsa odak değiştirmek için 'Shift+Tab' kullanın",
+	"home.hint.history":  "Önceki mesajları geri getirmek için Alt+Up/Alt+Down kullanın",
+	"home.hint.newline":  "Sona yeni satır eklemek için Ctrl+J'ye basın",
+	"home.hint.clear":    "Input'u temizlemek için Ctrl+C'ye basın (çıkmak için iki kez)",
 
 	"home.picker.skills":   "Beceriler — filtrelemek için yazın",
 	"home.picker.mentions": "Etiketler — filtrelemek için yazın",

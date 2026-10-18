@@ -38,7 +38,8 @@ terminal, or explicitly with `pegg tui`.
 
 | Key | Action |
 |---|---|
-| ++ctrl+c++ / ++ctrl+q++ | Quit |
+| ++ctrl+q++ | Quit |
+| ++ctrl+c++ | Clear the input; on an empty input, press again within 2 seconds to quit |
 | ++ctrl+t++ | Cycle to the next theme (saved to config) |
 | ++ctrl+p++ | Open Settings |
 | ++ctrl+shift+c++ | Copy the selected chat text (or input selection) |
@@ -58,13 +59,24 @@ Pressing it once and waiting lets the run continue.
 When the attachment bar has focus, ++esc++ returns focus to the input. While
 viewing a subagent transcript, ++esc++ goes back to the main chat.
 
+### Clearing the input and quitting
+
+++ctrl+c++ clears the chat input when it has text. When the input is already
+empty, the first press shows *Press Ctrl+C again to quit*; a second press
+within **2 seconds** closes the application. ++ctrl+q++ always quits
+immediately. The same hint area is used for the ++esc++ stream-interrupt
+warning.
+
 ## Input editor
 
 | Key | Action |
 |---|---|
 | ++enter++ | Submit |
 | ++shift+enter++ | Insert newline |
-| ++left++ / ++right++ / ++up++ / ++down++ | Move the cursor (word-wrap aware) |
+| ++left++ / ++right++ | Move the cursor (word-wrap aware) |
+| ++up++ / ++down++ | Move the cursor between lines |
+| ++alt+up++ / ++alt+down++ | Recall the previous / next message |
+| ++ctrl+j++ | Jump to the last line and insert a newline |
 | ++home++ / ++end++ | Start / end of line |
 | ++ctrl+left++ / ++ctrl+right++ | Word left / right |
 | ++alt+left++ / ++alt+right++ | Word left / right |
@@ -81,6 +93,22 @@ viewing a subagent transcript, ++esc++ goes back to the main chat.
 
 Skills (`/name`), mentions (`@name`), and long pasted text are atomic **chips**:
 cursor movement and deletion treat each chip as a single unit.
+
+### Input history
+
+Sent messages are kept in an in-memory history (the last 200, with consecutive
+duplicates skipped). Loading a session seeds the history from its stored user
+messages, so the shortcuts also work after resuming a session. In the input:
+
+- ++alt+up++ recalls the previous message; ++alt+down++ recalls the next
+  message. Shift+Up/Down continues to extend the selection.
+- While browsing history, the message you were typing is saved as a draft and
+  restored when you move past the newest entry.
+- Recalled messages scroll into view automatically, so multi-line messages stay
+  visible with the cursor at the end.
+- ++ctrl+j++ moves the cursor to the end of the input and starts a new line,
+  useful for appending to a multi-line message.
+- Submitting or clearing the input resets history browsing.
 
 ## Skills and mentions
 

@@ -3,6 +3,8 @@ package components
 import (
 	"strings"
 	"testing"
+
+	"github.com/gdamore/tcell/v2"
 )
 
 func TestVisibleRowsGrows(t *testing.T) {
@@ -743,5 +745,158 @@ func TestInputMoveUpDownFollowsWordWrap(t *testing.T) {
 	in.MoveDown()
 	if in.Row() != 0 || in.Col() != 19 {
 		t.Fatalf("after MoveDown row,col = %d,%d, want 0,19", in.Row(), in.Col())
+	}
+}
+
+func TestInputHistoryPrevNextRestoresDraft(t *testing.T) {
+	in := NewInput()
+	in.AddHistory("first")
+	in.AddHistory("second")
+	for _, r := range "draft" {
+		in.InsertRune(r)
+	}
+
+	if !in.historyPrev() {
+		t.Fatal("Up should recall history")
+	}
+	if got := in.Value(); got != "second" {
+		t.Fatalf("value = %q, want second", got)
+	}
+	if !in.historyPrev() {
+		t.Fatal("Up should recall older history")
+	}
+	if got := in.Value(); got != "first" {
+		t.Fatalf("value = %q, want first", got)
+	}
+	if !in.historyPrev() {
+		t.Fatal("Up at the oldest entry should be consumed")
+	}
+	if got := in.Value(); got != "first" {
+		t.Fatalf("value = %q, want first to stay", got)
+	}
+
+	if !in.historyNext() {
+		t.Fatal("Down should recall newer history")
+	}
+	if got := in.Value(); got != "second" {
+		t.Fatalf("value = %q, want second", got)
+	}
+	if !in.historyNext() {
+		t.Fatal("Down should restore the draft")
+	}
+	if got := in.Value(); got != "draft" {
+		t.Fatalf("value = %q, want draft", got)
+	}
+	if in.historyNext() {
+		t.Fatal("Down past the newest entry should not be handled")
+	}
+}
+
+func TestInputHistoryKeysAtEdges(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.AddHistory("previous")
+	in.InsertRune('x')
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModAlt))
+	if got := in.Value(); got != "previous" {
+		t.Fatalf("Alt+Up value = %q, want previous", got)
+	}
+	in.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModAlt))
+	if got := in.Value(); got != "x" {
+		t.Fatalf("Alt+Down value = %q, want the draft x", got)
+	}
+}
+
+func TestInputPlainUpDownMovesLines(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.SetInnerWidth(20)
+	in.AddHistory("older")
+	in.SetValue("line1\nline2")
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "line1\nline2" {
+		t.Fatalf("plain Up should move the cursor, got %q", got)
+	}
+	if in.Row() != 0 {
+		t.Fatalf("row = %d, want 0 after plain Up", in.Row())
+	}
+	in.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
+	if in.Row() != 1 {
+		t.Fatalf("row = %d, want 1 after plain Down", in.Row())
+	}
+}
+
+func TestInputShiftUpStillSelects(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.SetValue("line1\nline2")
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModShift))
+	if !in.HasSelection() {
+		t.Fatal("Shift+Up should extend the selection")
+	}
+}
+
+func TestInputAltUpRecallsFromMultiline(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.SetInnerWidth(20)
+	in.AddHistory("older")
+	in.SetValue("line1\nline2")
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModAlt))
+	if got := in.Value(); got != "older" {
+		t.Fatalf("Alt+Up value = %q, want older", got)
+	}
+}
+
+func TestInputCtrlJAppendsNewlineAtBottom(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.SetValue("line1\nline2")
+	in.Home()
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyCtrlJ, 0, tcell.ModCtrl))
+	if got := in.Value(); got != "line1\nline2\n" {
+		t.Fatalf("value = %q, want a trailing newline", got)
+	}
+	if in.Row() != 2 || in.Col() != 0 {
+		t.Fatalf("cursor = %d,%d, want 2,0", in.Row(), in.Col())
+	}
+}
+
+func TestInputSubmitRecordsHistory(t *testing.T) {
+	in := NewInput()
+	var submitted string
+	in.OnSubmit = func(s string) { submitted = s }
+	for _, r := range "hello" {
+		in.InsertRune(r)
+	}
+	in.Submit()
+	if submitted != "hello" {
+		t.Fatalf("submitted = %q, want hello", submitted)
+	}
+	if in.HistoryLen() != 1 {
+		t.Fatalf("history length = %d, want 1", in.HistoryLen())
+	}
+	if !in.Empty() {
+		t.Fatal("input should be cleared after submit")
+	}
+}
+
+func TestInputClearResetsHistoryNavigation(t *testing.T) {
+	in := NewInput()
+	in.AddHistory("a")
+	in.AddHistory("b")
+	in.historyPrev()
+	in.Clear()
+	if in.historyPos != len(in.history) {
+		t.Fatalf("history position = %d, want %d", in.historyPos, len(in.history))
+	}
+	in.historyPrev()
+	if got := in.Value(); got != "b" {
+		t.Fatalf("value = %q, want newest entry b", got)
 	}
 }

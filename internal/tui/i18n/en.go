@@ -14,6 +14,7 @@ var en = map[string]string{
 	"common.navigate":             "↑/↓ navigate  Enter select  Esc back",
 
 	"app.escInterrupt":  "Press Esc to interrupt",
+	"app.ctrlCQuit":     "Press Ctrl+C again to quit",
 	"app.error.attach":  "Could not attach file: %s",
 	"app.error.noImage": "Model does not support image attachments",
 	"app.error.noAudio": "Model does not support audio attachments",
@@ -92,6 +93,9 @@ var en = map[string]string{
 	"home.hint.stop":     "press Esc twice to stop a running agent",
 	"home.hint.attach":   "paste or drop a file to attach it",
 	"home.hint.focus":    "use 'Shift+Tab' to focus attachments (when the message has attachments)",
+	"home.hint.history":  "use Alt+Up/Alt+Down to recall previous messages",
+	"home.hint.newline":  "press Ctrl+J to add a new line at the end",
+	"home.hint.clear":    "press Ctrl+C to clear the input (twice to quit)",
 
 	"home.picker.skills":   "Skills — type to filter",
 	"home.picker.mentions": "Mentions — type to filter",

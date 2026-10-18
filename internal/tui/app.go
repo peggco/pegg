@@ -79,8 +79,12 @@ type App struct {
 	agentCancel context.CancelFunc
 	escTimer    *time.Timer
 
-	escHint  bool
-	errorMsg string
+	lastCtrlC  time.Time
+	ctrlCTimer *time.Timer
+
+	escHint   bool
+	ctrlCHint bool
+	errorMsg  string
 
 	mouseX int
 	mouseY int
@@ -490,6 +494,14 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 		}
 	}
 
+	if kev.Key() == tcell.KeyCtrlC {
+		if a.handleCtrlC() {
+			return true
+		}
+		a.quit = true
+		return false
+	}
+
 	if ov := a.getOverlay(); ov != nil {
 		if resolveGlobal(kev) == ActionQuit {
 			a.quit = true
@@ -658,6 +670,49 @@ func (a *App) clearEscHint() {
 	a.requestRedraw()
 }
 
+func (a *App) handleCtrlC() bool {
+	if a.getOverlay() != nil {
+		return false
+	}
+	if a.home == nil || a.home.AskOpen() {
+		return false
+	}
+
+	a.chatMu.Lock()
+	defer a.chatMu.Unlock()
+
+	in := a.home.Input()
+	if !in.Empty() {
+		in.Clear()
+		a.clearCtrlCHint()
+		return true
+	}
+
+	if !a.lastCtrlC.IsZero() && time.Since(a.lastCtrlC) < doubleEscWindow {
+		a.clearCtrlCHint()
+		return false
+	}
+
+	a.lastCtrlC = time.Now()
+	a.ctrlCHint = true
+	a.ctrlCTimer = time.AfterFunc(doubleEscWindow, func() {
+		a.chatMu.Lock()
+		a.clearCtrlCHint()
+		a.chatMu.Unlock()
+	})
+	return true
+}
+
+func (a *App) clearCtrlCHint() {
+	a.lastCtrlC = time.Time{}
+	if a.ctrlCTimer != nil {
+		a.ctrlCTimer.Stop()
+		a.ctrlCTimer = nil
+	}
+	a.ctrlCHint = false
+	a.requestRedraw()
+}
+
 func (a *App) refreshHomeLocked() {
 	if a.home == nil {
 		return
@@ -813,6 +868,23 @@ func (a *App) seedHistoryFromSessionLocked() {
 	}
 	h = append(h, session.MessagesToLLM(msgs)...)
 	a.history = h
+	a.seedInputHistoryLocked(msgs)
+}
+
+func (a *App) seedInputHistoryLocked(msgs []session.Message) {
+	if a.home == nil {
+		return
+	}
+	items := make([]string, 0, len(msgs))
+	for _, m := range session.MessagesToLLM(msgs) {
+		if m.Role != llm.RoleUser {
+			continue
+		}
+		if text := strings.TrimSpace(llm.MessageText(m)); text != "" {
+			items = append(items, text)
+		}
+	}
+	a.home.Input().SetHistory(items)
 }
 
 const initialChatMessages = 50
@@ -924,6 +996,8 @@ func (a *App) drawLocked() {
 		components.DrawText(a.screen, 2, hintY, a.errorMsg, style)
 	case a.escHint && a.getOverlay() == nil:
 		components.DrawText(a.screen, 2, hintY, i18n.T("app.escInterrupt"), style)
+	case a.ctrlCHint && a.getOverlay() == nil:
+		components.DrawText(a.screen, 2, hintY, i18n.T("app.ctrlCQuit"), style)
 	}
 	a.screen.Show()
 }
