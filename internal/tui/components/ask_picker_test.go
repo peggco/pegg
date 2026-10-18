@@ -67,11 +67,18 @@ func TestAskPickerMultiQuestionConfirms(t *testing.T) {
 		{ID: "b", Question: "Second?", Type: "select", Options: []string{"B1", "B2"}, Required: true},
 	})
 	p.HandleKey(askKey(tcell.KeyEnter))
-	if !p.Active() || !p.confirming {
-		t.Fatal("multiple questions should open the confirm page")
+	if !p.Active() || p.confirming {
+		t.Fatal("Enter should select the first answer and advance, not confirm yet")
+	}
+	if p.tab != 1 {
+		t.Fatalf("tab = %d, want 1 after Enter", p.tab)
 	}
 	if got != nil {
 		t.Fatalf("must not submit before confirming, got %v", got)
+	}
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if !p.Active() || !p.confirming {
+		t.Fatal("the last question should open the confirm page")
 	}
 	p.HandleKey(askKey(tcell.KeyEnter))
 	if p.Active() {
@@ -282,10 +289,10 @@ func TestAskPickerMultiSelect(t *testing.T) {
 		{ID: "tags", Question: "Tags?", Type: "multiselect", Options: []string{"a", "b", "c"}},
 	})
 
-	p.HandleKey(askRune(' '))
-	p.HandleKey(askKey(tcell.KeyDown))
-	p.HandleKey(askRune(' '))
 	p.HandleKey(askKey(tcell.KeyEnter))
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyEnter))
+	p.HandleKey(askKey(tcell.KeyTab))
 
 	if p.Active() {
 		t.Fatal("picker should close after confirming")
@@ -295,16 +302,33 @@ func TestAskPickerMultiSelect(t *testing.T) {
 	}
 }
 
+func TestAskPickerMultiSelectEnterTogglesAndStays(t *testing.T) {
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "tags", Question: "Tags?", Type: "multiselect", Options: []string{"a", "b"}},
+	})
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if p.tab != 0 || !p.Active() {
+		t.Fatal("Enter on a multiselect must toggle and stay on the question")
+	}
+	if !p.states[0].multi["a"] {
+		t.Fatal("Enter should toggle the highlighted option")
+	}
+}
+
 func TestAskPickerMultiSelectRequiredNeedsSelection(t *testing.T) {
 	p := NewAskPicker()
 	p.SetQuestions([]AskQuestion{
 		{ID: "tags", Question: "Tags?", Type: "multiselect", Options: []string{"a", "b"}, Required: true},
 	})
-	if !p.HandleKey(askKey(tcell.KeyEnter)) {
-		t.Fatal("Enter should be handled")
+	if !p.HandleKey(askKey(tcell.KeyTab)) {
+		t.Fatal("Tab should be handled")
 	}
 	if !p.Active() || p.confirming {
-		t.Fatal("required multiselect must block entering the confirm page")
+		t.Fatal("required multiselect must block advancing without a selection")
+	}
+	if p.states[0].err == "" {
+		t.Fatal("required multiselect should show an error")
 	}
 }
 
@@ -336,8 +360,12 @@ func TestAskPickerConfirmEscGoesBack(t *testing.T) {
 	p.HandleKey(askRune('x'))
 
 	p.HandleKey(askKey(tcell.KeyEnter))
+	if p.confirming || p.tab != 1 {
+		t.Fatal("Enter should advance to the next question")
+	}
+	p.HandleKey(askKey(tcell.KeyEnter))
 	if !p.confirming {
-		t.Fatal("Enter should open the confirm page")
+		t.Fatal("the last question should open the confirm page")
 	}
 	p.HandleKey(askKey(tcell.KeyEsc))
 	if !p.Active() || p.confirming {
@@ -348,6 +376,9 @@ func TestAskPickerConfirmEscGoesBack(t *testing.T) {
 	}
 
 	p.HandleKey(askKey(tcell.KeyEnter))
+	if !p.confirming {
+		t.Fatal("Enter on the last question should reopen the confirm page")
+	}
 	p.HandleKey(askKey(tcell.KeyEnter))
 	if p.Active() {
 		t.Fatal("picker should close after confirming")
@@ -368,8 +399,9 @@ func TestAskPickerConfirmShowsQuestionsAndAnswers(t *testing.T) {
 		{ID: "b", Question: "Second?", Type: "select", Options: []string{"B1", "B2"}},
 	})
 	p.HandleKey(askKey(tcell.KeyEnter))
+	p.HandleKey(askKey(tcell.KeyEnter))
 	if !p.confirming {
-		t.Fatal("multiple questions should open the confirm page")
+		t.Fatal("the last question should open the confirm page")
 	}
 
 	bounds := layout.Region{Left: 4, Top: 2, Width: 60, Height: p.Height()}
@@ -383,15 +415,294 @@ func TestAskPickerConfirmShowsQuestionsAndAnswers(t *testing.T) {
 	}
 }
 
-func TestAskPickerSelectUsesSpace(t *testing.T) {
+func TestAskPickerSelectUsesEnter(t *testing.T) {
 	p := NewAskPicker()
 	p.SetQuestions([]AskQuestion{
 		{ID: "c", Question: "Color?", Type: "select", Options: []string{"Red", "Green", "Blue"}},
 	})
 	p.HandleKey(askKey(tcell.KeyDown))
-	p.HandleKey(askRune(' '))
 	p.HandleKey(askKey(tcell.KeyEnter))
 	if p.states[0].answer != "Green" {
 		t.Fatalf("answer = %q, want Green", p.states[0].answer)
+	}
+	if p.Active() {
+		t.Fatal("a single question should submit after Enter")
+	}
+}
+
+func TestAskPickerSelectEnterAdvances(t *testing.T) {
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "a", Question: "First?", Type: "select", Options: []string{"A1", "A2"}},
+		{ID: "b", Question: "Second?", Type: "select", Options: []string{"B1", "B2"}},
+	})
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if p.tab != 1 || p.confirming {
+		t.Fatal("Enter should select and advance to the next question")
+	}
+	if got := p.states[0].answer; got != "A1" {
+		t.Fatalf("answer = %q, want A1", got)
+	}
+}
+
+func TestAskPickerSpaceDoesNothing(t *testing.T) {
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "a", Question: "First?", Type: "select", Options: []string{"A1", "A2"}},
+		{ID: "b", Question: "Second?", Type: "select", Options: []string{"B1", "B2"}},
+	})
+	if !p.HandleKey(askRune(' ')) {
+		t.Fatal("Space should be consumed")
+	}
+	if p.tab != 0 || p.confirming {
+		t.Fatal("Space must not advance to the next question")
+	}
+	if p.states[0].answer != "" {
+		t.Fatalf("Space must not select an answer, got %q", p.states[0].answer)
+	}
+}
+
+func TestAskPickerTabOnLastFinishes(t *testing.T) {
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "a", Question: "First?", Type: "select", Options: []string{"A1", "A2"}},
+		{ID: "b", Question: "Second?", Type: "select", Options: []string{"B1", "B2"}},
+	})
+	p.HandleKey(askKey(tcell.KeyTab))
+	if p.tab != 1 || p.confirming {
+		t.Fatal("Tab should move to the next question")
+	}
+	p.HandleKey(askKey(tcell.KeyTab))
+	if !p.Active() || !p.confirming {
+		t.Fatal("Tab on the last question should open the confirm page")
+	}
+}
+
+func TestAskPickerCustomOptionSelect(t *testing.T) {
+	p := NewAskPicker()
+	var got map[string]string
+	p.SetOnSend(func(answers map[string]string) { got = answers })
+	p.SetQuestions([]AskQuestion{
+		{ID: "c", Question: "Color?", Type: "select", Options: []string{"Red", "Blue"}},
+	})
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyDown))
+	if !p.states[0].onCustom() {
+		t.Fatal("cursor should be on the Custom row")
+	}
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if !p.states[0].customEditing {
+		t.Fatal("Enter on the Custom row should open the editor")
+	}
+	for _, r := range "Purple" {
+		p.HandleKey(askRune(r))
+	}
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if p.Active() {
+		t.Fatal("a single question should submit after applying the custom answer")
+	}
+	if got["c"] != "Purple" {
+		t.Fatalf("answers = %v, want c=Purple", got)
+	}
+}
+
+func TestAskPickerCustomOptionMultiselect(t *testing.T) {
+	p := NewAskPicker()
+	var got map[string]string
+	p.SetOnSend(func(answers map[string]string) { got = answers })
+	p.SetQuestions([]AskQuestion{
+		{ID: "tags", Question: "Tags?", Type: "multiselect", Options: []string{"a", "b"}},
+	})
+	p.HandleKey(askKey(tcell.KeyEnter))
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyEnter))
+	for _, r := range "z" {
+		p.HandleKey(askRune(r))
+	}
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if !p.Active() || p.states[0].customEditing {
+		t.Fatal("applying a custom multiselect answer should return to the options")
+	}
+	if p.states[0].customValue != "z" {
+		t.Fatalf("customValue = %q, want z", p.states[0].customValue)
+	}
+	p.HandleKey(askKey(tcell.KeyTab))
+	if p.Active() {
+		t.Fatal("Tab should advance and submit the single question")
+	}
+	if got["tags"] != "a, z" {
+		t.Fatalf("answers = %v, want tags=\"a, z\"", got)
+	}
+}
+
+func TestAskPickerCustomOptionBoolean(t *testing.T) {
+	p := NewAskPicker()
+	var got map[string]string
+	p.SetOnSend(func(answers map[string]string) { got = answers })
+	p.SetQuestions([]AskQuestion{
+		{ID: "proceed", Question: "Proceed?", Type: "boolean"},
+	})
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyEnter))
+	for _, r := range "maybe" {
+		p.HandleKey(askRune(r))
+	}
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if p.Active() {
+		t.Fatal("a single question should submit after applying the custom answer")
+	}
+	if got["proceed"] != "maybe" {
+		t.Fatalf("answers = %v, want proceed=maybe", got)
+	}
+}
+
+func TestAskPickerCustomEscCancels(t *testing.T) {
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "c", Question: "Color?", Type: "select", Options: []string{"Red", "Blue"}},
+	})
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyEnter))
+	p.HandleKey(askRune('x'))
+	p.HandleKey(askKey(tcell.KeyEsc))
+	if !p.Active() {
+		t.Fatal("Esc in the custom editor should not close the picker")
+	}
+	if p.states[0].customEditing {
+		t.Fatal("Esc should close the custom editor")
+	}
+	if p.states[0].answer != "" {
+		t.Fatalf("Esc must not apply the custom answer, got %q", p.states[0].answer)
+	}
+}
+
+func TestAskPickerCustomEmptyRejected(t *testing.T) {
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "c", Question: "Color?", Type: "select", Options: []string{"Red"}},
+	})
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyEnter))
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if !p.states[0].customEditing {
+		t.Fatal("an empty custom answer must keep the editor open")
+	}
+	if p.states[0].err == "" {
+		t.Fatal("an empty custom answer should show an error")
+	}
+}
+
+func TestAskPickerCustomSpaceTypes(t *testing.T) {
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "c", Question: "Color?", Type: "select", Options: []string{"Red"}},
+	})
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyEnter))
+	p.HandleKey(askRune('a'))
+	p.HandleKey(askRune(' '))
+	p.HandleKey(askRune('b'))
+	if got := p.states[0].custom.Value(); got != "a b" {
+		t.Fatalf("custom value = %q, want %q", got, "a b")
+	}
+	if p.tab != 0 || p.confirming {
+		t.Fatal("Space in the custom editor must not advance")
+	}
+}
+
+func TestAskPickerCustomRowRendered(t *testing.T) {
+	s := tcell.NewSimulationScreen("UTF-8")
+	if err := s.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Fini()
+	s.SetSize(80, 30)
+
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "c", Question: "Color?", Type: "select", Options: []string{"Red", "Blue"}},
+	})
+	bounds := layout.Region{Left: 4, Top: 2, Width: 50, Height: p.Height()}
+	p.Draw(s, bounds)
+
+	if all := askScreenText(s, 80, 30); !strings.Contains(all, "Custom") {
+		t.Fatalf("Custom row not rendered:\n%s", all)
+	}
+}
+
+func TestAskPickerCustomEditorVisible(t *testing.T) {
+	s := tcell.NewSimulationScreen("UTF-8")
+	if err := s.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Fini()
+	s.SetSize(80, 30)
+
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "c", Question: "Color?", Type: "select", Options: []string{"Red"}},
+	})
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyEnter))
+	for _, r := range "zzz" {
+		p.HandleKey(askRune(r))
+	}
+	bounds := layout.Region{Left: 4, Top: 2, Width: 50, Height: p.Height()}
+	p.Draw(s, bounds)
+
+	if all := askScreenText(s, 80, 30); !strings.Contains(all, "zzz") {
+		t.Fatalf("custom editor text not rendered:\n%s", all)
+	}
+}
+
+func TestAskPickerCustomPaste(t *testing.T) {
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "c", Question: "Color?", Type: "select", Options: []string{"Red"}},
+	})
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyEnter))
+	p.InsertPaste("hello")
+	if got := p.states[0].custom.Value(); got != "hello" {
+		t.Fatalf("custom value = %q, want hello", got)
+	}
+}
+
+func TestAskPickerCustomConfirmShowsValue(t *testing.T) {
+	s := tcell.NewSimulationScreen("UTF-8")
+	if err := s.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Fini()
+	s.SetSize(100, 30)
+
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "a", Question: "First?", Type: "select", Options: []string{"A1", "A2"}},
+		{ID: "b", Question: "Second?", Type: "select", Options: []string{"B1", "B2"}},
+	})
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyDown))
+	p.HandleKey(askKey(tcell.KeyEnter))
+	for _, r := range "Zed" {
+		p.HandleKey(askRune(r))
+	}
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if p.tab != 1 {
+		t.Fatal("applying a custom select answer should advance")
+	}
+	p.HandleKey(askKey(tcell.KeyEnter))
+	if !p.confirming {
+		t.Fatal("the last question should open the confirm page")
+	}
+
+	bounds := layout.Region{Left: 4, Top: 2, Width: 60, Height: p.Height()}
+	p.Draw(s, bounds)
+
+	if all := askScreenText(s, 100, 30); !strings.Contains(all, "Zed") {
+		t.Fatalf("confirm page missing the custom answer:\n%s", all)
 	}
 }
