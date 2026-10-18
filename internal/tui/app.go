@@ -506,7 +506,7 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 		return true
 	}
 
-	if resolveGlobal(kev) == ActionModeNext {
+	if resolveGlobal(kev) == ActionModeNext && a.modeTab(kev) {
 		a.cycleMode()
 		return true
 	}
@@ -670,6 +670,13 @@ func (a *App) refreshHomeLocked() {
 	if a.model.model.Config != nil {
 		a.home.SetMaxInputTokens(a.model.model.MaxInputTokens())
 	}
+}
+
+func (a *App) modeTab(ev *tcell.EventKey) bool {
+	if ev.Key() != tcell.KeyTab || ev.Modifiers() != 0 {
+		return false
+	}
+	return a.home == nil || (!a.home.AskOpen() && !a.home.PickOpen())
 }
 
 func (a *App) cycleMode() {

@@ -88,7 +88,7 @@ var en = map[string]string{
 	"home.hint.batch":    "use '/batch' to change many files at once",
 	"home.hint.settings": "press Ctrl+P for settings",
 	"home.hint.theme":    "press Ctrl+T to cycle the theme",
-	"home.hint.mode":     "use 'Shift+Tab' to change mode",
+	"home.hint.mode":     "use 'Tab' to change mode",
 	"home.hint.stop":     "press Esc twice to stop a running agent",
 	"home.hint.attach":   "paste or drop a file to attach it",
 

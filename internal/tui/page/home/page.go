@@ -246,7 +246,7 @@ func (p *Page) HandleKey(ev *tcell.EventKey) bool {
 	if p.askPicker.Active() {
 		return p.askPicker.HandleKey(ev)
 	}
-	if ev.Key() == tcell.KeyTab {
+	if ev.Key() == tcell.KeyBacktab || (ev.Key() == tcell.KeyTab && ev.Modifiers()&tcell.ModShift != 0) {
 		if p.attachmentBar.Count() > 0 {
 			switch p.focus {
 			case focusInput:
@@ -265,7 +265,7 @@ func (p *Page) HandleKey(ev *tcell.EventKey) bool {
 			p.focus = focusInput
 			p.input.Focus()
 		}
-		return p.input.HandleKey(ev)
+		return true
 	}
 	if ev.Key() == tcell.KeyEsc {
 		if p.chat.HasBack() && p.chat.HandleKey(ev) {

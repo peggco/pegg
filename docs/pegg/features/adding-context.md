@@ -14,7 +14,7 @@ attachments, `@` mentions, project instructions, rules, and skills.
 - **Paste a path** — pasting a single line that is an existing file path attaches
   that file. In a multi-line paste, every line that is a file path is attached.
 - **Attachment bar** — attachments appear above the input as cards with type icons
-  (image, audio, video, file). Focus it with ++tab++, navigate with ++left++/++right++, and
+  (image, audio, video, file). Focus it with ++shift+tab++, navigate with ++left++/++right++, and
   remove with ++backspace++/++delete++.
 - Attachments are sent with your next message and are persisted with it, so they
   reappear as chips when you resume the session.

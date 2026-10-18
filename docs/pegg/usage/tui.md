@@ -42,9 +42,9 @@ terminal, or explicitly with `pegg tui`.
 | ++ctrl+t++ | Cycle to the next theme (saved to config) |
 | ++ctrl+p++ | Open Settings |
 | ++ctrl+shift+c++ | Copy the selected chat text (or input selection) |
-| ++shift+tab++ | Cycle session mode: build → plan → auto (saved to the session) |
+| ++tab++ | Cycle session mode: build → plan → auto (saved to the session) |
 | ++esc++ | Interrupt (see below) |
-| ++tab++ | Toggle focus between the input and attachments (when attachments exist) |
+| ++shift+tab++ | Toggle focus between the input and attachments (when attachments exist) |
 | Mouse wheel | Scroll the chat 3 lines |
 | Mouse drag | Select chat text (release to keep the selection) |
 | Mouse click | Activate the item under the cursor |
@@ -64,7 +64,6 @@ viewing a subagent transcript, ++esc++ goes back to the main chat.
 |---|---|
 | ++enter++ | Submit |
 | ++shift+enter++ | Insert newline |
-| ++tab++ | Insert a tab character |
 | ++left++ / ++right++ / ++up++ / ++down++ | Move the cursor (word-wrap aware) |
 | ++home++ / ++end++ | Start / end of line |
 | ++ctrl+left++ / ++ctrl+right++ | Word left / right |
@@ -111,7 +110,7 @@ paste. When you paste:
 - Text longer than 100 characters is inserted as a collapsible **long text** chip.
 
 Attachments appear in the attachment bar with type icons (image, audio, video,
-file) and pagination dots. Focus the bar with ++tab++, navigate with
+file) and pagination dots. Focus the bar with ++shift+tab++, navigate with
 ++left++/++right++, and remove with ++backspace++ or ++delete++.
 
 Files are copied into the attachment store (`os.TempDir()/pegg`); the agent is told
