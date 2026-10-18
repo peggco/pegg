@@ -12,7 +12,13 @@ terminal application, a headless CLI, an HTTP API server, an
 ## Quick start
 
 ```bash
+# macOS / Linux
 curl -fsSL https://pegg.dev/install | bash
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://pegg.dev/install.ps1 | iex
 ```
 
 ```bash
