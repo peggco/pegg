@@ -13,6 +13,7 @@ type sessionDTO struct {
 	Provider        string    `json:"provider"`
 	Model           string    `json:"model"`
 	ReasoningEffort string    `json:"reasoning_effort,omitempty"`
+	Mode            string    `json:"mode,omitempty"`
 	ProjectDir      string    `json:"project_dir,omitempty"`
 	ParentID        string    `json:"parent_id,omitempty"`
 	CreatedAt       string    `json:"created_at"`
@@ -27,6 +28,7 @@ func toSessionDTO(s *session.Session) sessionDTO {
 		Provider:        s.Provider,
 		Model:           s.Model,
 		ReasoningEffort: s.ReasoningEffort,
+		Mode:            s.Mode,
 		ProjectDir:      s.ProjectDir,
 		ParentID:        s.ParentID,
 		CreatedAt:       s.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
@@ -153,6 +155,7 @@ type sessionCreateParams struct {
 	Title    string `json:"title"`
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
+	Mode     string `json:"mode"`
 }
 
 func (c *Connector) handleSessionCreate(_ context.Context, req *Request) (any, error) {
@@ -165,6 +168,7 @@ func (c *Connector) handleSessionCreate(_ context.Context, req *Request) (any, e
 		Title:      p.Title,
 		Provider:   p.Provider,
 		Model:      p.Model,
+		Mode:       p.Mode,
 		ProjectDir: c.workspace(),
 	})
 	if err != nil {

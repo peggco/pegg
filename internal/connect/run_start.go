@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
@@ -16,8 +17,16 @@ type StartParams struct {
 	Provider        string
 	Model           string
 	ReasoningEffort string
+	Mode            string
 	Files           []string
 	Attachments     []llm.Attachment
+}
+
+func resolveRunMode(provided, sessionMode string) agent.Mode {
+	if m := agent.Mode(provided); m.Valid() {
+		return m
+	}
+	return agent.NormalizeMode(agent.Mode(sessionMode))
 }
 
 func (m *runManager) Start(p StartParams) (RunInfo, error) {
@@ -71,13 +80,24 @@ func (m *runManager) Start(p StartParams) (RunInfo, error) {
 	var (
 		sessionID string
 		history   []llm.Message
+		mode      = resolveRunMode(p.Mode, "")
 	)
 	if p.SessionID != "" {
+		existing, gerr := m.c.deps.Sessions.Get(p.SessionID)
+		if gerr != nil {
+			return RunInfo{}, &FrameError{Code: ErrCodeNotFound, Message: "session not found: " + p.SessionID}
+		}
 		msgs, merr := m.c.deps.Sessions.Messages(p.SessionID)
 		if merr != nil {
 			return RunInfo{}, &FrameError{Code: ErrCodeNotFound, Message: "session not found: " + p.SessionID}
 		}
 		sessionID = p.SessionID
+		mode = resolveRunMode(p.Mode, existing.Mode)
+		if string(mode) != existing.Mode {
+			if serr := m.c.deps.Sessions.SetMode(sessionID, string(mode)); serr != nil {
+				return RunInfo{}, &FrameError{Code: ErrCodeInternal, Message: "set session mode: " + serr.Error()}
+			}
+		}
 		if orch.SystemPrompt != "" {
 			history = append(history, llm.SystemMessage(orch.SystemPrompt))
 		}
@@ -87,6 +107,7 @@ func (m *runManager) Start(p StartParams) (RunInfo, error) {
 			Provider:        prov.Name(),
 			Model:           mdl.ID,
 			ReasoningEffort: orch.ReasoningEffort,
+			Mode:            string(mode),
 			ProjectDir:      m.c.workspace(),
 		})
 		if serr != nil {
@@ -94,6 +115,8 @@ func (m *runManager) Start(p StartParams) (RunInfo, error) {
 		}
 		sessionID = s.ID
 	}
+
+	orch.SetMode(mode)
 
 	runCtx, cancel := context.WithCancel(m.base)
 	r := &run{
