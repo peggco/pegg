@@ -9,6 +9,7 @@ import (
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/core/event"
+	"github.com/peggco/pegg/internal/session"
 )
 
 const topicAgentAsk = agent.TopicAgentAsk
@@ -23,7 +24,22 @@ func (c *Connector) subscribeBus(bus event.Bus) error {
 	_ = bus.Subscribe(agent.TopicAgentError, c.onAgentError)
 	_ = bus.Subscribe(agent.TopicErrorMessage, c.onErrorMessage)
 	_ = bus.Subscribe(agent.TopicErrorMessageFinished, c.onErrorMessageFinished)
+	_ = bus.Subscribe(session.TopicSessionUpdated, c.onSessionUpdated)
+	_ = bus.Subscribe(session.TopicSessionCreated, c.onSessionCreated)
+	_ = bus.Subscribe(session.TopicSessionDeleted, c.onSessionDeleted)
 	return nil
+}
+
+func (c *Connector) onSessionUpdated(e session.SessionUpdated) {
+	c.emit(eventSessionUpdate, e.SessionID, "", map[string]any{"id": e.SessionID})
+}
+
+func (c *Connector) onSessionCreated(e session.SessionCreated) {
+	c.emit(eventSessionUpdate, e.SessionID, "", map[string]any{"id": e.SessionID, "created": true})
+}
+
+func (c *Connector) onSessionDeleted(e session.SessionDeleted) {
+	c.emit(eventSessionUpdate, e.SessionID, "", map[string]any{"id": e.SessionID, "deleted": true})
 }
 
 func (c *Connector) handleRequest(ctx context.Context, f *Frame) {

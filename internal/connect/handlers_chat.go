@@ -19,6 +19,7 @@ type chatSendParams struct {
 	Provider        string           `json:"provider"`
 	Model           string           `json:"model"`
 	ReasoningEffort string           `json:"reasoning_effort"`
+	Mode            string           `json:"mode"`
 	Files           []string         `json:"files"`
 	Attachments     []llm.Attachment `json:"attachments"`
 }
@@ -37,6 +38,7 @@ func (c *Connector) handleChatSend(_ context.Context, req *Request) (any, error)
 		Provider:        p.Provider,
 		Model:           p.Model,
 		ReasoningEffort: p.ReasoningEffort,
+		Mode:            p.Mode,
 		Files:           p.Files,
 		Attachments:     p.Attachments,
 	})
