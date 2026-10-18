@@ -66,6 +66,7 @@ All responses are JSON. Errors always use the same shape:
 | `GET` | `/api/health` | Liveness and version |
 | `GET` | `/api/models` | Cached models for every configured provider |
 | `POST` | `/api/run` | Run the orchestrator, synchronously or as SSE |
+| `POST` | `/api/stt` | Transcribe base64 audio with the configured STT provider |
 | `GET` | `/api/sessions` | List sessions |
 | `GET` | `/api/sessions/{id}` | Get one session |
 | `GET` | `/api/sessions/{id}/messages` | Get a session's messages |
@@ -100,6 +101,39 @@ curl http://127.0.0.1:8080/api/models
 
 Providers that fail to list models are skipped. The endpoint waits for the LLM
 manager to finish its initial sync.
+
+### `POST /api/stt`
+
+Transcribes audio with the STT provider/model selected under **Settings →
+General**. The request and response are JSON; audio is base64-encoded.
+
+```bash
+curl -s http://127.0.0.1:8080/api/stt \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "audio": "<base64>",
+    "media_type": "audio/webm",
+    "file_name": "voice.webm"
+  }'
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `audio` | string | yes | Base64 audio, at most 8 MiB decoded |
+| `media_type` | string | no | MIME type; defaults to `audio/webm` |
+| `file_name` | string | no | Original file name for the provider |
+
+```json
+{
+  "text": "Fix the failing parser test",
+  "provider": "assemblyai",
+  "model": "universal-3-6-pro"
+}
+```
+
+STT is configured on the server machine; the initial language follows the
+`language` config. Missing provider/model returns `400`, and provider failures
+return `502`.
 
 ### `POST /api/run`
 

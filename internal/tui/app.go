@@ -55,6 +55,7 @@ type App struct {
 	home  *home.Page
 	chat  *components.Chat
 	model selectedModel
+	voice voiceController
 
 	main            *agentTranscript
 	subs            map[string]*agentTranscript
@@ -177,6 +178,7 @@ func Run(bus event.Bus, deps settings.Deps) error {
 		cancel:      cancel,
 		mode:        agent.ModeAuto,
 	}
+	defer a.cancelVoiceIfActive()
 	return a.start()
 }
 
@@ -244,6 +246,8 @@ func (a *App) build() {
 	page.Input().OnSubmit = a.submitMessage
 	page.Input().Focus()
 	page.SetModel(a.modelDisplay())
+	page.SetOnVoiceToggle(a.toggleVoice)
+	page.SetVoiceState("", 0)
 	page.AttachmentBar().OnChange = func() {
 		a.chatMu.Lock()
 		defer a.chatMu.Unlock()
@@ -409,6 +413,7 @@ func (a *App) loop() error {
 				if t, ok := a.root.(components.Ticker); ok {
 					t.OnTick(a.blink)
 				}
+				a.tickVoice()
 				lastBlink = now
 				a.redrawPending.Store(true)
 			}
@@ -470,6 +475,10 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 	}
 	kev := tcell.NewEventKey(ke.Key, ke.Rune, ke.Mod)
 
+	if kev.Key() == tcell.KeyEsc && a.cancelVoiceIfActive() {
+		return true
+	}
+
 	if kev.Key() == tcell.KeyEsc {
 		if a.escHandledLocally() || !a.running {
 			a.chatMu.Lock()
@@ -510,6 +519,11 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 		if ov.HandleKey(kev) {
 			return true
 		}
+		return true
+	}
+
+	if resolveGlobal(kev) == ActionVoiceToggle {
+		a.toggleVoice()
 		return true
 	}
 
@@ -605,6 +619,15 @@ func (a *App) openSettings() {
 		}
 	})
 	s.SetOnClose(func() { a.setOverlay(nil) })
+	s.SetOnSTTChange(func() {
+		if fresh, err := config.Load(); err == nil {
+			if a.deps.Config != nil {
+				*a.deps.Config = *fresh
+			} else {
+				a.deps.Config = fresh
+			}
+		}
+	})
 	s.SetOnThemeChange(func() {
 		a.chat.Invalidate()
 		a.requestRedraw()

@@ -56,6 +56,9 @@ type Connector struct {
 	dispatch *Dispatcher
 	runs     *runManager
 
+	sttMu      sync.Mutex
+	sttStreams map[string]*sttStreamSession
+
 	startedAt time.Time
 	log       *logger.Logger
 
@@ -91,13 +94,14 @@ func New(deps Deps, cfg *config.ConnectConfig) (*Connector, error) {
 		deps.Version = config.AppVersion
 	}
 	c := &Connector{
-		deps:      deps,
-		cfg:       cfg,
-		identity:  identity,
-		log:       deps.Log,
-		dispatch:  newDispatcher(),
-		startedAt: time.Now(),
-		stopped:   make(chan struct{}),
+		deps:       deps,
+		cfg:        cfg,
+		identity:   identity,
+		log:        deps.Log,
+		dispatch:   newDispatcher(),
+		sttStreams: make(map[string]*sttStreamSession),
+		startedAt:  time.Now(),
+		stopped:    make(chan struct{}),
 	}
 	c.runCtx, c.runCancel = context.WithCancel(context.Background())
 	c.runs = newRunManager(c)
@@ -131,6 +135,7 @@ func (c *Connector) Stop() {
 			c.runCancel()
 		}
 		c.runs.cancelAll()
+		c.closeSTTStreams()
 		if cs := c.cur.Swap(nil); cs != nil {
 			if cs.cancel != nil {
 				cs.cancel()

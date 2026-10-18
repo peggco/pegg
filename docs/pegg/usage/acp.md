@@ -70,6 +70,7 @@ handler does not apply the HTTP API's auth or CORS middleware.
 | `session/delete` | `sessionId` | `null` |
 | `session/close` | `sessionId` | `{}` |
 | `session/list` | — | `{ "sessions": [...], "nextCursor": "" }` |
+| `stt/transcribe` | `audio` (base64), `mediaType?`, `fileName?` | `{ "text": "...", "provider": "...", "model": "..." }` |
 | `session/cancel` | `sessionId` | no response |
 | `$/cancelRequest` | — | no response (no-op) |
 
@@ -90,7 +91,7 @@ the agent supports:
   "protocolVersion": 1,
   "agentCapabilities": {
     "loadSession": true,
-    "promptCapabilities": { "image": true, "audio": false, "embeddedContext": true },
+    "promptCapabilities": { "image": true, "audio": true, "embeddedContext": true },
     "mcpCapabilities": { "http": true, "sse": false },
     "sessionCapabilities": {
       "delete": {},
@@ -127,7 +128,9 @@ session (titled `ACP Session`) in its session store and links the two.
 
 ### `session/prompt`
 
-Only the first `text` content block is used as the agent input. While the agent
+The first `text` content block is used as the agent input. If the prompt contains
+no text but includes an `audio` content block, Pegg transcribes that audio with
+the configured STT provider and uses the transcript. While the agent
 runs, the server pushes `session/update` notifications (see below). The result's
 `stopReason` is one of:
 
@@ -145,6 +148,26 @@ runs, the server pushes `session/update` notifications (see below). The result's
 ```json
 { "jsonrpc": "2.0", "id": 2, "result": { "stopReason": "end_turn" } }
 ```
+
+### `stt/transcribe`
+
+Transcribes base64 audio directly, without starting an agent run. Audio must be at
+most 8 MiB decoded.
+
+```json
+{ "jsonrpc": "2.0", "id": 3, "method": "stt/transcribe",
+  "params": { "audio": "<base64>", "mediaType": "audio/webm", "fileName": "voice.webm" } }
+```
+
+```json
+{ "jsonrpc": "2.0", "id": 3,
+  "result": { "text": "Fix the failing parser test",
+              "provider": "assemblyai", "model": "universal-3-6-pro" } }
+```
+
+The STT provider and model are configured on the agent machine under
+**Settings → General**. A missing configuration returns `-32603`; invalid audio
+returns `-32602`.
 
 ### `session/list`
 

@@ -103,6 +103,75 @@ const DefaultConnectConcurrency = 4
 
 const DefaultConnectResponseTimeoutSecs = 180
 
+type STTProviderConfig struct {
+	Provider  string `json:"provider"`
+	APIKey    string `json:"api_key,omitempty"`
+	BaseURL   string `json:"base_url,omitempty"`
+	StreamURL string `json:"stream_url,omitempty"`
+}
+
+type STTConfig struct {
+	Providers       []STTProviderConfig `json:"providers,omitempty"`
+	Provider        string              `json:"provider,omitempty"`
+	Model           string              `json:"model,omitempty"`
+	RecordCommand   string              `json:"record_command,omitempty"`
+	MaxDurationSecs int                 `json:"max_duration_secs,omitempty"`
+
+	APIKey    string `json:"api_key,omitempty"`
+	BaseURL   string `json:"base_url,omitempty"`
+	StreamURL string `json:"stream_url,omitempty"`
+}
+
+const DefaultSTTMaxDurationSecs = 120
+
+func (s *STTConfig) MaxDurationValue() int {
+	if s == nil || s.MaxDurationSecs <= 0 {
+		return DefaultSTTMaxDurationSecs
+	}
+	return s.MaxDurationSecs
+}
+
+func (s *STTConfig) ProviderConfig(name string) (STTProviderConfig, bool) {
+	if s == nil {
+		return STTProviderConfig{}, false
+	}
+	for _, p := range s.Providers {
+		if p.Provider == name {
+			if p.APIKey == "" && s.APIKey != "" {
+				p.APIKey = s.APIKey
+			}
+			if p.BaseURL == "" && s.BaseURL != "" {
+				p.BaseURL = s.BaseURL
+			}
+			if p.StreamURL == "" && s.StreamURL != "" {
+				p.StreamURL = s.StreamURL
+			}
+			return p, true
+		}
+	}
+	if name != "" && name == s.Provider && s.APIKey != "" {
+		return STTProviderConfig{Provider: name, APIKey: s.APIKey, BaseURL: s.BaseURL, StreamURL: s.StreamURL}, true
+	}
+	return STTProviderConfig{}, false
+}
+
+func (s *STTConfig) UpsertProvider(entry STTProviderConfig) {
+	if s == nil || entry.Provider == "" {
+		return
+	}
+	for i := range s.Providers {
+		if s.Providers[i].Provider == entry.Provider {
+			s.Providers[i] = entry
+			return
+		}
+	}
+	s.Providers = append(s.Providers, entry)
+}
+
+func (s *STTConfig) HasModel() bool {
+	return s != nil && s.Provider != "" && s.Model != ""
+}
+
 type CompactionConfig struct {
 	Enabled            bool     `json:"enabled"`
 	Strategy           []string `json:"strategy"`
@@ -225,6 +294,7 @@ type Config struct {
 	Scheduler       *SchedulerConfig                `json:"scheduler,omitempty"`
 	Plugins         PluginConfig                    `json:"plugins,omitempty"`
 	Connect         *ConnectConfig                  `json:"connect,omitempty"`
+	STT             *STTConfig                      `json:"stt,omitempty"`
 	MCPServers      map[string]MCPServerConfig      `json:"mcp_servers,omitempty"`
 	LanguageServers map[string]LanguageServerConfig `json:"language_servers,omitempty"`
 }
@@ -286,6 +356,9 @@ func DefaultConfig() *Config {
 		Connect: &ConnectConfig{
 			Enabled:        false,
 			MaxConcurrency: DefaultConnectConcurrency,
+		},
+		STT: &STTConfig{
+			MaxDurationSecs: DefaultSTTMaxDurationSecs,
 		},
 		Compaction: &CompactionConfig{
 			Enabled:            true,
@@ -532,6 +605,15 @@ func UpsertConnect(cfg *ConnectConfig) error {
 		return err
 	}
 	c.Connect = cfg
+	return Save(c)
+}
+
+func UpsertSTT(cfg *STTConfig) error {
+	c, err := Load()
+	if err != nil {
+		return err
+	}
+	c.STT = cfg
 	return Save(c)
 }
 

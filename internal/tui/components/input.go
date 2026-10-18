@@ -680,6 +680,41 @@ func (in *Input) InsertRune(ch rune) {
 	in.ensureCursorVisible()
 }
 
+func (in *Input) InsertText(text string) {
+	if text == "" {
+		return
+	}
+	in.saveUndo()
+	if in.anchor != nil {
+		in.deleteSelection()
+	}
+	parts := strings.Split(text, "\n")
+	rs := []rune(in.lines[in.row])
+	first := []rune(parts[0])
+	rs = append(rs[:in.col], append(first, rs[in.col:]...)...)
+	in.lines[in.row] = string(rs)
+	in.col += len(first)
+
+	for _, part := range parts[1:] {
+		current := []rune(in.lines[in.row])
+		left := string(current[:in.col])
+		right := string(current[in.col:])
+		in.lines[in.row] = left
+		in.lines = append(in.lines, "")
+		copy(in.lines[in.row+2:], in.lines[in.row+1:])
+		in.lines[in.row+1] = part + right
+		in.row++
+		in.col = len([]rune(part))
+	}
+
+	current := []rune(in.lines[in.row])
+	if in.col < len(current) && !isSpace(current[in.col]) {
+		current = append(current[:in.col], append([]rune{' '}, current[in.col:]...)...)
+		in.lines[in.row] = string(current)
+	}
+	in.ensureCursorVisible()
+}
+
 func (in *Input) Backspace() {
 	in.saveUndo()
 	if in.anchor != nil {

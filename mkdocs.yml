@@ -153,10 +153,12 @@ nav:
         - Scheduling: pegg/features/scheduling.md
         - Permissions: pegg/features/permissions.md
         - Notifications: pegg/features/notifications.md
+        - Voice input: pegg/features/voice.md
         - Connect: pegg/features/connect.md
   - Sdk:
       - Get Started: sdk/index.md
       - Chat: sdk/chat.md
+      - Speech-to-Text: sdk/stt.md
       - Sessions: sdk/sessions.md
       - Files: sdk/files.md
       - Extending: sdk/extending.md

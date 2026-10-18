@@ -65,7 +65,12 @@ func New(bus event.Bus, cfg *config.Config, log *logger.Logger, vfs *vfs.VFS, se
 		picker:    defaultPicker,
 	}
 
+	c.root.Flags().Bool("stt", false, "record voice input and run it as the message")
 	c.root.RunE = func(cmd *cobra.Command, args []string) error {
+		sttFlag, _ := cmd.Flags().GetBool("stt")
+		if sttFlag {
+			return c.runRun(cmd.OutOrStdout(), cmd.InOrStdin(), strings.Join(args, " "), runOptions{stt: true})
+		}
 		if !isTerminal(cmd.InOrStdin()) {
 			var parts []string
 			if argMsg := strings.TrimSpace(strings.Join(args, " ")); argMsg != "" {

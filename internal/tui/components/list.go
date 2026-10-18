@@ -12,6 +12,7 @@ import (
 type ListItem struct {
 	Label    string
 	Detail   string
+	Hint     string
 	Data     any
 	Marked   bool
 	Disabled bool
@@ -311,6 +312,10 @@ func (l *List) Draw(s tcell.Screen, bounds layout.Region, _ bool) {
 		DrawText(s, bounds.Left+1, y, TruncateTo(label, labelW), rowStyle)
 		if detail != "" {
 			DrawText(s, bounds.Right()-DisplayWidth(detail)-1, y, detail, rowStyle)
+		} else if item.Hint != "" {
+			hint := TruncateTo(item.Hint, bounds.Width/3)
+			DrawText(s, bounds.Right()-DisplayWidth(hint)-1, y, hint,
+				th.Base().Foreground(th.Hint).Background(th.InputBg))
 		}
 	}
 }

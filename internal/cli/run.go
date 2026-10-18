@@ -40,6 +40,7 @@ type runOptions struct {
 	showThinking  bool
 	showSubagent  bool
 	chat          bool
+	stt           bool
 	mode          agent.Mode
 	modeSet       bool
 }
@@ -72,6 +73,7 @@ func (c *CLI) newRunCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.showThinking, "show-thinking", false, "show the model's raw thinking (reasoning) content instead of a Thinking indicator")
 	cmd.Flags().BoolVar(&opts.showSubagent, "show-subagent", false, "show subagent messages (their content) instead of a Subagent indicator")
 	cmd.Flags().BoolVar(&opts.chat, "chat", false, "keep chatting with the agent after the run finishes (type exit/quit to end)")
+	cmd.Flags().BoolVar(&opts.stt, "stt", false, "record voice input; press Enter to stop and use the transcript as the message")
 	cmd.Flags().BoolVar(&modePlan, "plan", false, "start in plan mode (read-only planning)")
 	cmd.Flags().BoolVar(&modeBuild, "build", false, "start in build mode (execute without planning tools)")
 	cmd.Flags().BoolVar(&modeAuto, "auto", false, "start in auto mode, letting the agent plan on its own (default)")
@@ -127,6 +129,19 @@ func (c *CLI) runRun(out io.Writer, in io.Reader, message string, opts runOption
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if opts.stt {
+		transcript, err := c.recordSTT(ctx, in, out)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(message) == "" {
+			message = transcript
+		} else {
+			message = strings.TrimSpace(message) + " " + transcript
+		}
+		opts.stt = false
+	}
 
 	var prov llm.Provider
 	var mdl llm.Model

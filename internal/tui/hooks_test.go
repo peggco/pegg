@@ -53,6 +53,7 @@ func TestResolveGlobal(t *testing.T) {
 		{tcell.KeyCtrlC, 0, tcell.ModCtrl, ActionQuit},
 		{tcell.KeyCtrlQ, 0, tcell.ModCtrl, ActionQuit},
 		{tcell.KeyCtrlT, 0, tcell.ModCtrl, ActionThemeNext},
+		{tcell.KeyCtrlG, 0, tcell.ModCtrl, ActionVoiceToggle},
 		{tcell.KeyEnter, 0, 0, ActionNone},
 		{tcell.KeyCtrlC, 0, tcell.ModCtrl | tcell.ModShift, ActionCopy},
 		{tcell.KeyRune, 'c', tcell.ModCtrl | tcell.ModShift, ActionCopy},

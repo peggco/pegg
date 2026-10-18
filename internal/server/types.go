@@ -5,6 +5,18 @@ import (
 	"github.com/peggco/pegg/internal/session"
 )
 
+type STTRequest struct {
+	Audio     string `json:"audio"`
+	MediaType string `json:"media_type,omitempty"`
+	FileName  string `json:"file_name,omitempty"`
+}
+
+type STTResponse struct {
+	Text     string `json:"text"`
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model,omitempty"`
+}
+
 type RunRequest struct {
 	Message   string   `json:"message"`
 	SessionID string   `json:"session_id,omitempty"`

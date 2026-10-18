@@ -82,6 +82,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("GET /api/models", s.handleListModels)
 	mux.HandleFunc("POST /api/run", s.handleRun)
+	mux.HandleFunc("POST /api/stt", s.handleSTT)
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", s.handleGetSession)
 	mux.HandleFunc("GET /api/sessions/{id}/messages", s.handleGetSessionMessages)

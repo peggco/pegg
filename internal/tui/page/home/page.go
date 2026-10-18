@@ -1,8 +1,10 @@
 package home
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -45,6 +47,13 @@ type Page struct {
 
 	pickDismissed bool
 	pickTokenAt   int
+
+	voiceMu       sync.RWMutex
+	voiceState    string
+	voiceElapsed  int
+	voicePreview  string
+	voiceHit      layout.Region
+	onVoiceToggle func()
 }
 
 func New() *Page {
@@ -126,6 +135,38 @@ func (p *Page) MentionPicker() *components.Picker { return p.mentionPicker }
 
 func (p *Page) AskPicker() *components.AskPicker { return p.askPicker }
 
+func (p *Page) SetOnVoiceToggle(fn func()) { p.onVoiceToggle = fn }
+
+func (p *Page) SetVoiceState(state string, elapsed int) {
+	p.voiceMu.Lock()
+	p.voiceState = state
+	p.voiceElapsed = elapsed
+	p.voiceMu.Unlock()
+}
+
+func (p *Page) SetVoicePreview(text string) {
+	p.voiceMu.Lock()
+	p.voicePreview = text
+	p.voiceMu.Unlock()
+}
+
+func (p *Page) voiceSnapshot() (string, int, string) {
+	p.voiceMu.RLock()
+	defer p.voiceMu.RUnlock()
+	return p.voiceState, p.voiceElapsed, p.voicePreview
+}
+
+func voiceButtonLabel(state string, elapsed int) string {
+	switch state {
+	case "recording":
+		return fmt.Sprintf("[REC %d:%02d]", elapsed/60, elapsed%60)
+	case "transcribing":
+		return "[stt...]"
+	default:
+		return "[mic Ctrl+G]"
+	}
+}
+
 func (p *Page) AskOpen() bool { return p.askPicker.Active() }
 
 func (p *Page) SetAsk(items []components.AskQuestion) {
@@ -185,6 +226,14 @@ func (p *Page) HandleClick(x, y, w, h int) bool {
 }
 
 func (p *Page) HandleMouse(x, y, w, h int, buttons tcell.ButtonMask) bool {
+	if buttons&tcell.ButtonPrimary != 0 && p.voiceHit.Width > 0 &&
+		x >= p.voiceHit.Left && x < p.voiceHit.Right() &&
+		y >= p.voiceHit.Top && y < p.voiceHit.Bottom() {
+		if p.onVoiceToggle != nil {
+			p.onVoiceToggle()
+		}
+		return true
+	}
 	if !p.chat.HasItems() {
 		return false
 	}
@@ -502,6 +551,7 @@ func (p *Page) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 		p.askPicker.Draw(s, inputRegion)
 	} else {
 		p.input.Draw(s, inputRegion, focused && p.focus == focusInput)
+		p.drawVoiceButton(s, inputRegion)
 	}
 
 	p.drawHint(s, bounds, inputRegion)
@@ -542,6 +592,34 @@ func (p *Page) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 		}
 	}
 	p.status.Draw(s, statusRegion, true)
+}
+
+func (p *Page) drawVoiceButton(s tcell.Screen, inputRegion layout.Region) {
+	state, elapsed, preview := p.voiceSnapshot()
+	label := voiceButtonLabel(state, elapsed)
+	th := styles.Current()
+	style := th.Base().Foreground(th.Hint).Background(th.InputBg)
+	switch state {
+	case "recording":
+		style = th.Base().Foreground(tcell.ColorRed).Background(th.InputBg).Bold(true)
+	case "transcribing":
+		style = th.Base().Foreground(th.Accent).Background(th.InputBg)
+	}
+	x := inputRegion.Right() - len(label) - 2
+	if x < inputRegion.Left+1 {
+		p.voiceHit = layout.Region{}
+		return
+	}
+	components.DrawText(s, x, inputRegion.Top, label, style)
+	p.voiceHit = layout.Region{Left: x, Top: inputRegion.Top, Width: len(label), Height: 1}
+
+	if preview != "" {
+		y := inputRegion.Top - 1
+		if y >= 0 {
+			text := components.TruncateTo("[stt] "+preview, inputRegion.Width-2)
+			components.DrawText(s, inputRegion.Left+1, y, text, th.Base().Foreground(th.Accent).Background(th.Background))
+		}
+	}
 }
 
 func (p *Page) drawHint(s tcell.Screen, bounds, inputRegion layout.Region) {

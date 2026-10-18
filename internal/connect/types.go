@@ -40,6 +40,10 @@ const (
 	eventSessionUpdate = "session.updated"
 	eventSettings      = "settings.changed"
 	eventStatus        = "status.changed"
+	eventSTTStarted    = "stt.started"
+	eventSTTPartial    = "stt.partial"
+	eventSTTFinished   = "stt.finished"
+	eventSTTError      = "stt.error"
 	eventHeartbeat     = "heartbeat"
 )
 

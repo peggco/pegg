@@ -13,7 +13,11 @@ func (c *Connector) reloadConfig() error {
 	if err != nil {
 		return err
 	}
-	c.deps.Config = fresh
+	if c.deps.Config != nil {
+		*c.deps.Config = *fresh
+	} else {
+		c.deps.Config = fresh
+	}
 	return nil
 }
 
@@ -24,6 +28,7 @@ func (c *Connector) registerSettingsMethods() {
 	c.dispatch.register("settings.providers.upsert", ScopeSettingsWrite, c.handleSettingsProviderUpsert)
 	c.dispatch.register("settings.providers.remove", ScopeSettingsWrite, c.handleSettingsProviderRemove)
 
+	c.registerSTTSettings()
 	c.registerPermissionSettings()
 	c.registerCompactionMemorySettings()
 	c.registerMCPSkillRulePluginSettings()

@@ -13,6 +13,7 @@ The `pegg` binary is both the TUI launcher and a full command-line tool. Run
 |---|---|
 | `pegg` on a terminal | Launches the [TUI](tui.md) |
 | `pegg "message"` | Runs the orchestrator on the message (headless if stdin is not a terminal) |
+| `pegg --stt` | Records voice, then runs the transcript as the message |
 | `echo "msg" \| pegg` | Reads stdin, appends it to any arguments, and runs the orchestrator |
 | `pegg <command>` | Runs the subcommand |
 
@@ -31,6 +32,7 @@ pegg run "Explain the build system"
 pegg run --provider openai --model gpt-4o "Review internal/agent"
 pegg run --model smart-router "Fix the flaky tests"   # needs smart_router.enabled
 pegg run --session 3f2b1c... "Continue where we left off"
+pegg run --stt
 ```
 
 | Flag | Default | Description |
@@ -44,6 +46,7 @@ pegg run --session 3f2b1c... "Continue where we left off"
 | `--show-thinking` | `false` | Print raw reasoning content instead of a `Thinking...` indicator |
 | `--show-subagent` | `false` | Print subagent messages instead of a `Subagent` indicator |
 | `--chat` | `false` | Keep chatting after the first run ends |
+| `--stt` | `false` | Record voice; press Enter to stop and use the transcript as the message |
 | `--plan` | `false` | Start in plan mode (read-only planning) |
 | `--build` | `false` | Start in build mode (execute without plan tools) |
 | `--auto` | `false` | Start in auto mode, letting the agent plan on its own (default) |
@@ -99,6 +102,28 @@ chat mode: type a message, exit/quit to end
 ```
 
 Exit words: `exit`, `quit`, `/exit`, `/quit`, `bye`.
+
+### Voice input
+
+`--stt` records from the default microphone and prints:
+
+```
+Listening… press Enter to stop.
+```
+
+Press ++enter++ to stop. The recording is transcribed with the STT provider and
+model configured under **Settings → General** (see [Voice input](../features/voice.md)).
+The transcript becomes the message. If a message argument is also provided, the
+transcript is appended to it:
+
+```bash
+pegg --stt
+pegg run --stt "Summarize this repository"
+```
+
+A recorder must be available: `sox`, `arecord`, or `ffmpeg`. Override the command
+with `stt.record_command` in `~/.peggco/pegg.json` using `{output}` for the WAV
+path.
 
 ### Attachments
 

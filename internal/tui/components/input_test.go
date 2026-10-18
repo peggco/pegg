@@ -900,3 +900,29 @@ func TestInputClearResetsHistoryNavigation(t *testing.T) {
 		t.Fatalf("value = %q, want newest entry b", got)
 	}
 }
+
+func TestInputInsertTextAtCursor(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.SetValue("hello world")
+	in.MoveLeft()
+	in.MoveLeft()
+	in.MoveLeft()
+	in.MoveLeft()
+	in.MoveLeft()
+	in.InsertText("there\nfriend")
+	if got := in.Value(); got != "hello there\nfriend world" {
+		t.Fatalf("value = %q", got)
+	}
+}
+
+func TestInputInsertTextReplacesSelection(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.SetValue("hello")
+	in.SelectAll()
+	in.InsertText("bye")
+	if got := in.Value(); got != "bye" {
+		t.Fatalf("value = %q", got)
+	}
+}
