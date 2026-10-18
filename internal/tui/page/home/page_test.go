@@ -140,6 +140,27 @@ func TestHomeHidesHintWithAttachments(t *testing.T) {
 	}
 }
 
+func TestHomeShiftTabTogglesAttachmentFocus(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+	p := New()
+	p.AttachmentBar().Add(llm.Attachment{Type: llm.AttachmentTypeFile, FileName: "main.go"})
+
+	if !p.HandleKey(tcell.NewEventKey(tcell.KeyBacktab, 0, 0)) {
+		t.Fatal("Shift+Tab should be handled")
+	}
+	if p.focus != focusAttachments {
+		t.Fatal("Shift+Tab should focus the attachment bar")
+	}
+
+	if !p.HandleKey(tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModShift)) {
+		t.Fatal("Shift+Tab should be handled")
+	}
+	if p.focus != focusInput {
+		t.Fatal("Shift+Tab should return focus to the input")
+	}
+}
+
 func TestHomeHidesHintWhileTyping(t *testing.T) {
 	styles.RegisterDefaults()
 	styles.Set("dark")

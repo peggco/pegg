@@ -178,6 +178,11 @@ func TestAppEscInSubagentViewDoesNotArmInterrupt(t *testing.T) {
 
 func newKey(k tcell.Key) *tcell.EventKey { return tcell.NewEventKey(k, 0, 0) }
 
+func postCtrlC(s tcell.Screen) {
+	_ = s.PostEvent(tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModCtrl))
+	_ = s.PostEvent(tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModCtrl))
+}
+
 func TestAppSessionLoadUpdatesHome(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	store, err := session.NewSQLiteStore()
@@ -254,6 +259,9 @@ func TestAppQuitsOnCtrlC(t *testing.T) {
 	if err := s.PostEvent(tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModCtrl)); err != nil {
 		t.Fatalf("post event: %v", err)
 	}
+	if err := s.PostEvent(tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModCtrl)); err != nil {
+		t.Fatalf("post event: %v", err)
+	}
 
 	select {
 	case err := <-done:
@@ -281,6 +289,48 @@ func TestAppQuitsOnCtrlQ(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("loop did not quit on Ctrl+Q")
+	}
+}
+
+func TestCtrlCClearsInputWarnsThenQuits(t *testing.T) {
+	p := home.New()
+	p.Input().InsertRune('x')
+	a := &App{home: p}
+
+	if !a.handleCtrlC() {
+		t.Fatal("first Ctrl+C should clear the input")
+	}
+	if !p.Input().Empty() {
+		t.Fatal("input was not cleared")
+	}
+	if a.ctrlCHint {
+		t.Fatal("clearing the input should not show the quit warning")
+	}
+
+	if !a.handleCtrlC() {
+		t.Fatal("first Ctrl+C on an empty input should warn")
+	}
+	if !a.ctrlCHint {
+		t.Fatal("expected the quit warning")
+	}
+
+	if a.handleCtrlC() {
+		t.Fatal("second Ctrl+C should request a quit")
+	}
+}
+
+func TestAppAltUpRecallsInputHistory(t *testing.T) {
+	p := home.New()
+	p.Input().Focus()
+	p.Input().InsertRune('h')
+	p.Input().Submit()
+
+	a := &App{home: p, root: p}
+	if !a.handleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModAlt)) {
+		t.Fatal("Alt+Up should be handled")
+	}
+	if got := p.Input().Value(); got != "h" {
+		t.Fatalf("Alt+Up recalled %q, want h", got)
 	}
 }
 
@@ -315,7 +365,7 @@ func TestAppSubmitPublishesEvent(t *testing.T) {
 		t.Fatal("no submit event received")
 	}
 
-	_ = s.PostEvent(tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModCtrl))
+	postCtrlC(s)
 	select {
 	case err := <-done:
 		if err != nil {
@@ -360,7 +410,7 @@ func TestAppSettingsModal(t *testing.T) {
 		t.Error("Esc did not close the settings overlay")
 	}
 
-	_ = s.PostEvent(tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModCtrl))
+	postCtrlC(s)
 	select {
 	case err := <-done:
 		if err != nil {
@@ -391,7 +441,7 @@ func TestAppThemeCycle(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	_ = s.PostEvent(tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModCtrl))
+	postCtrlC(s)
 	select {
 	case err := <-done:
 		if err != nil {
@@ -540,6 +590,15 @@ func TestAppResolveUserMessage(t *testing.T) {
 
 	info, _ := a.sessionInfoFor(sess.ID)
 	a.activateSession(info)
+
+	if got := a.home.Input().HistoryLen(); got != 2 {
+		t.Fatalf("input history = %d, want 2 user messages", got)
+	}
+	a.home.Input().Focus()
+	a.home.Input().HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModAlt))
+	if got := a.home.Input().Value(); got != "second" {
+		t.Fatalf("Alt+Up recalled %q, want second", got)
+	}
 
 	target := chatItemByText(a.chat.Items(), "second")
 	sid, mid, ok := a.resolveUserMessage(target)

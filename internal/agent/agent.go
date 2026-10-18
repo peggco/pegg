@@ -16,7 +16,10 @@ import (
 	"github.com/peggco/pegg/internal/llm"
 )
 
-const DefaultMaxIterations = 150
+const (
+	DefaultMaxIterations = 150
+	UnlimitedIterations  = -1
+)
 
 type Option func(*Agent)
 
@@ -154,7 +157,7 @@ func WithAttachments(atts ...llm.Attachment) Option {
 
 func WithMaxIterations(maxIterations int) Option {
 	return func(a *Agent) {
-		if maxIterations > 0 {
+		if maxIterations > 0 || maxIterations == UnlimitedIterations {
 			a.MaxIterations = maxIterations
 		}
 	}

@@ -10,6 +10,13 @@ func Register() {
 	agents.Register(newExplorerAgent)
 }
 
+const (
+	agentTemperature   = 0.1
+	agentTopP          = 0.9
+	agentMaxTokens     = 4096
+	agentMaxIterations = 150
+)
+
 func newExplorerAgent() (*agent.Agent, error) {
 	main := agent.New("explorer",
 		agent.WithSystemPromptFn(func(providerID, modelID string) string {
@@ -20,7 +27,11 @@ func newExplorerAgent() (*agent.Agent, error) {
 			return sys
 		}),
 		agent.WithToolNames("glob", "grep", "list", "read", "bash", "webfetch", "websearch"),
-		agent.WithMiddlewareNames("loop-detector", "redaction", "retry", "permission", "compaction"),
+		agent.WithMiddlewareNames("loop-detector", "retry", "permission", "compaction"),
+		agent.WithTemperature(agentTemperature),
+		agent.WithTopP(agentTopP),
+		agent.WithMaxTokens(agentMaxTokens),
+		agent.WithMaxIterations(agentMaxIterations),
 	)
 
 	return main, nil

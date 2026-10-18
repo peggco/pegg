@@ -57,7 +57,8 @@ func TestResolveGlobal(t *testing.T) {
 		{tcell.KeyCtrlC, 0, tcell.ModCtrl | tcell.ModShift, ActionCopy},
 		{tcell.KeyRune, 'c', tcell.ModCtrl | tcell.ModShift, ActionCopy},
 		{tcell.KeyRune, 'x', tcell.ModCtrl | tcell.ModShift, ActionNone},
-		{tcell.KeyBacktab, 0, 0, ActionModeNext},
+		{tcell.KeyTab, 0, 0, ActionModeNext},
+		{tcell.KeyBacktab, 0, 0, ActionNone},
 	}
 	for _, c := range cases {
 		ev := tcell.NewEventKey(c.key, c.rune, c.mod)

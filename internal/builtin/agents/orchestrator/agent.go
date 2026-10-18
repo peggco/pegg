@@ -15,6 +15,13 @@ func Register(fs *vfs.VFS) {
 	})
 }
 
+const (
+	agentTemperature   = 0.2
+	agentTopP          = 0.9
+	agentMaxTokens     = 4096
+	agentMaxIterations = agent.UnlimitedIterations
+)
+
 func newOrchestratorAgent(fs *vfs.VFS) (*agent.Agent, error) {
 	main := agent.New("orchestrator",
 		agent.WithSystemPromptFn(func(providerID, modelID string) string {
@@ -26,7 +33,11 @@ func newOrchestratorAgent(fs *vfs.VFS) (*agent.Agent, error) {
 		}),
 		agent.WithTools(file.Tools(fs)...),
 		agent.WithToolNames("askuserquestion", "bash", "task", "taskstatus", "todoread", "todowrite", "webfetch", "websearch", "loadskill", "enterplanmode", "exitplanmode", "mem-search", "mem-read", "schedule"),
-		agent.WithMiddlewareNames("loop-detector", "redaction", "retry", "permission", "compaction"),
+		agent.WithMiddlewareNames("loop-detector", "retry", "permission", "compaction"),
+		agent.WithTemperature(agentTemperature),
+		agent.WithTopP(agentTopP),
+		agent.WithMaxTokens(agentMaxTokens),
+		agent.WithMaxIterations(agentMaxIterations),
 		agent.WithModeController(func(a *agent.Agent, m agent.Mode) {
 			plan.ApplyMode(a, fs, m)
 		}),

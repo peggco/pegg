@@ -39,6 +39,30 @@ type askState struct {
 	answer string
 	multi  map[string]bool
 	err    string
+
+	custom        *Input
+	customEditing bool
+	customValue   string
+}
+
+func (st *askState) hasCustom() bool {
+	switch st.q.Type {
+	case "select", "multiselect", "boolean":
+		return true
+	}
+	return false
+}
+
+func (st *askState) optionCount() int {
+	n := len(st.q.Options)
+	if st.hasCustom() {
+		n++
+	}
+	return n
+}
+
+func (st *askState) onCustom() bool {
+	return st.hasCustom() && st.cursor >= len(st.q.Options)
 }
 
 func NewAskPicker() *AskPicker { return &AskPicker{} }
@@ -120,15 +144,30 @@ func (a *AskPicker) prev() {
 	a.focusCurrent()
 }
 
+func (a *AskPicker) tabNext() {
+	st := a.current()
+	if st != nil && st.q.Type != "text" && a.tab == len(a.states)-1 {
+		a.advance(st)
+		return
+	}
+	a.next()
+}
+
 func (a *AskPicker) focusCurrent() {
 	for i, st := range a.states {
-		if st.input == nil {
-			continue
+		if st.input != nil {
+			if i == a.tab {
+				st.input.Focus()
+			} else {
+				st.input.Blur()
+			}
 		}
-		if i == a.tab {
-			st.input.Focus()
-		} else {
-			st.input.Blur()
+		if st.custom != nil {
+			if i == a.tab && st.customEditing {
+				st.custom.Focus()
+			} else {
+				st.custom.Blur()
+			}
 		}
 	}
 }
@@ -138,6 +177,9 @@ func (st *askState) answered() bool {
 	case "text":
 		return st.input != nil && strings.TrimSpace(st.input.Value()) != ""
 	case "multiselect":
+		if strings.TrimSpace(st.customValue) != "" {
+			return true
+		}
 		for _, v := range st.multi {
 			if v {
 				return true
@@ -157,47 +199,45 @@ func (a *AskPicker) answerOf(st *askState) string {
 		}
 		return strings.TrimSpace(st.input.Value())
 	case "multiselect":
-		sel := make([]string, 0, len(st.q.Options))
+		sel := make([]string, 0, len(st.q.Options)+1)
 		for _, opt := range st.q.Options {
 			if st.multi[opt] {
 				sel = append(sel, opt)
 			}
 		}
+		if v := strings.TrimSpace(st.customValue); v != "" {
+			sel = append(sel, v)
+		}
 		return strings.Join(sel, ", ")
 	default:
-		if st.answer != "" {
-			return st.answer
-		}
-		if len(st.values) > 0 {
-			return st.values[st.cursor]
-		}
-		return ""
+		return st.answer
 	}
 }
 
 func (a *AskPicker) moveCursor(st *askState, delta int) {
-	n := len(st.q.Options)
+	n := st.optionCount()
 	if n == 0 {
 		return
 	}
 	st.cursor = (st.cursor + delta + n) % n
 	st.err = ""
-	if st.q.Type != "multiselect" {
-		st.answer = st.values[st.cursor]
-	}
 }
 
 func (a *AskPicker) selectCurrent(st *askState) {
-	if len(st.values) == 0 {
-		return
-	}
-	st.err = ""
-	if st.q.Type == "multiselect" {
-		label := st.q.Options[st.cursor]
-		st.multi[label] = !st.multi[label]
+	if st.cursor < 0 || st.cursor >= len(st.values) {
 		return
 	}
 	st.answer = st.values[st.cursor]
+	st.err = ""
+}
+
+func (a *AskPicker) toggleCurrent(st *askState) {
+	if st.cursor < 0 || st.cursor >= len(st.q.Options) {
+		return
+	}
+	label := st.q.Options[st.cursor]
+	st.multi[label] = !st.multi[label]
+	st.err = ""
 }
 
 func (a *AskPicker) collect() map[string]string {
@@ -210,22 +250,74 @@ func (a *AskPicker) collect() map[string]string {
 	return answers
 }
 
-func (a *AskPicker) enterConfirm() {
-	answers := a.collect()
+func (a *AskPicker) firstMissingRequired() int {
 	for i, st := range a.states {
-		if st.q.Required && answers[st.q.ID] == "" {
-			st.err = i18n.T("ask.required")
-			a.tab = i
-			a.confirming = false
-			a.focusCurrent()
-			return
+		if st.q.Required && !st.answered() {
+			return i
 		}
+	}
+	return -1
+}
+
+func (a *AskPicker) advance(st *askState) {
+	if st.q.Required && !st.answered() {
+		st.err = i18n.T("ask.required")
+		return
+	}
+	if a.tab < len(a.states)-1 {
+		a.next()
+		return
+	}
+	if i := a.firstMissingRequired(); i >= 0 {
+		a.states[i].err = i18n.T("ask.required")
+		a.tab = i
+		a.confirming = false
+		a.focusCurrent()
+		return
 	}
 	if len(a.states) == 1 {
 		a.finalSubmit()
 		return
 	}
 	a.confirming = true
+}
+
+func (a *AskPicker) openCustom(st *askState) {
+	if st.custom == nil {
+		in := NewInput()
+		in.SetRows(1, 1)
+		in.Placeholder = i18n.T("ask.custom.placeholder")
+		st.custom = in
+	}
+	st.customEditing = true
+	st.err = ""
+	st.custom.Focus()
+}
+
+func (a *AskPicker) closeCustom(st *askState) {
+	if st.custom != nil {
+		st.custom.Blur()
+	}
+	st.customEditing = false
+}
+
+func (a *AskPicker) commitCustom(st *askState) {
+	if st.custom == nil {
+		return
+	}
+	v := strings.TrimSpace(st.custom.Value())
+	if v == "" {
+		st.err = i18n.T("ask.custom.empty")
+		return
+	}
+	st.customValue = v
+	st.err = ""
+	a.closeCustom(st)
+	if st.q.Type == "multiselect" {
+		return
+	}
+	st.answer = v
+	a.advance(st)
 }
 
 func (a *AskPicker) finalSubmit() {
@@ -251,17 +343,27 @@ func (a *AskPicker) cancel() {
 
 func (a *AskPicker) InsertPaste(text string) {
 	st := a.current()
-	if st == nil || st.q.Type != "text" || st.input == nil {
+	if st == nil {
+		return
+	}
+	var in *Input
+	switch {
+	case st.customEditing:
+		in = st.custom
+	case st.q.Type == "text":
+		in = st.input
+	}
+	if in == nil {
 		return
 	}
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	for i, line := range strings.Split(text, "\n") {
 		if i > 0 {
-			st.input.Newline()
+			in.Newline()
 		}
 		for _, r := range line {
-			st.input.InsertRune(r)
+			in.InsertRune(r)
 		}
 	}
 }
@@ -287,6 +389,33 @@ func (a *AskPicker) HandleKey(ev *tcell.EventKey) bool {
 		return false
 	}
 
+	if st.customEditing {
+		switch ev.Key() {
+		case tcell.KeyEsc:
+			a.closeCustom(st)
+			return true
+		case tcell.KeyEnter:
+			a.commitCustom(st)
+			return true
+		case tcell.KeyBacktab:
+			a.closeCustom(st)
+			a.prev()
+			return true
+		case tcell.KeyTab:
+			a.closeCustom(st)
+			if ev.Modifiers()&tcell.ModShift != 0 {
+				a.prev()
+			} else {
+				a.tabNext()
+			}
+			return true
+		}
+		if st.custom != nil && st.custom.HandleKey(ev) {
+			return true
+		}
+		return false
+	}
+
 	switch ev.Key() {
 	case tcell.KeyEsc:
 		a.cancel()
@@ -298,7 +427,7 @@ func (a *AskPicker) HandleKey(ev *tcell.EventKey) bool {
 		if ev.Modifiers()&tcell.ModShift != 0 {
 			a.prev()
 		} else {
-			a.next()
+			a.tabNext()
 		}
 		return true
 	}
@@ -308,7 +437,7 @@ func (a *AskPicker) HandleKey(ev *tcell.EventKey) bool {
 			return false
 		}
 		if ev.Key() == tcell.KeyEnter && ev.Modifiers()&tcell.ModShift == 0 {
-			a.enterConfirm()
+			a.advance(st)
 			return true
 		}
 		return st.input.HandleKey(ev)
@@ -328,11 +457,19 @@ func (a *AskPicker) HandleKey(ev *tcell.EventKey) bool {
 		a.next()
 		return true
 	case tcell.KeyEnter:
-		a.enterConfirm()
+		if st.onCustom() {
+			a.openCustom(st)
+			return true
+		}
+		if st.q.Type == "multiselect" {
+			a.toggleCurrent(st)
+			return true
+		}
+		a.selectCurrent(st)
+		a.advance(st)
 		return true
 	case tcell.KeyRune:
 		if ev.Rune() == ' ' {
-			a.selectCurrent(st)
 			return true
 		}
 	}
@@ -356,12 +493,15 @@ func (a *AskPicker) Height() int {
 	}
 	body := 4
 	if st.q.Type != "text" {
-		body = len(st.q.Options)
+		body = st.optionCount()
 		if body < 3 {
 			body = 3
 		}
 		if body > 8 {
 			body = 8
+		}
+		if st.customEditing {
+			body += 3
 		}
 	}
 	return 8 + body
@@ -468,6 +608,13 @@ func (a *AskPicker) Draw(s tcell.Screen, bounds layout.Region) {
 	if st.q.Type == "text" {
 		st.input.SetInnerWidth(body.Width - 2)
 		st.input.Draw(s, body, true)
+	} else if st.customEditing && st.custom != nil && body.Height >= 5 {
+		editorH := 3
+		optsH := body.Height - editorH
+		a.drawOptions(s, st, layout.Region{Left: body.Left, Top: body.Top, Width: body.Width, Height: optsH})
+		editor := layout.Region{Left: body.Left, Top: body.Top + optsH, Width: body.Width, Height: editorH}
+		st.custom.SetInnerWidth(editor.Width - 2)
+		st.custom.Draw(s, editor, true)
 	} else {
 		a.drawOptions(s, st, body)
 	}
@@ -483,10 +630,12 @@ func (a *AskPicker) Draw(s tcell.Screen, bounds layout.Region) {
 	}
 	cancel := i18n.T("ask.footer.cancel")
 	hint := nav + i18n.T("ask.footer.select") + action + cancel
-	switch st.q.Type {
-	case "text":
+	switch {
+	case st.customEditing:
+		hint = nav + i18n.T("ask.custom.hint")
+	case st.q.Type == "text":
 		hint = nav + i18n.T("ask.footer.newline") + action + cancel
-	case "multiselect":
+	case st.q.Type == "multiselect":
 		hint = nav + i18n.T("ask.footer.move") + action + cancel
 	}
 	hintStyle := th.Base().Foreground(th.Hint).Background(th.InputBg)
@@ -502,25 +651,55 @@ func (a *AskPicker) drawOptions(s tcell.Screen, st *askState, region layout.Regi
 	base := th.Base().Foreground(th.InputText).Background(th.InputBg)
 	dim := th.Base().Foreground(th.Placeholder).Background(th.InputBg)
 
-	rows := make([]Line, 0, len(st.q.Options))
-	rowOf := make([]int, 0, len(st.q.Options))
+	total := st.optionCount()
+	rows := make([]Line, 0, total)
+	rowOf := make([]int, 0, total)
 	cursorStart, cursorEnd := 0, 0
-	for i, opt := range st.q.Options {
+	for i := 0; i < total; i++ {
+		custom := st.hasCustom() && i == len(st.q.Options)
+		opt := ""
+		if custom {
+			opt = i18n.T("ask.custom")
+			if st.customValue != "" {
+				opt += ": " + st.customValue
+			}
+		} else {
+			opt = st.q.Options[i]
+		}
+
+		on := false
+		switch st.q.Type {
+		case "multiselect":
+			if custom {
+				on = st.customValue != ""
+			} else {
+				on = st.multi[opt]
+			}
+		default:
+			if custom {
+				on = st.customValue != "" && st.answer == st.customValue
+			} else if i < len(st.values) {
+				on = st.answer != "" && st.values[i] == st.answer
+			}
+		}
+
 		var marker string
-		switch {
-		case st.q.Type == "multiselect":
-			if st.multi[opt] {
+		if st.q.Type == "multiselect" {
+			if on {
 				marker = "[x] "
 			} else {
 				marker = "[ ] "
 			}
-		case st.answer != "" && st.values[i] == st.answer:
-			marker = "(•) "
-		default:
-			marker = "( ) "
+		} else {
+			if on {
+				marker = "(•) "
+			} else {
+				marker = "( ) "
+			}
 		}
+
 		style := base
-		if st.q.Type == "multiselect" && !st.multi[opt] {
+		if st.q.Type == "multiselect" && !on {
 			style = dim
 		}
 		lines := WrapText(marker+opt, style, region.Width)
