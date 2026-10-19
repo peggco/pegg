@@ -154,6 +154,7 @@ nav:
         - Permissions: pegg/features/permissions.md
         - Notifications: pegg/features/notifications.md
         - Voice input: pegg/features/voice.md
+        - Team AI: pegg/features/team-ai.md
         - Connect: pegg/features/connect.md
   - Sdk:
       - Get Started: sdk/index.md

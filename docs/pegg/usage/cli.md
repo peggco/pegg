@@ -174,6 +174,65 @@ pegg login --provider anthropic --api-key sk-ant-...
 The provider's model list is fetched before the config is saved, so a login only
 succeeds when the credentials work.
 
+## `pegg team`
+
+Connect this machine to a team's BYOK configuration. The command opens the
+website, approves a one-time connection, creates or reuses a team-scoped API key
+assigned to you, and fetches the team's models and defaults. The provider is
+saved as `pegg-team <team>`, for example `pegg-team Acme`.
+
+```bash
+pegg team
+pegg team --team Acme
+pegg team --no-browser --port 8765
+pegg team --refresh
+pegg team list
+pegg team remove "pegg-team Acme"
+```
+
+| Flag / command | Description |
+|---|---|
+| `--team` | Team name to preselect on the website; otherwise the current team is used |
+| `--provider` | Team provider to refresh |
+| `--app-url` / `--api-url` | Override the website or API URL |
+| `--device` / `--key-name` | Device label and API key name |
+| `--port` | Local callback port; `0` chooses a free port |
+| `--no-browser` | Print the approval URL instead of opening a browser |
+| `--print` | Print the merged pegg config after connecting |
+| `--print-secret` | Include API keys in `--print` output |
+| `--force` | Save even if the provider check fails |
+| `pegg team list` | List connected team providers |
+| `pegg team remove NAME` | Remove a team provider from the pegg config |
+
+The API key is reused for later connections to the same team and user; revoking
+it on the website forces a new key. Website-created keys cannot be reused
+automatically. **Team AI** on the website controls providers, models and
+defaults; see [Team AI](../features/team-ai.md).
+
+### Over SSH
+
+The callback is a loopback URL on the machine running pegg, so forward the port
+from your laptop. On the server:
+
+```bash
+pegg team --no-browser --port 8765
+```
+
+On the laptop:
+
+```bash
+ssh -L 8765:127.0.0.1:8765 user@server
+```
+
+Open the printed URL and approve. The port must match `--port`. The server must
+also reach the website API (`--api-url`) and the team service URL
+(`TEAM_SERVICE_URL`). If the session is already open, add the forward with the
+OpenSSH escape `~C` followed by `-L 8765:127.0.0.1:8765`.
+
+As an alternative, connect locally, copy `~/.pegg/pegg.json` to the server, and
+run `pegg team --refresh` there. See
+[Troubleshooting](../troubleshooting.md) for the failure modes.
+
 ## `pegg connect`
 
 Connect this machine's agent to a website backend so you can chat with it from a

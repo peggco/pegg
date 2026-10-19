@@ -1,6 +1,10 @@
 package openai
 
-import json "github.com/goccy/go-json"
+import (
+	json "github.com/goccy/go-json"
+
+	"github.com/peggco/pegg/internal/llm"
+)
 
 type chatMessage struct {
 	Role             string          `json:"role"`
@@ -120,9 +124,10 @@ type chatModelsResponse struct {
 }
 
 type chatModel struct {
-	ID      string `json:"id"`
-	Name    string `json:"name,omitempty"`
-	Object  string `json:"object,omitempty"`
-	Created int64  `json:"created,omitempty"`
-	OwnedBy string `json:"owned_by,omitempty"`
+	ID      string           `json:"id"`
+	Name    string           `json:"name,omitempty"`
+	Object  string           `json:"object,omitempty"`
+	Created int64            `json:"created,omitempty"`
+	OwnedBy string           `json:"owned_by,omitempty"`
+	Config  *llm.ModelConfig `json:"config,omitempty"`
 }

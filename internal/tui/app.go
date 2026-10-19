@@ -126,7 +126,10 @@ func (a *App) selectPreferred() {
 		return
 	}
 	go func() {
-		res := a.deps.LLM.Select(llm.SelectRequest{Mode: llm.SelectModePreferred})
+		res, ok := a.selectAgentDefault("orchestrator")
+		if !ok {
+			res = a.deps.LLM.Select(llm.SelectRequest{Mode: llm.SelectModePreferred})
+		}
 		if res.Err != nil {
 			return
 		}
@@ -136,6 +139,46 @@ func (a *App) selectPreferred() {
 		a.chatMu.Unlock()
 		a.requestRedraw()
 	}()
+}
+
+func (a *App) selectAgentDefault(agent string) (llm.SelectResult, bool) {
+	if a.deps.Config == nil {
+		return llm.SelectResult{}, false
+	}
+	def, ok := a.deps.Config.AgentDefaults[agent]
+	if !ok {
+		return llm.SelectResult{}, false
+	}
+	try := func(provider, model string) (llm.SelectResult, bool) {
+		if model == "" {
+			return llm.SelectResult{}, false
+		}
+		if provider != "" {
+			res := a.deps.LLM.Select(llm.SelectRequest{
+				Mode:     llm.SelectModeExact,
+				Provider: provider,
+				Model:    model,
+			})
+			if res.Err == nil {
+				return res, true
+			}
+		}
+		res := a.deps.LLM.Select(llm.SelectRequest{
+			Mode:  llm.SelectModeExact,
+			Model: model,
+		})
+		if res.Err == nil {
+			return res, true
+		}
+		return llm.SelectResult{}, false
+	}
+	if res, ok := try(def.Provider, def.Model); ok {
+		return res, true
+	}
+	if res, ok := try(def.FallbackProvider, def.FallbackModel); ok {
+		return res, true
+	}
+	return llm.SelectResult{}, false
 }
 
 func (a *App) setOverlay(c components.Component) {

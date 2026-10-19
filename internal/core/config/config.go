@@ -18,6 +18,13 @@ type LLMConfig struct {
 	Headers    map[string]string `json:"headers,omitempty"`
 }
 
+type AgentModelDefault struct {
+	Provider         string `json:"provider,omitempty"`
+	Model            string `json:"model,omitempty"`
+	FallbackProvider string `json:"fallback_provider,omitempty"`
+	FallbackModel    string `json:"fallback_model,omitempty"`
+}
+
 type LoggerConfig struct {
 	Driver      string `json:"driver"`
 	MaxLogCount int    `json:"max_log_count"`
@@ -114,6 +121,7 @@ type STTConfig struct {
 	Providers       []STTProviderConfig `json:"providers,omitempty"`
 	Provider        string              `json:"provider,omitempty"`
 	Model           string              `json:"model,omitempty"`
+	StreamingModel  string              `json:"streaming_model,omitempty"`
 	RecordCommand   string              `json:"record_command,omitempty"`
 	MaxDurationSecs int                 `json:"max_duration_secs,omitempty"`
 
@@ -289,6 +297,7 @@ type Config struct {
 	Language        string                          `json:"language,omitempty"`
 	Permission      *PermissionConfig               `json:"permission,omitempty"`
 	Compaction      *CompactionConfig               `json:"compaction,omitempty"`
+	AgentDefaults   map[string]AgentModelDefault    `json:"agent_defaults,omitempty"`
 	SmartRouter     *SmartRouterConfig              `json:"smart_router,omitempty"`
 	Memory          *MemoryConfig                   `json:"memory,omitempty"`
 	Scheduler       *SchedulerConfig                `json:"scheduler,omitempty"`
@@ -440,11 +449,34 @@ func Save(config *Config) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
+	tmp := configPath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
+	if err := os.Rename(tmp, configPath); err != nil {
+		if removeErr := os.Remove(configPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			_ = os.Remove(tmp)
+			return fmt.Errorf("failed to replace config file: %w", err)
+		}
+		if renameErr := os.Rename(tmp, configPath); renameErr != nil {
+			_ = os.Remove(tmp)
+			return fmt.Errorf("failed to write config file: %w", renameErr)
+		}
+	}
+	_ = os.Chmod(configPath, 0600)
 
 	return nil
+}
+
+func Update(fn func(*Config) error) error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	if err := fn(cfg); err != nil {
+		return err
+	}
+	return Save(cfg)
 }
 
 func SaveIfNotExists(config *Config) error {

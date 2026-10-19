@@ -55,6 +55,12 @@ language servers — all inside a sandboxed workspace.
     observations, a librarian curates them, and future runs get a budget-bounded
     memory panel of what was done, decided, and learned.
 
+- [:lucide-key-round:{ .lg } **Team AI**](features/team-ai.md)
+
+    Centralize provider keys for a team. Owners add encrypted BYOK providers and
+    defaults on the website; members connect with `pegg team` and use a
+    `pegg-team <team>` provider backed by the team's keys.
+
 - [:lucide-monitor-smartphone:{ .lg } **Connect to the web**](features/connect.md)
 
     Pair the app on your machine with the Pegg website and chat with your agent
