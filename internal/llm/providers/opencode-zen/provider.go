@@ -90,7 +90,7 @@ func satisfyGate(body map[string]any) {
 
 func NewFromConfig(cfg config.LLMConfig) (llm.Provider, error) {
 	defaultHeaders := map[string]string{
-		"User-Agent":         "opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14",
+		"User-Agent":         "opencode/1.18.35 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14",
 		"x-opencode-client":  "cli",
 		"x-opencode-project": random.GenerateHex(20),
 		"x-opencode-request": fmt.Sprintf("msg_%s", random.GenerateAlphanumeric(26)),
