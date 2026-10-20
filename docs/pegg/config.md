@@ -190,6 +190,69 @@ Each agent entry accepts:
   the TUI model list or `--model smart-router`); subagents are always routed when
   the router is enabled.
 
+With [Team AI](features/team-ai.md), `pegg team` sets `provider` to the team
+provider (`pegg-team <team>`) and `model` to the team's decision model. The team
+gateway serves the decision model through the normal chat path, so the router
+falls back to the LLM selection path when no separate decision provider is
+available.
+
+### `agent_defaults`
+
+Per-agent default and fallback models written by `pegg team`. They are applied to
+the orchestrator at TUI startup and to subagents at spawn unless the smart router
+manages that agent.
+
+| Key | Type | Description |
+|---|---|---|
+| `<agent>` | object | `orchestrator`, `developer`, `explorer` or `planner` |
+| `.provider` | string | Provider name, normally `pegg-team <team>` |
+| `.model` | string | Default model key |
+| `.fallback_provider` | string | Fallback provider name |
+| `.fallback_model` | string | Fallback model key |
+
+```json
+{
+  "agent_defaults": {
+    "orchestrator": {
+      "provider": "pegg-team Acme",
+      "model": "gpt-4.1",
+      "fallback_provider": "pegg-team Acme",
+      "fallback_model": "gpt-4.1-mini"
+    }
+  }
+}
+```
+
+### `stt`
+
+Speech-to-text settings. `pegg team` writes the team's default STT model here.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `providers` | array | — | Per-provider credentials: `{ provider, api_key, base_url, stream_url }` |
+| `provider` | string | — | Selected STT provider (`pegg-team` for Team AI) |
+| `model` | string | — | Selected STT model key |
+| `streaming_model` | string | — | Optional streaming model written by Team AI defaults; the current CLI uses `model` for batch transcription |
+| `record_command` | string | — | Custom recording command |
+| `max_duration_secs` | int | `120` | Maximum recording length |
+
+```json
+{
+  "stt": {
+    "provider": "pegg-team",
+    "model": "whisper-large-v3",
+    "providers": [
+      {
+        "provider": "pegg-team",
+        "base_url": "https://team.example.com/v1",
+        "api_key": "vsk_live_..."
+      }
+    ],
+    "max_duration_secs": 120
+  }
+}
+```
+
 ### `memory`
 
 Persistent, markdown-based memory for coding agents. A background observer distills

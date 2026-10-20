@@ -23,6 +23,7 @@ import (
 	"github.com/peggco/pegg/internal/agent/agents"
 	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/builtin/middlewares/compaction"
+	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/router"
@@ -488,6 +489,14 @@ func (c *CLI) selectModel(provider, model string, interactive bool) (llm.Provide
 		return c.resolveChoice(choices[idx])
 	}
 
+	if c.cfg != nil {
+		if def, ok := c.cfg.AgentDefaults["orchestrator"]; ok {
+			if choice, ok := c.resolveAgentDefault(def); ok {
+				return c.resolveChoice(choice)
+			}
+		}
+	}
+
 	mode := llm.SelectModePreferred
 
 	reply := "llm.select.reply." + uuid.NewString()
@@ -517,6 +526,30 @@ func (c *CLI) selectModel(provider, model string, interactive bool) (llm.Provide
 	case <-time.After(30 * time.Second):
 		return nil, llm.Model{}, errors.New("cli: timed out selecting model")
 	}
+}
+
+func (c *CLI) resolveAgentDefault(def config.AgentModelDefault) (modelChoice, bool) {
+	try := func(provider, model string) (modelChoice, bool) {
+		if model == "" {
+			return modelChoice{}, false
+		}
+		if provider != "" {
+			if choice, err := c.findModel(provider, model); err == nil {
+				return choice, true
+			}
+		}
+		if res := c.llmMgr.Select(llm.SelectRequest{Mode: llm.SelectModeExact, Model: model}); res.Err == nil {
+			return modelChoice{provider: res.Provider, model: res.Model}, true
+		}
+		return modelChoice{}, false
+	}
+	if choice, ok := try(def.Provider, def.Model); ok {
+		return choice, true
+	}
+	if choice, ok := try(def.FallbackProvider, def.FallbackModel); ok {
+		return choice, true
+	}
+	return modelChoice{}, false
 }
 
 func (c *CLI) availableModels(provider string) ([]modelChoice, error) {

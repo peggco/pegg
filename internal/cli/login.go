@@ -57,10 +57,9 @@ func (c *CLI) runLogin(provider, apiKey string, selectProvider func() (string, e
 		apiKey = key
 	}
 
-	cfg := config.LLMConfig{
-		Provider: provider,
-		APIKey:   apiKey,
-	}
+	cfg, _ := config.GetProvider(provider)
+	cfg.Provider = provider
+	cfg.APIKey = apiKey
 
 	if err := c.syncProvider(cfg); err != nil {
 		return err
@@ -81,7 +80,8 @@ func (c *CLI) loginSubscription(provider string, info subscription.Info) error {
 		return fmt.Errorf("cli: %s subscription is not signed in — %s", provider, info.Hint)
 	}
 
-	cfg := config.LLMConfig{Provider: provider}
+	cfg, _ := config.GetProvider(provider)
+	cfg.Provider = provider
 	if err := c.syncProvider(cfg); err != nil {
 		return err
 	}

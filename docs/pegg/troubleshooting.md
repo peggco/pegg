@@ -73,6 +73,51 @@ driver).
     is empty. Run `pegg doctor` to see which providers fail, then retry. Passing
     `--provider` and `--model` explicitly skips the selection step.
 
+??? question "`pegg team` browser cannot connect to 127.0.0.1"
+
+    The team callback is a loopback URL on the machine running pegg. Over SSH you
+    must forward the same port to the server:
+
+    ```bash
+    # server
+    pegg team --no-browser --port 8765
+
+    # laptop
+    ssh -L 8765:127.0.0.1:8765 user@server
+    ```
+
+    Open the printed URL and approve. If the SSH session is already open, use the
+    OpenSSH escape `~C` followed by `-L 8765:127.0.0.1:8765`. The port must match
+    `--port`, and the local port must be free. If `AllowTcpForwarding` is disabled
+    on the SSH server, connect locally and copy the resulting
+    `~/.pegg/pegg.json`, or use a public team service URL.
+
+??? question "`pegg team` returns `provider check failed` or `connection refused`"
+
+    The CLI reached the website but could not reach the team service returned as
+    the provider base URL. Check `TEAM_SERVICE_URL` in the ginit environment and
+    make sure the machine running `pegg team` can reach it. If the team service
+    runs on your laptop, forward it with `ssh -R 8081:127.0.0.1:8081` or use a
+    public URL.
+
+    Also check that the website API is reachable from the same machine
+    (`--api-url`).
+
+??? question "`pegg team` returns `401` or `503 team_store_unavailable`"
+
+    `401` means the team gateway rejected the API key. Retry after the embedded
+    replica sync interval, or lower `DATABASE_SYNC_INTERVAL` in the team service
+    environment. `503 team_store_unavailable` means the gateway's database or the
+    `team_ai_*` tables are unavailable; run ginit migrations and check the team
+    service logs.
+
+??? question "`pegg team` keeps creating a new API key"
+
+    The CLI reuses a key only when it can decrypt the stored per-team/user CLI
+    credential. Revoking the key, rotating `BYOK_ENCRYPTION_KEY`, or deleting the
+    key removes that ability. Connect again to create a new key. Website-created
+    keys are not reused because only their hash is stored.
+
 ??? question "HTTP 401 / 403 from a provider"
 
     The API key is missing, expired, or lacks access to the model. Re-run

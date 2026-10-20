@@ -91,6 +91,7 @@ func TestParseGateIndices(t *testing.T) {
 }
 
 func TestGateDispatcherOffAndScore(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bus := event.New()
 	hits := []SearchHit{
 		{ID: "a", Title: "auth token", Score: 20},
@@ -111,6 +112,7 @@ func TestGateDispatcherOffAndScore(t *testing.T) {
 }
 
 func TestGateAutoFallsBackToScore(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bus := event.New()
 	cfg := defaultCfg()
 	m := newManager(Deps{Config: cfg, Bus: bus}, t.TempDir())
@@ -125,6 +127,7 @@ func TestGateAutoFallsBackToScore(t *testing.T) {
 }
 
 func TestGateDecisionUnavailableFailsOpen(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bus := event.New()
 	cfg := defaultCfg()
 	cfg.Gate = config.GateDecision

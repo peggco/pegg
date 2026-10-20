@@ -119,6 +119,7 @@ func (c *CLI) registerDefaultCommands() {
 			c.newFilesCommand(),
 			c.newCacheCommand(),
 			c.newProviderCommand(),
+			c.newTeamCommand(),
 			c.newModelsCommand(),
 			c.newDoctorCommand(),
 			c.newConfigCommand(),

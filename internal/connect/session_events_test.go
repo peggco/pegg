@@ -10,6 +10,7 @@ import (
 )
 
 func TestSessionEventsForwardedToClient(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bus := event.New()
 	c, err := New(Deps{Config: config.DefaultConfig(), Bus: bus, Log: testLogger(), Version: "test"}, config.DefaultConfig().Connect)
 	if err != nil {

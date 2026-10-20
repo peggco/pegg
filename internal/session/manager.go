@@ -107,6 +107,24 @@ func (m *Manager) SetMode(id, mode string) error {
 	return nil
 }
 
+func (m *Manager) SetModel(id, provider, model string) error {
+	s, err := m.store.Get(id)
+	if err != nil {
+		return err
+	}
+	if s.Provider == provider && s.Model == model {
+		return nil
+	}
+	s.Provider = provider
+	s.Model = model
+	s.UpdatedAt = time.Now()
+	if err := m.store.Update(*s); err != nil {
+		return err
+	}
+	m.publish(TopicSessionUpdated, SessionUpdated{SessionID: id})
+	return nil
+}
+
 func (m *Manager) AppendMessage(sessionID string, msg llm.Message) (*Message, error) {
 	if _, err := m.store.Get(sessionID); err != nil {
 		return nil, err

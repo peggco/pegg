@@ -81,6 +81,23 @@ func New(deps Deps, log *logger.Logger) *Router {
 		}}, opts...)
 	})
 	agent.OnModelResolve(func(mr agent.ModelResolve) agent.ModelResolve {
+		if r.deps.Config == nil || r.deps.LLM == nil || mr.Agent == nil {
+			return mr
+		}
+		a := mr.Agent
+		if a.ParentAgentID == "" || a.RouterManaged {
+			return mr
+		}
+		def, ok := r.deps.Config.AgentDefaults[a.Name]
+		if !ok {
+			return mr
+		}
+		if prov, mdl, ok := r.resolveAgentDefault(def); ok {
+			a.SetModelProvider(mdl, prov)
+		}
+		return mr
+	})
+	agent.OnModelResolve(func(mr agent.ModelResolve) agent.ModelResolve {
 		if !r.Enabled() {
 			return mr
 		}
@@ -106,6 +123,48 @@ func New(deps Deps, log *logger.Logger) *Router {
 		return mr
 	})
 	return r
+}
+
+func (r *Router) resolveAgentDefault(def config.AgentModelDefault) (llm.Provider, llm.Model, bool) {
+	if r == nil || r.deps.LLM == nil {
+		return nil, llm.Model{}, false
+	}
+	try := func(provider, model string) (llm.Provider, llm.Model, bool) {
+		if model == "" {
+			return nil, llm.Model{}, false
+		}
+		if provider != "" {
+			res := r.deps.LLM.Select(llm.SelectRequest{
+				Mode:     llm.SelectModeExact,
+				Provider: provider,
+				Model:    model,
+			})
+			if res.Err == nil {
+				prov, err := r.deps.LLM.Provider(res.Provider)
+				if err == nil {
+					return prov, res.Model, true
+				}
+			}
+		}
+		res := r.deps.LLM.Select(llm.SelectRequest{
+			Mode:  llm.SelectModeExact,
+			Model: model,
+		})
+		if res.Err == nil {
+			prov, err := r.deps.LLM.Provider(res.Provider)
+			if err == nil {
+				return prov, res.Model, true
+			}
+		}
+		return nil, llm.Model{}, false
+	}
+	if prov, model, ok := try(def.Provider, def.Model); ok {
+		return prov, model, true
+	}
+	if prov, model, ok := try(def.FallbackProvider, def.FallbackModel); ok {
+		return prov, model, true
+	}
+	return nil, llm.Model{}, false
 }
 
 func hasImageAttachments(a *agent.Agent) bool {
@@ -203,36 +262,96 @@ func (r *Router) usesDifficulty(agentName string) bool {
 }
 
 func (r *Router) evaluateDifficulty(ctx context.Context, req SelectRequest) string {
-	prov, err := r.decisionProvider()
+	if prov, err := r.decisionProvider(); err == nil {
+		model := ""
+		if r.cfg().SmartRouter != nil {
+			model = r.cfg().SmartRouter.Model
+		}
+		res, err := prov.Decide(ctx, &decision.Request{
+			Model: model,
+			State: buildState(req),
+			Questions: map[string]decision.Question{
+				"task_difficulty": decision.ScoreQuestion(
+					"How difficult is this task for an AI coding agent?",
+					difficultyCriteria,
+				),
+			},
+		})
+		if err == nil {
+			if ans, ok := res.Answers["task_difficulty"]; ok {
+				if score, ok := ans.ScoreValue(); ok {
+					return difficultyFromScore(score)
+				}
+			}
+		}
+	}
+	return r.evaluateDifficultyViaLLM(ctx, req)
+}
+
+func (r *Router) evaluateDifficultyViaLLM(ctx context.Context, req SelectRequest) string {
+	prov, model, err := r.decisionPreference()
 	if err != nil {
 		return ""
 	}
-	model := ""
-	if r.cfg().SmartRouter != nil {
-		model = r.cfg().SmartRouter.Model
-	}
-	res, err := prov.Decide(ctx, &decision.Request{
-		Model: model,
-		State: buildState(req),
-		Questions: map[string]decision.Question{
-			"task_difficulty": decision.ScoreQuestion(
-				"How difficult is this task for an AI coding agent?",
-				difficultyCriteria,
-			),
+	system := "Classify the difficulty of a coding task for an AI coding agent.\n\n" +
+		strings.Join(difficultyCriteria, "\n") +
+		"\n\nRespond with exactly one of: trivial, moderate, complex."
+	llmReq := llm.NewRequest(model.ID, []llm.Message{
+		llm.SystemMessage(system),
+		llm.UserMessage(buildState(req)),
+	}).WithStrictStructuredOutput("task_difficulty", map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"difficulty": map[string]any{
+				"type": "string",
+				"enum": []string{
+					DifficultyTrivial,
+					DifficultyModerate,
+					DifficultyComplex,
+				},
+			},
 		},
+		"required":             []string{"difficulty"},
+		"additionalProperties": false,
 	})
+	resp, err := prov.Chat(ctx, llmReq)
 	if err != nil {
 		return ""
 	}
-	ans, ok := res.Answers["task_difficulty"]
-	if !ok {
+	var out struct {
+		Difficulty string `json:"difficulty"`
+	}
+	if err := resp.Structured(&out); err != nil {
 		return ""
 	}
-	score, ok := ans.ScoreValue()
-	if !ok {
-		return ""
+	switch out.Difficulty {
+	case DifficultyTrivial, DifficultyModerate, DifficultyComplex:
+		return out.Difficulty
 	}
-	return difficultyFromScore(score)
+	return ""
+}
+
+func (r *Router) decisionPreference() (llm.Provider, llm.Model, error) {
+	if r.deps.LLM == nil {
+		return nil, llm.Model{}, errors.New("router: llm manager unavailable")
+	}
+	if cfg := r.cfg(); cfg != nil && cfg.SmartRouter != nil && cfg.SmartRouter.Model != "" {
+		if prov, model, ok := r.resolveAgentDefault(config.AgentModelDefault{
+			Provider: cfg.SmartRouter.Provider,
+			Model:    cfg.SmartRouter.Model,
+		}); ok {
+			return prov, model, nil
+		}
+	}
+	res := r.deps.LLM.Select(llm.SelectRequest{Mode: llm.SelectModePreferred})
+	if res.Err != nil || res.Model.ID == "" {
+		return nil, llm.Model{}, errors.New("router: no models available")
+	}
+	prov, err := r.deps.LLM.Provider(res.Provider)
+	if err != nil {
+		return nil, llm.Model{}, err
+	}
+	return prov, res.Model, nil
 }
 
 func (r *Router) resolve(cand candidate) (llm.Provider, llm.Model, error) {
@@ -427,14 +546,7 @@ func (r *Router) decisionProvider() (decision.Provider, error) {
 }
 
 func (r *Router) selectViaLLM(ctx context.Context, req SelectRequest, cands []candidate) (candidate, bool, error) {
-	if r.deps.LLM == nil {
-		return candidate{}, false, errors.New("router: llm manager unavailable")
-	}
-	res := r.deps.LLM.Select(llm.SelectRequest{Mode: llm.SelectModePreferred})
-	if res.Err != nil || res.Model.ID == "" {
-		return candidate{}, false, res.Err
-	}
-	prov, err := r.deps.LLM.Provider(res.Provider)
+	prov, mdl, err := r.decisionPreference()
 	if err != nil {
 		return candidate{}, false, err
 	}
@@ -453,7 +565,7 @@ func (r *Router) selectViaLLM(ctx context.Context, req SelectRequest, cands []ca
 		llm.UserMessage(req.Task),
 	}
 
-	llmReq := llm.NewRequest(res.Model.ID, messages).WithStrictStructuredOutput("model_pick", map[string]any{
+	llmReq := llm.NewRequest(mdl.ID, messages).WithStrictStructuredOutput("model_pick", map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"model": map[string]any{"type": "string"},

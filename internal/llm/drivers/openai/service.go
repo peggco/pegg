@@ -241,6 +241,7 @@ func (s *Service) ListModels(ctx context.Context) ([]llm.Model, error) {
 			Object:  m.Object,
 			Created: m.Created,
 			OwnedBy: m.OwnedBy,
+			Config:  m.Config,
 		}
 	}
 	return models, nil

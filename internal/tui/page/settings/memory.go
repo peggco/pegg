@@ -459,28 +459,36 @@ func (t *memoryTab) adjustMaxResults(delta int) {
 }
 
 func (t *memoryTab) save() {
-	cfg := &config.MemoryConfig{
-		Enabled:       t.enabled,
-		Provider:      t.provider,
-		Model:         t.model,
-		Gate:          t.gate,
-		ContextBudget: t.budget,
-		MaxResults:    t.maxResults,
+	cfg, err := config.Load()
+	if err != nil {
+		t.settings.errMsg = i18n.Tf("settings.memory.errSave", err.Error())
+		return
 	}
+	mem := cfg.Memory
+	if mem == nil {
+		mem = config.DefaultConfig().Memory
+	}
+	mem.Enabled = t.enabled
+	mem.Provider = t.provider
+	mem.Model = t.model
+	mem.Gate = t.gate
+	mem.ContextBudget = t.budget
+	mem.MaxResults = t.maxResults
 	thr := t.threshold
-	cfg.Threshold = &thr
+	mem.Threshold = &thr
 	cons := t.consolidate
-	cfg.Consolidate = &cons
-	if err := config.UpsertMemory(cfg); err != nil {
+	mem.Consolidate = &cons
+	cfg.Memory = mem
+	if err := config.Save(cfg); err != nil {
 		t.settings.errMsg = i18n.Tf("settings.memory.errSave", err.Error())
 		return
 	}
 	t.settings.errMsg = ""
 	if t.settings.deps.Config != nil {
-		t.settings.deps.Config.Memory = cfg
+		t.settings.deps.Config.Memory = mem
 	}
 	if t.settings.deps.Memory != nil {
-		t.settings.deps.Memory.UpdateConfig(cfg)
+		t.settings.deps.Memory.UpdateConfig(mem)
 	}
 }
 

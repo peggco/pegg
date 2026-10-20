@@ -1,3 +1,7 @@
+---
+icon: lucide/audio-lines
+---
+
 # Voice input
 
 Pegg can record speech and insert the transcript into the chat input. The

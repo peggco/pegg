@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/gdamore/tcell/v2"
+
+	"github.com/peggco/pegg/internal/core/config"
 )
 
 func TestMemoryTabFocusReachesStatsAndClear(t *testing.T) {
@@ -31,6 +33,7 @@ func TestMemoryTabFocusReachesStatsAndClear(t *testing.T) {
 }
 
 func TestMemoryTabGateCycling(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	s := New(Deps{})
 	m := s.memory
 	m.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
@@ -90,5 +93,37 @@ func TestMemoryTabStatsRowsReadOnly(t *testing.T) {
 	}
 	if m.focus != memoryFocusLastEntry {
 		t.Fatalf("focus changed on read-only row: %v", m.focus)
+	}
+}
+
+func TestMemoryTabSavePreservesSkipTools(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg := config.DefaultConfig()
+	cfg.Memory.SkipTools = []string{"websearch"}
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(Deps{Config: cfg})
+	m := s.memory
+	m.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
+	m.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
+	if m.focus != memoryFocusGate {
+		t.Fatalf("focus = %v, want Gate", m.focus)
+	}
+	start := m.gate
+	if !m.HandleKey(tcell.NewEventKey(tcell.KeyRight, 0, 0)) {
+		t.Fatal("Right should cycle gate")
+	}
+
+	got, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Memory.Gate == start {
+		t.Fatal("expected memory settings to be toggled and saved")
+	}
+	if len(got.Memory.SkipTools) != 1 || got.Memory.SkipTools[0] != "websearch" {
+		t.Fatalf("skip_tools lost: %+v", got.Memory)
 	}
 }

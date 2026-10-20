@@ -47,6 +47,15 @@ Pegg fetches at startup and caches locally.
 | `yi` | openai | `https://api.lingyiwanwu.com/v1` |
 | `zhipu` | openai | `https://open.bigmodel.cn/api/paas/v4` |
 
+### Team providers
+
+`pegg team` adds a provider named `pegg-team <team>`. It behaves like an
+OpenAI-compatible provider, but its base URL points at the team BYOK gateway and
+its models and defaults come from the team's website configuration. Manage the
+upstream keys on **Team AI** in the website, not with `pegg login`.
+
+See [Team AI](features/team-ai.md).
+
 ### Authentication
 
 | Driver | Auth mechanism |

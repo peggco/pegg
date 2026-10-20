@@ -224,6 +224,41 @@ func TestLoginInteractiveEmptyAPIKey(t *testing.T) {
 	}
 }
 
+func TestLoginPreservesExistingProviderFields(t *testing.T) {
+	c, _ := newTestCLI(t)
+	registerTestProvider(t, "provfields")
+
+	seed := config.DefaultConfig()
+	seed.Providers = []config.LLMConfig{{
+		Provider: "provfields",
+		BaseURL:  "http://localhost:9999/v1",
+		Timeout:  42,
+		Headers:  map[string]string{"X-Test": "1"},
+	}}
+	if err := config.Save(seed); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Execute([]string{"login", "--provider", "provfields", "--api-key", "sk-new"}); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Providers) != 1 {
+		t.Fatalf("config providers: %+v", loaded.Providers)
+	}
+	p := loaded.Providers[0]
+	if p.APIKey != "sk-new" {
+		t.Errorf("api key = %q, want sk-new", p.APIKey)
+	}
+	if p.BaseURL != "http://localhost:9999/v1" || p.Timeout != 42 || p.Headers["X-Test"] != "1" {
+		t.Errorf("provider fields wiped: %+v", p)
+	}
+}
+
 func TestOnRegisterCommandHook(t *testing.T) {
 	c, _ := newTestCLI(t)
 	c.OnRegisterCommand(func(cmds []*cobra.Command) []*cobra.Command {

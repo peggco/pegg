@@ -18,6 +18,7 @@ func (acpDiscardHandler) Write(logger.Record) error { return nil }
 func (acpDiscardHandler) Close() error              { return nil }
 
 func TestResolveModelSmartRouterThroughManager(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bus := event.New()
 	log := logger.New(logger.LevelError, acpDiscardHandler{})
 	store, err := cache.NewJSONCache()

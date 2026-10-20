@@ -231,16 +231,34 @@ func (t *sessionTab) saveCompaction() {
 			strategy = append(strategy, compStrategies[i])
 		}
 	}
-	cfg := &config.CompactionConfig{
-		Enabled:            t.compEnabled,
-		Strategy:           strategy,
-		Threshold:          float64(t.compThresh),
-		MaxMessages:        t.compMaxMsg,
-		MaxToolOutputChars: t.compMaxTool,
+	cfg, err := config.Load()
+	if err != nil {
+		return
 	}
-	_ = config.UpsertCompaction(cfg)
+	comp := cfg.Compaction
+	if comp == nil {
+		comp = config.DefaultConfig().Compaction
+	}
+	known := make(map[string]bool, len(compStrategies))
+	for _, s := range compStrategies {
+		known[s] = true
+	}
+	for _, s := range comp.Strategy {
+		if !known[s] {
+			strategy = append(strategy, s)
+		}
+	}
+	comp.Enabled = t.compEnabled
+	comp.Strategy = strategy
+	comp.Threshold = float64(t.compThresh)
+	comp.MaxMessages = t.compMaxMsg
+	comp.MaxToolOutputChars = t.compMaxTool
+	cfg.Compaction = comp
+	if err := config.Save(cfg); err != nil {
+		return
+	}
 	if t.settings.deps.Config != nil {
-		t.settings.deps.Config.Compaction = cfg
+		t.settings.deps.Config.Compaction = comp
 	}
 }
 

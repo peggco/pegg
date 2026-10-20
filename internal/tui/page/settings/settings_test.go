@@ -231,6 +231,7 @@ func TestSettingsSelectedModelEmptyDisplay(t *testing.T) {
 }
 
 func TestSettingsAllTabsMouseSmoke(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	styles.RegisterDefaults()
 	styles.Set("dark")
 	for i := 0; i < tabKindCount; i++ {
@@ -293,6 +294,47 @@ func TestSettingsOpenSubscriptionNotSignedIn(t *testing.T) {
 	if s.sub == nil {
 		t.Fatal("not-signed-in subscription should show instructions")
 	}
+}
+
+func TestSettingsOpenSubscriptionPreservesProviderFields(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg := config.DefaultConfig()
+	cfg.Providers = []config.LLMConfig{{
+		Provider: "tuisub3",
+		APIKey:   "sk-existing",
+		BaseURL:  "http://localhost:9999/v1",
+		Timeout:  42,
+		Headers:  map[string]string{"X-Test": "1"},
+	}}
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	s := New(Deps{})
+	subscription.Register(subscription.Info{
+		Provider: "tuisub3",
+		Hint:     "run tui-cli",
+		Status:   func() credentials.Status { return credentials.Status{Provider: "tuisub3", LoggedIn: true} },
+	})
+	s.openSubscription("tuisub3", mustSub(t, "tuisub3"))
+	if s.errMsg != "" {
+		t.Fatalf("errMsg = %q", s.errMsg)
+	}
+
+	got, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range got.Providers {
+		if p.Provider != "tuisub3" {
+			continue
+		}
+		if p.APIKey != "sk-existing" || p.BaseURL != "http://localhost:9999/v1" ||
+			p.Timeout != 42 || p.Headers["X-Test"] != "1" {
+			t.Fatalf("provider fields wiped: %+v", p)
+		}
+		return
+	}
+	t.Fatal("tuisub3 provider not saved")
 }
 
 func mustSub(t *testing.T, name string) subscription.Info {
@@ -393,6 +435,7 @@ func TestListModalMouse(t *testing.T) {
 }
 
 func TestSettingsListTabClick(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	styles.RegisterDefaults()
 	styles.Set("dark")
 	s := New(Deps{})
