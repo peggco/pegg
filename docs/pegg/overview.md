@@ -6,8 +6,8 @@ icon: lucide/rocket
 
 Pegg is a provider-agnostic AI coding agent written in Go. It runs as an interactive
 terminal application, a headless CLI, an HTTP API server, an
-[Agent Client Protocol](usage/acp.md) server, or as an embeddable
-[Go SDK](../sdk/index.md).
+[Agent Client Protocol](usage/acp.md) server, a [VS Code extension](usage/vscode.md),
+or as an embeddable [Go SDK](../sdk/index.md).
 
 The agent can read and edit files, run shell commands, search the web, manage todos,
 delegate work to subagents, load skills, follow project rules, and talk to MCP and
@@ -126,6 +126,13 @@ These are end-user applications built on top of Pegg's agent core:
     Speak JSON-RPC 2.0 with the agent over stdio, HTTP+SSE, or WebSocket.
 
     `pegg serve --acp --stdio`
+
+- [:octicons-code-square-24:{ .lg } **VS Code**](usage/vscode.md)
+
+    Chat, sessions, tools, permissions, voice input, and editor actions inside
+    VS Code, backed by the local Pegg engine.
+
+    `code --install-extension peggco.pegg-vscode`
 
 - [:octicons-package-24:{ .lg } **Go SDK**](../sdk/index.md)
 

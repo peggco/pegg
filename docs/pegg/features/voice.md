@@ -4,9 +4,9 @@ icon: lucide/audio-lines
 
 # Voice input
 
-Pegg can record speech and insert the transcript into the chat input. The
-feature is available through the TUI and the Connect web page. Speech-to-text is
-configured on the machine that runs Pegg.
+Pegg can record speech and insert the transcript into the chat input. The feature
+is available through the TUI, the VS Code extension, and the Connect web page.
+Speech-to-text is configured on the machine that runs Pegg.
 
 ## Configure
 
@@ -63,6 +63,21 @@ The Connect composer has a microphone button.
   the page streams raw PCM and shows live partial text.
 - Otherwise it records with `MediaRecorder` and sends one clip when you stop.
 - The transcript is inserted at the cursor; it is not sent automatically.
+
+## VS Code
+
+The VS Code extension records through the Pegg engine on the machine running the
+agent, so it does not request browser microphone permission in the webview.
+
+- Click the mic button in the composer to start recording; click it again to stop
+  and insert the transcript at the cursor.
+- `sox`, `arecord`, or `ffmpeg` must be available on that machine, or configure
+  `stt.record_command`.
+- In remote and WSL windows, the **remote** host's microphone is used. If it has no
+  microphone, use the local CLI or configure a custom recorder.
+
+See the [VS Code guide](../usage/vscode.md) for the full composer and settings
+reference.
 
 ## Proxy
 

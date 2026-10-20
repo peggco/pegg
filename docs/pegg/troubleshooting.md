@@ -47,6 +47,46 @@ pegg providers refresh --provider openai
 Cache files: `~/.pegg/cache.db` (SQLite driver) or `~/.pegg/cache.json` (JSON
 driver).
 
+## VS Code extension
+
+The [VS Code extension](usage/vscode.md) has its own output channel and ACP process. Open **Pegg: Show
+Logs** and **Pegg: Restart Server** when something looks stuck. The extension
+uses the same config and session database as the CLI.
+
+??? question "The extension cannot find a Pegg binary"
+
+    Run **Pegg: Install or Update Binary**, set `pegg.executablePath`, or allow
+    `<workspace>/bin/pegg` with `pegg.binary.allowWorkspaceBinary`. The extension
+    prefers the workspace binary, then `PATH`, then a verified download.
+
+??? question "The extension says the Pegg binary is too old"
+
+    Update the binary with **Pegg: Install or Update Binary**, or point
+    `pegg.executablePath` at a newer build. Older ACP servers do not support
+    interactive permissions, model switching, or rich tool events.
+
+??? question "No models or providers in VS Code"
+
+    Run **Pegg: Provider Login**, **Pegg: Connect Team**, or open **Pegg: Open
+    Global Config**. After changing providers, run **Pegg: Restart Server**.
+
+??? question "Opening chat creates a new session every time"
+
+    That is expected: opening a new chat starts fresh. Resume with **Pegg: Resume
+    Session** or the Sessions tree. The current session is marked in green. If the
+    engine exits unexpectedly mid-run, the next message resumes the same session.
+
+??? question "Voice input fails in VS Code"
+
+    Recording happens on the machine running Pegg, not in the webview. Install
+    `sox`, `arecord`, or `ffmpeg` there, verify the microphone works, and configure
+    `stt.provider`/`stt.model`. Remote and WSL windows use the remote microphone.
+
+??? question "A permission prompt does not appear"
+
+    Update the Pegg binary and retry. If the Pegg chat view is hidden, the
+    extension falls back to a VS Code modal prompt.
+
 ## Common problems
 
 ??? question "`cli: no providers configured` or an empty provider list"

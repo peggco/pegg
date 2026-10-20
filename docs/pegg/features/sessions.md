@@ -51,6 +51,13 @@ current project.
     messages; scrolling to the top loads older messages in batches of 50. A
     submitted message with an active session resumes it automatically.
 
+=== "VS Code"
+
+    Open the **Sessions** view, or run **Pegg: Resume Session**. The current
+    session is marked with a green icon and a `current` label. Use **Pegg: New
+    Session** to start a fresh chat; opening a new chat does not auto-resume the
+    last session.
+
 === "HTTP"
 
     ```bash
@@ -112,12 +119,12 @@ compacted view plus everything said afterwards.
 
 ## Managing sessions
 
-| Action | CLI | TUI | HTTP | ACP |
-|---|---|---|---|---|
-| List | `sessions list` | Settings → Session → Load | `GET /api/sessions` | `session/list` |
-| Show details | `sessions show <id>` | transcript | `GET /api/sessions/{id}` | — |
-| Rename | — | Settings → Session → Change title | — | — |
-| Delete | — | Settings → Session → Delete | `DELETE /api/sessions/{id}` | `session/delete` |
+| Action | CLI | TUI | VS Code | HTTP | ACP |
+|---|---|---|---|---|---|
+| List | `sessions list` | Settings → Session → Load | Sessions view | `GET /api/sessions` | `session/list` |
+| Show details | `sessions show <id>` | transcript | chat transcript | `GET /api/sessions/{id}` | — |
+| Rename | — | Settings → Session → Change title | **Pegg: Rename Session** | — | `session/rename` |
+| Delete | — | Settings → Session → Delete | **Pegg: Delete Session** | `DELETE /api/sessions/{id}` | `session/delete` |
 | Resume | `run --session` | Load session | `POST /api/run` | `session/resume` / `session/load` |
 
 Deleting a session permanently removes its messages and usage from the store.

@@ -10,8 +10,12 @@ tool result (or run as a background subagent for `context: fork` skills). Four
 commands are built in — `/init`, `/batch`, `/review`, and `/rule` — and you can
 [add your own](../configurations/skills.md#creating-your-own) with a `SKILL.md` file.
 
-In the TUI, type `/` to open the picker and filter by name. The same token works in
-the CLI (`pegg run "/init"`) and inside subagent task messages.
+In the TUI and the [VS Code extension](../usage/vscode.md), type `/` in the input to
+open the picker and filter by name. The same token works in the CLI
+(`pegg run "/init"`) and inside subagent task messages.
+
+In VS Code, the `@pegg` chat participant also exposes `/explain`, `/fix`,
+`/review`, `/tests`, `/init`, `/rule`, and `/batch` directly in the Chat view.
 
 ## `/init`
 

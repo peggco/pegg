@@ -136,6 +136,7 @@ nav:
       - Usage:
         - CLI: pegg/usage/cli.md
         - TUI: pegg/usage/tui.md
+        - VS Code: pegg/usage/vscode.md
         - HTTP: pegg/usage/http.md
         - ACP: pegg/usage/acp.md
       - Configurations:

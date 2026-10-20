@@ -7,6 +7,9 @@ icon: lucide/cog
 Pegg is configured with a single JSON file per machine plus a few project-local
 files. There is no YAML or TOML variant.
 
+The [VS Code extension](usage/vscode.md) uses this same config and stores only its
+editor-specific options in VS Code settings (`pegg.*`).
+
 ## File locations
 
 | Scope | Path | Purpose |
