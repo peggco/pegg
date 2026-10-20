@@ -2,6 +2,7 @@ package settings
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"sort"
 
@@ -580,7 +581,7 @@ func (t *permissionsTab) saveThreshold() {
 	}
 	perm := cfg.Permission
 	if perm == nil {
-		perm = &config.PermissionConfig{}
+		perm = config.DefaultConfig().Permission
 	}
 	thr := t.judgeThreshold
 	perm.JudgeThreshold = &thr
@@ -708,19 +709,21 @@ func (t *permissionsTab) setJudgeModel(provider, model string) {
 }
 
 func (t *permissionsTab) applyLive() {
-	rules := make(map[string]string, len(t.tools))
-	for _, tp := range t.tools {
-		rules[tp.name] = tp.mode
-	}
 	cfg, err := config.Load()
 	if err != nil {
 		return
 	}
 	perm := cfg.Permission
 	if perm == nil {
-		perm = &config.PermissionConfig{}
+		perm = config.DefaultConfig().Permission
 	}
-	perm.Default = "semi-ask"
+	rules := maps.Clone(perm.Rules)
+	if rules == nil {
+		rules = make(map[string]string, len(t.tools))
+	}
+	for _, tp := range t.tools {
+		rules[tp.name] = tp.mode
+	}
 	perm.Rules = rules
 	cfg.Permission = perm
 	_ = config.Save(cfg)

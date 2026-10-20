@@ -14,6 +14,7 @@ import (
 )
 
 func TestHandleStreamEmitsFrames(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	c, err := New(Deps{Config: config.DefaultConfig(), Log: testLogger(), Version: "test"}, config.DefaultConfig().Connect)
 	if err != nil {
 		t.Fatal(err)
@@ -54,6 +55,7 @@ func TestHandleStreamEmitsFrames(t *testing.T) {
 }
 
 func TestStartRejectsEmptyMessage(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	c, err := New(Deps{Config: config.DefaultConfig(), Log: testLogger(), Version: "test"}, config.DefaultConfig().Connect)
 	if err != nil {
 		t.Fatal(err)
@@ -84,6 +86,7 @@ func (p *fakeProvider) ListModels(context.Context) ([]llm.Model, error) {
 }
 
 func TestExecuteEmitsRunLifecycle(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	c, err := New(Deps{Config: config.DefaultConfig(), Log: testLogger(), Version: "test"}, config.DefaultConfig().Connect)
 	if err != nil {
 		t.Fatal(err)
@@ -142,6 +145,7 @@ loop:
 }
 
 func TestWatchdogFailsStalledRun(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	c, err := New(Deps{Config: config.DefaultConfig(), Log: testLogger(), Version: "test"}, func() *config.ConnectConfig {
 		cc := config.DefaultConfig().Connect
 		cc.ResponseTimeoutSecs = 1
@@ -211,6 +215,7 @@ func (p *errorProvider) ListModels(context.Context) ([]llm.Model, error) {
 }
 
 func TestExecuteEmitsRunError(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	c, err := New(Deps{Config: config.DefaultConfig(), Log: testLogger(), Version: "test"}, config.DefaultConfig().Connect)
 	if err != nil {
 		t.Fatal(err)
@@ -252,6 +257,7 @@ func TestExecuteEmitsRunError(t *testing.T) {
 }
 
 func TestForwardsAgentErrorAndRetry(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bus := event.New()
 	c, err := New(Deps{Config: config.DefaultConfig(), Bus: bus, Log: testLogger(), Version: "test"}, config.DefaultConfig().Connect)
 	if err != nil {

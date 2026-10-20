@@ -187,7 +187,8 @@ func (s *Settings) openSubscription(name string, info subscription.Info) {
 		return
 	}
 
-	cfg := config.LLMConfig{Provider: name}
+	cfg, _ := config.GetProvider(name)
+	cfg.Provider = name
 	if err := config.UpsertProvider(cfg); err != nil {
 		s.errMsg = i18n.Tf("settings.provider.saveError", err.Error())
 		s.back()

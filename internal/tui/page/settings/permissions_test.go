@@ -413,4 +413,28 @@ func TestPermissionsApplyLivePreservesJudgeConfig(t *testing.T) {
 	}
 }
 
+func TestPermissionsApplyLivePreservesDefaultAndForeignRules(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg := config.DefaultConfig()
+	cfg.Permission.Default = "judge"
+	cfg.Permission.Rules["third_party_tool"] = "allow"
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	s := permSettings(t, cfg, nil)
+	s.permissions.applyLive()
+
+	got, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Permission.Default != "judge" {
+		t.Fatalf("default = %q, want judge", got.Permission.Default)
+	}
+	if got.Permission.Rules["third_party_tool"] != "allow" {
+		t.Fatalf("rule for unregistered tool lost: %+v", got.Permission.Rules)
+	}
+}
+
 var _ = components.ListItem{}

@@ -199,6 +199,7 @@ func (d *mockDecision) Decide(_ context.Context, req *decisionapi.Request) (*dec
 }
 
 func TestManagerGateHitsWithDecision(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bus := event.New()
 	decMgr := decisionapi.NewManager(bus, testLogger())
 	if err := decMgr.Start(); err != nil {
@@ -228,6 +229,7 @@ func TestManagerGateHitsWithDecision(t *testing.T) {
 }
 
 func TestManagerDisabled(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bus := event.New()
 	cfg := defaultCfg()
 	cfg.Enabled = false
@@ -243,6 +245,7 @@ func TestManagerDisabled(t *testing.T) {
 }
 
 func TestSkipTools(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	bus := event.New()
 	cfg := defaultCfg()
 	cfg.SkipTools = []string{"bash"}

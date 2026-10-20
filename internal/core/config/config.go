@@ -492,6 +492,19 @@ func SaveIfNotExists(config *Config) error {
 	return Save(config)
 }
 
+func GetProvider(name string) (LLMConfig, bool) {
+	cfg, err := Load()
+	if err != nil {
+		return LLMConfig{}, false
+	}
+	for _, p := range cfg.Providers {
+		if p.Provider == name {
+			return p, true
+		}
+	}
+	return LLMConfig{}, false
+}
+
 func UpsertProvider(provider LLMConfig) error {
 	cfg, err := Load()
 	if err != nil {

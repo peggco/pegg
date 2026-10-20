@@ -231,6 +231,7 @@ func TestSessionTabNewClosesModal(t *testing.T) {
 }
 
 func TestSessionTabCompactionCheckboxes(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	s := New(Deps{})
 	st := s.session
 	st.loadCompaction()
@@ -266,6 +267,7 @@ func TestSessionTabCompactionCheckboxes(t *testing.T) {
 }
 
 func TestSessionTabCompactionEnabledArrows(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	s := New(Deps{})
 	st := s.session
 	st.loadCompaction()
@@ -284,6 +286,7 @@ func TestSessionTabCompactionEnabledArrows(t *testing.T) {
 }
 
 func TestSessionTabCompactionSaveMultiStrategy(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	s := New(Deps{Config: config.DefaultConfig()})
 	st := s.session
 	st.loadCompaction()
@@ -312,5 +315,32 @@ func TestSessionTabCompactionSaveMultiStrategy(t *testing.T) {
 	}
 	if got.Threshold != float64(st.compThresh) || got.MaxMessages != st.compMaxMsg || got.MaxToolOutputChars != st.compMaxTool {
 		t.Errorf("numeric settings not saved: %+v", got)
+	}
+}
+
+func TestSessionTabCompactionSavePreservesSummarizer(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg := config.DefaultConfig()
+	cfg.Compaction.SummarizerProvider = "openrouter"
+	cfg.Compaction.SummarizerModel = "typesafe/jev-1.13"
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(Deps{Config: cfg})
+	st := s.session
+	st.loadCompaction()
+	st.index = compSectionStart
+	st.HandleKey(tcell.NewEventKey(tcell.KeyRight, 0, 0))
+
+	got, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Compaction.Enabled {
+		t.Fatal("expected compaction to be toggled and saved")
+	}
+	if got.Compaction.SummarizerProvider != "openrouter" || got.Compaction.SummarizerModel != "typesafe/jev-1.13" {
+		t.Fatalf("summarizer config lost: %+v", got.Compaction)
 	}
 }
