@@ -8,6 +8,10 @@ Pegg implements the **Agent Client Protocol** (ACP): a JSON-RPC 2.0 protocol for
 driving a coding agent from an editor or other client. The server exposes the same
 orchestrator used by the CLI and TUI.
 
+The official [VS Code extension](vscode.md) is a complete ACP client and uses the
+stdio transport. See its guide for editor workflows, permissions, voice, sessions,
+and settings.
+
 ## Starting the server
 
 === "stdio"
@@ -66,11 +70,16 @@ handler does not apply the HTTP API's auth or CORS middleware.
 | `session/load` | `sessionId`, `cwd`, `mcpServers?`, `additionalDirectories?` | `null` (replays history as notifications) |
 | `session/resume` | same as `session/load` | `{}` (no replay) |
 | `session/set_mode` | `sessionId`, `modeId` (`build`/`plan`/`auto`) | `{}` |
-| `session/prompt` | `sessionId`, `prompt` | `{ "stopReason": "..." }` |
+| `session/set_model` | `sessionId`, `provider`, `model`, `reasoningEffort?` | `{ "provider": "...", "model": "..." }` |
+| `session/rename` | `sessionId`, `title` | `{}` |
+| `session/prompt` | `sessionId`, `prompt` | `{ "stopReason": "...", "usage?": {...} }` |
 | `session/delete` | `sessionId` | `null` |
 | `session/close` | `sessionId` | `{}` |
-| `session/list` | — | `{ "sessions": [...], "nextCursor": "" }` |
+| `session/list` | `cwd?`, `all?`, `limit?`, `cursor?` | `{ "sessions": [...], "nextCursor": "" }` |
+| `pegg/models` | `provider?` | `{ "models": [{ "provider": "...", "model": {...} }] }` |
 | `stt/transcribe` | `audio` (base64), `mediaType?`, `fileName?` | `{ "text": "...", "provider": "...", "model": "..." }` |
+| `stt/record/start` | — | `{ "recording": true }` |
+| `stt/record/stop` | — | `{ "text": "...", "provider": "...", "model": "..." }` |
 | `session/cancel` | `sessionId` | no response |
 | `$/cancelRequest` | — | no response (no-op) |
 
@@ -98,9 +107,18 @@ the agent supports:
       "resume": {},
       "close": {},
       "additionalDirectories": {}
+    },
+    "pegg": {
+      "ask": true,
+      "permissions": true,
+      "models": true,
+      "commands": true,
+      "attachments": true,
+      "diffs": true,
+      "plan": true
     }
   },
-  "agentInfo": { "name": "pegg", "title": "Pegg AI Agent", "version": "0.1.0" },
+  "agentInfo": { "name": "pegg", "title": "Pegg AI Agent", "version": "0.1.9" },
   "authMethods": []
 }
 ```
@@ -115,7 +133,19 @@ session (titled `ACP Session`) in its session store and links the two.
 ```
 
 ```json
-{ "jsonrpc": "2.0", "id": 1, "result": { "sessionId": "9d1f..." } }
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "sessionId": "9d1f...",
+    "peggSessionId": "3f2b...",
+    "mode": "auto",
+    "provider": "openai",
+    "model": "gpt-4o",
+    "permissionMode": "semi-ask",
+    "commands": [{ "name": "init", "description": "..." }]
+  }
+}
 ```
 
 !!! warning
@@ -130,9 +160,10 @@ session (titled `ACP Session`) in its session store and links the two.
 
 The first `text` content block is used as the agent input. If the prompt contains
 no text but includes an `audio` content block, Pegg transcribes that audio with
-the configured STT provider and uses the transcript. While the agent
-runs, the server pushes `session/update` notifications (see below). The result's
-`stopReason` is one of:
+the configured STT provider and uses the transcript. `image` blocks become image
+attachments; `resource` text blocks are inlined as file context; resource blobs
+become file attachments. While the agent runs, the server pushes
+`session/update` notifications (see below). The result's `stopReason` is one of:
 
 | Stop reason | Meaning |
 |---|---|
@@ -204,9 +235,19 @@ The server pushes `session/update` notifications:
 |---|---|
 | `user_message_chunk` | Replaying a stored user message (`session/load`) |
 | `agent_message_chunk` | Streaming assistant text |
-| `tool_call` | A tool call starts (`toolCallId`, `title`, `kind: "other"`, `status: "pending"`) |
-| `tool_call_update` | A tool call completes (`toolCallId`, `status: "completed"`) |
+| `agent_thought_chunk` | Streaming model reasoning |
+| `tool_call` | A tool call starts (`toolCallId`, `title`, `kind`, `status`, `rawInput`, `locations`) |
+| `tool_call_update` | A tool call completes or fails (`status`, `rawOutput`, `error`, optional `contents` diff) |
+| `plan` | A `todowrite` call updates the plan (`entries`) |
 | `usage_update` | After a run with token usage (`used`, `size`, `cost`) |
+| `current_mode_update` | Mode changed (`mode`) |
+| `current_model_update` | Model changed (`provider`, `model`) |
+| `available_commands_update` | Skills/commands available for the session |
+| `error` | The run failed (`error`) |
+
+Updates also include `agentId` and `agentName` when the event came from a
+subagent. Tool calls may include a `contents` array with a `diff` object
+(`path`, `oldText`, `newText`) for `write`/`edit` calls.
 
 When the context is compacted mid-run, an `agent_message_chunk` notification is
 emitted with the text `[Context compacted (<strategy>) — <messages> messages,
@@ -294,6 +335,19 @@ agent's context is cancelled and the in-flight `session/prompt` resolves with
 
 ## Outbound requests
 
-The server can also call methods on the client (`fs/read_text_file`,
-`fs/write_text_file`, `session/request_permission`). The plumbing is implemented, but
-current tools do not invoke it, so clients do not need to handle these methods yet.
+The server calls the client when the agent needs user input:
+
+- `session/request_permission` — the permission middleware asks for a decision.
+  Clients should return `{ "outcome": { "outcome": "selected", "optionId": "allow_once" } }`
+  (or another advertised option id).
+- `pegg/ask` — Pegg-specific questions from `askuserquestion`. Params contain
+  `sessionId`, `agentId`, `agentName`, and `questions` (text, boolean, select,
+  multiselect). Return `{ "answers": { "<question id>": "<answer>" } }`.
+
+Permission and question requests are sent while `session/prompt` is running. A
+client must continue reading JSON-RPC frames while a prompt is active so it can
+answer them. If the client cannot answer, return a rejection/empty answers rather
+than leaving the run blocked.
+
+`fs/read_text_file` and `fs/write_text_file` are also available; current built-in
+tools use the server-side sandbox and do not require them.

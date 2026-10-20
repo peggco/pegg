@@ -63,6 +63,17 @@ type AgentCapabilities struct {
 	MCPCapabilities    *MCPCaps          `json:"mcpCapabilities,omitempty"`
 	SessionCaps        *AgentSessionCaps `json:"sessionCapabilities,omitempty"`
 	Auth               *AgentAuthCaps    `json:"auth,omitempty"`
+	Pegg               *PeggCapabilities `json:"pegg,omitempty"`
+}
+
+type PeggCapabilities struct {
+	Ask         bool `json:"ask,omitempty"`
+	Permissions bool `json:"permissions,omitempty"`
+	Models      bool `json:"models,omitempty"`
+	Commands    bool `json:"commands,omitempty"`
+	Attachments bool `json:"attachments,omitempty"`
+	Diffs       bool `json:"diffs,omitempty"`
+	Plan        bool `json:"plan,omitempty"`
 }
 
 type PromptCaps struct {
@@ -106,6 +117,7 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 	if req.ProtocolVersion < 1 {
 		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "unsupported protocol version"}
 	}
+	s.setClientCapabilities(req.ClientCapabilities)
 
 	caps := AgentCapabilities{
 		LoadSession: true,
@@ -123,6 +135,15 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 			Resume:                &struct{}{},
 			Close:                 &struct{}{},
 			AdditionalDirectories: &struct{}{},
+		},
+		Pegg: &PeggCapabilities{
+			Ask:         true,
+			Permissions: true,
+			Models:      true,
+			Commands:    true,
+			Attachments: true,
+			Diffs:       true,
+			Plan:        true,
 		},
 	}
 

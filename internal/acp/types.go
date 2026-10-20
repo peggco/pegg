@@ -52,7 +52,13 @@ type SessionUpdate struct {
 	Size          int                `json:"size,omitempty"`
 	Cost          *Cost              `json:"cost,omitempty"`
 	Mode          string             `json:"mode,omitempty"`
+	Provider      string             `json:"provider,omitempty"`
+	Model         string             `json:"model,omitempty"`
 	Commands      []SlashCommand     `json:"commands,omitempty"`
+	AgentID       string             `json:"agentId,omitempty"`
+	AgentName     string             `json:"agentName,omitempty"`
+	Error         string             `json:"error,omitempty"`
+	Contents      []ToolCallContent  `json:"contents,omitempty"`
 }
 
 type ToolCallContent struct {

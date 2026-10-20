@@ -180,7 +180,7 @@ func TestMethodNotFound(t *testing.T) {
 	})
 	srv.handleFrame(ctx, Message{Body: raw})
 	bt := srv.transport.(*bufferTransport)
-	resp := bt.sends[len(bt.sends)-1]
+	resp := waitForSend(t, bt)
 	if !strings.Contains(resp, `"code":-32601`) {
 		t.Errorf("expected method not found error, got %s", resp)
 	}
@@ -193,7 +193,7 @@ func TestParseError(t *testing.T) {
 
 	srv.handleFrame(ctx, Message{Body: json.RawMessage(`{"jsonrpc": "2.0", "id": 1, "method"`)})
 	bt := srv.transport.(*bufferTransport)
-	resp := bt.sends[len(bt.sends)-1]
+	resp := waitForSend(t, bt)
 	if !strings.Contains(resp, `"code":-32700`) {
 		t.Errorf("expected parse error code, got %s", resp)
 	}
@@ -212,7 +212,7 @@ func TestInvalidJSONRPCVersion(t *testing.T) {
 	})
 	srv.handleFrame(ctx, Message{Body: raw})
 	bt := srv.transport.(*bufferTransport)
-	resp := bt.sends[len(bt.sends)-1]
+	resp := waitForSend(t, bt)
 	if !strings.Contains(resp, `"code":-32600`) {
 		t.Errorf("expected invalid request error, got %s", resp)
 	}
@@ -225,8 +225,9 @@ func TestNotificationNoResponse(t *testing.T) {
 
 	sendNotification(t, srv, ctx, "session/cancel", SessionCancelParams{SessionId: "any"})
 	bt := srv.transport.(*bufferTransport)
-	if len(bt.sends) != 0 {
-		t.Errorf("expected no response for notification, got %d sends: %v", len(bt.sends), bt.sends)
+	time.Sleep(20 * time.Millisecond)
+	if bt.count() != 0 {
+		t.Errorf("expected no response for notification, got %d sends", bt.count())
 	}
 }
 
@@ -242,8 +243,8 @@ func TestClientResponseDelivery(t *testing.T) {
 	})
 	srv.handleFrame(ctx, Message{Body: raw})
 	bt := srv.transport.(*bufferTransport)
-	if len(bt.sends) != 0 {
-		t.Errorf("expected no sends for client response, got %v", bt.sends)
+	if bt.count() != 0 {
+		t.Errorf("expected no sends for client response, got %d", bt.count())
 	}
 }
 
@@ -320,7 +321,7 @@ func TestSessionPromptMalformed(t *testing.T) {
 	})
 	srv.handleFrame(ctx, Message{Body: raw})
 	bt := srv.transport.(*bufferTransport)
-	resp := bt.sends[len(bt.sends)-1]
+	resp := waitForSend(t, bt)
 	if !strings.Contains(resp, `"code"`) {
 		t.Errorf("expected error for malformed params, got %s", resp)
 	}
@@ -481,10 +482,10 @@ func TestClientRequestIsSent(t *testing.T) {
 		var parsed struct {
 			ID string `json:"id"`
 		}
-		if len(bt.sends) == 0 {
+		if bt.count() == 0 {
 			return
 		}
-		json.Unmarshal([]byte(bt.sends[len(bt.sends)-1]), &parsed)
+		json.Unmarshal([]byte(bt.last()), &parsed)
 		resp, _ := json.Marshal(map[string]any{
 			"jsonrpc": "2.0",
 			"id":      parsed.ID,
