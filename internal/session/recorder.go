@@ -133,8 +133,12 @@ func (r *Recorder) handleResume(e SessionResume) {
 
 func (r *Recorder) handleStarted(e agent.AgentStarted) {
 	r.mu.Lock()
-	if _, ok := r.sessions[e.AgentID]; ok {
+	if info, ok := r.sessions[e.AgentID]; ok {
+		info.provider = e.Provider
+		info.model = e.Model
+		sessID := info.sessionID
 		r.mu.Unlock()
+		r.persistModel(sessID, e.Provider, e.Model)
 		return
 	}
 	sessID := r.resumed[e.AgentID]
@@ -150,6 +154,7 @@ func (r *Recorder) handleStarted(e agent.AgentStarted) {
 		parentSessionID = r.sessionIDForAgent(e.ParentAgentID)
 	}
 
+	created := false
 	if sessID == "" {
 		opts := CreateOptions{}
 		if e.Provider != nil {
@@ -177,6 +182,7 @@ func (r *Recorder) handleStarted(e agent.AgentStarted) {
 			return
 		}
 		sessID = s.ID
+		created = true
 	}
 
 	info := &sessionInfo{
@@ -191,10 +197,27 @@ func (r *Recorder) handleStarted(e agent.AgentStarted) {
 	r.sessions[e.AgentID] = info
 	r.mu.Unlock()
 
+	if !created {
+		r.persistModel(sessID, e.Provider, e.Model)
+	}
+
 	r.mgr.publish(TopicSessionAttached, SessionAttached{
 		AgentID:   e.AgentID,
 		SessionID: sessID,
 	})
+}
+
+func (r *Recorder) persistModel(sessID string, provider llm.Provider, model llm.Model) {
+	if sessID == "" {
+		return
+	}
+	provName := ""
+	if provider != nil {
+		provName = provider.Name()
+	}
+	if err := r.mgr.SetModel(sessID, provName, model.ID); err != nil {
+		r.log.Fdebug("session recorder: set model: %v", err)
+	}
 }
 
 func (r *Recorder) sessionIDForAgent(agentID string) string {
