@@ -1,0 +1,793 @@
+{
+  "name": "pegg-vscode",
+  "displayName": "Pegg",
+  "description": "Pegg AI coding agent for VS Code: chat, tools, sessions, permissions, attachments, and editor integrations.",
+  "version": "0.1.9",
+  "publisher": "peggco",
+  "license": "FSL-1.1-MIT",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "pegg",
+    "ai",
+    "agent",
+    "coding-agent",
+    "chat",
+    "assistant"
+  ],
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Pegg can run commands and edit files, so it requires a trusted workspace."
+    },
+    "virtualWorkspaces": false
+  },
+  "activationEvents": [
+    "onView:pegg.chat",
+    "onView:pegg.sessions",
+    "onChatParticipant:pegg.chat"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pegg-vscode",
+          "title": "Pegg",
+          "icon": "media/activity-bar-v2.svg"
+        }
+      ]
+    },
+    "views": {
+      "pegg-vscode": [
+        {
+          "type": "webview",
+          "id": "pegg.chat",
+          "name": "Chat"
+        },
+        {
+          "id": "pegg.sessions",
+          "name": "Sessions"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "pegg.sessions",
+        "contents": "No Pegg sessions yet.\n[Start a chat](command:pegg.chat.open)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "pegg.chat.open",
+        "title": "Open Chat",
+        "category": "Pegg",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "pegg.chat.newSession",
+        "title": "New Session",
+        "category": "Pegg",
+        "icon": "$(add)"
+      },
+      {
+        "command": "pegg.chat.stop",
+        "title": "Stop Agent",
+        "category": "Pegg",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "pegg.chat.clear",
+        "title": "Clear Chat",
+        "category": "Pegg",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "pegg.chat.selectMode",
+        "title": "Select Mode",
+        "category": "Pegg",
+        "icon": "$(symbol-mode)"
+      },
+      {
+        "command": "pegg.chat.selectModel",
+        "title": "Select Model",
+        "category": "Pegg",
+        "icon": "$(chip)"
+      },
+      {
+        "command": "pegg.session.resume",
+        "title": "Resume Session",
+        "category": "Pegg",
+        "icon": "$(history)"
+      },
+      {
+        "command": "pegg.session.delete",
+        "title": "Delete Session",
+        "category": "Pegg",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "pegg.session.rename",
+        "title": "Rename Session",
+        "category": "Pegg",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "pegg.session.refresh",
+        "title": "Refresh Sessions",
+        "category": "Pegg",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "pegg.explainSelection",
+        "title": "Explain Selection",
+        "category": "Pegg"
+      },
+      {
+        "command": "pegg.fixSelection",
+        "title": "Fix Selection",
+        "category": "Pegg"
+      },
+      {
+        "command": "pegg.reviewSelection",
+        "title": "Review Selection",
+        "category": "Pegg"
+      },
+      {
+        "command": "pegg.generateTests",
+        "title": "Generate Tests for Selection",
+        "category": "Pegg"
+      },
+      {
+        "command": "pegg.refactorSelection",
+        "title": "Refactor Selection",
+        "category": "Pegg"
+      },
+      {
+        "command": "pegg.addSelectionToChat",
+        "title": "Add Selection to Chat",
+        "category": "Pegg"
+      },
+      {
+        "command": "pegg.addFileToChat",
+        "title": "Add File to Chat",
+        "category": "Pegg"
+      },
+      {
+        "command": "pegg.explainFile",
+        "title": "Explain File",
+        "category": "Pegg"
+      },
+      {
+        "command": "pegg.editorActions",
+        "title": "AI Actions\u2026",
+        "category": "Pegg",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "pegg.selectionActions",
+        "title": "Selection Actions\u2026",
+        "category": "Pegg",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "pegg.fileActions",
+        "title": "File Actions\u2026",
+        "category": "Pegg",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "pegg.askSelection",
+        "title": "Ask About Selection\u2026",
+        "category": "Pegg",
+        "icon": "$(question)"
+      },
+      {
+        "command": "pegg.editSelection",
+        "title": "Edit Selection\u2026",
+        "category": "Pegg",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "pegg.findBugsSelection",
+        "title": "Find Bugs in Selection",
+        "category": "Pegg",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "pegg.securityReviewSelection",
+        "title": "Security Review Selection",
+        "category": "Pegg",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "pegg.optimizeSelection",
+        "title": "Optimize Selection",
+        "category": "Pegg",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "pegg.documentSelection",
+        "title": "Document Selection",
+        "category": "Pegg",
+        "icon": "$(book)"
+      },
+      {
+        "command": "pegg.askAboutFile",
+        "title": "Ask About File\u2026",
+        "category": "Pegg",
+        "icon": "$(question)"
+      },
+      {
+        "command": "pegg.editFile",
+        "title": "Edit File\u2026",
+        "category": "Pegg",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "pegg.reviewFile",
+        "title": "Review File",
+        "category": "Pegg",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "pegg.documentFile",
+        "title": "Document File",
+        "category": "Pegg",
+        "icon": "$(book)"
+      },
+      {
+        "command": "pegg.generateTestsForFile",
+        "title": "Generate Tests for File",
+        "category": "Pegg",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "pegg.fixDiagnosticsInFile",
+        "title": "Fix All Diagnostics in File",
+        "category": "Pegg",
+        "icon": "$(warning)"
+      },
+      {
+        "command": "pegg.reviewChanges",
+        "title": "Review Changes",
+        "category": "Pegg",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "pegg.reviewCurrentFile",
+        "title": "Review Current File Changes",
+        "category": "Pegg"
+      },
+      {
+        "command": "pegg.login",
+        "title": "Provider Login",
+        "category": "Pegg",
+        "icon": "$(key)"
+      },
+      {
+        "command": "pegg.doctor",
+        "title": "Run Doctor",
+        "category": "Pegg",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "pegg.update",
+        "title": "Check for Updates",
+        "category": "Pegg",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "pegg.team",
+        "title": "Connect Team",
+        "category": "Pegg",
+        "icon": "$(organization)"
+      },
+      {
+        "command": "pegg.openGlobalConfig",
+        "title": "Open Global Config",
+        "category": "Pegg",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "pegg.openProjectConfig",
+        "title": "Reveal Project .pegg Folder",
+        "category": "Pegg",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "pegg.showLogs",
+        "title": "Show Logs",
+        "category": "Pegg",
+        "icon": "$(output)"
+      },
+      {
+        "command": "pegg.restartServer",
+        "title": "Restart Server",
+        "category": "Pegg",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "pegg.installBinary",
+        "title": "Install or Update Binary",
+        "category": "Pegg",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "pegg.fixDiagnostic",
+        "title": "Fix Diagnostic with Pegg",
+        "category": "Pegg"
+      },
+      {
+        "command": "pegg.explainDiagnostic",
+        "title": "Explain Diagnostic with Pegg",
+        "category": "Pegg"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "pegg.explainSelection",
+          "when": "editorHasSelection",
+          "group": "pegg@1"
+        },
+        {
+          "command": "pegg.editSelection",
+          "when": "editorHasSelection",
+          "group": "pegg@2"
+        },
+        {
+          "command": "pegg.addSelectionToChat",
+          "when": "editorHasSelection",
+          "group": "pegg@3"
+        },
+        {
+          "command": "pegg.editorActions",
+          "group": "pegg@4"
+        },
+        {
+          "submenu": "pegg.editor",
+          "group": "pegg@5"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "pegg.fileActions",
+          "group": "pegg@1"
+        },
+        {
+          "command": "pegg.addFileToChat",
+          "group": "pegg@2"
+        },
+        {
+          "command": "pegg.explainFile",
+          "group": "pegg@3"
+        },
+        {
+          "command": "pegg.reviewFile",
+          "group": "pegg@4"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "pegg.reviewChanges",
+          "when": "scmProvider == git",
+          "group": "navigation@90"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "pegg.chat.newSession",
+          "when": "view == pegg.chat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pegg.session.refresh",
+          "when": "view == pegg.sessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pegg.openGlobalConfig",
+          "when": "view == pegg.chat",
+          "group": "navigation@9"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "pegg.session.resume",
+          "when": "view == pegg.sessions && viewItem == peggSession",
+          "group": "inline@1"
+        },
+        {
+          "command": "pegg.session.rename",
+          "when": "view == pegg.sessions && viewItem == peggSession",
+          "group": "1_main@1"
+        },
+        {
+          "command": "pegg.session.delete",
+          "when": "view == pegg.sessions && viewItem == peggSession",
+          "group": "2_danger@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "pegg.session.resume",
+          "when": "false"
+        },
+        {
+          "command": "pegg.session.delete",
+          "when": "false"
+        },
+        {
+          "command": "pegg.session.rename",
+          "when": "false"
+        }
+      ],
+      "pegg.editor": [
+        {
+          "command": "pegg.explainSelection",
+          "when": "editorHasSelection",
+          "group": "1_ai@1"
+        },
+        {
+          "command": "pegg.editSelection",
+          "when": "editorHasSelection",
+          "group": "1_ai@2"
+        },
+        {
+          "command": "pegg.askSelection",
+          "when": "editorHasSelection",
+          "group": "1_ai@3"
+        },
+        {
+          "command": "pegg.fixSelection",
+          "when": "editorHasSelection",
+          "group": "2_review@1"
+        },
+        {
+          "command": "pegg.findBugsSelection",
+          "when": "editorHasSelection",
+          "group": "2_review@2"
+        },
+        {
+          "command": "pegg.reviewSelection",
+          "when": "editorHasSelection",
+          "group": "2_review@3"
+        },
+        {
+          "command": "pegg.securityReviewSelection",
+          "when": "editorHasSelection",
+          "group": "2_review@4"
+        },
+        {
+          "command": "pegg.refactorSelection",
+          "when": "editorHasSelection",
+          "group": "3_improve@1"
+        },
+        {
+          "command": "pegg.optimizeSelection",
+          "when": "editorHasSelection",
+          "group": "3_improve@2"
+        },
+        {
+          "command": "pegg.documentSelection",
+          "when": "editorHasSelection",
+          "group": "3_improve@3"
+        },
+        {
+          "command": "pegg.generateTests",
+          "when": "editorHasSelection",
+          "group": "3_improve@4"
+        },
+        {
+          "command": "pegg.addSelectionToChat",
+          "when": "editorHasSelection",
+          "group": "4_chat@1"
+        },
+        {
+          "command": "pegg.askAboutFile",
+          "when": "!editorHasSelection",
+          "group": "1_ai@1"
+        },
+        {
+          "command": "pegg.editFile",
+          "when": "!editorHasSelection",
+          "group": "1_ai@2"
+        },
+        {
+          "command": "pegg.explainFile",
+          "when": "!editorHasSelection",
+          "group": "1_ai@3"
+        },
+        {
+          "command": "pegg.reviewFile",
+          "when": "!editorHasSelection",
+          "group": "2_review@1"
+        },
+        {
+          "command": "pegg.fixDiagnosticsInFile",
+          "when": "!editorHasSelection",
+          "group": "2_review@2"
+        },
+        {
+          "command": "pegg.documentFile",
+          "when": "!editorHasSelection",
+          "group": "3_improve@1"
+        },
+        {
+          "command": "pegg.generateTestsForFile",
+          "when": "!editorHasSelection",
+          "group": "3_improve@2"
+        },
+        {
+          "command": "pegg.addFileToChat",
+          "when": "!editorHasSelection",
+          "group": "4_chat@1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "pegg.editorActions",
+          "when": "editorTextFocus",
+          "group": "navigation@100"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "pegg.fileActions",
+          "group": "pegg@1"
+        },
+        {
+          "submenu": "pegg.editor",
+          "group": "pegg@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "pegg.chat.open",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p"
+      },
+      {
+        "command": "pegg.chat.newSession",
+        "key": "ctrl+alt+n",
+        "mac": "cmd+alt+n"
+      },
+      {
+        "command": "pegg.chat.selectMode",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m"
+      },
+      {
+        "command": "pegg.editorActions",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "pegg.explainSelection",
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e",
+        "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "command": "pegg.askSelection",
+        "key": "ctrl+alt+q",
+        "mac": "cmd+alt+q",
+        "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "command": "pegg.editSelection",
+        "key": "ctrl+alt+x",
+        "mac": "cmd+alt+x",
+        "when": "editorTextFocus && editorHasSelection"
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "pegg.chat",
+        "name": "pegg",
+        "fullName": "Pegg",
+        "description": "Ask Pegg to explore, explain, edit, review, or test your code.",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "explain",
+            "description": "Explain the referenced code or question"
+          },
+          {
+            "name": "fix",
+            "description": "Find and fix a bug"
+          },
+          {
+            "name": "review",
+            "description": "Review code or changes for issues"
+          },
+          {
+            "name": "tests",
+            "description": "Write or improve tests"
+          },
+          {
+            "name": "init",
+            "description": "Create or improve AGENTS.md"
+          },
+          {
+            "name": "rule",
+            "description": "Create or update a project rule"
+          },
+          {
+            "name": "batch",
+            "description": "Plan and execute a large parallel change"
+          }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "Pegg",
+      "properties": {
+        "pegg.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the pegg binary. Empty auto-detects PATH, workspace bin/, or a downloaded binary."
+        },
+        "pegg.binary.autoDownload": {
+          "type": "boolean",
+          "default": true,
+          "description": "Download the matching Pegg release binary when no working binary is found."
+        },
+        "pegg.binary.allowWorkspaceBinary": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow using <workspace>/bin/pegg (requires a trusted workspace). Disable this to always use PATH or a verified download."
+        },
+        "pegg.binary.version": {
+          "type": "string",
+          "default": "match-extension",
+          "description": "Release tag to download (e.g. v0.1.9), 'match-extension', or 'latest'."
+        },
+        "pegg.downloadBaseUrl": {
+          "type": "string",
+          "default": "https://github.com/peggco/pegg/releases/download",
+          "description": "Base URL for release downloads."
+        },
+        "pegg.provider": {
+          "type": "string",
+          "default": "",
+          "description": "Preferred provider. Empty lets Pegg choose."
+        },
+        "pegg.model": {
+          "type": "string",
+          "default": "",
+          "description": "Preferred model. Empty lets Pegg choose."
+        },
+        "pegg.defaultMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "plan",
+            "build"
+          ],
+          "default": "auto",
+          "description": "Mode for new sessions."
+        },
+        "pegg.context.includeActiveFile": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the active file path in prompts."
+        },
+        "pegg.context.includeSelection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the active selection in prompts."
+        },
+        "pegg.context.maxFileBytes": {
+          "type": "number",
+          "default": 262144,
+          "description": "Maximum size of a file attached as text."
+        },
+        "pegg.chat.sendOnEnter": {
+          "type": "string",
+          "enum": [
+            "enter",
+            "ctrl+enter"
+          ],
+          "default": "enter",
+          "description": "Send the chat message with Enter or Ctrl/Cmd+Enter."
+        },
+        "pegg.notifications.onComplete": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a notification when an agent run finishes while VS Code is unfocused."
+        },
+        "pegg.env": {
+          "type": "object",
+          "default": {},
+          "description": "Additional environment variables for the Pegg process."
+        },
+        "pegg.logLevel": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
+          "default": "info",
+          "description": "Extension log level."
+        }
+      }
+    },
+    "submenus": [
+      {
+        "id": "pegg.editor",
+        "label": "Pegg",
+        "icon": "$(sparkle)"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test --max-warnings=0",
+    "format": "prettier --write .",
+    "test:unit": "vitest run",
+    "test": "npm run test:unit",
+    "check": "npm run typecheck && npm run lint && npm run test:unit && npm run build",
+    "package": "vsce package",
+    "vscode:prepublish": "npm run build",
+    "test:integration": "PEGG_TEST_BINARY=../../bin/pegg vitest run test/unit/acp-client.test.ts test/unit/controller.test.ts",
+    "test:download": "PEGG_TEST_DOWNLOAD=1 vitest run test/unit/binary-manager.integration.test.ts"
+  },
+  "dependencies": {
+    "dompurify": "^3.2.4",
+    "extract-zip": "^2.0.1",
+    "highlight.js": "^11.11.1",
+    "marked": "^15.0.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tar": "^7.4.3",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.22.0",
+    "@types/dompurify": "^3.2.0",
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@types/tar": "^6.1.13",
+    "@types/vscode": "~1.90.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.3.2",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.22.0",
+    "ovsx": "^0.10.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.0",
+    "vitest": "^3.0.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/peggco/pegg.git",
+    "directory": "pkg/vscode"
+  },
+  "homepage": "https://pegg.dev",
+  "bugs": {
+    "url": "https://github.com/peggco/pegg/issues"
+  }
+}

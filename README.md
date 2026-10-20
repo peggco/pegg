@@ -82,6 +82,20 @@ resp, _ := eng.Chat(ctx, sdk.ChatRequest{Input: "Fix the leak"})
 </tr>
 </table>
 
+### VS Code
+
+The Pegg VS Code extension lives in [`pkg/vscode`](pkg/vscode). It brings the
+same engine into a sidebar chat, the `@pegg` chat participant, editor context
+menus, diagnostics fixes, session history, and SCM review. See the
+[VS Code guide](docs/pegg/usage/vscode.md) for install, commands, settings, and
+troubleshooting.
+
+```bash
+cd pkg/vscode
+npm ci
+npm run build
+```
+
 ---
 
 ## What It Actually Does

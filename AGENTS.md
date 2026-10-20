@@ -12,6 +12,7 @@ Pegg is a provider-agnostic AI coding agent written in Go. It runs as an interac
 - `internal/` - Core packages (agent, llm, tools, skills, session, etc.)
 - `docs/` - Documentation (system, SDK, plugin guides)
 - `pkg/sdk/` - Embeddable Go SDK
+- `pkg/vscode/` - TypeScript VS Code extension (sidebar chat, `@pegg` chat participant, ACP client)
 - `.pegg/` - Project-specific config, plans, and subagent state
 - `.github/workflows/` - CI/CD pipelines (test, fmt, vet, release)
 
