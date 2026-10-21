@@ -140,8 +140,7 @@ uses the same config and session database as the CLI.
     runs on your laptop, forward it with `ssh -R 8081:127.0.0.1:8081` or use a
     public URL.
 
-    Also check that the website API is reachable from the same machine
-    (`--api-url`).
+    Also check that `https://pegg.dev` is reachable from the same machine.
 
 ??? question "`pegg team` returns `401` or `503 team_store_unavailable`"
 
