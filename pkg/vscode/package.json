@@ -2,7 +2,7 @@
   "name": "pegg-vscode",
   "displayName": "Pegg",
   "description": "Pegg AI coding agent for VS Code: chat, tools, sessions, permissions, attachments, and editor integrations.",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "publisher": "peggco",
   "license": "FSL-1.1-MIT",
   "icon": "media/icon.png",
@@ -172,31 +172,31 @@
       },
       {
         "command": "pegg.editorActions",
-        "title": "AI Actions\u2026",
+        "title": "AI Actions…",
         "category": "Pegg",
         "icon": "$(sparkle)"
       },
       {
         "command": "pegg.selectionActions",
-        "title": "Selection Actions\u2026",
+        "title": "Selection Actions…",
         "category": "Pegg",
         "icon": "$(sparkle)"
       },
       {
         "command": "pegg.fileActions",
-        "title": "File Actions\u2026",
+        "title": "File Actions…",
         "category": "Pegg",
         "icon": "$(sparkle)"
       },
       {
         "command": "pegg.askSelection",
-        "title": "Ask About Selection\u2026",
+        "title": "Ask About Selection…",
         "category": "Pegg",
         "icon": "$(question)"
       },
       {
         "command": "pegg.editSelection",
-        "title": "Edit Selection\u2026",
+        "title": "Edit Selection…",
         "category": "Pegg",
         "icon": "$(edit)"
       },
@@ -226,13 +226,13 @@
       },
       {
         "command": "pegg.askAboutFile",
-        "title": "Ask About File\u2026",
+        "title": "Ask About File…",
         "category": "Pegg",
         "icon": "$(question)"
       },
       {
         "command": "pegg.editFile",
-        "title": "Edit File\u2026",
+        "title": "Edit File…",
         "category": "Pegg",
         "icon": "$(edit)"
       },
