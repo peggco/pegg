@@ -15,6 +15,7 @@ are produced for Linux, macOS, and Windows on both `amd64` and `arm64`.
 | **Build from source** | Go 1.26.5 or newer |
 | **Windows installer** | Windows PowerShell 5.1+ or PowerShell 7+ |
 | **Terminal** | Any modern terminal. The TUI uses 24-bit color and mouse/paste support when available |
+| **VS Code extension** | VS Code 1.90+ with a trusted workspace |
 
 ## Install
 
@@ -53,6 +54,16 @@ are produced for Linux, macOS, and Windows on both `amd64` and `arm64`.
     $env:VERSION = 'v0.1.8'
     irm https://pegg.dev/install.ps1 | iex
     ```
+
+=== "VS Code extension"
+
+    ```bash
+    code --install-extension peggco.pegg-vscode
+    ```
+
+    Or install **Pegg** from the Extensions view. The extension can download and
+    verify the matching `pegg` binary automatically, so a separate CLI install is
+    optional. See the [VS Code guide](usage/vscode.md).
 
 === "npm"
 
@@ -142,6 +153,9 @@ Once at least one provider is configured, start the TUI:
 ```bash
 pegg
 ```
+
+Or open the Pegg extension in VS Code and run **Pegg: Provider Login** from the
+command palette. See the [VS Code guide](usage/vscode.md).
 
 Or run a one-shot headless prompt:
 

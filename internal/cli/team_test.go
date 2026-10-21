@@ -81,9 +81,10 @@ func TestApplyTeamConfig(t *testing.T) {
 
 func TestTeamExchangeURL(t *testing.T) {
 	cases := map[string]string{
-		"https://pegg.dev":       "https://pegg.dev/api/team-ai/cli/exchange",
-		"https://pegg.dev/api":   "https://pegg.dev/api/team-ai/cli/exchange",
-		"http://localhost:3000/": "http://localhost:3000/api/team-ai/cli/exchange",
+		"https://api.pegg.dev":     "https://api.pegg.dev/api/team-ai/cli/exchange",
+		"https://api.pegg.dev/api": "https://api.pegg.dev/api/team-ai/cli/exchange",
+		"https://pegg.dev":         "https://pegg.dev/api/team-ai/cli/exchange",
+		"http://localhost:3000/":   "http://localhost:3000/api/team-ai/cli/exchange",
 	}
 	for input, want := range cases {
 		if got := teamExchangeURL(input); got != want {

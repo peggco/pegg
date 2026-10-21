@@ -24,6 +24,9 @@ Terminals without xterm-1004 focus reporting never report a blur, so the app
 stays "focused" and no desktop notifications are sent. Headless CLI mode never
 notifies either.
 
+The [VS Code extension](../usage/vscode.md) does not use this notifier. It uses
+VS Code notifications and the `pegg.notifications.onComplete` setting instead.
+
 ## What triggers a notification
 
 | Event | Title | Message |

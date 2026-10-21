@@ -5,18 +5,24 @@ import (
 	"context"
 	"io"
 	"os"
+	"sync"
 
 	json "github.com/goccy/go-json"
 )
 
+const maxStdioFrameBytes = 32 << 20
+
 type StdioTransport struct {
 	scanner *bufio.Scanner
 	writer  io.Writer
+	mu      sync.Mutex
 }
 
 func NewStdioTransport() *StdioTransport {
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 64*1024), maxStdioFrameBytes)
 	return &StdioTransport{
-		scanner: bufio.NewScanner(os.Stdin),
+		scanner: scanner,
 		writer:  os.Stdout,
 	}
 }
@@ -51,7 +57,11 @@ func (t *StdioTransport) Start(ctx context.Context) (<-chan Message, error) {
 }
 
 func (t *StdioTransport) Send(msg Message) error {
-	data := append(msg.Body, '\n')
+	data := make([]byte, 0, len(msg.Body)+1)
+	data = append(data, msg.Body...)
+	data = append(data, '\n')
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	_, err := t.writer.Write(data)
 	return err
 }

@@ -22,13 +22,17 @@ type ACPSession struct {
 	Agent     *agent.Agent
 	CreatedAt time.Time
 	Cwd       string
+	Provider  string
+	Model     string
 
 	PeggSessionID string
 
 	cancel context.CancelFunc
+	ctx    context.Context
 	mu     sync.Mutex
 
-	reqID any
+	reqID   any
+	running bool
 }
 
 func (s *ACPSession) SetCancel(cancel context.CancelFunc, reqID any) {
@@ -39,6 +43,38 @@ func (s *ACPSession) SetCancel(cancel context.CancelFunc, reqID any) {
 	}
 	s.cancel = cancel
 	s.reqID = reqID
+}
+
+func (s *ACPSession) StartPrompt(ctx context.Context, cancel context.CancelFunc, reqID any) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running {
+		return false
+	}
+	s.ctx = ctx
+	s.cancel = cancel
+	s.reqID = reqID
+	s.running = true
+	return true
+}
+
+func (s *ACPSession) ClearPrompt() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ctx = nil
+	s.running = false
+}
+
+func (s *ACPSession) PromptContext() (context.Context, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ctx, s.running
+}
+
+func (s *ACPSession) IsRunning() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.running
 }
 
 func (s *ACPSession) Cancel() {
@@ -65,7 +101,13 @@ type Server struct {
 	responseHook func(id any, body json.RawMessage) error
 
 	active map[string]*ACPSession
+	agents map[string]string
 	mu     sync.RWMutex
+
+	clientCaps *ClientCapabilities
+
+	recMu sync.Mutex
+	rec   *recording
 
 	closed chan struct{}
 	once   sync.Once
@@ -87,14 +129,17 @@ func New(
 		llmMgr:   llmMgr,
 		fs:       fs,
 		active:   make(map[string]*ACPSession),
+		agents:   make(map[string]string),
 		closed:   make(chan struct{}),
 	}
 	s.client = NewClient(s.sendRaw)
 	s.newAgentFn = s.newOrchestratorAgent
+	s.subscribeAsk()
 	return s
 }
 
 func (s *Server) Serve(ctx context.Context, transport Transport) error {
+	defer s.cleanupRecording()
 	s.transport = transport
 	inbound, err := transport.Start(ctx)
 	if err != nil {
@@ -139,6 +184,10 @@ func (s *Server) handleFrame(ctx context.Context, msg Message) {
 		return
 	}
 
+	if envelope.ID != nil && envelope.Method == "session/prompt" {
+		go s.dispatch(ctx, envelope.ID, envelope.Method, envelope.Params)
+		return
+	}
 	s.dispatch(ctx, envelope.ID, envelope.Method, envelope.Params)
 }
 
@@ -163,10 +212,20 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleSessionClose(ctx, params)
 	case "session/set_mode":
 		result, handlerErr = s.handleSessionSetMode(ctx, params)
+	case "session/set_model":
+		result, handlerErr = s.handleSessionSetModel(ctx, params)
+	case "session/rename":
+		result, handlerErr = s.handleSessionRename(ctx, params)
 	case "session/list":
 		result, handlerErr = s.handleSessionList(ctx, params)
+	case "pegg/models":
+		result, handlerErr = s.handleListModels(ctx, params)
 	case "stt/transcribe":
 		result, handlerErr = s.handleSTTTranscribe(ctx, params)
+	case "stt/record/start":
+		result, handlerErr = s.handleSTTRecordStart(ctx, params)
+	case "stt/record/stop":
+		result, handlerErr = s.handleSTTRecordStop(ctx, params)
 	case "session/cancel":
 		handlerErr = s.handleSessionCancel(ctx, params)
 		if handlerErr == nil {
@@ -237,6 +296,18 @@ func (s *Server) sendResponse(id any, body json.RawMessage) {
 	s.sendRaw(body)
 }
 
+func (s *Server) setClientCapabilities(caps *ClientCapabilities) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clientCaps = caps
+}
+
+func (s *Server) clientCapabilities() *ClientCapabilities {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.clientCaps
+}
+
 func (s *Server) notify(sessionID string, update SessionUpdate) {
 	payload := map[string]any{
 		"jsonrpc": "2.0",
@@ -269,6 +340,9 @@ func (s *Server) addSession(acpSess *ACPSession) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.active[acpSess.ID] = acpSess
+	if acpSess.Agent != nil {
+		s.agents[acpSess.Agent.ID] = acpSess.ID
+	}
 }
 
 func (s *Server) getSession(id string) (*ACPSession, bool) {
@@ -283,8 +357,23 @@ func (s *Server) removeSession(id string) {
 	defer s.mu.Unlock()
 	if acpSess, ok := s.active[id]; ok {
 		acpSess.Cancel()
+		for agentID, sessionID := range s.agents {
+			if sessionID == id {
+				delete(s.agents, agentID)
+			}
+		}
 	}
 	delete(s.active, id)
+}
+
+func (s *Server) sessionForAgent(agentID string) (*ACPSession, bool) {
+	s.mu.RLock()
+	id, ok := s.agents[agentID]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+	return s.getSession(id)
 }
 
 func (s *Server) resolveModel(provider, model string) (llm.Provider, llm.Model, error) {

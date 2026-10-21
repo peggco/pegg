@@ -83,12 +83,17 @@ prompt, while `git status` and `npm run build` run directly.
 
 ## The prompt flow
 
-When a call needs approval, the user is asked (in the TUI and CLI):
+When a call needs approval, the user is asked in the TUI, CLI, and the
+[VS Code extension](../usage/vscode.md):
 
 ```
 Allow the "bash" tool call?
   Allow / Allow All / Reject
 ```
+
+In VS Code the prompt appears as an inline card in the chat, with the tool
+arguments and any sandbox denial reason. If the Pegg chat is not visible, the
+extension falls back to a VS Code modal prompt.
 
 | Choice | Effect |
 |---|---|
@@ -99,7 +104,8 @@ Allow the "bash" tool call?
 Dismissing the prompt denies the call. The `askuserquestion` tool is exempt from all gating.
 
 When the Pegg window is in the background, a permission prompt also raises a
-desktop notification — see [Notifications](notifications.md).
+desktop notification — see [Notifications](notifications.md). VS Code uses its
+own notification system when the window is unfocused.
 
 ## The judge flow
 

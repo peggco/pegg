@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -124,6 +125,7 @@ func newTestServer(t *testing.T) *Server {
 type bufferTransport struct {
 	msg   chan Message
 	sends []string
+	mu    sync.Mutex
 }
 
 func newBufferTransport() *bufferTransport {
@@ -135,8 +137,25 @@ func (t *bufferTransport) Start(ctx context.Context) (<-chan Message, error) {
 }
 
 func (t *bufferTransport) Send(msg Message) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.sends = append(t.sends, strings.TrimSpace(string(msg.Body)))
 	return nil
+}
+
+func (t *bufferTransport) last() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(t.sends) == 0 {
+		return ""
+	}
+	return t.sends[len(t.sends)-1]
+}
+
+func (t *bufferTransport) count() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return len(t.sends)
 }
 
 func (t *bufferTransport) Close() error { return nil }
@@ -158,11 +177,23 @@ func sendRequest(t *testing.T, srv *Server, ctx context.Context, method string, 
 		"method":  method,
 		"params":  params,
 	})
-	srv.handleFrame(ctx, Message{Body: raw})
-	if bt, ok := srv.transport.(*bufferTransport); ok && len(bt.sends) > 0 {
-		return bt.sends[len(bt.sends)-1]
+	bt, buffered := srv.transport.(*bufferTransport)
+	before := 0
+	if buffered {
+		before = bt.count()
 	}
-	return ""
+	srv.handleFrame(ctx, Message{Body: raw})
+	if !buffered {
+		return ""
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if bt.count() > before {
+			return bt.last()
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return bt.last()
 }
 
 func sendNotification(t *testing.T, srv *Server, ctx context.Context, method string, params any) {
@@ -177,4 +208,17 @@ func sendNotification(t *testing.T, srv *Server, ctx context.Context, method str
 
 func init() {
 	_ = time.Second
+}
+
+func waitForSend(t *testing.T, bt *bufferTransport) string {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if bt.count() > 0 {
+			return bt.last()
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("timed out waiting for response")
+	return ""
 }

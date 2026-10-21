@@ -86,6 +86,8 @@ single message.
   stream into the same transcript.
 - In the TUI, each subagent is a card with a live activity line, an output preview,
   usage, and a **History** view of its full transcript.
+- In VS Code, subagent tool activity and reasoning stream into the same chat with
+  the subagent name attached; tool cards expose file locations and command output.
 - The `task_id` field links a subagent to todo items, so progress is trackable via
   the todo tools.
 

@@ -129,11 +129,6 @@ func (t *HTTPTransport) handlePost(w http.ResponseWriter, r *http.Request) {
 		t.rtMu.Lock()
 		t.replyTargets[msg.ID] = &replyTarget{conn: conn, sessionID: sessID}
 		t.rtMu.Unlock()
-		defer func() {
-			t.rtMu.Lock()
-			delete(t.replyTargets, msg.ID)
-			t.rtMu.Unlock()
-		}()
 	}
 
 	go t.server.dispatch(r.Context(), msg.ID, msg.Method, msg.Params)
@@ -144,6 +139,7 @@ func (t *HTTPTransport) handlePost(w http.ResponseWriter, r *http.Request) {
 func (t *HTTPTransport) routeResponse(id any, body json.RawMessage) error {
 	t.rtMu.Lock()
 	target, ok := t.replyTargets[id]
+	delete(t.replyTargets, id)
 	t.rtMu.Unlock()
 	if !ok {
 		return fmt.Errorf("acp: no reply target for request id %v", id)

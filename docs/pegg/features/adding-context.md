@@ -19,6 +19,21 @@ attachments, `@` mentions, project instructions, rules, and skills.
 - Attachments are sent with your next message and are persisted with it, so they
   reappear as chips when you resume the session.
 
+### In VS Code
+
+- Use the `+` button, drag files from the explorer, or paste an image into the
+  composer.
+- Type `@` to open the inline file picker. It shows file-type icons, the file name,
+  and the relative path.
+- Use **Pegg: Add Selection to Chat** (or right-click → **Pegg**) to insert the
+  current selection; with no selection it adds the current line.
+- **Pegg: Add File to Chat** attaches the whole file.
+- Editor actions such as Explain, Edit, Review, Refactor, Optimize, Document, and
+  Generate Tests include the selection automatically.
+- Voice input is recorded by the Pegg engine and inserted at the cursor.
+
+See the [VS Code guide](../usage/vscode.md#chat).
+
 ### In the CLI
 
 ```bash
@@ -58,16 +73,21 @@ and referenced by path.
 
 ## `@` mentions
 
-Typing `@` in the input opens the mention picker. It offers:
+Typing `@` opens a picker.
 
-- **Agents** — subagent types you can address in your message.
-- **Files and folders** — discovered by scanning the workspace.
-- **Attachments** already in the attachment bar.
+=== "TUI"
 
-Mentions are inserted as atomic chips and sent to the model as literal `@name`
-text. Unlike skills, mentions are **not** expanded by Pegg — the model decides how
-to use the reference (for example `@internal/server` prompts it to look at that
-directory).
+    The TUI picker offers **agents** (subagent types), **files and folders**, and
+    **attachments** already in the attachment bar. Mentions are atomic chips.
+
+=== "VS Code"
+
+    The VS Code picker lists workspace files with a file-type badge, file name, and
+    relative path. It is fuzzy-filtered and keyboard navigable.
+
+Mentions are sent to the model as literal `@name`/`@path` text. Unlike skills,
+mentions are **not** expanded by Pegg — the model decides how to use the
+reference (for example `@internal/server` prompts it to look at that directory).
 
 ## Long text
 

@@ -24,8 +24,6 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 )
 
-const defaultTeamAppURL = "https://team.pegg.dev"
-
 var (
 	teamVerifyAttempts = 8
 	teamVerifyDelay    = 10 * time.Second
@@ -34,8 +32,6 @@ var (
 type teamOptions struct {
 	team        string
 	provider    string
-	appURL      string
-	apiURL      string
 	device      string
 	keyName     string
 	port        int
@@ -125,8 +121,6 @@ func (c *CLI) newTeamCommand() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&opts.team, "team", "", "team name to preselect on the website")
 	cmd.Flags().StringVar(&opts.provider, "provider", "", "team provider to refresh or remove")
-	cmd.Flags().StringVar(&opts.appURL, "app-url", "", "website URL (default "+defaultTeamAppURL+")")
-	cmd.Flags().StringVar(&opts.apiURL, "api-url", "", "API URL (defaults to the website URL)")
 	cmd.Flags().StringVar(&opts.device, "device", "", "device name shown on the website")
 	cmd.Flags().StringVar(&opts.keyName, "key-name", "", "name for the created API key")
 	cmd.Flags().IntVar(&opts.port, "port", 0, "local callback port (0 chooses a free port)")
@@ -141,8 +135,6 @@ func (c *CLI) newTeamCommand() *cobra.Command {
 }
 
 func (c *CLI) runTeamConnect(out io.Writer, opts *teamOptions) error {
-	appURL := firstNonEmpty(opts.appURL, defaultTeamAppURL)
-	apiURL := firstNonEmpty(opts.apiURL, appURL)
 	device := strings.TrimSpace(opts.device)
 	if device == "" {
 		device, _ = os.Hostname()
@@ -211,7 +203,7 @@ func (c *CLI) runTeamConnect(out io.Writer, opts *teamOptions) error {
 	go func() { _ = server.Serve(listener) }()
 	defer server.Shutdown(context.Background())
 
-	connectURL := buildTeamConnectURL(appURL, state, challenge, callback, device, opts)
+	connectURL := buildTeamConnectURL(config.AppUrl, state, challenge, callback, device, opts)
 	fmt.Fprintf(out, "Open this URL to connect this computer:\n%s\n\n", connectURL)
 	if !opts.noBrowser {
 		if err := openBrowser(connectURL); err != nil {
@@ -233,7 +225,7 @@ func (c *CLI) runTeamConnect(out io.Writer, opts *teamOptions) error {
 	}
 	fmt.Fprintln(out, "Browser approval received.")
 
-	cfg, err := exchangeTeamCode(apiURL, result.code, verifier)
+	cfg, err := exchangeTeamCode(config.AppApiUrl, result.code, verifier)
 	if err != nil {
 		return err
 	}

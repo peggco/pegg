@@ -62,3 +62,25 @@ jobs:
 
       - name: Run go vet
         run: go vet ./...
+
+  vscode:
+    name: VS Code Extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: pkg/vscode/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: pkg/vscode
+
+      - name: Check extension
+        run: npm run check
+        working-directory: pkg/vscode
