@@ -43,12 +43,13 @@ type teamOptions struct {
 }
 
 type teamProviderConfig struct {
-	Name    string            `json:"name"`
-	Driver  string            `json:"driver"`
-	BaseURL string            `json:"base_url"`
-	APIKey  string            `json:"api_key"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Timeout int               `json:"timeout"`
+	Name            string            `json:"name"`
+	Driver          string            `json:"driver"`
+	BaseURL         string            `json:"base_url"`
+	APIKey          string            `json:"api_key"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	Timeout         int               `json:"timeout"`
+	SystemFirstOnly *bool             `json:"system_first_only,omitempty"`
 }
 
 type teamModelConfig struct {
@@ -394,12 +395,13 @@ func applyTeamConfig(peggCfg *config.Config, cfg *teamConfig) {
 		timeout = 300
 	}
 	provider := config.LLMConfig{
-		Provider: providerName,
-		Driver:   driver,
-		APIKey:   cfg.Provider.APIKey,
-		BaseURL:  cfg.Provider.BaseURL,
-		Headers:  cfg.Provider.Headers,
-		Timeout:  timeout,
+		Provider:        providerName,
+		Driver:          driver,
+		APIKey:          cfg.Provider.APIKey,
+		BaseURL:         cfg.Provider.BaseURL,
+		Headers:         cfg.Provider.Headers,
+		Timeout:         timeout,
+		SystemFirstOnly: cfg.Provider.SystemFirstOnly,
 	}
 	replaced := false
 	for i := range peggCfg.Providers {

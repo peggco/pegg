@@ -239,6 +239,13 @@ func (c *CLI) runProviderAdd(out io.Writer, f *providerAddFlags, p providerAddPr
 		return fmt.Errorf("cli: load config: %w", err)
 	}
 
+	for _, e := range existing.Providers {
+		if e.Provider == cfg.Provider && e.SystemFirstOnly != nil {
+			cfg.SystemFirstOnly = e.SystemFirstOnly
+			break
+		}
+	}
+
 	identity := cfg.Provider
 	if identity == "" {
 		identity = cfg.Driver

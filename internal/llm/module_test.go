@@ -143,3 +143,30 @@ func (m *namedMockProvider) ChatStream(context.Context, *Request, StreamHandler)
 func (m *namedMockProvider) ListModels(context.Context) ([]Model, error) {
 	return m.models, nil
 }
+
+func TestResolveProviderSystemFirstOnlyWraps(t *testing.T) {
+	RegisterProvider("sysfirst", func(config.LLMConfig) (Provider, error) {
+		return &namedMockProvider{name: "sysfirst"}, nil
+	})
+
+	off, err := resolveProvider(config.LLMConfig{Provider: "sysfirst"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, wrapped := off.(*systemFirstProvider); wrapped {
+		t.Fatal("provider must not be wrapped by default")
+	}
+
+	on := true
+	prov, err := resolveProvider(config.LLMConfig{Provider: "sysfirst", SystemFirstOnly: &on})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapped, ok := prov.(*systemFirstProvider)
+	if !ok {
+		t.Fatalf("provider type = %T, want *systemFirstProvider", prov)
+	}
+	if wrapped.Name() != "sysfirst" {
+		t.Fatalf("Name = %q, want sysfirst", wrapped.Name())
+	}
+}

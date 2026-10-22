@@ -285,18 +285,7 @@ func appendReminder(msgs []llm.Message, text string) []llm.Message {
 		return append(msgs, llm.SystemMessage(text))
 	}
 	out := append([]llm.Message(nil), msgs...)
-	m := out[last]
-	switch c := m.Content.(type) {
-	case string:
-		m.Content = c + "\n\n" + text
-	case llm.Content:
-		m.Content = llm.Content{Text: c.Text + "\n\n" + text, Attachments: c.Attachments}
-	case []any:
-		parts := append([]any(nil), c...)
-		parts = append(parts, map[string]any{"type": "text", "text": text})
-		m.Content = parts
-	}
-	out[last] = m
+	out[last] = llm.AppendMessageText(out[last], text)
 	return out
 }
 

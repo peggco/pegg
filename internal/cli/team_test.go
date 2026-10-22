@@ -11,6 +11,37 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 )
 
+func TestApplyTeamConfigSystemFirstOnly(t *testing.T) {
+	peggCfg := config.DefaultConfig()
+	enabled := true
+	cfg := &teamConfig{
+		Team: struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		}{ID: 7, Name: "Acme"},
+		Provider: teamProviderConfig{
+			Name:            "pegg-team Acme",
+			Driver:          "openai",
+			BaseURL:         "https://team.example.com/v1",
+			APIKey:          "vsk_live_test",
+			Timeout:         120,
+			SystemFirstOnly: &enabled,
+		},
+	}
+
+	applyTeamConfig(peggCfg, cfg)
+
+	for i := range peggCfg.Providers {
+		if peggCfg.Providers[i].Provider == "pegg-team Acme" {
+			if !peggCfg.Providers[i].SystemFirstOnlyValue() {
+				t.Fatal("system_first_only was not applied to the team provider")
+			}
+			return
+		}
+	}
+	t.Fatal("team provider was not added")
+}
+
 func TestApplyTeamConfig(t *testing.T) {
 	peggCfg := config.DefaultConfig()
 	cfg := &teamConfig{

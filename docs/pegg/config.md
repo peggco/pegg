@@ -59,6 +59,7 @@ Configured LLM providers. See [Providers & Models](providers-and-models.md).
 | `timeout` | int | `120` | HTTP timeout in seconds for one-shot requests (model list sync, non-streaming calls). Streaming responses are never cut off by this — a model may reason for minutes before emitting the first token; stop a run with `Esc` |
 | `max_retries` | int | — | Reserved; currently not read by the runtime |
 | `headers` | object | — | Extra HTTP headers merged onto the driver defaults |
+| `system_first_only` | bool | `false` | Only allow the system prompt in the first message. Later system messages (reminders, compaction summaries) are folded into the neighbouring user or tool message. Needed for providers that reject a late system message |
 
 Either `provider` or `driver` must be set.
 

@@ -9,13 +9,18 @@ import (
 )
 
 type LLMConfig struct {
-	Provider   string            `json:"provider"`
-	Driver     string            `json:"driver"`
-	APIKey     string            `json:"api_key,omitempty"`
-	BaseURL    string            `json:"base_url,omitempty"`
-	Timeout    int               `json:"timeout,omitempty"`
-	MaxRetries int               `json:"max_retries,omitempty"`
-	Headers    map[string]string `json:"headers,omitempty"`
+	Provider        string            `json:"provider"`
+	Driver          string            `json:"driver"`
+	APIKey          string            `json:"api_key,omitempty"`
+	BaseURL         string            `json:"base_url,omitempty"`
+	Timeout         int               `json:"timeout,omitempty"`
+	MaxRetries      int               `json:"max_retries,omitempty"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	SystemFirstOnly *bool             `json:"system_first_only,omitempty"`
+}
+
+func (c LLMConfig) SystemFirstOnlyValue() bool {
+	return c.SystemFirstOnly != nil && *c.SystemFirstOnly
 }
 
 type AgentModelDefault struct {

@@ -170,6 +170,40 @@ Keys are stored in plaintext in `~/.peggco/pegg.json`:
 
 Keys are masked in `pegg providers list` and `pegg config show`.
 
+## Providers that only allow the first system message
+
+Some providers reject a system message that is not the first message of the
+conversation ("System message must be at the beginning"). Pegg normally sends
+reminders and compaction summaries as system messages, so those providers fail
+mid-run.
+
+Set `system_first_only` on the provider entry to fold every late system message
+into the neighbouring user or tool message instead:
+
+```json
+{
+  "providers": [
+    { "provider": "zhipu", "api_key": "...", "system_first_only": true }
+  ]
+}
+```
+
+The option is off by default and is only read from `~/.pegg/pegg.json` — there
+is no CLI flag or TUI switch for it. Re-adding a provider with
+`pegg providers add` keeps the setting.
+
+The website can set the same option:
+
+- **Pegg Connect** → *Settings → Providers* → the provider dialog → *System
+  prompt first only*. The value is stored in the local `pegg.json`.
+- **Team AI** → the team provider dialog → *System prompt first only*. The
+  value is stored on the website and handed to the CLI when the team is
+  connected, so every team member gets the same behaviour.
+
+The folded content keeps its `<system-reminder>` markup, so the agent still
+reads it as a reminder. The conversation history itself is not modified; only
+the request that is sent to the provider is rewritten.
+
 ## Custom and OpenAI-compatible endpoints
 
 To use a gateway, proxy, or local runtime, configure a raw **driver** instead of a
