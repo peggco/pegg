@@ -1,5 +1,9 @@
 package llm
 
+import "github.com/peggco/pegg/internal/core/config"
+
+type Model = config.Model
+
 type Role string
 
 const (
@@ -18,16 +22,6 @@ const (
 	FinishReasonToolCalls     FinishReason = "tool_calls"
 	FinishReasonNull          FinishReason = "null"
 )
-
-type Model struct {
-	ID      string `json:"id"`
-	Name    string `json:"name,omitempty"`
-	Object  string `json:"object,omitempty"`
-	Created int64  `json:"created,omitempty"`
-	OwnedBy string `json:"owned_by,omitempty"`
-
-	Config *ModelConfig `json:"config,omitempty"`
-}
 
 type ListModelsResponse struct {
 	Object string  `json:"object"`

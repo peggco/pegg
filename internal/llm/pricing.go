@@ -9,6 +9,8 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/peggco/pegg/internal/core/config"
 )
 
 const ModelsDataURL = "https://cdn.pegg.dev/models.json"
@@ -17,60 +19,12 @@ const PricesCacheKey = "models_cache"
 
 var ErrModelConfigNotFound = errors.New("llm: model config not found")
 
-type ReasoningOption struct {
-	Type   string   `json:"type"`
-	Values []string `json:"values,omitempty"`
-	Min    *int     `json:"min,omitempty"`
-	Max    *int     `json:"max,omitempty"`
-}
-
-type Interleaved struct {
-	Field string `json:"field"`
-}
-
-func (i *Interleaved) UnmarshalJSON(data []byte) error {
-	var b bool
-	if err := json.Unmarshal(data, &b); err == nil {
-		if b {
-			i.Field = "default"
-		}
-		return nil
-	}
-	type alias Interleaved
-	return json.Unmarshal(data, (*alias)(i))
-}
-
-type Modalities struct {
-	Input  []string `json:"input,omitempty"`
-	Output []string `json:"output,omitempty"`
-}
-
-type ModelConfig struct {
-	MaxTokens       int `json:"max_tokens,omitempty"`
-	MaxInputTokens  int `json:"max_input_tokens,omitempty"`
-	MaxOutputTokens int `json:"max_output_tokens,omitempty"`
-
-	InputCostPerToken     float64 `json:"input_cost_per_token,omitempty"`
-	OutputCostPerToken    float64 `json:"output_cost_per_token,omitempty"`
-	CacheReadCostPerToken float64 `json:"cache_read_cost_per_token,omitempty"`
-
-	SupportsReasoning bool `json:"supports_reasoning,omitempty"`
-
-	Family      string `json:"family,omitempty"`
-	Description string `json:"description,omitempty"`
-	Knowledge   string `json:"knowledge,omitempty"`
-	ReleaseDate string `json:"release_date,omitempty"`
-	LastUpdated string `json:"last_updated,omitempty"`
-	OpenWeights bool   `json:"open_weights,omitempty"`
-	Attachment  bool   `json:"attachment,omitempty"`
-	ToolCall    bool   `json:"tool_call,omitempty"`
-
-	StructuredOutput bool              `json:"structured_output,omitempty"`
-	Temperature      bool              `json:"temperature,omitempty"`
-	ReasoningOptions []ReasoningOption `json:"reasoning_options,omitempty"`
-	Interleaved      *Interleaved      `json:"interleaved,omitempty"`
-	Modalities       *Modalities       `json:"modalities,omitempty"`
-}
+type (
+	ModelConfig     = config.ModelConfig
+	ReasoningOption = config.ReasoningOption
+	Interleaved     = config.Interleaved
+	Modalities      = config.Modalities
+)
 
 type apiProvider struct {
 	ID     string                   `json:"id"`

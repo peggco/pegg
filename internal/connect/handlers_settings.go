@@ -89,6 +89,7 @@ type providerUpsertParams struct {
 	BaseURL         string            `json:"base_url"`
 	Headers         map[string]string `json:"headers"`
 	SystemFirstOnly *bool             `json:"system_first_only"`
+	Models          []config.Model    `json:"models"`
 }
 
 func (c *Connector) handleSettingsProviderUpsert(_ context.Context, req *Request) (any, error) {
@@ -115,11 +116,15 @@ func (c *Connector) handleSettingsProviderUpsert(_ context.Context, req *Request
 				cfg.APIKey = existing.APIKey
 			}
 			cfg.SystemFirstOnly = existing.SystemFirstOnly
+			cfg.Models = existing.Models
 			break
 		}
 	}
 	if p.SystemFirstOnly != nil {
 		cfg.SystemFirstOnly = p.SystemFirstOnly
+	}
+	if len(p.Models) > 0 {
+		cfg.Models = p.Models
 	}
 	if err := config.UpsertProvider(cfg); err != nil {
 		return nil, &FrameError{Code: ErrCodeInternal, Message: "save provider: " + err.Error()}

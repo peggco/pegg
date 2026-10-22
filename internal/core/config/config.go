@@ -17,6 +17,7 @@ type LLMConfig struct {
 	MaxRetries      int               `json:"max_retries,omitempty"`
 	Headers         map[string]string `json:"headers,omitempty"`
 	SystemFirstOnly *bool             `json:"system_first_only,omitempty"`
+	Models          []Model           `json:"models,omitempty"`
 }
 
 func (c LLMConfig) SystemFirstOnlyValue() bool {

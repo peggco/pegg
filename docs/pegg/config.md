@@ -60,8 +60,64 @@ Configured LLM providers. See [Providers & Models](providers-and-models.md).
 | `max_retries` | int | — | Reserved; currently not read by the runtime |
 | `headers` | object | — | Extra HTTP headers merged onto the driver defaults |
 | `system_first_only` | bool | `false` | Only allow the system prompt in the first message. Later system messages (reminders, compaction summaries) are folded into the neighbouring user or tool message. Needed for providers that reject a late system message |
+| `models` | array | — | Model catalogue of the provider. Declared models are merged with the models the provider reports; a declared model wins for its id |
 
 Either `provider` or `driver` must be set.
+
+#### Declaring models
+
+`models` declares the models of a provider together with their metadata. The
+entry uses the same shape as the `config` object of an OpenAI-compatible
+`/models` response, so a model declared here and a model discovered from a
+provider look identical:
+
+```json
+{
+  "providers": [
+    {
+      "provider": "my-gateway",
+      "driver": "openai",
+      "base_url": "https://gw.example.com/v1",
+      "api_key": "sk-...",
+      "models": [
+        {
+          "id": "gpt-4o",
+          "name": "GPT-4o",
+          "config": {
+            "max_input_tokens": 128000,
+            "max_output_tokens": 16384,
+            "input_cost_per_token": 0.0000025,
+            "output_cost_per_token": 0.00001,
+            "modalities": { "input": ["text", "image"], "output": ["text"] },
+            "tool_call": true,
+            "structured_output": true,
+            "temperature": true,
+            "reasoning_options": [
+              { "type": "effort", "values": ["low", "medium", "high"] }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+Rules:
+
+- Declared models are **merged** with the models the provider reports. A
+  declared model replaces the reported model with the same `id`; declared
+  models the provider does not know are added.
+- A declared model without a `config` keeps the metadata of the reported model
+  (or the metadata from the shared price table).
+- When the provider has no reachable `/models` endpoint, the declared models
+  are used on their own.
+- Prices are **per token**. `2.5` USD per 1M tokens is `0.0000025`.
+- `reasoning_options` declares the reasoning effort levels the model accepts.
+  Declaring them implies `supports_reasoning`; without them the provider
+  default is used.
+- The metadata fields are listed under
+  [Model metadata](providers-and-models.md#model-metadata).
 
 ### `logger`
 

@@ -330,11 +330,22 @@ each model this includes:
 | `max_input_tokens`, `max_output_tokens`, `max_tokens` | Context-window usage indicator and request limits |
 | `input_cost_per_token`, `output_cost_per_token`, `cache_read_cost_per_token` | Cost display in the TUI status bar and session usage |
 | `supports_reasoning`, `reasoning_options` | The TUI **Reasoning** setting (`default`, `low`, `medium`, `high`) |
+| `reasoning_options[].type`, `.values` | The effort levels offered for the model (`effort` values, `max_tokens` bounds) |
 | `modalities.input` | Whether image/audio/video attachments are allowed |
 | `tool_call`, `structured_output`, `temperature` | Capability checks |
 
 Lookup tries `provider/model` first, then the bare model ID, then a substring
 fallback. Unknown models still work; they simply have no metadata.
+
+Metadata can also be declared directly in `pegg.json` — see
+[Declaring models](config.md#declaring-models). A declared model wins over the
+discovered one, and a provider without a reachable `/models` endpoint still
+works with the declared catalogue.
+
+On the website, **Team AI** model entries carry the same metadata. The model
+dialog has fields for the context window, the output limit, the prices, the
+input and output types and the capability flags; a model sync only fills the
+keys that are still missing, so manual values survive.
 
 ## Reasoning effort
 
