@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { EventEmitter } from 'node:events';
+import { delimiter } from 'node:path';
 import { AcpClient, contentText } from '../acp/client';
 import {
   AskParams,
@@ -15,6 +16,7 @@ import {
   SessionUpdate,
 } from '../acp/types';
 import { BinaryManager } from '../binary/manager';
+import { searchDirs } from '../binary/paths';
 import { getConfig, workspaceRoot } from '../config';
 import { Logger } from '../logger';
 import { activeContext, attachmentToBlock } from './context';
@@ -430,6 +432,16 @@ export class ChatController extends EventEmitter {
     await this.starting;
   }
 
+  private async serverEnv(): Promise<Record<string, string>> {
+    const env: Record<string, string> = {};
+    try {
+      env.PATH = (await searchDirs()).join(delimiter);
+    } catch {
+      // fall back to the inherited environment
+    }
+    return { ...env, ...getConfig().env };
+  }
+
   private async startClient(): Promise<void> {
     const root = workspaceRoot();
     if (!root) throw new Error('Open a folder to use Pegg.');
@@ -439,7 +451,7 @@ export class ChatController extends EventEmitter {
     const client = new AcpClient({
       cwd: root,
       getBinary: () => this.binary.ensure(),
-      env: getConfig().env,
+      env: await this.serverEnv(),
       log: this.log,
       version: String(this.context.extension.packageJSON.version ?? '0.1.9'),
     });
