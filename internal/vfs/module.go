@@ -3,7 +3,9 @@ package vfs
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
+	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/logger"
 )
 
@@ -19,6 +21,14 @@ func VFSModule(log *logger.Logger) (*VFS, error) {
 		}
 	} else {
 		opts.SnapshotPath = path
+	}
+	if root, err := config.ProjectRoot(); err == nil {
+		local := filepath.Join(filepath.Clean(cwd), config.ProjectConfigDirName)
+		if filepath.Clean(root) != local {
+			opts.ProjectRoot = root
+		}
+	} else if log != nil {
+		log.Fwarn("vfs: resolve project state directory: %v", err)
 	}
 	return New(cwd, opts)
 }

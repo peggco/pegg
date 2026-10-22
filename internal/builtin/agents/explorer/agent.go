@@ -6,8 +6,8 @@ import (
 	_ "github.com/peggco/pegg/internal/builtin/middlewares"
 )
 
-func Register() {
-	agents.Register(newExplorerAgent)
+func Register() error {
+	return agents.Register(newExplorerAgent)
 }
 
 const (

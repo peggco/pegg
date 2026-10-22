@@ -48,6 +48,23 @@ export async function downloadText(url: string): Promise<string> {
   return response.text();
 }
 
+export async function downloadFileAny(
+  urls: string[],
+  dest: string,
+  progress?: Progress,
+): Promise<string> {
+  let lastError: unknown;
+  for (const url of urls) {
+    try {
+      await downloadFile(url, dest, progress);
+      return url;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 export async function extractArchive(archive: string, dest: string, asset: string): Promise<void> {
   await mkdir(dest, { recursive: true });
   if (asset.endsWith('.zip')) {

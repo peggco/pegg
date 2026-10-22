@@ -326,6 +326,12 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "pegg.diagnoseBinary",
+        "title": "Diagnose Binary",
+        "category": "Pegg",
+        "icon": "$(pulse)"
+      },
+      {
         "command": "pegg.fixDiagnostic",
         "title": "Fix Diagnostic with Pegg",
         "category": "Pegg"

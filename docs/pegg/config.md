@@ -21,9 +21,17 @@ editor-specific options in VS Code settings (`pegg.*`).
 | Global | `~/.pegg/permissions.json` | Remembered tool approvals and rejections |
 | Global | `~/.pegg/schedules.json` | Recurring schedules. Run history lives in `~/.pegg/schedule_runs/` |
 | Global | `~/.pegg/vfs/` | Per-workspace read-hash snapshots backing read-before-edit |
+| Global | `~/.pegg/projects/<workspace-key>/` | Fallback location for project data when the working directory cannot hold `.pegg/` |
 
 The global file is created with defaults on first run. A missing file is not an
 error — Pegg falls back to built-in defaults. An unparsable file is an error.
+
+Project data normally lives in `<project>/.pegg/` so it can be committed with
+the repository. When that directory cannot be created — a read-only mount, a
+sandboxed process, or a working directory such as `/` — Pegg keeps running and
+stores the same data in `~/.pegg/projects/<workspace-key>/` instead. The
+workspace key is derived from the absolute working directory, so the data
+stays separated per project. Pegg logs the relocation once at startup.
 
 `pegg files` prints every resolved path and whether it exists.
 

@@ -192,7 +192,6 @@ func (p *Prompt) AgentsMd() *Prompt {
 
 func (p *Prompt) Rules() *Prompt {
 	globalDir, _ := config.GetConfigPath("rules")
-	projectDir, _ := config.GetProjectConfigPath("rules")
 
 	var allRules []string
 
@@ -200,8 +199,10 @@ func (p *Prompt) Rules() *Prompt {
 		allRules = append(allRules, rules...)
 	}
 
-	if rules := readRuleDir(projectDir); len(rules) > 0 {
-		allRules = append(allRules, rules...)
+	for _, dir := range config.ProjectReadPaths("rules") {
+		if rules := readRuleDir(dir); len(rules) > 0 {
+			allRules = append(allRules, rules...)
+		}
 	}
 
 	if len(allRules) == 0 {

@@ -1,6 +1,22 @@
 # Changelog
 
-## 0.1.9
+## Unreleased
+
+- The binary version check now reports why a candidate was rejected instead of
+  a generic "failed its version check" message.
+- The version probe runs inside the workspace instead of the extension host
+  working directory, which can be `/` or the application bundle.
+- Binary discovery also searches the well known install directories and the
+  `PATH` declared in the shell profiles, so VS Code started from the Dock or
+  the Finder finds an existing installation.
+- `pegg.binary.version` set to `latest` now uses the release download endpoint
+  instead of a tag that does not exist.
+- New `Pegg: Diagnose Binary` command that lists every probed location, the
+  detected version and the failure reasons.
+- The Pegg process inherits the augmented `PATH`, so shell tools keep working
+  in GUI launches.
+
+## 0.2.0
 
 - Initial VS Code extension release.
 - Streaming ACP chat, sessions, modes, models, permissions, questions, plans,

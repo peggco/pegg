@@ -76,6 +76,9 @@ func newManager(deps Deps, dir string) *Manager {
 }
 
 func projectDir() string {
+	if root, err := config.ProjectRoot(); err == nil && root != "" {
+		return root
+	}
 	dir, err := os.Getwd()
 	if err != nil {
 		return "."

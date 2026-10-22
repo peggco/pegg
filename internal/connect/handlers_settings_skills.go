@@ -62,24 +62,32 @@ func (c *Connector) handleRulesList(_ context.Context, _ *Request) (any, error) 
 	}
 	var out []ruleFile
 	for _, scope := range []string{"global", "project"} {
-		dir, err := c.rulesDir(scope)
-		if err != nil {
-			continue
-		}
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+		var dirs []string
+		if scope == "project" {
+			dirs = config.ProjectReadPaths("rules")
+		} else {
+			dir, err := c.rulesDir(scope)
+			if err != nil {
 				continue
 			}
-			info, _ := e.Info()
-			var size int64
-			if info != nil {
-				size = info.Size()
+			dirs = []string{dir}
+		}
+		for _, dir := range dirs {
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				continue
 			}
-			out = append(out, ruleFile{Scope: scope, Name: e.Name(), Path: filepath.Join(dir, e.Name()), Size: size})
+			for _, e := range entries {
+				if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+					continue
+				}
+				info, _ := e.Info()
+				var size int64
+				if info != nil {
+					size = info.Size()
+				}
+				out = append(out, ruleFile{Scope: scope, Name: e.Name(), Path: filepath.Join(dir, e.Name()), Size: size})
+			}
 		}
 	}
 	return map[string]any{"rules": out}, nil

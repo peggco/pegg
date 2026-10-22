@@ -17,18 +17,20 @@ import (
 type Options struct {
 	Log          *logger.Logger
 	SnapshotPath string
+	ProjectRoot  string
 }
 
 type VFS struct {
-	root      string
-	scope     string
-	wscope    string
-	writeOnly string
-	mu        sync.RWMutex
-	snapshots *snapshotStore
-	ignorer   *Ignorer
-	hooks     vfsHooks
-	log       *logger.Logger
+	root        string
+	scope       string
+	wscope      string
+	writeOnly   string
+	projectRoot string
+	mu          sync.RWMutex
+	snapshots   *snapshotStore
+	ignorer     *Ignorer
+	hooks       vfsHooks
+	log         *logger.Logger
 }
 
 func New(root string, opts Options) (*VFS, error) {
@@ -46,12 +48,19 @@ func New(root string, opts Options) (*VFS, error) {
 	if !fi.IsDir() {
 		return nil, fmt.Errorf("vfs: root %q is not a directory", abs)
 	}
+	projectRoot := ""
+	if opts.ProjectRoot != "" {
+		if resolved, err := filepath.Abs(opts.ProjectRoot); err == nil {
+			projectRoot = filepath.Clean(resolved)
+		}
+	}
 	return &VFS{
-		root:      filepath.Clean(abs),
-		snapshots: newSnapshotStore(opts.SnapshotPath, filepath.Clean(abs), opts.Log),
-		ignorer:   newIgnorer(filepath.Clean(abs)),
-		hooks:     newHooks(),
-		log:       opts.Log,
+		root:        filepath.Clean(abs),
+		projectRoot: projectRoot,
+		snapshots:   newSnapshotStore(opts.SnapshotPath, filepath.Clean(abs), opts.Log),
+		ignorer:     newIgnorer(filepath.Clean(abs)),
+		hooks:       newHooks(),
+		log:         opts.Log,
 	}, nil
 }
 
@@ -71,12 +80,13 @@ func (v *VFS) Scoped(relScope string) (*VFS, error) {
 		return nil, err
 	}
 	return &VFS{
-		root:      v.root,
-		scope:     clean,
-		snapshots: v.snapshots,
-		ignorer:   v.ignorer,
-		hooks:     v.hooks,
-		log:       v.log,
+		root:        v.root,
+		scope:       clean,
+		projectRoot: v.projectRoot,
+		snapshots:   v.snapshots,
+		ignorer:     v.ignorer,
+		hooks:       v.hooks,
+		log:         v.log,
 	}, nil
 }
 
@@ -92,12 +102,13 @@ func (v *VFS) WriteScope(relScope string) (*VFS, error) {
 		return nil, err
 	}
 	return &VFS{
-		root:      v.root,
-		wscope:    clean,
-		snapshots: v.snapshots,
-		ignorer:   v.ignorer,
-		hooks:     v.hooks,
-		log:       v.log,
+		root:        v.root,
+		wscope:      clean,
+		projectRoot: v.projectRoot,
+		snapshots:   v.snapshots,
+		ignorer:     v.ignorer,
+		hooks:       v.hooks,
+		log:         v.log,
 	}, nil
 }
 
@@ -117,10 +128,37 @@ func prepareScope(relScope string) (string, error) {
 
 func (v *VFS) ensureScopeDir(relScope, clean string) error {
 	abs := filepath.Join(v.root, filepath.FromSlash(clean))
+	if mapped, ok := v.mapProjectPath(clean); ok {
+		abs = mapped
+	}
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return fmt.Errorf("vfs: create scope %q: %w", relScope, err)
 	}
 	return nil
+}
+
+func (v *VFS) mapProjectPath(rel string) (string, bool) {
+	if v.projectRoot == "" {
+		return "", false
+	}
+	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(rel)))
+	if clean != peggDir && !strings.HasPrefix(clean, peggDir+"/") {
+		return "", false
+	}
+	rest := strings.TrimPrefix(strings.TrimPrefix(clean, peggDir), "/")
+	if rest == "" {
+		return v.projectRoot, true
+	}
+	return filepath.Join(v.projectRoot, filepath.FromSlash(rest)), true
+}
+
+func (v *VFS) projectMapped(phys string) bool {
+	if v.projectRoot == "" {
+		return false
+	}
+	base := filepath.Clean(v.projectRoot)
+	clean := filepath.Clean(phys)
+	return clean == base || strings.HasPrefix(clean, base+string(filepath.Separator))
 }
 
 func (v *VFS) Resolve(vpath string) (string, error) {
@@ -171,11 +209,24 @@ func (v *VFS) resolve(vpath string, ctx context.Context) (string, error) {
 		}
 		return "", v.denyAccess(req, verdict)
 	}
+	if mapped, ok := v.mapProjectPath(filepath.ToSlash(clean)); ok {
+		return v.evalWithinRootCtx(ctx, mapped)
+	}
 	return v.evalWithinRootCtx(ctx, filepath.Join(v.root, clean))
 }
 
 func (v *VFS) Virtual(ppath string) string {
 	clean := filepath.Clean(ppath)
+	if v.projectRoot != "" {
+		base := filepath.Clean(v.projectRoot)
+		if rel, err := filepath.Rel(base, clean); err == nil && rel != ".." &&
+			!strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			if rel == "." {
+				return peggDir
+			}
+			return peggDir + "/" + filepath.ToSlash(rel)
+		}
+	}
 	rel, err := filepath.Rel(v.root, clean)
 	if err != nil {
 		return filepath.ToSlash(clean)
@@ -303,7 +354,7 @@ func (v *VFS) resolveCheckedCtx(ctx context.Context, vpath string) (string, stri
 	if fi, err := os.Stat(phys); err == nil {
 		isDir = fi.IsDir()
 	}
-	if !v.within(phys) {
+	if !v.within(phys) && !v.projectMapped(phys) {
 		return phys, rel, isDir, nil
 	}
 	if v.ignored(rel, isDir) {
@@ -333,7 +384,7 @@ func (v *VFS) resolveWriteCheckedCtx(ctx context.Context, op AccessOp, vpath str
 	if fi, err := os.Stat(phys); err == nil {
 		isDir = fi.IsDir()
 	}
-	if !v.within(phys) {
+	if !v.within(phys) && !v.projectMapped(phys) {
 		return phys, rel, isDir, nil
 	}
 	if v.writeIgnored(rel, isDir) {
@@ -479,5 +530,11 @@ func hashBytes(data []byte) string {
 func (v *VFS) debug(format string, args ...any) {
 	if v.log != nil {
 		v.log.Fdebug(format, args...)
+	}
+}
+
+func (v *VFS) Warn(format string, args ...any) {
+	if v.log != nil {
+		v.log.Fwarn(format, args...)
 	}
 }

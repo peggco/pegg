@@ -168,6 +168,34 @@ export function registerChatCommands(
         showError(err);
       }
     }),
+    vscode.commands.registerCommand('pegg.diagnoseBinary', async () => {
+      const diagnostic = await binary.diagnose();
+      const lines = [
+        `platform: ${diagnostic.platform}`,
+        `extension version: ${diagnostic.extensionVersion}`,
+        `pegg.binary.version: ${diagnostic.binaryVersionSetting}`,
+        `download base url: ${diagnostic.downloadBaseUrl}`,
+        `probe working directory: ${diagnostic.probeCwd}`,
+        `search directories: ${diagnostic.searchDirs.join(', ') || '(none)'}`,
+        '',
+        'candidates:',
+        ...diagnostic.candidates.map(
+          (candidate) =>
+            `  ${candidate.ok ? 'OK  ' : 'FAIL'} ${candidate.path}${candidate.ok ? ` (${candidate.version})` : ` — ${candidate.error ?? 'unknown error'}`}`,
+        ),
+        '',
+        diagnostic.resolved
+          ? `resolved: ${diagnostic.resolved}${diagnostic.resolvedVersion ? ` (${diagnostic.resolvedVersion})` : ''}`
+          : `resolved: none — ${diagnostic.error ?? 'no working binary found'}`,
+      ];
+      log.info('Pegg binary diagnostics:\n' + lines.join('\n'));
+      log.show();
+      void vscode.window.showInformationMessage(
+        diagnostic.resolved
+          ? `Pegg binary: ${diagnostic.resolved}${diagnostic.resolvedVersion ? ` (${diagnostic.resolvedVersion})` : ''}`
+          : `Pegg binary not found. Details written to the Pegg output channel.`,
+      );
+    }),
   ];
 }
 

@@ -3,9 +3,11 @@ package todo
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/core/config"
 )
 
 const testSessionID = "test-session"
@@ -18,6 +20,8 @@ func setupTodoTest(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
+	config.ResetProjectRoot()
+	t.Cleanup(config.ResetProjectRoot)
 	store.mu.Lock()
 	store.sessions = make(map[string]*sessionStore)
 	store.agentSessions = make(map[string]string)
@@ -256,4 +260,41 @@ func containsStr(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestTodoFallsBackToGlobalProjectState(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	config.ResetProjectRoot()
+	t.Cleanup(config.ResetProjectRoot)
+	store.mu.Lock()
+	store.sessions = make(map[string]*sessionStore)
+	store.agentSessions = make(map[string]string)
+	store.mu.Unlock()
+
+	tool := todowriteTool(nil)
+	ctx := sessionContext(t)
+	if _, err := tool.Execute(ctx, `{"todos": [
+		{"id": "todo-1", "title": "fallback task", "status": "pending", "priority": "medium"}
+	]}`); err != nil {
+		t.Fatalf("todo must work in a read-only directory: %v", err)
+	}
+
+	file := filepath.Join(home, ".pegg", "projects", config.WorkspaceKey(dir), "todos", testSessionID+".json")
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("todo file not written to the fallback project state: %v", err)
+	}
 }

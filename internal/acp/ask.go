@@ -11,6 +11,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/core/config"
 )
 
 const (
@@ -103,11 +104,18 @@ func isPermissionQuestion(q agent.AskQuestion) bool {
 	return q.ID == permissionQuestionID
 }
 
+func planFilePath(cwd string) string {
+	if root, _, err := config.ProjectRootFor(cwd); err == nil && root != "" {
+		return filepath.Join(root, "plans", "plan.md")
+	}
+	return filepath.Join(cwd, ".pegg", "plans", "plan.md")
+}
+
 func (s *Server) askPermission(ctx context.Context, acpSess *ACPSession, ev agent.AgentAsk) (map[string]string, error) {
 	q := ev.Questions[0]
 	question := q.Question
 	if strings.Contains(question, "exitplanmode") {
-		if data, err := os.ReadFile(filepath.Join(acpSess.Cwd, ".pegg", "plans", "plan.md")); err == nil {
+		if data, err := os.ReadFile(planFilePath(acpSess.Cwd)); err == nil {
 			question += "\n\nPlan file:\n" + truncate(string(data), 128*1024)
 		}
 	}
