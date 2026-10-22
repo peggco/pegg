@@ -79,6 +79,17 @@ func HasDriver(name string) bool {
 }
 
 func resolveProvider(cfg config.LLMConfig) (Provider, error) {
+	prov, err := buildProvider(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.SystemFirstOnlyValue() {
+		return WithSystemFirstOnly(prov), nil
+	}
+	return prov, nil
+}
+
+func buildProvider(cfg config.LLMConfig) (Provider, error) {
 	if cfg.Provider != "" {
 		providersMu.RLock()
 		factory, ok := providers[cfg.Provider]

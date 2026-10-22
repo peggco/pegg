@@ -48,7 +48,9 @@ func (c *CLI) runProviders(out io.Writer) error {
 	fmt.Fprintf(out, "%-12s %-24s %s\n", "PROVIDER", "API KEY", "MODELS")
 	for _, p := range cfg.Providers {
 		count := 0
-		if raw, err := store.Get(p.Provider); err == nil {
+		if models, ok := c.providerModels(p.Provider); ok {
+			count = len(models)
+		} else if raw, err := store.Get(p.Provider); err == nil {
 			var models []llm.Model
 			if json.Unmarshal(raw, &models) == nil {
 				count = len(models)
@@ -237,6 +239,19 @@ func (c *CLI) runProviderAdd(out io.Writer, f *providerAddFlags, p providerAddPr
 	existing, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("cli: load config: %w", err)
+	}
+
+	for _, e := range existing.Providers {
+		if e.Provider != cfg.Provider {
+			continue
+		}
+		if e.SystemFirstOnly != nil {
+			cfg.SystemFirstOnly = e.SystemFirstOnly
+		}
+		if len(e.Models) > 0 {
+			cfg.Models = e.Models
+		}
+		break
 	}
 
 	identity := cfg.Provider

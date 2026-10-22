@@ -15,6 +15,19 @@
   detected version and the failure reasons.
 - The Pegg process inherits the augmented `PATH`, so shell tools keep working
   in GUI launches.
+- Tool cards follow the TUI: simple tools (`read`, `glob`, `grep`, `fetch`, …)
+  collapse to one status line and stay collapsed unless they fail; raw JSON
+  arguments are no longer shown, `bash` keeps its output and `edit`/`write`
+  keep the diff button.
+- Subagents render as their own card with the task and status. Clicking it
+  opens the subagent chat (only that agent's messages) with a Back button.
+  Internals of a subagent no longer leak into the main transcript. Requires the
+  `pegg` CLI from this version (`toolName` and `subagent` updates).
+- Click a user message to open a small menu with **Copy**, **Fork from here** and
+  **Revert to here**, matching the TUI. Forking switches to a new session with
+  the messages before that point; reverting removes the message and everything
+  after it and puts the text back into the composer. Requires the
+  `pegg.history` CLI capability.
 
 ## 0.2.0
 

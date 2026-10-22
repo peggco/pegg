@@ -41,6 +41,7 @@ type SessionUpdate struct {
 	MessageID     string             `json:"messageId,omitempty"`
 	Content       any                `json:"content,omitempty"`
 	ToolCallID    string             `json:"toolCallId,omitempty"`
+	ToolName      string             `json:"toolName,omitempty"`
 	Title         string             `json:"title,omitempty"`
 	Kind          string             `json:"kind,omitempty"`
 	Status        string             `json:"status,omitempty"`

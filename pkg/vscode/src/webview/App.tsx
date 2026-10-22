@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  ChatItem,
-  ChatState,
-  PendingPermission,
-  PendingQuestion,
-  ToolState,
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  filterConversation,
+  type ChatItem,
+  type ChatState,
+  type PendingPermission,
+  type PendingQuestion,
+  type ToolState,
 } from '../chat/state';
 import { renderMarkdown } from './markdown';
 import { vscode } from './vscode';
@@ -35,7 +36,18 @@ interface VoiceErrorMessage {
   error: string;
 }
 
-type Incoming = StateMessage | TranscriptMessage | FilesMessage | RecordingMessage | VoiceErrorMessage;
+interface ComposerTextMessage {
+  type: 'composerText';
+  text: string;
+}
+
+type Incoming =
+  | StateMessage
+  | TranscriptMessage
+  | FilesMessage
+  | RecordingMessage
+  | VoiceErrorMessage
+  | ComposerTextMessage;
 
 interface PopupState {
   kind: 'mention' | 'command';
@@ -95,6 +107,42 @@ export function App() {
   const selectedRow = useRef<HTMLButtonElement>(null);
   const stick = useRef(true);
   const textRef = useRef('');
+  const [menu, setMenu] = useState<{ item: ChatItem; rect: DOMRect } | null>(null);
+  const [agentView, setAgentView] = useState<{ id: string; name?: string } | null>(null);
+
+  const openMessageMenu = useCallback((item: ChatItem, rect: DOMRect) => {
+    setMenu((current) => (current?.item.id === item.id ? null : { item, rect }));
+  }, []);
+
+  const openSubagent = useCallback((agentId: string, name?: string) => {
+    setAgentView({ id: agentId, name });
+    setMenu(null);
+  }, []);
+
+  useEffect(() => {
+    setAgentView(null);
+  }, [state.acpSessionId, state.peggSessionId]);
+
+  const subagentIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of state.items) {
+      if (item.kind === 'subagent') ids.add(item.agentId);
+    }
+    return ids;
+  }, [state.items]);
+
+  const visibleItems = useMemo(
+    () => filterConversation(state.items, agentView?.id ?? null, subagentIds),
+    [state.items, agentView, subagentIds],
+  );
+
+  const activeSubagent = useMemo(() => {
+    if (!agentView) return undefined;
+    return state.items.find(
+      (item): item is Extract<ChatItem, { kind: 'subagent' }> =>
+        item.kind === 'subagent' && item.agentId === agentView.id,
+    );
+  }, [state.items, agentView]);
 
   const scrollToBottom = useCallback((smooth = false) => {
     const el = messages.current;
@@ -143,12 +191,47 @@ export function App() {
       } else if (data.type === 'voiceError') {
         setRecording(false);
         setLocalError(data.error);
+      } else if (data.type === 'composerText') {
+        textRef.current = data.text;
+        setText(data.text);
+        requestAnimationFrame(() => {
+          const el = textarea.current;
+          if (!el) return;
+          el.focus();
+          el.setSelectionRange(data.text.length, data.text.length);
+        });
       }
     };
     window.addEventListener('message', onMessage);
     vscode.postMessage({ type: 'ready' });
     return () => window.removeEventListener('message', onMessage);
   }, [insertText]);
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      close();
+    };
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('.message-menu')) return;
+      if (target?.closest('.message-body.clickable')) return;
+      close();
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('mousedown', onPointerDown, true);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('mousedown', onPointerDown, true);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [menu]);
 
   useEffect(() => {
     if (!stick.current) return;
@@ -334,8 +417,21 @@ export function App() {
   return (
     <div className="app" onDrop={onDrop} onDragOver={(event) => event.preventDefault()}>
 
+      {agentView && (
+        <div className="agent-view-bar">
+          <button className="agent-back" onClick={() => setAgentView(null)}>
+            ← Back
+          </button>
+          <span className="agent-view-name">{activeSubagent?.agentName || agentView.name || 'Subagent'}</span>
+          {activeSubagent?.task && <span className="agent-view-task">{activeSubagent.task}</span>}
+          <span className={`agent-view-status status-${activeSubagent?.status ?? 'running'}`}>
+            {activeSubagent?.status === 'running' ? 'working…' : activeSubagent?.status === 'error' ? 'failed' : 'done'}
+          </span>
+        </div>
+      )}
+
       <main className="messages" ref={messages} onScroll={onScroll}>
-        {state.items.length === 0 && !state.running && (
+        {!agentView && state.items.length === 0 && !state.running && (
           <div className="empty">
             <div className="empty-title">Ask Pegg about this workspace</div>
             <div className="empty-subtitle">
@@ -352,9 +448,21 @@ export function App() {
           </div>
         )}
 
-        {state.items.map((item) => (
-          <ItemView key={item.id} item={item} />
+        {visibleItems.map((item) => (
+          <ItemView
+            key={item.id}
+            item={item}
+            onOpenMenu={openMessageMenu}
+            onOpenSubagent={openSubagent}
+          />
         ))}
+
+        {agentView && visibleItems.length === 0 && activeSubagent?.status === 'running' && (
+          <div className="agent-view-empty">
+            <span className="spinner" />
+            <span>{activeSubagent.agentName || 'The subagent'} is working…</span>
+          </div>
+        )}
 
         {state.pending.map((pending) =>
           pending.kind === 'permission' ? (
@@ -364,7 +472,7 @@ export function App() {
           ),
         )}
 
-        {state.running && (
+        {!agentView && state.running && (
           <div className="working">
             <span className="spinner" />
             <span>Pegg is working…</span>
@@ -393,9 +501,15 @@ export function App() {
         </section>
       )}
 
-      <footer className="composer-wrap">
+      <footer className={`composer-wrap ${agentView ? 'disabled' : ''}`}>
         <div className="composer-tip">
-          Tip: Type <code>/</code> for skills and <code>@</code> to mention files or folders.
+          {agentView
+            ? 'Viewing a subagent — go back to continue the conversation.'
+            : (
+                <>
+                  Tip: Type <code>/</code> for skills and <code>@</code> to mention files or folders.
+                </>
+              )}
         </div>
 
         <div className="composer">
@@ -440,7 +554,8 @@ export function App() {
             ref={textarea}
             value={text}
             rows={1}
-            placeholder="Ask a question about your code or project"
+            placeholder={agentView ? 'Viewing a subagent chat' : 'Ask a question about your code or project'}
+            disabled={Boolean(agentView)}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={onKeyDown}
             onPaste={onPaste}
@@ -482,7 +597,7 @@ export function App() {
                 <button
                   className="send"
                   title="Send"
-                  disabled={!text.trim() && state.composerAttachments.length === 0}
+                  disabled={Boolean(agentView) || (!text.trim() && state.composerAttachments.length === 0)}
                   onClick={send}
                 >
                   <ArrowUpIcon />
@@ -496,16 +611,206 @@ export function App() {
           {pendingIds.size > 0 && <span className="waiting">Waiting for your input</span>}
         </div>
       </footer>
+
+      {menu && menu.item.kind === 'user' && (
+        <MessageMenu
+          rect={menu.rect}
+          supported={Boolean(state.historySupported)}
+          running={state.running}
+          onCopy={() => {
+            vscode.postMessage({ type: 'copyText', text: menu.item.kind === 'user' ? menu.item.text : '' });
+            setMenu(null);
+          }}
+          onFork={() => {
+            vscode.postMessage({ type: 'forkMessage', id: menu.item.id });
+            setMenu(null);
+          }}
+          onRevert={() => {
+            vscode.postMessage({ type: 'revertMessage', id: menu.item.id });
+            setMenu(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function ItemView({ item }: { item: ChatItem }) {
+function MessageMenu({
+  rect,
+  supported,
+  running,
+  onCopy,
+  onFork,
+  onRevert,
+}: {
+  rect: DOMRect;
+  supported: boolean;
+  running: boolean;
+  onCopy: () => void;
+  onFork: () => void;
+  onRevert: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const menuRect = element.getBoundingClientRect();
+    const gap = 6;
+    const margin = 8;
+    const below = rect.bottom + gap;
+    const above = rect.top - menuRect.height - gap;
+    const fitsBelow = below + menuRect.height <= window.innerHeight - margin;
+    const top = fitsBelow || above < margin ? below : above;
+    const maxLeft = Math.max(margin, window.innerWidth - menuRect.width - margin);
+    const left = Math.min(Math.max(margin, rect.left), maxLeft);
+    setPosition({ top, left });
+  }, [rect, supported, running]);
+
+  return (
+    <div
+      ref={ref}
+      className="message-menu"
+      role="menu"
+      aria-label="Message actions"
+      style={{ ...position, visibility: position ? 'visible' : 'hidden' }}
+    >
+      <button type="button" className="message-menu-item" role="menuitem" onClick={onCopy}>
+        <CopyIcon />
+        <span className="message-menu-text">
+          <span className="message-menu-label">Copy</span>
+          <span className="message-menu-detail">Copy the message text</span>
+        </span>
+      </button>
+      <div className="message-menu-separator" role="separator" />
+      <button
+        type="button"
+        className="message-menu-item"
+        role="menuitem"
+        disabled={running || !supported}
+        title={supported ? undefined : 'Update the Pegg binary to use this action'}
+        onClick={onFork}
+      >
+        <ForkIcon />
+        <span className="message-menu-text">
+          <span className="message-menu-label">Fork from here</span>
+          <span className="message-menu-detail">
+            {running
+              ? 'Wait for Pegg to finish'
+              : supported
+                ? 'New session with the messages before this one'
+                : 'Requires a newer Pegg binary'}
+          </span>
+        </span>
+      </button>
+      <button
+        type="button"
+        className="message-menu-item danger"
+        role="menuitem"
+        disabled={running || !supported}
+        title={supported ? undefined : 'Update the Pegg binary to use this action'}
+        onClick={onRevert}
+      >
+        <RevertIcon />
+        <span className="message-menu-text">
+          <span className="message-menu-label">Revert to here</span>
+          <span className="message-menu-detail">
+            {running
+              ? 'Wait for Pegg to finish'
+              : supported
+                ? 'Removes this message and everything after'
+                : 'Requires a newer Pegg binary'}
+          </span>
+        </span>
+      </button>
+      {!supported && (
+        <p className="message-menu-note">
+          <WarningIcon />
+          The running Pegg binary is too old. Update it with <strong>Pegg: Install or Update Binary</strong>,
+          then restart the server.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg {...iconProps}>
+      <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+      <path d="M10.5 3.5H4A1.5 1.5 0 0 0 2.5 5v6.5" />
+    </svg>
+  );
+}
+
+function WarningIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M8 2.5 14 13H2L8 2.5Z" />
+      <path d="M8 6.5v3M8 11.2v.1" />
+    </svg>
+  );
+}
+
+function ForkIcon() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="4.5" cy="4" r="1.5" />
+      <circle cx="4.5" cy="12" r="1.5" />
+      <circle cx="11.5" cy="8" r="1.5" />
+      <path d="M4.5 5.5v5M6 8h4" />
+    </svg>
+  );
+}
+
+function RevertIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M3 7.5h7a3 3 0 0 1 0 6H6" />
+      <path d="M5.5 5 3 7.5 5.5 10" />
+    </svg>
+  );
+}
+
+function ItemView({
+  item,
+  onOpenMenu,
+  onOpenSubagent,
+}: {
+  item: ChatItem;
+  onOpenMenu?: (item: ChatItem, rect: DOMRect) => void;
+  onOpenSubagent?: (agentId: string, name?: string) => void;
+}) {
   if (item.kind === 'user') {
+    const owned = Boolean(item.agentId);
+    const open = (element: HTMLElement) => {
+      if (owned) return;
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim()) return;
+      onOpenMenu?.(item, element.getBoundingClientRect());
+    };
     return (
-      <article className="message user">
-        <div className="message-role">You</div>
-        <div className="message-body plain">{item.text}</div>
+      <article className={`message user${owned ? ' subagent-prompt' : ''}`}>
+        <div className="message-role">{owned ? 'Task' : 'You'}</div>
+        <div
+          className={`message-body plain${owned ? '' : ' clickable'}`}
+          role="button"
+          tabIndex={0}
+          aria-haspopup={owned ? undefined : 'menu'}
+          title={owned ? undefined : 'Message actions'}
+          onClick={(event) => open(event.currentTarget)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            open(event.currentTarget);
+          }}
+        >
+          {item.text}
+          <span className="message-menu-hint" aria-hidden="true">
+            ⋯
+          </span>
+        </div>
       </article>
     );
   }
@@ -525,7 +830,13 @@ function ItemView({ item }: { item: ChatItem }) {
       </details>
     );
   }
-  if (item.kind === 'tool') return <ToolCard tool={item.tool} />;
+  if (item.kind === 'subagent') {
+    return <SubagentCard item={item} onOpen={() => onOpenSubagent?.(item.agentId, item.agentName)} />;
+  }
+  if (item.kind === 'tool') {
+    if (item.tool.name === 'task') return null;
+    return <ToolCard tool={item.tool} />;
+  }
   if (item.kind === 'error') return <div className="notice error">{item.text}</div>;
   return <div className={`notice ${item.level}`}>{item.text}</div>;
 }
@@ -535,75 +846,106 @@ function AssistantBody({ text }: { text: string }) {
   return <div className="message-body markdown" dangerouslySetInnerHTML={{ __html: html }} onClick={handleLinkClick} />;
 }
 
-function ToolCard({ tool }: { tool: ToolState }) {
-  const isCommand = tool.kind === 'execute' || /^bash\b/i.test(tool.title) || /\bbash\b/i.test(tool.title);
-  const [open, setOpen] = useState(false);
-  const output = stripAnsi(tool.output === undefined ? '' : pretty(tool.output));
-  const showOutput = output.length > 0 && (open || isCommand || tool.status === 'failed');
+function SubagentCard({
+  item,
+  onOpen,
+}: {
+  item: Extract<ChatItem, { kind: 'subagent' }>;
+  onOpen: () => void;
+}) {
+  const running = item.status === 'running';
+  const label = item.agentName || 'Subagent';
   return (
-    <div className={`tool-card status-${tool.status}`}>
-      <button className="tool-head" onClick={() => setOpen((value) => !value)}>
-        <span className={`tool-kind kind-${isCommand ? 'execute' : tool.kind || 'other'}`}>
-          {kindLabel(tool.kind, tool.title)}
+    <div className={`subagent-card status-${item.status}`}>
+      <button className="subagent-head" onClick={onOpen} title="Open this subagent chat">
+        <span className={`subagent-dot status-${item.status}`} />
+        <span className="subagent-name">{label}</span>
+        <span className="subagent-status">
+          {running ? 'working…' : item.status === 'error' ? 'failed' : 'done'}
         </span>
-        <span className="tool-title">{tool.title || 'Tool'}</span>
-        {tool.agentName && tool.agentName !== 'orchestrator' && <span className="tool-agent">{tool.agentName}</span>}
-        <span className="tool-status">{statusLabel(tool.status)}</span>
-        <span className="tool-chevron">{open ? '−' : '+'}</span>
+        <span className="subagent-open">open chat</span>
       </button>
+      {item.task && <div className="subagent-task">{item.task}</div>}
+      {item.error && <div className="subagent-error">{stripAnsi(item.error)}</div>}
+    </div>
+  );
+}
 
-      {showOutput && (
+function ToolCard({ tool }: { tool: ToolState }) {
+  const [open, setOpen] = useState(false);
+  const name = (tool.name ?? '').toLowerCase();
+  const isBash = name === 'bash' || tool.kind === 'execute' || /^bash\b/i.test(tool.title);
+  const hasDiff = Boolean(tool.diff);
+  const output = stripAnsi(tool.output === undefined ? '' : pretty(tool.output));
+  const hasOutput = isBash && output.length > 0;
+  const failed = Boolean(tool.error);
+  const longOutput = hasOutput && output.split('\n').length > 9;
+  const canExpand = failed || longOutput;
+
+  const head = (
+    <>
+      <span className={`tool-kind kind-${isBash ? 'execute' : tool.kind || 'other'}`}>
+        {kindLabel(tool.kind, tool.title)}
+      </span>
+      <span className="tool-title">{tool.title || name || 'Tool'}</span>
+      {tool.agentName && tool.agentName !== 'orchestrator' && <span className="tool-agent">{tool.agentName}</span>}
+      <span className="tool-status">{statusLabel(tool.status)}</span>
+      {canExpand && <span className="tool-chevron">{open ? '−' : '+'}</span>}
+    </>
+  );
+
+  return (
+    <div className={`tool-card status-${tool.status}${canExpand ? '' : ' compact'}`}>
+      {canExpand ? (
+        <button className="tool-head" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+          {head}
+        </button>
+      ) : (
+        <div className="tool-head static">{head}</div>
+      )}
+
+      {failed && open && <div className="tool-error">{stripAnsi(tool.error ?? '')}</div>}
+      {failed && !open && (
+        <div className="tool-error-preview">{stripAnsi(tool.error ?? '').split('\n')[0]}</div>
+      )}
+
+      {hasOutput && (!longOutput || open) && (
         <div className="tool-output-wrap">
-          <pre className={`tool-output ${open ? 'expanded' : ''}`}>{output}</pre>
-          {output.split('\n').length > 9 && (
-            <button className="tool-expand" onClick={() => setOpen((value) => !value)}>
-              {open ? 'Show less' : 'Show full output'}
-            </button>
-          )}
+          <pre className="tool-output expanded">{output}</pre>
         </div>
       )}
 
-      {tool.error && <div className="tool-error">{stripAnsi(tool.error)}</div>}
-
-      {open && (
-        <div className="tool-details">
-          {tool.input !== undefined && (
-            <div className="tool-section">
-              <div className="tool-label">Input</div>
-              <pre>{pretty(tool.input)}</pre>
-            </div>
+      {(hasDiff || (open && hasOutput)) && (
+        <div className="tool-buttons">
+          {tool.locations?.map((location, index) => (
+            <button
+              key={`${location.path}-${index}`}
+              className="mini-button"
+              onClick={() => vscode.postMessage({ type: 'openFile', path: location.path, line: location.line ?? 1 })}
+            >
+              Open {location.path.split('/').pop()}
+            </button>
+          ))}
+          {hasOutput && (
+            <button className="mini-button" onClick={() => vscode.postMessage({ type: 'copyText', text: output })}>
+              Copy output
+            </button>
           )}
-          <div className="tool-buttons">
-            {tool.locations?.map((location, index) => (
-              <button
-                key={`${location.path}-${index}`}
-                className="mini-button"
-                onClick={() => vscode.postMessage({ type: 'openFile', path: location.path, line: location.line ?? 1 })}
-              >
-                Open {location.path.split('/').pop()}
-              </button>
-            ))}
-            {output && (
-              <button className="mini-button" onClick={() => vscode.postMessage({ type: 'copyText', text: output })}>
-                Copy output
-              </button>
-            )}
-            {tool.diff && (
-              <button
-                className="mini-button"
-                onClick={() =>
-                  vscode.postMessage({
-                    type: 'openDiff',
-                    path: tool.diff?.path,
-                    oldText: tool.diff?.oldText ?? '',
-                    newText: tool.diff?.newText ?? '',
-                  })
-                }
-              >
-                View diff
-              </button>
-            )}
-          </div>
+          {tool.diff && (
+            <button
+              className="mini-button"
+              onClick={() =>
+                vscode.postMessage({
+                  type: 'openDiff',
+                  path: tool.diff?.path,
+                  oldText: tool.diff?.oldText ?? '',
+                  newText: tool.diff?.newText ?? '',
+                })
+              }
+            >
+              View diff
+            </button>
+          )}
         </div>
       )}
     </div>

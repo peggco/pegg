@@ -18,6 +18,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   ) {
     controller.setUiVisible(() => this.view?.visible === true);
     controller.on('state', () => this.scheduleState());
+    controller.on('composerText', (text: string) => this.postComposerText(text));
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -41,8 +42,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   private html(webview: vscode.Webview): string {
     const nonce = nonceString();
-    const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.js'));
-    const style = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.css'));
+    const version = String(Date.now());
+    const script = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.js').with({ query: `v=${version}` }),
+    );
+    const style = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.css').with({ query: `v=${version}` }),
+    );
     const csp = [
       "default-src 'none'",
       `img-src ${webview.cspSource} data: https:`,
@@ -64,6 +70,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 <script nonce="${nonce}" src="${script}"></script>
 </body>
 </html>`;
+  }
+
+  private async forkMessage(id: string): Promise<void> {
+    try {
+      await this.controller.forkMessage(id);
+      await vscode.commands.executeCommand('pegg.session.refresh');
+    } catch (err) {
+      this.showActionError(err);
+    }
+  }
+
+  private async revertMessage(id: string): Promise<void> {
+    try {
+      await this.controller.revertMessage(id);
+    } catch (err) {
+      this.showActionError(err);
+    }
+  }
+
+  private showActionError(err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err);
+    this.log.warn('Message action failed', err);
+    void vscode.window.showErrorMessage(`Pegg: ${message}`);
+  }
+
+  private postComposerText(text: string): void {
+    if (!this.view) return;
+    void this.view.webview.postMessage({ type: 'composerText', text });
   }
 
   private scheduleState(): void {
@@ -108,6 +142,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           return;
         case 'stop':
           await this.controller.cancel();
+          return;
+        case 'forkMessage':
+          await this.forkMessage(String(message.id ?? ''));
+          return;
+        case 'revertMessage':
+          await this.revertMessage(String(message.id ?? ''));
           return;
         case 'newSession':
           await this.controller.newSession();

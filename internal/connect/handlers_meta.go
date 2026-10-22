@@ -91,11 +91,12 @@ func (c *Connector) handleProvidersList(_ context.Context, _ *Request) (any, err
 	if c.deps.Config != nil {
 		for _, p := range c.deps.Config.Providers {
 			configured = append(configured, map[string]any{
-				"provider":   p.Provider,
-				"driver":     p.Driver,
-				"base_url":   p.BaseURL,
-				"has_key":    p.APIKey != "",
-				"configured": true,
+				"provider":          p.Provider,
+				"driver":            p.Driver,
+				"base_url":          p.BaseURL,
+				"has_key":           p.APIKey != "",
+				"configured":        true,
+				"system_first_only": p.SystemFirstOnlyValue(),
 			})
 		}
 	}

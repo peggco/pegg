@@ -51,9 +51,18 @@ that was detected, and the exact reason a candidate was rejected.
 
 - Streaming chat with markdown, syntax highlighting, reasoning, tool calls,
   diffs, plan/todo updates, usage and cost.
+- TUI-style tool cards: `read`, `glob`, `grep` and other simple tools collapse
+  to a single status line (expandable only on error); `bash` shows its output
+  and `edit`/`write` offer the diff.
+- Subagents appear as their own card. Open one to read its chat in place, then
+  go back to the main conversation.
 - Modes: **Auto**, **Plan**, and **Build**.
 - Model and provider picker.
 - Session list, resume, rename, delete, and replay.
+- Click a user message for **Copy**, **Fork from here** and **Revert to here**
+  (the same actions as the TUI). Forking opens a new session with the messages
+  before that point; reverting removes the message and everything after it and
+  puts the text back into the composer.
 - Interactive permission approvals and `askuserquestion` forms.
 - Slash commands and skills (`/init`, `/batch`, `/review`, `/rule`, custom skills).
 - File, image, selection, `@` mention, and voice attachments.

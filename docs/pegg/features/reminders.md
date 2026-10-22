@@ -22,6 +22,13 @@ Reminders are delivered as part of the **next LLM request** of the target agent.
 Multiple reminders arriving between two iterations are batched into a single
 `<system-reminders>` block.
 
+Some providers only accept the system prompt in the **first** message of a
+conversation and reject a later system message. For those providers, set
+[`system_first_only`](../config.md#providers) on the provider entry: the
+reminder block is then folded into the neighbouring user or tool message
+instead of being sent as a system message. The `<system-reminder>` markup stays
+intact, so the agent still reads it as a reminder.
+
 Reminders work for **every agent in the system** — the orchestrator, subagents,
 and helper agents alike. They are registered globally at startup and driven by
 the shared event bus, so no per-agent configuration is required.

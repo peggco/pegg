@@ -32,6 +32,7 @@ export interface SessionUpdate {
   messageId?: string;
   content?: ContentBlock | string;
   toolCallId?: string;
+  toolName?: string;
   title?: string;
   kind?: string;
   status?: string;
@@ -85,6 +86,17 @@ export interface SessionNewResult {
   commands?: SlashCommand[];
 }
 
+export interface SessionForkResult {
+  sessionId: string;
+  title?: string;
+  parentId?: string;
+}
+
+export interface SessionRevertResult {
+  removed: number;
+  snapshotId?: string;
+}
+
 export interface SessionListResult {
   sessions: SessionListItem[];
   nextCursor?: string;
@@ -131,6 +143,7 @@ export interface InitializeResult {
       attachments?: boolean;
       diffs?: boolean;
       plan?: boolean;
+      history?: boolean;
     };
   };
   agentInfo?: { name?: string; title?: string; version?: string };

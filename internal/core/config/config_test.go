@@ -171,3 +171,37 @@ func TestRemoveMCPServer(t *testing.T) {
 		t.Fatal("expected error for missing server")
 	}
 }
+
+func TestSystemFirstOnlyDefaultsToOff(t *testing.T) {
+	if (LLMConfig{}).SystemFirstOnlyValue() {
+		t.Fatal("system_first_only must be off by default")
+	}
+	off := false
+	if (LLMConfig{SystemFirstOnly: &off}).SystemFirstOnlyValue() {
+		t.Fatal("system_first_only=false must stay off")
+	}
+	on := true
+	if !(LLMConfig{SystemFirstOnly: &on}).SystemFirstOnlyValue() {
+		t.Fatal("system_first_only=true must be on")
+	}
+}
+
+func TestSystemFirstOnlySurvivesConfigRoundTrip(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	on := true
+	if err := UpsertProvider(LLMConfig{Provider: "strict", APIKey: "a", SystemFirstOnly: &on}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := findProvider(cfg, "strict")
+	if p == nil {
+		t.Fatal("provider not found after load")
+	}
+	if !p.SystemFirstOnlyValue() {
+		t.Fatal("system_first_only was not persisted")
+	}
+}

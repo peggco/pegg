@@ -58,15 +58,17 @@ func (c *CLI) runModels(out io.Writer, provider string) error {
 			continue
 		}
 		fmt.Fprintf(out, "[%s]\n", p.Provider)
-		raw, err := store.Get(p.Provider)
-		if err != nil {
-			fmt.Fprintln(out, "  no cached models")
-			continue
-		}
-		var models []llm.Model
-		if err := json.Unmarshal(raw, &models); err != nil {
-			fmt.Fprintln(out, "  (unreadable cache)")
-			continue
+		models, ok := c.providerModels(p.Provider)
+		if !ok {
+			raw, err := store.Get(p.Provider)
+			if err != nil {
+				fmt.Fprintln(out, "  no cached models")
+				continue
+			}
+			if err := json.Unmarshal(raw, &models); err != nil {
+				fmt.Fprintln(out, "  (unreadable cache)")
+				continue
+			}
 		}
 		for _, m := range models {
 			name := m.ID
@@ -77,4 +79,15 @@ func (c *CLI) runModels(out io.Writer, provider string) error {
 		}
 	}
 	return nil
+}
+
+func (c *CLI) providerModels(name string) ([]llm.Model, bool) {
+	if c.llmMgr == nil {
+		return nil, false
+	}
+	models, err := c.llmMgr.Models(name)
+	if err != nil {
+		return nil, false
+	}
+	return models, true
 }

@@ -109,6 +109,8 @@ type Server struct {
 	recMu sync.Mutex
 	rec   *recording
 
+	subStreams *subagentStreamState
+
 	closed chan struct{}
 	once   sync.Once
 }
@@ -216,6 +218,10 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleSessionSetModel(ctx, params)
 	case "session/rename":
 		result, handlerErr = s.handleSessionRename(ctx, params)
+	case "session/fork":
+		result, handlerErr = s.handleSessionFork(ctx, params)
+	case "session/revert":
+		result, handlerErr = s.handleSessionRevert(ctx, params)
 	case "session/list":
 		result, handlerErr = s.handleSessionList(ctx, params)
 	case "pegg/models":

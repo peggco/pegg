@@ -13,16 +13,6 @@ func (u *Usage) ContextPercent(maxInputTokens int) float64 {
 	return float64(u.TotalTokens) / float64(maxInputTokens) * 100
 }
 
-func (m *Model) MaxInputTokens() int {
-	if m == nil || m.Config == nil {
-		return 0
-	}
-	if m.Config.MaxInputTokens > 0 {
-		return m.Config.MaxInputTokens
-	}
-	return m.Config.MaxTokens
-}
-
 func FormatTokens(n int) string {
 	switch {
 	case n >= 1_000_000:

@@ -279,23 +279,74 @@ func (m *Manager) resolveAndLoad(ctx context.Context, cfg config.LLMConfig) (str
 		skipCache = s.SkipModelCache()
 	}
 
+	var models []Model
+	cached := false
 	if !skipCache {
-		if cached, ok := m.loadCachedModels(name); ok {
-			cached = m.enrichWithConfig(name, cached)
-			m.storeEntry(name, cfg, prov, cached)
-			m.log.Fdebug("llm: provider %q loaded %d models from cache", name, len(cached))
-			return name, prov, cached, nil
+		if c, ok := m.loadCachedModels(name); ok {
+			models = c
+			cached = true
 		}
 	}
-	models, err := prov.ListModels(ctx)
-	if err != nil {
-		return name, prov, nil, err
+	if !cached {
+		fetched, err := prov.ListModels(ctx)
+		if err != nil {
+			if len(cfg.Models) == 0 {
+				return name, prov, nil, err
+			}
+			m.log.Fwarn("llm: provider %q: model list unavailable, using the models declared in the config: %v", name, err)
+		} else {
+			models = fetched
+		}
 	}
 
 	models = m.enrichWithConfig(name, models)
+	models = m.mergeDeclaredModels(name, models, cfg.Models)
 	m.storeEntry(name, cfg, prov, models)
 	m.saveCachedModels(name, models)
 	return name, prov, models, nil
+}
+
+func (m *Manager) mergeDeclaredModels(provider string, discovered []Model, declared []Model) []Model {
+	if len(declared) == 0 {
+		return discovered
+	}
+	out := make([]Model, len(discovered))
+	copy(out, discovered)
+	index := make(map[string]int, len(out))
+	for i := range out {
+		index[out[i].ID] = i
+	}
+
+	prices, err := m.loadPrices()
+	if err != nil {
+		m.log.Fdebug("llm: mergeDeclaredModels: no prices cached: %v", err)
+	}
+
+	for _, d := range declared {
+		if d.ID == "" {
+			continue
+		}
+		if i, ok := index[d.ID]; ok {
+			if d.Config == nil {
+				d.Config = out[i].Config
+			}
+			if d.Name == "" {
+				d.Name = out[i].Name
+			}
+			d.Config.Normalize()
+			out[i] = d
+			continue
+		}
+		if d.Config == nil && prices != nil {
+			if cfg, err := lookupModelConfig(prices, provider, d.ID); err == nil {
+				d.Config = cfg
+			}
+		}
+		d.Config.Normalize()
+		index[d.ID] = len(out)
+		out = append(out, d)
+	}
+	return out
 }
 
 func (m *Manager) storeEntry(name string, cfg config.LLMConfig, prov Provider, models []Model) {

@@ -284,6 +284,7 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 		s.notify(st.sessionID, SessionUpdate{
 			SessionUpdate: "tool_call",
 			ToolCallID:    call.ID,
+			ToolName:      call.Function.Name,
 			Title:         toolTitle(call.Function.Name, args),
 			Kind:          string(toolKind(call.Function.Name)),
 			Status:        string(ToolCallPending),
@@ -317,6 +318,7 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 		update := SessionUpdate{
 			SessionUpdate: "tool_call_update",
 			ToolCallID:    call.ID,
+			ToolName:      call.Function.Name,
 			Status:        string(status),
 			RawOutput:     truncate(ev.ToolOutput, 128*1024),
 			Error:         errText,
