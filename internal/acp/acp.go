@@ -109,6 +109,8 @@ type Server struct {
 	recMu sync.Mutex
 	rec   *recording
 
+	subStreams *subagentStreamState
+
 	closed chan struct{}
 	once   sync.Once
 }

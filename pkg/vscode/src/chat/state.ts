@@ -8,6 +8,7 @@ export interface UsageState {
 
 export interface ToolState {
   id: string;
+  name?: string;
   title: string;
   kind?: string;
   status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
@@ -16,14 +17,26 @@ export interface ToolState {
   error?: string;
   locations?: { path: string; line?: number }[];
   diff?: { path: string; oldText?: string; newText: string };
+  agentId?: string;
   agentName?: string;
 }
 
 export type ChatItem =
-  | { kind: 'user'; id: string; text: string; createdAt: number; messageId?: string }
-  | { kind: 'assistant'; id: string; text: string; agentName?: string; createdAt: number }
-  | { kind: 'reasoning'; id: string; text: string; agentName?: string; createdAt: number }
+  | { kind: 'user'; id: string; text: string; createdAt: number; messageId?: string; agentId?: string }
+  | { kind: 'assistant'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
+  | { kind: 'reasoning'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
   | { kind: 'tool'; id: string; tool: ToolState; createdAt: number }
+  | {
+      kind: 'subagent';
+      id: string;
+      agentId: string;
+      agentName?: string;
+      status: 'running' | 'finished' | 'error';
+      task?: string;
+      output?: string;
+      error?: string;
+      createdAt: number;
+    }
   | { kind: 'notice'; id: string; text: string; level: 'info' | 'warn' | 'error'; createdAt: number }
   | { kind: 'error'; id: string; text: string; createdAt: number };
 
@@ -146,6 +159,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           kind,
           id,
           text,
+          agentId: update.agentId,
           agentName: update.agentName,
           createdAt: now,
           ...(kind === 'user' && storedId ? { messageId: storedId } : {}),
@@ -171,6 +185,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           kind: 'reasoning',
           id,
           text,
+          agentId: update.agentId,
           agentName: update.agentName,
           createdAt: now,
         });
@@ -190,6 +205,8 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
         if (update.rawOutput !== undefined) existing.tool.output = update.rawOutput;
         if (update.error !== undefined) existing.tool.error = update.error;
         if (update.locations) existing.tool.locations = update.locations;
+        if (update.toolName) existing.tool.name = update.toolName;
+        if (update.agentId) existing.tool.agentId = update.agentId;
         if (update.agentName) existing.tool.agentName = update.agentName;
         const diff = update.contents?.find((c) => c.type === 'diff' && c.diff)?.diff;
         if (diff) existing.tool.diff = diff;
@@ -201,6 +218,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           createdAt: now,
           tool: {
             id,
+            name: update.toolName,
             title: update.title || update.toolCallId || 'Tool',
             kind: inferToolKind(update.kind, update.title, undefined),
             status: status || 'pending',
@@ -209,10 +227,44 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
             error: update.error,
             locations: update.locations,
             diff,
+            agentId: update.agentId,
             agentName: update.agentName,
           },
         });
       }
+      return state;
+    }
+    case 'subagent': {
+      const agentId = update.agentId ?? '';
+      if (!agentId) return state;
+      const status: 'running' | 'finished' | 'error' =
+        update.status === 'finished' ? 'finished' : update.status === 'error' ? 'error' : 'running';
+      const existing = state.items.find(
+        (item) => item.kind === 'subagent' && item.agentId === agentId,
+      ) as Extract<ChatItem, { kind: 'subagent' }> | undefined;
+      if (existing) {
+        existing.status = status;
+        if (update.agentName) existing.agentName = update.agentName;
+        if (update.title) {
+          existing.task = update.title;
+          pushSubagentPrompt(state, agentId, update.title, now);
+        }
+        if (update.rawOutput !== undefined) existing.output = String(update.rawOutput ?? '');
+        if (update.error) existing.error = update.error;
+        return state;
+      }
+      state.items.push({
+        kind: 'subagent',
+        id: `subagent-${agentId}`,
+        agentId,
+        agentName: update.agentName,
+        status,
+        task: update.title,
+        output: update.rawOutput === undefined ? undefined : String(update.rawOutput ?? ''),
+        error: update.error,
+        createdAt: now,
+      });
+      if (update.title) pushSubagentPrompt(state, agentId, update.title, now);
       return state;
     }
     case 'plan':
@@ -329,9 +381,53 @@ export function truncateFrom(state: ChatState, itemId: string): ChatState {
 export function userMessageOrdinal(state: ChatState, itemId: string): number | undefined {
   let ordinal = 0;
   for (const item of state.items) {
-    if (item.kind !== 'user') continue;
+    if (item.kind !== 'user' || item.agentId) continue;
     if (item.id === itemId) return ordinal;
     ordinal += 1;
   }
   return undefined;
+}
+
+function pushSubagentPrompt(state: ChatState, agentId: string, text: string, now: number): void {
+  const id = `subagent-input-${agentId}`;
+  if (state.items.some((item) => item.id === id)) return;
+  state.items.push({ kind: 'user', id, text, agentId, createdAt: now });
+}
+
+export function itemAgentId(item: ChatItem): string | undefined {
+  switch (item.kind) {
+    case 'user':
+    case 'assistant':
+    case 'reasoning':
+    case 'subagent':
+      return item.agentId;
+    case 'tool':
+      return item.tool.agentId;
+    default:
+      return undefined;
+  }
+}
+
+export function filterConversation(
+  items: ChatItem[],
+  agentId: string | null,
+  subagentIds: Set<string>,
+): ChatItem[] {
+  return items.filter((item) => {
+    const owner = itemAgentId(item);
+    const subagentOwned = Boolean(owner && subagentIds.has(owner)) || isNamedSubagent(item);
+    if (agentId) {
+      if (item.kind === 'subagent') return false;
+      return owner === agentId;
+    }
+    if (item.kind === 'subagent') return true;
+    if (subagentOwned) return false;
+    return true;
+  });
+}
+
+function isNamedSubagent(item: ChatItem): boolean {
+  if (item.kind !== 'tool') return false;
+  const name = item.tool.agentName;
+  return Boolean(name) && name !== 'orchestrator';
 }

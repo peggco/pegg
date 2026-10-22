@@ -51,6 +51,7 @@ func (s *Server) subscribeAsk() {
 	}
 	_ = s.bus.Subscribe(agent.TopicAgentAsk, s.handleAgentAsk)
 	_ = s.bus.Subscribe(agent.TopicAgentStarted, s.handleAgentStarted)
+	s.subscribeSubagents()
 }
 
 func (s *Server) handleAgentStarted(ev agent.AgentStarted) {
@@ -58,10 +59,20 @@ func (s *Server) handleAgentStarted(ev agent.AgentStarted) {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if sessionID, ok := s.agents[ev.ParentAgentID]; ok {
+	sessionID, ok := s.agents[ev.ParentAgentID]
+	if ok {
 		s.agents[ev.AgentID] = sessionID
 	}
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	s.notify(sessionID, SessionUpdate{
+		SessionUpdate: "subagent",
+		AgentID:       ev.AgentID,
+		AgentName:     ev.AgentName,
+		Status:        "running",
+	})
 }
 
 func (s *Server) handleAgentAsk(ev agent.AgentAsk) {

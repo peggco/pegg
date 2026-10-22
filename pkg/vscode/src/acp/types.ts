@@ -32,6 +32,7 @@ export interface SessionUpdate {
   messageId?: string;
   content?: ContentBlock | string;
   toolCallId?: string;
+  toolName?: string;
   title?: string;
   kind?: string;
   status?: string;

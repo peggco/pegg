@@ -42,8 +42,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   private html(webview: vscode.Webview): string {
     const nonce = nonceString();
-    const script = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.js'));
-    const style = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.css'));
+    const version = String(Date.now());
+    const script = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.js').with({ query: `v=${version}` }),
+    );
+    const style = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.css').with({ query: `v=${version}` }),
+    );
     const csp = [
       "default-src 'none'",
       `img-src ${webview.cspSource} data: https:`,

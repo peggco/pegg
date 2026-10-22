@@ -1159,3 +1159,207 @@ button {
   font-weight: 600;
   color: var(--vscode-foreground);
 }
+
+.tool-card.compact {
+  border-color: transparent;
+  background: transparent;
+}
+
+.tool-card.compact .tool-head.static {
+  padding: 2px 4px;
+}
+
+.tool-head.static {
+  cursor: default;
+}
+
+.tool-head.static:hover {
+  background: transparent;
+}
+
+.tool-card.compact .tool-kind {
+  border-color: transparent;
+  opacity: 0.85;
+}
+
+.tool-card.compact .tool-title {
+  color: var(--vscode-descriptionForeground);
+}
+
+.tool-error-preview {
+  padding: 0 8px 5px 8px;
+  color: var(--vscode-testing-iconFailed);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subagent-card {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--vscode-editorWidget-background, transparent);
+}
+
+.subagent-card.status-error {
+  border-color: var(--vscode-testing-iconFailed);
+}
+
+.subagent-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 11px;
+}
+
+.subagent-head:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.subagent-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--vscode-descriptionForeground);
+}
+
+.subagent-dot.status-running {
+  background: var(--vscode-progressBar-background, var(--vscode-textLink-foreground));
+  animation: subagent-pulse 1.4s ease-in-out infinite;
+}
+
+.subagent-dot.status-finished {
+  background: var(--vscode-testing-iconPassed, var(--vscode-terminal-ansiGreen));
+}
+
+.subagent-dot.status-error {
+  background: var(--vscode-testing-iconFailed);
+}
+
+@keyframes subagent-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.subagent-name {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  color: var(--vscode-terminal-ansiCyan, var(--vscode-foreground));
+}
+
+.subagent-status {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.subagent-open {
+  font-size: 10px;
+  color: var(--vscode-textLink-foreground);
+}
+
+.subagent-task {
+  border-top: 1px solid var(--vscode-panel-border);
+  padding: 5px 8px;
+  color: var(--vscode-foreground);
+  font-size: 11px;
+  line-height: 1.4;
+  max-height: 72px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.subagent-error {
+  border-top: 1px solid var(--vscode-panel-border);
+  padding: 5px 8px;
+  color: var(--vscode-testing-iconFailed);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+.agent-view-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background));
+  font-size: 11px;
+}
+
+.agent-back {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  background: transparent;
+  color: var(--vscode-textLink-foreground);
+  font-size: 11px;
+}
+
+.agent-back:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+}
+
+.agent-view-name {
+  font-weight: 600;
+  color: var(--vscode-terminal-ansiCyan, var(--vscode-foreground));
+}
+
+.agent-view-status {
+  color: var(--vscode-descriptionForeground);
+}
+
+.agent-view-status.status-error {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.agent-view-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+}
+
+.composer-wrap.disabled {
+  opacity: 0.75;
+}
+
+.composer-wrap.disabled .composer textarea {
+  cursor: default;
+}
+
+.agent-view-task {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--vscode-descriptionForeground);
+}
+
+.message.user.subagent-prompt .message-role {
+  color: var(--vscode-terminal-ansiCyan, var(--vscode-descriptionForeground));
+}
+
+.message.user.subagent-prompt .message-body {
+  border-style: dashed;
+}
