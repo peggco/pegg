@@ -72,6 +72,8 @@ handler does not apply the HTTP API's auth or CORS middleware.
 | `session/set_mode` | `sessionId`, `modeId` (`build`/`plan`/`auto`) | `{}` |
 | `session/set_model` | `sessionId`, `provider`, `model`, `reasoningEffort?` | `{ "provider": "...", "model": "..." }` |
 | `session/rename` | `sessionId`, `title` | `{}` |
+| `session/fork` | `sessionId`, `messageId?` or `userMessageIndex?` | `{ "sessionId": "...", "title": "...", "parentId": "..." }` |
+| `session/revert` | `sessionId`, `messageId?` or `userMessageIndex?` | `{ "removed": 2, "snapshotId": "..." }` |
 | `session/prompt` | `sessionId`, `prompt` | `{ "stopReason": "...", "usage?": {...} }` |
 | `session/delete` | `sessionId` | `null` |
 | `session/close` | `sessionId` | `{}` |
@@ -115,7 +117,8 @@ the agent supports:
       "commands": true,
       "attachments": true,
       "diffs": true,
-      "plan": true
+      "plan": true,
+      "history": true
     }
   },
   "agentInfo": { "name": "pegg", "title": "Pegg AI Agent", "version": "0.1.9" },
@@ -244,6 +247,21 @@ The server pushes `session/update` notifications:
 | `current_model_update` | Model changed (`provider`, `model`) |
 | `available_commands_update` | Skills/commands available for the session |
 | `error` | The run failed (`error`) |
+
+### Forking and reverting
+
+`session/fork` creates a new session with the messages **before** the referenced
+message and returns its session id; load it with `session/load` to continue from
+that point. `session/revert` removes the referenced message **and everything
+after it** from the current session and keeps a snapshot of the removed
+messages. Both are rejected while a prompt is running.
+
+The target message is addressed by `messageId` when the client knows the stored
+id (the ids sent with replayed `user_message_chunk` updates) or by
+`userMessageIndex` — the zero-based position of the user message in the session
+— for messages the client sent itself.
+
+Clients should gate the feature on the `pegg.history` capability.
 
 Updates also include `agentId` and `agentName` when the event came from a
 subagent. Tool calls may include a `contents` array with a `diff` object

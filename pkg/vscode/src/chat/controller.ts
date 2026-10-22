@@ -12,6 +12,7 @@ import {
   SessionListItem,
   SessionListResult,
   SessionMode,
+  SessionForkResult,
   SessionNewResult,
   SessionUpdate,
 } from '../acp/types';
@@ -28,6 +29,8 @@ import {
   clearAttachments,
   ComposerAttachment,
   initialState,
+  truncateFrom,
+  userMessageOrdinal,
   PendingInteraction,
   PendingPermission,
   PendingQuestion,
@@ -360,6 +363,53 @@ export class ChatController extends EventEmitter {
     return result.text;
   }
 
+  get historySupported(): boolean {
+    return Boolean(this.capabilities?.pegg?.history);
+  }
+
+  async forkMessage(itemId: string): Promise<void> {
+    const item = this.state.items.find((entry) => entry.id === itemId);
+    if (!item || item.kind !== 'user') throw new Error('Message not found');
+    await this.ensureSession();
+    if (this.state.running) throw new Error('Wait for Pegg to finish before forking.');
+    if (!this.capabilities?.pegg?.history) {
+      throw new Error('This Pegg binary does not support forking. Update it first.');
+    }
+    const result = await this.client!.request<SessionForkResult>('session/fork', this.messageRef(itemId), 60000);
+    await this.resumeSession(result.sessionId);
+    this.emit('composerText', item.text);
+  }
+
+  async revertMessage(itemId: string): Promise<void> {
+    const item = this.state.items.find((entry) => entry.id === itemId);
+    if (!item || item.kind !== 'user') throw new Error('Message not found');
+    await this.ensureSession();
+    if (this.state.running) throw new Error('Wait for Pegg to finish before reverting.');
+    if (!this.capabilities?.pegg?.history) {
+      throw new Error('This Pegg binary does not support reverting. Update it first.');
+    }
+    await this.client!.request('session/revert', this.messageRef(itemId), 60000);
+    this.state = truncateFrom(this.state, itemId);
+    this.state = { ...this.state, usage: { used: 0, size: 0 }, plan: [] };
+    this.emitState();
+    this.emit('session', this.state);
+    this.emit('composerText', item.text);
+  }
+
+  private messageRef(itemId: string): { sessionId: string; messageId?: string; userMessageIndex?: number } {
+    const ref: { sessionId: string; messageId?: string; userMessageIndex?: number } = {
+      sessionId: this.state.acpSessionId ?? '',
+    };
+    const item = this.state.items.find((entry) => entry.id === itemId);
+    if (item?.kind === 'user' && item.messageId) {
+      ref.messageId = item.messageId;
+      return ref;
+    }
+    const ordinal = userMessageOrdinal(this.state, itemId);
+    if (ordinal !== undefined) ref.userMessageIndex = ordinal;
+    return ref;
+  }
+
   async restart(): Promise<void> {
     this.log.info('Restarting Pegg server');
     this.rejectPending('Server restarting');
@@ -450,7 +500,11 @@ export class ChatController extends EventEmitter {
     }
     const client = new AcpClient({
       cwd: root,
-      getBinary: () => this.binary.ensure(),
+      getBinary: async () => {
+        const binaryPath = await this.binary.ensure();
+        this.log.info('Using Pegg binary', binaryPath, this.binary.currentVersion());
+        return binaryPath;
+      },
       env: await this.serverEnv(),
       log: this.log,
       version: String(this.context.extension.packageJSON.version ?? '0.1.9'),
@@ -472,6 +526,7 @@ export class ChatController extends EventEmitter {
       await client.start();
       const capabilities = await client.initialize();
       this.capabilities = capabilities.agentCapabilities;
+      this.log.info('Pegg capabilities', JSON.stringify(capabilities.agentCapabilities?.pegg ?? {}));
       this.started = true;
       this.state = { ...this.state, connected: true };
       this.emitState();
@@ -669,6 +724,7 @@ export class ChatController extends EventEmitter {
   }
 
   private emitState(): void {
+    this.state = { ...this.state, historySupported: this.historySupported };
     this.emit('state', this.state);
   }
 

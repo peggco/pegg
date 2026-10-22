@@ -85,6 +85,17 @@ export interface SessionNewResult {
   commands?: SlashCommand[];
 }
 
+export interface SessionForkResult {
+  sessionId: string;
+  title?: string;
+  parentId?: string;
+}
+
+export interface SessionRevertResult {
+  removed: number;
+  snapshotId?: string;
+}
+
 export interface SessionListResult {
   sessions: SessionListItem[];
   nextCursor?: string;
@@ -131,6 +142,7 @@ export interface InitializeResult {
       attachments?: boolean;
       diffs?: boolean;
       plan?: boolean;
+      history?: boolean;
     };
   };
   agentInfo?: { name?: string; title?: string; version?: string };

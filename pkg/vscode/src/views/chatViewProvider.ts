@@ -18,6 +18,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   ) {
     controller.setUiVisible(() => this.view?.visible === true);
     controller.on('state', () => this.scheduleState());
+    controller.on('composerText', (text: string) => this.postComposerText(text));
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -66,6 +67,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 </html>`;
   }
 
+  private async forkMessage(id: string): Promise<void> {
+    try {
+      await this.controller.forkMessage(id);
+      await vscode.commands.executeCommand('pegg.session.refresh');
+    } catch (err) {
+      this.showActionError(err);
+    }
+  }
+
+  private async revertMessage(id: string): Promise<void> {
+    try {
+      await this.controller.revertMessage(id);
+    } catch (err) {
+      this.showActionError(err);
+    }
+  }
+
+  private showActionError(err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err);
+    this.log.warn('Message action failed', err);
+    void vscode.window.showErrorMessage(`Pegg: ${message}`);
+  }
+
+  private postComposerText(text: string): void {
+    if (!this.view) return;
+    void this.view.webview.postMessage({ type: 'composerText', text });
+  }
+
   private scheduleState(): void {
     if (this.sendTimer) return;
     this.sendTimer = setTimeout(() => {
@@ -108,6 +137,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           return;
         case 'stop':
           await this.controller.cancel();
+          return;
+        case 'forkMessage':
+          await this.forkMessage(String(message.id ?? ''));
+          return;
+        case 'revertMessage':
+          await this.revertMessage(String(message.id ?? ''));
           return;
         case 'newSession':
           await this.controller.newSession();

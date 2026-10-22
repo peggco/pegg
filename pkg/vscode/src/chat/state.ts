@@ -20,7 +20,7 @@ export interface ToolState {
 }
 
 export type ChatItem =
-  | { kind: 'user'; id: string; text: string; createdAt: number }
+  | { kind: 'user'; id: string; text: string; createdAt: number; messageId?: string }
   | { kind: 'assistant'; id: string; text: string; agentName?: string; createdAt: number }
   | { kind: 'reasoning'; id: string; text: string; agentName?: string; createdAt: number }
   | { kind: 'tool'; id: string; tool: ToolState; createdAt: number }
@@ -78,6 +78,7 @@ export interface ChatState {
   composerAttachments: ComposerAttachment[];
   error?: string;
   counter: number;
+  historySupported?: boolean;
 }
 
 export function initialState(): ChatState {
@@ -93,6 +94,7 @@ export function initialState(): ChatState {
     pending: [],
     composerAttachments: [],
     counter: 0,
+    historySupported: false,
   };
 }
 
@@ -124,6 +126,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       if (!text) return state;
       const id = update.messageId || nextId(state, 'message');
       const kind = update.sessionUpdate === 'user_message_chunk' ? 'user' : 'assistant';
+      const storedId = update.messageId;
       const existing = state.items.find(
         (item) => item.id === id && (item.kind === 'assistant' || item.kind === 'user'),
       ) as Extract<ChatItem, { kind: 'assistant' | 'user' }> | undefined;
@@ -145,6 +148,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           text,
           agentName: update.agentName,
           createdAt: now,
+          ...(kind === 'user' && storedId ? { messageId: storedId } : {}),
         } as ChatItem);
       }
       return state;
@@ -314,4 +318,20 @@ export function clearConversation(state: ChatState): ChatState {
     error: undefined,
     counter: 0,
   };
+}
+
+export function truncateFrom(state: ChatState, itemId: string): ChatState {
+  const index = state.items.findIndex((item) => item.id === itemId);
+  if (index < 0) return state;
+  return { ...state, items: state.items.slice(0, index) };
+}
+
+export function userMessageOrdinal(state: ChatState, itemId: string): number | undefined {
+  let ordinal = 0;
+  for (const item of state.items) {
+    if (item.kind !== 'user') continue;
+    if (item.id === itemId) return ordinal;
+    ordinal += 1;
+  }
+  return undefined;
 }

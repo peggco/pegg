@@ -15,6 +15,11 @@
   detected version and the failure reasons.
 - The Pegg process inherits the augmented `PATH`, so shell tools keep working
   in GUI launches.
+- Click a user message to open a small menu with **Copy**, **Fork from here** and
+  **Revert to here**, matching the TUI. Forking switches to a new session with
+  the messages before that point; reverting removes the message and everything
+  after it and puts the text back into the composer. Requires the
+  `pegg.history` CLI capability.
 
 ## 0.2.0
 

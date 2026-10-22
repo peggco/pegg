@@ -74,6 +74,7 @@ type PeggCapabilities struct {
 	Attachments bool `json:"attachments,omitempty"`
 	Diffs       bool `json:"diffs,omitempty"`
 	Plan        bool `json:"plan,omitempty"`
+	History     bool `json:"history,omitempty"`
 }
 
 type PromptCaps struct {
@@ -144,6 +145,7 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 			Attachments: true,
 			Diffs:       true,
 			Plan:        true,
+			History:     true,
 		},
 	}
 

@@ -76,11 +76,27 @@ func (m *mockStore) Messages(sessionID string) ([]session.Message, error) {
 }
 
 func (m *mockStore) TruncateAfter(sessionID, messageID string) ([]session.Message, error) {
-	return nil, nil
+	msgs := m.messages[sessionID]
+	for i, msg := range msgs {
+		if msg.ID == messageID {
+			removed := append([]session.Message(nil), msgs[i+1:]...)
+			m.messages[sessionID] = msgs[:i+1]
+			return removed, nil
+		}
+	}
+	return nil, session.ErrMessageNotFound
 }
 
 func (m *mockStore) TruncateFrom(sessionID, messageID string) ([]session.Message, error) {
-	return nil, nil
+	msgs := m.messages[sessionID]
+	for i, msg := range msgs {
+		if msg.ID == messageID {
+			removed := append([]session.Message(nil), msgs[i:]...)
+			m.messages[sessionID] = msgs[:i]
+			return removed, nil
+		}
+	}
+	return nil, session.ErrMessageNotFound
 }
 
 func (m *mockStore) SaveSnapshot(s session.Snapshot) error { return nil }
