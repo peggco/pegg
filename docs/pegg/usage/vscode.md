@@ -221,6 +221,7 @@ or run **Pegg: Review Current File Changes** for the active file.
 | **Pegg: Show Logs** | Open the extension output channel |
 | **Pegg: Restart Server** | Restart the ACP process |
 | **Pegg: Install or Update Binary** | Force a verified binary download |
+| **Pegg: Diagnose Binary** | List the probed binary locations and failure reasons |
 
 ## Binary resolution
 
@@ -229,10 +230,18 @@ In order:
 1. `pegg.executablePath`
 2. `<workspace>/bin/pegg` when `pegg.binary.allowWorkspaceBinary` is enabled
 3. `pegg` on `PATH`
-4. A checksum-verified release binary downloaded into VS Code global storage
+4. `pegg` in the well known install directories (`/opt/homebrew/bin`,
+   `/usr/local/bin`, `~/.local/bin`, `~/bin`, `~/.pegg/bin`) and in the `PATH`
+   declared by the shell profiles (`~/.zshrc`, `~/.zprofile`, `~/.bash_profile`,
+   `~/.profile`)
+5. A checksum-verified release binary downloaded into VS Code global storage
 
 The downloaded version defaults to the extension version. Set
 `pegg.binary.version` to `latest` or a specific tag to override it.
+
+Step 4 exists because a GUI launch (Dock, Finder) starts VS Code with a
+minimal `PATH`. Run `Pegg: Diagnose Binary` to see every location that was
+probed, the detected version and why a candidate was rejected.
 
 ## Settings
 

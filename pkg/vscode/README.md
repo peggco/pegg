@@ -33,11 +33,19 @@ In order:
 1. `pegg.executablePath`
 2. `<workspace>/bin/pegg` when `pegg.binary.allowWorkspaceBinary` is enabled
 3. `pegg` on `PATH`
-4. A downloaded release binary in global storage
+4. `pegg` in the well known install directories (`/opt/homebrew/bin`,
+   `/usr/local/bin`, `~/.local/bin`, `~/bin`, `~/.pegg/bin`) and in the `PATH`
+   declared by the shell profiles (`~/.zshrc`, `~/.zprofile`, `~/.bash_profile`,
+   `~/.profile`). This keeps the extension working when VS Code is started
+   from the Dock or the Finder, where the `PATH` is minimal.
+5. A downloaded release binary in global storage
 
 Downloads are verified with `checksums.txt` and cached by release tag. Set
 `pegg.binary.version` to `match-extension` (default), a tag such as `v0.1.9`, or
 `latest`. Set `pegg.binary.autoDownload` to `false` to disable downloads.
+
+Run `Pegg: Diagnose Binary` to see every location that was probed, the version
+that was detected, and the exact reason a candidate was rejected.
 
 ## Features
 
@@ -126,8 +134,15 @@ under `stt` in `pegg.json`.
 
 ## Troubleshooting
 
-- **Binary not found**: run `Pegg: Install or Update Binary`, or set
+- **Binary not found**: run `Pegg: Diagnose Binary` to see what was probed and
+  why it failed, then `Pegg: Install or Update Binary`, or set
   `pegg.executablePath`.
+- **"Downloaded Pegg binary failed its version check"**: the message now
+  includes the reason reported by the binary. A common cause is a working
+  directory that cannot be written to; `pegg version` no longer depends on one.
+- **Started from the Dock / Finder**: the `PATH` of a GUI launch is minimal, so
+  the extension also searches the usual install directories and the `PATH` from
+  your shell profiles.
 - **No models configured**: run `Pegg: Provider Login`.
 - **Server stopped**: run `Pegg: Restart Server` and inspect `Pegg: Show Logs`.
 - **Permissions hang**: update the Pegg binary so it advertises interactive ACP
