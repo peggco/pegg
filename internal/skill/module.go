@@ -9,35 +9,39 @@ import (
 	"github.com/peggco/pegg/internal/agent/prompt"
 	"github.com/peggco/pegg/internal/builtin/skills"
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/core/logger"
 )
 
 const agentsSkillsDir = ".agents/skills"
 
-func SkillModule() error {
+func SkillModule(log *logger.Logger) error {
 	peggSkills, err := config.GetConfigPath("skills")
 	if err != nil {
 		return err
 	}
 	if err := MaterializeTo(peggSkills); err != nil {
-		return err
+		warn(log, "skill: failed to materialize built-in skills: %v", err)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("skill: home dir: %w", err)
 	}
-	projSkills, err := config.GetProjectConfigPath("skills")
-	if err != nil {
-		return err
-	}
-	if err := LoadDirs(
-		filepath.Join(home, agentsSkillsDir),
-		peggSkills,
-		projSkills,
-	); err != nil {
-		return err
+	dirs := []string{filepath.Join(home, agentsSkillsDir), peggSkills}
+	dirs = append(dirs, config.ProjectReadPaths("skills")...)
+	for _, dir := range dirs {
+		if err := LoadDir(dir, dir); err != nil {
+			warn(log, "skill: skip %s: %v", dir, err)
+		}
 	}
 	agent.OnMessageInput(ExpandMessage)
 	return nil
+}
+
+func warn(log *logger.Logger, format string, args ...any) {
+	if log == nil {
+		return
+	}
+	log.Fwarn(format, args...)
 }
 
 func MaterializeTo(root string) error {

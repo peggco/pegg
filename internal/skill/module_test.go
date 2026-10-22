@@ -63,10 +63,10 @@ func TestMaterializedSkillParsesAndExpands(t *testing.T) {
 
 func TestSkillModule(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	if err := SkillModule(); err != nil {
+	if err := SkillModule(nil); err != nil {
 		t.Fatalf("SkillModule: %v", err)
 	}
-	if err := SkillModule(); err != nil {
+	if err := SkillModule(nil); err != nil {
 		t.Fatalf("SkillModule must be idempotent: %v", err)
 	}
 }
@@ -91,5 +91,25 @@ func TestSkillifyMaterializesAndLoads(t *testing.T) {
 	}
 	if strings.Contains(s.Instructions, ".claude") {
 		t.Error("skillify instructions should not reference .claude")
+	}
+}
+
+func TestSkillModuleToleratesUnreadableDirectories(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	skillsDir := filepath.Join(home, ".pegg", "skills")
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(skillsDir, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(skillsDir, 0o755) })
+
+	if err := SkillModule(nil); err != nil {
+		t.Fatalf("SkillModule must tolerate unreadable skill directories: %v", err)
 	}
 }

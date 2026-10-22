@@ -20,8 +20,8 @@ const (
 	agentMaxIterations = 150
 )
 
-func Register(fs *vfs.VFS) {
-	agents.Register(func() (*agent.Agent, error) {
+func Register(fs *vfs.VFS) error {
+	return agents.Register(func() (*agent.Agent, error) {
 		return newPlannerAgent(fs)
 	})
 }

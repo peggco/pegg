@@ -9,8 +9,16 @@ import (
 )
 
 func Create(fs *vfs.VFS) {
-	explorer.Register()
-	planner.Register(fs)
-	developer.Register(fs)
-	orchestrator.Register(fs)
+	if err := explorer.Register(); err != nil {
+		fs.Warn("agents: explorer is disabled: %v", err)
+	}
+	if err := planner.Register(fs); err != nil {
+		fs.Warn("agents: planner is disabled: %v", err)
+	}
+	if err := developer.Register(fs); err != nil {
+		fs.Warn("agents: developer is disabled: %v", err)
+	}
+	if err := orchestrator.Register(fs); err != nil {
+		fs.Warn("agents: orchestrator is disabled: %v", err)
+	}
 }

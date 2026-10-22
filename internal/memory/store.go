@@ -15,13 +15,13 @@ import (
 )
 
 type Store struct {
-	mu         sync.Mutex
-	projectDir string
-	globalDir  string
+	mu          sync.Mutex
+	projectRoot string
+	globalDir   string
 }
 
-func NewStore(projectDir string) (*Store, error) {
-	s := &Store{projectDir: projectDir}
+func NewStore(projectRoot string) (*Store, error) {
+	s := &Store{projectRoot: projectRoot}
 	gd, err := config.GetConfigDir()
 	if err == nil {
 		s.globalDir = gd
@@ -33,7 +33,7 @@ func NewStore(projectDir string) (*Store, error) {
 }
 
 func (s *Store) root() string {
-	return filepath.Join(s.projectDir, config.ProjectConfigDirName, dirName)
+	return filepath.Join(s.projectRoot, dirName)
 }
 
 func (s *Store) sessionsRoot() string {

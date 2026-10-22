@@ -43,10 +43,6 @@ func Run(args []string) error {
 		return fmt.Errorf("bootstrap: save default config: %w", err)
 	}
 
-	if err := config.EnsureProjectConfigDir(); err != nil {
-		return fmt.Errorf("bootstrap: create project config dir: %w", err)
-	}
-
 	if os.Getenv("PEGG_SCHEDULE_RUN") == "1" && cfg.Permission != nil {
 		schedule.ApplyScheduledPermissions(cfg.Permission)
 	}
@@ -56,6 +52,10 @@ func Run(args []string) error {
 		return fmt.Errorf("bootstrap: init logger: %w", err)
 	}
 	defer log.Close()
+
+	if notice := config.ProjectRootNotice(); notice != "" {
+		log.Fwarn("%s", notice)
+	}
 
 	bus := event.New()
 
@@ -135,8 +135,8 @@ func Run(args []string) error {
 	if err != nil {
 		return fmt.Errorf("bootstrap: init vfs: %w", err)
 	}
-	if err := skill.SkillModule(); err != nil {
-		return fmt.Errorf("bootstrap: init skills: %w", err)
+	if err := skill.SkillModule(log); err != nil {
+		return fmt.Errorf("bootstrap: skill module: %w", err)
 	}
 	if err := builtin.Create(fs, sess, builtin.Options{LLM: mgr, Decision: decMgr, Config: cfg, Bus: bus, Memory: memMgr, Scheduler: sched}); err != nil {
 		return fmt.Errorf("bootstrap: builtin: %w", err)
