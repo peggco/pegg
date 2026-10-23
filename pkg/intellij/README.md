@@ -55,7 +55,7 @@ Download `pegg-intellij-<version>.zip` from the release page, then:
 ### Build from source
 
 ```bash
-npm --prefix pkg/vscode ci
+npm --prefix pkg/chat-ui ci
 cd pkg/intellij
 npm ci
 ./gradlew buildPlugin
@@ -145,10 +145,10 @@ Pegg tool window
 PeggService → ChatController → AcpClient → pegg serve --acp --stdio
 ```
 
-The webview build consumes `pkg/vscode/src/webview` directly and adds a JCEF
-bridge in `webview/bootstrap.ts`; the chat UI is therefore a single shared source
-of truth. The Kotlin controller/state is a direct port of the VS Code extension's
-controller/state.
+The webview build consumes `pkg/chat-ui` directly and adds a JCEF bridge in
+`webview/bootstrap.ts`; the chat UI is therefore a single shared source of truth.
+The Kotlin controller/state is a direct port of the VS Code extension's
+controller/state and produces the same `ChatState` wire format.
 
 ### Tests
 

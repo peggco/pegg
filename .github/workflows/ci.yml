@@ -75,7 +75,11 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: pkg/vscode/package-lock.json
+          cache-dependency-path: pkg/*/package-lock.json
+
+      - name: Install shared chat UI dependencies
+        run: npm ci
+        working-directory: pkg/chat-ui
 
       - name: Install dependencies
         run: npm ci
@@ -105,9 +109,9 @@ jobs:
           cache: npm
           cache-dependency-path: pkg/*/package-lock.json
 
-      - name: Install VS Code webview dependencies
+      - name: Install shared chat UI dependencies
         run: npm ci
-        working-directory: pkg/vscode
+        working-directory: pkg/chat-ui
 
       - name: Install IntelliJ webview dependencies
         run: npm ci

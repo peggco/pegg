@@ -1,6 +1,12 @@
-import { createRoot } from 'react-dom/client';
-import { App } from './App';
-import './styles.css';
+import { mount } from '../../../chat-ui/src/webview/main';
 
-const root = document.getElementById('root');
-if (root) createRoot(root).render(<App />);
+interface VsCodeApi {
+  postMessage(message: unknown): void;
+  getState(): unknown;
+  setState(state: unknown): void;
+}
+
+declare function acquireVsCodeApi(): VsCodeApi;
+
+const api = acquireVsCodeApi();
+mount({ postMessage: (message) => api.postMessage(message) });

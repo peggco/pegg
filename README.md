@@ -91,6 +91,7 @@ menus, diagnostics fixes, session history, and SCM review. See the
 troubleshooting.
 
 ```bash
+npm --prefix pkg/chat-ui ci
 cd pkg/vscode
 npm ci
 npm run build
@@ -105,7 +106,7 @@ extension, with a Sessions tab, editor actions, intentions, voice input, and
 binary management. See the [IntelliJ guide](docs/pegg/usage/intellij.md).
 
 ```bash
-npm --prefix pkg/vscode ci
+npm --prefix pkg/chat-ui ci
 cd pkg/intellij
 npm ci
 ./gradlew buildPlugin

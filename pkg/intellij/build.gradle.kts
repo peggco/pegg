@@ -68,9 +68,7 @@ val buildWebview by tasks.registering(Exec::class) {
     workingDir = projectDir
     commandLine("node", "build-webview.mjs")
     inputs.dir(layout.projectDirectory.dir("webview"))
-    inputs.dir(layout.projectDirectory.dir("../vscode/src/webview"))
-    inputs.dir(layout.projectDirectory.dir("../vscode/src/chat"))
-    inputs.file(layout.projectDirectory.file("../vscode/src/acp/types.ts"))
+    inputs.dir(layout.projectDirectory.dir("../chat-ui/src"))
     inputs.file(layout.projectDirectory.file("build-webview.mjs"))
     outputs.dir(layout.buildDirectory.dir("webview"))
 }

@@ -34,7 +34,7 @@ Download `pegg-intellij-<version>.zip` from the release page, then open
 For local development:
 
 ```bash
-npm --prefix pkg/vscode ci
+npm --prefix pkg/chat-ui ci
 cd pkg/intellij
 npm ci
 ./gradlew buildPlugin
@@ -57,7 +57,7 @@ The Pegg tool window has two tabs:
 - **Pegg** — the chat, composer, plan, and approvals.
 - **Sessions** — session history shared with the CLI and VS Code.
 
-The chat tab is the same UI as the VS Code extension, rendered with JCEF. It
+The chat tab is the same shared `pkg/chat-ui` renderer as the VS Code extension, rendered with JCEF. It
 supports streaming markdown, syntax highlighting, reasoning, tool cards with
 output and diffs, subagent cards with in-place transcripts, plan updates, usage
 and cost, permission cards, and ask-user forms.

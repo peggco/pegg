@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outdir = resolve(here, 'build/webview');
-const vscodeModules = resolve(here, '../vscode/node_modules');
 const isWatch = process.argv.includes('--watch');
 
 mkdirSync(outdir, { recursive: true });
@@ -22,7 +21,6 @@ const options = {
   target: 'es2022',
   jsx: 'automatic',
   outdir,
-  nodePaths: [vscodeModules],
   sourcemap: true,
   minify: !isWatch,
   logLevel: 'info',

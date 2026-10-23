@@ -1,7 +1,12 @@
-import { createRoot } from 'react-dom/client';
-import { App } from '../../vscode/src/webview/App';
-import '../../vscode/src/webview/styles.css';
+import { mount } from '../../chat-ui/src/webview/main';
 import './intellij.css';
 
-const root = document.getElementById('root');
-if (root) createRoot(root).render(<App />);
+mount({
+  postMessage: (message) => {
+    if (window.__peggSend) {
+      window.__peggSend(message);
+    } else {
+      (window.__peggOutbox ??= []).push(JSON.stringify(message));
+    }
+  },
+});

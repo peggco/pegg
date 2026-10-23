@@ -6,9 +6,9 @@ import {
   type PendingPermission,
   type PendingQuestion,
   type ToolState,
-} from '../chat/state';
+} from '../state';
 import { renderMarkdown } from './markdown';
-import { vscode } from './vscode';
+import { host } from './host';
 
 interface StateMessage {
   type: 'state';
@@ -225,7 +225,7 @@ export function App() {
       }
     };
     window.addEventListener('message', onMessage);
-    vscode.postMessage({ type: 'ready' });
+    host.postMessage({ type: 'ready' });
     return () => window.removeEventListener('message', onMessage);
   }, [insertText]);
 
@@ -288,7 +288,7 @@ export function App() {
     if (state.running) return;
     const value = text.trim();
     if (!value && state.composerAttachments.length === 0) return;
-    vscode.postMessage({ type: 'send', text: value });
+    host.postMessage({ type: 'send', text: value });
     setText('');
     textRef.current = '';
     setPopup(null);
@@ -367,7 +367,7 @@ export function App() {
       const char = value[inserted];
       if (char === '@' && (inserted === 0 || /\s/.test(value[inserted - 1]))) {
         next = { kind: 'mention', anchor: inserted, query: value.slice(inserted + 1, caret), selected: 0 };
-        vscode.postMessage({ type: 'listFiles' });
+        host.postMessage({ type: 'listFiles' });
       } else if (char === '/' && inserted === 0) {
         next = { kind: 'command', anchor: 0, query: value.slice(1, caret), selected: 0 };
       }
@@ -378,11 +378,11 @@ export function App() {
   function toggleRecording() {
     setLocalError('');
     if (recording) {
-      vscode.postMessage({ type: 'stopVoice' });
+      host.postMessage({ type: 'stopVoice' });
       return;
     }
     setRecording(true);
-    vscode.postMessage({ type: 'startVoice' });
+    host.postMessage({ type: 'startVoice' });
   }
 
   function onDrop(event: React.DragEvent) {
@@ -393,14 +393,14 @@ export function App() {
       .filter((line) => line.startsWith('file://'))
       .map((line) => decodeURIComponent(new URL(line).pathname));
     if (paths.length > 0) {
-      vscode.postMessage({ type: 'attachPaths', paths });
+      host.postMessage({ type: 'attachPaths', paths });
       return;
     }
     const files = Array.from(event.dataTransfer.files);
     for (const file of files) {
       if (file.type.startsWith('image/')) {
         void fileToBase64(file).then((data) =>
-          vscode.postMessage({
+          host.postMessage({
             type: 'addAttachmentData',
             name: file.name,
             mediaType: file.type,
@@ -421,7 +421,7 @@ export function App() {
     if (!file) return;
     event.preventDefault();
     void fileToBase64(file).then((data) =>
-      vscode.postMessage({
+      host.postMessage({
         type: 'addAttachmentData',
         name: file.name || 'pasted-image.png',
         mediaType: file.type,
@@ -564,7 +564,7 @@ export function App() {
                   <button
                     className="attachment-remove"
                     title="Remove"
-                    onClick={() => vscode.postMessage({ type: 'removeAttachment', id: attachment.id })}
+                    onClick={() => host.postMessage({ type: 'removeAttachment', id: attachment.id })}
                   >
                     ×
                   </button>
@@ -585,14 +585,14 @@ export function App() {
           />
           <div className="composer-toolbar">
             <div className="left-actions">
-              <button className="icon-button" title="Attach files" onClick={() => vscode.postMessage({ type: 'pickFiles' })}>
+              <button className="icon-button" title="Attach files" onClick={() => host.postMessage({ type: 'pickFiles' })}>
                 <PlusIcon />
               </button>
               <button
                 className="composer-pill"
                 onClick={(event) => {
                   if (!inlinePickers) {
-                    vscode.postMessage({ type: 'pickMode' });
+                    host.postMessage({ type: 'pickMode' });
                     return;
                   }
                   const anchor = event.currentTarget.getBoundingClientRect();
@@ -608,7 +608,7 @@ export function App() {
                 onClick={(event) => {
                   const anchor = event.currentTarget.getBoundingClientRect();
                   if (!inlinePickers) {
-                    vscode.postMessage({ type: 'pickModel' });
+                    host.postMessage({ type: 'pickModel' });
                     return;
                   }
                   if (composerPicker?.kind === 'model') {
@@ -616,7 +616,7 @@ export function App() {
                     return;
                   }
                   setComposerPicker({ kind: 'model', anchor, loading: models.length === 0 });
-                  vscode.postMessage({ type: 'pickModel' });
+                  host.postMessage({ type: 'pickModel' });
                 }}
                 title="Change model"
               >
@@ -625,7 +625,7 @@ export function App() {
               </button>
             </div>
             <div className="right-actions">
-              <button className="icon-button" title="Settings" onClick={() => vscode.postMessage({ type: 'openSettings' })}>
+              <button className="icon-button" title="Settings" onClick={() => host.postMessage({ type: 'openSettings' })}>
                 <SlidersIcon />
               </button>
               <button
@@ -636,7 +636,7 @@ export function App() {
                 <MicIcon />
               </button>
               {state.running ? (
-                <button className="send stop" title="Stop" onClick={() => vscode.postMessage({ type: 'stop' })}>
+                <button className="send stop" title="Stop" onClick={() => host.postMessage({ type: 'stop' })}>
                   <StopIcon />
                 </button>
               ) : (
@@ -667,11 +667,11 @@ export function App() {
           model={state.model}
           onClose={() => setComposerPicker(null)}
           onMode={(mode) => {
-            vscode.postMessage({ type: 'setMode', mode });
+            host.postMessage({ type: 'setMode', mode });
             setComposerPicker(null);
           }}
           onModel={(entry) => {
-            vscode.postMessage({ type: 'setModel', provider: entry.provider, model: entry.model.id });
+            host.postMessage({ type: 'setModel', provider: entry.provider, model: entry.model.id });
             setComposerPicker(null);
           }}
         />
@@ -683,15 +683,15 @@ export function App() {
           supported={Boolean(state.historySupported)}
           running={state.running}
           onCopy={() => {
-            vscode.postMessage({ type: 'copyText', text: menu.item.kind === 'user' ? menu.item.text : '' });
+            host.postMessage({ type: 'copyText', text: menu.item.kind === 'user' ? menu.item.text : '' });
             setMenu(null);
           }}
           onFork={() => {
-            vscode.postMessage({ type: 'forkMessage', id: menu.item.id });
+            host.postMessage({ type: 'forkMessage', id: menu.item.id });
             setMenu(null);
           }}
           onRevert={() => {
-            vscode.postMessage({ type: 'revertMessage', id: menu.item.id });
+            host.postMessage({ type: 'revertMessage', id: menu.item.id });
             setMenu(null);
           }}
         />
@@ -1156,13 +1156,13 @@ function ToolCard({ tool }: { tool: ToolState }) {
             <button
               key={`${location.path}-${index}`}
               className="mini-button"
-              onClick={() => vscode.postMessage({ type: 'openFile', path: location.path, line: location.line ?? 1 })}
+              onClick={() => host.postMessage({ type: 'openFile', path: location.path, line: location.line ?? 1 })}
             >
               Open {location.path.split('/').pop()}
             </button>
           ))}
           {hasOutput && (
-            <button className="mini-button" onClick={() => vscode.postMessage({ type: 'copyText', text: output })}>
+            <button className="mini-button" onClick={() => host.postMessage({ type: 'copyText', text: output })}>
               Copy output
             </button>
           )}
@@ -1170,7 +1170,7 @@ function ToolCard({ tool }: { tool: ToolState }) {
             <button
               className="mini-button"
               onClick={() =>
-                vscode.postMessage({
+                host.postMessage({
                   type: 'openDiff',
                   path: tool.diff?.path,
                   oldText: tool.diff?.oldText ?? '',
@@ -1197,7 +1197,7 @@ function PermissionCard({ pending }: { pending: PendingPermission }) {
           <button
             key={option.optionId}
             className={option.kind.startsWith('reject') ? 'danger' : option.kind === 'allow_always' ? 'primary' : ''}
-            onClick={() => vscode.postMessage({ type: 'permissionResponse', id: pending.id, optionId: option.optionId })}
+            onClick={() => host.postMessage({ type: 'permissionResponse', id: pending.id, optionId: option.optionId })}
           >
             {option.name}
           </button>
@@ -1269,7 +1269,7 @@ function QuestionCard({ pending }: { pending: PendingQuestion }) {
         </div>
       ))}
       <div className="interaction-actions">
-        <button className="primary" onClick={() => vscode.postMessage({ type: 'questionResponse', id: pending.id, answers })}>
+        <button className="primary" onClick={() => host.postMessage({ type: 'questionResponse', id: pending.id, answers })}>
           Submit
         </button>
       </div>
@@ -1283,9 +1283,9 @@ function handleLinkClick(event: React.MouseEvent) {
   event.preventDefault();
   const href = target.getAttribute('data-href') || target.getAttribute('href') || '';
   if (/^https?:\/\//i.test(href)) {
-    vscode.postMessage({ type: 'openExternal', url: href });
+    host.postMessage({ type: 'openExternal', url: href });
   } else if (href.startsWith('file://')) {
-    vscode.postMessage({ type: 'openFile', path: decodeURIComponent(new URL(href).pathname) });
+    host.postMessage({ type: 'openFile', path: decodeURIComponent(new URL(href).pathname) });
   }
 }
 

@@ -6,15 +6,9 @@ interface CefQuery {
   onFailure?: (code: number, message: string) => void;
 }
 
-interface VsCodeApi {
-  postMessage(message: unknown): void;
-  getState(): unknown;
-  setState(state: unknown): void;
-}
-
 declare global {
   interface Window {
-    acquireVsCodeApi?: () => VsCodeApi;
+    __peggSend?: (message: unknown) => void;
     cefQuery?: (query: CefQuery) => void;
     __peggOutbox?: string[];
     __peggDrainOutbox?: () => void;
@@ -57,9 +51,4 @@ window.addEventListener('unhandledrejection', (event) => {
 
 window.__peggHideReady = true;
 window.__peggInlinePickers = true;
-
-window.acquireVsCodeApi = () => ({
-  postMessage: send,
-  getState: () => undefined,
-  setState: () => undefined,
-});
+window.__peggSend = send;

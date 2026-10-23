@@ -14,5 +14,5 @@
     "noEmit": true,
     "types": []
   },
-  "include": ["webview/**/*.ts", "webview/**/*.tsx", "../vscode/src/webview/**/*.ts", "../vscode/src/webview/**/*.tsx", "../vscode/src/chat/state.ts", "../vscode/src/acp/types.ts"]
+  "include": ["webview/**/*.ts", "webview/**/*.tsx", "../chat-ui/src/**/*.ts", "../chat-ui/src/**/*.tsx"]
 }

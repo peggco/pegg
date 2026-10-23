@@ -172,31 +172,31 @@
       },
       {
         "command": "pegg.editorActions",
-        "title": "AI Actions…",
+        "title": "AI Actions\u2026",
         "category": "Pegg",
         "icon": "$(sparkle)"
       },
       {
         "command": "pegg.selectionActions",
-        "title": "Selection Actions…",
+        "title": "Selection Actions\u2026",
         "category": "Pegg",
         "icon": "$(sparkle)"
       },
       {
         "command": "pegg.fileActions",
-        "title": "File Actions…",
+        "title": "File Actions\u2026",
         "category": "Pegg",
         "icon": "$(sparkle)"
       },
       {
         "command": "pegg.askSelection",
-        "title": "Ask About Selection…",
+        "title": "Ask About Selection\u2026",
         "category": "Pegg",
         "icon": "$(question)"
       },
       {
         "command": "pegg.editSelection",
-        "title": "Edit Selection…",
+        "title": "Edit Selection\u2026",
         "category": "Pegg",
         "icon": "$(edit)"
       },
@@ -226,13 +226,13 @@
       },
       {
         "command": "pegg.askAboutFile",
-        "title": "Ask About File…",
+        "title": "Ask About File\u2026",
         "category": "Pegg",
         "icon": "$(question)"
       },
       {
         "command": "pegg.editFile",
-        "title": "Edit File…",
+        "title": "Edit File\u2026",
         "category": "Pegg",
         "icon": "$(edit)"
       },
@@ -759,21 +759,13 @@
     "test:download": "PEGG_TEST_DOWNLOAD=1 vitest run test/unit/binary-manager.integration.test.ts"
   },
   "dependencies": {
-    "dompurify": "^3.2.4",
     "extract-zip": "^2.0.1",
-    "highlight.js": "^11.11.1",
-    "marked": "^15.0.7",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
     "tar": "^7.4.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",
-    "@types/dompurify": "^3.2.0",
     "@types/node": "^22.13.10",
-    "@types/react": "^19.0.10",
-    "@types/react-dom": "^19.0.4",
     "@types/tar": "^6.1.13",
     "@types/vscode": "~1.90.0",
     "@vscode/test-cli": "^0.0.10",
