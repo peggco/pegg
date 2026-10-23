@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-23
+
 ### Added
 
 - IntelliJ Platform plugin with a Pegg tool window, ACP chat, sessions, tools,
