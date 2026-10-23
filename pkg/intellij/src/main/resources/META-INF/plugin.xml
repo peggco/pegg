@@ -1,5 +1,5 @@
 <idea-plugin>
-    <id>dev.pegg.intellij</id>
+    <id>dev.pegg.ide</id>
     <name>Pegg</name>
     <vendor url="https://pegg.dev">Pegg</vendor>
 
@@ -15,11 +15,6 @@
         </ul>
         <p>The plugin runs the local <code>pegg</code> binary over the Agent Client Protocol.</p>
     ]]></description>
-
-    <change-notes><![CDATA[
-        <p>0.2.0 — Initial IntelliJ Platform release with chat, sessions, tools, subagents,
-        permissions, attachments, voice, editor actions, and binary management.</p>
-    ]]></change-notes>
 
     <idea-version since-build="253.1"/>
 

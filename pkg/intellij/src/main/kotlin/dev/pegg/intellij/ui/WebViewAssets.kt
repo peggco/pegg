@@ -10,7 +10,7 @@ object WebViewAssets {
 
     @Synchronized
     fun ensure(): File {
-        val version = PluginManagerCore.getPlugin(PluginId.getId("dev.pegg.intellij"))?.version ?: "dev"
+        val version = PluginManagerCore.getPlugin(PluginId.getId("dev.pegg.ide"))?.version ?: "dev"
         val dir = File(PathManager.getTempPath(), "pegg-webview/$version")
         dir.mkdirs()
         for (name in files) {

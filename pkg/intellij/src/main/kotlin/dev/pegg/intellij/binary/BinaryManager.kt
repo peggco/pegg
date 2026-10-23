@@ -368,7 +368,7 @@ class BinaryManager(private val project: Project) {
     }
 
     private fun pluginVersion(): String =
-        PluginManagerCore.getPlugin(PluginId.getId("dev.pegg.intellij"))?.version ?: "0.2.1"
+        PluginManagerCore.getPlugin(PluginId.getId("dev.pegg.ide"))?.version ?: "0.2.1"
 
     private fun cachedDir(tag: String): File =
         File(PathManager.getConfigPath(), "pegg/bin/${tag.replace(Regex("[^A-Za-z0-9._-]"), "_")}")

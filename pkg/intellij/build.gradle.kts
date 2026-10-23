@@ -4,6 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.jvm") version "2.1.21"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.1.21"
     id("org.jetbrains.intellij.platform")
+    id("org.jetbrains.changelog") version "2.5.0"
 }
 
 group = providers.gradleProperty("pluginGroup").get()
@@ -45,7 +46,7 @@ sourceSets {
 
 intellijPlatform {
     pluginConfiguration {
-        id = "dev.pegg.intellij"
+        id = "dev.pegg.ide"
         name = "Pegg"
         version = providers.gradleProperty("pluginVersion").get()
         description = """
