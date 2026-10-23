@@ -582,7 +582,7 @@ class ChatController(
         runCatching { env["PATH"] = searchDirs().joinToString(File.pathSeparator) }
         env.putAll(PeggSettings.getInstance().state.env)
         val version = com.intellij.ide.plugins.PluginManagerCore
-            .getPlugin(com.intellij.openapi.extensions.PluginId.getId("dev.pegg.intellij"))?.version ?: "0.2.0"
+            .getPlugin(com.intellij.openapi.extensions.PluginId.getId("dev.pegg.intellij"))?.version ?: "0.2.1"
         val acp = AcpClient(
             cwd = File(root),
             binary = binary,

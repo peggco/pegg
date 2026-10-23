@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.1
+
 - The binary version check now reports why a candidate was rejected instead of
   a generic "failed its version check" message.
 - The version probe runs inside the workspace instead of the extension host
