@@ -166,6 +166,7 @@ FSL-1.1-MIT. See [LICENSE.md](LICENSE.md).
 ## Development
 
 ```bash
+npm --prefix ../chat-ui ci
 npm ci
 npm run check          # typecheck + lint + unit tests + build
 npm run package        # build a .vsix
