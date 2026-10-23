@@ -116,10 +116,39 @@ func isPermissionQuestion(q agent.AskQuestion) bool {
 }
 
 func planFilePath(cwd string) string {
+	plansDir := filepath.Join(cwd, ".pegg", "plans")
 	if root, _, err := config.ProjectRootFor(cwd); err == nil && root != "" {
-		return filepath.Join(root, "plans", "plan.md")
+		plansDir = filepath.Join(root, "plans")
 	}
-	return filepath.Join(cwd, ".pegg", "plans", "plan.md")
+	if newest := newestPlanFile(plansDir); newest != "" {
+		return newest
+	}
+	return filepath.Join(plansDir, "plan.md")
+}
+
+func newestPlanFile(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	var (
+		newest     string
+		newestTime time.Time
+	)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".md") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if newest == "" || info.ModTime().After(newestTime) {
+			newest = filepath.Join(dir, entry.Name())
+			newestTime = info.ModTime()
+		}
+	}
+	return newest
 }
 
 func (s *Server) askPermission(ctx context.Context, acpSess *ACPSession, ev agent.AgentAsk) (map[string]string, error) {

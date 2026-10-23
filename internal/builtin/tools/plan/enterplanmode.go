@@ -12,6 +12,14 @@ import (
 	"github.com/peggco/pegg/internal/vfs"
 )
 
+type PlanExitMode int
+
+const (
+	PlanExitTool PlanExitMode = iota
+	PlanExitMessage
+	PlanExitNone
+)
+
 func PlanTools(fs *vfs.VFS) {
 	tools.Register(enterplanmodeTool(fs))
 	tools.Register(exitplanmodeTool(fs))
@@ -45,7 +53,7 @@ func enterplanmodeTool(fs *vfs.VFS) tool.Tool {
 			if parent == nil {
 				return "", fmt.Errorf("enterplanmode: no parent agent in context")
 			}
-			parent.AttachReminder(PlanModeReminder())
+			parent.AttachReminder(PlanModeReminder(PlanExitTool))
 			if fs != nil {
 				if err := fs.SetWriteOnly(vfs.PlansDir); err != nil {
 					return "", fmt.Errorf("enterplanmode: restrict writes: %w", err)
@@ -56,13 +64,13 @@ func enterplanmodeTool(fs *vfs.VFS) tool.Tool {
 	)
 }
 
-func PlanModeReminder() reminder.Reminder {
-	content, err := prompt.New().
+func PlanModeReminder(exitMode PlanExitMode) reminder.Reminder {
+	b := prompt.New().
 		Heading(1, "Plan Mode - System Reminder").
 		Paragraph("Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.").
 		Hr(3).
 		Heading(2, "Plan File Info").
-		Paragraph("No plan file exists yet. You should create your plan at `.pegg/plans/plan.md` using the Write tool.").
+		Paragraph("Create a new plan file for this task at `.pegg/plans/<feature-name>.md` using the Write tool, where `<feature-name>` is a short, descriptive kebab-case slug unique to the task (for example `.pegg/plans/plan-mode-reminder-exitphase.md`). Each task gets its own plan file - do not overwrite an existing plan.").
 		Paragraph("You should build your plan incrementally by writing to or editing this file. NOTE that this is the only file you are allowed to edit - other than this you are only allowed to take READ-ONLY actions.").
 		Paragraph("**Plan File Guidelines:** The plan file should contain only your final recommended approach, not all alternatives considered. Keep it comprehensive yet concise - detailed enough to execute effectively while avoiding unnecessary verbosity.").
 		Hr(3).
@@ -102,10 +110,22 @@ func PlanModeReminder() reminder.Reminder {
 			"Recommended approach with rationale",
 			"Key insights from different perspectives",
 			"Critical files that need modification",
-		).
-		Heading(3, "Phase 5: Call ExitPlanMode").
-		Paragraph("At the very end of your turn, once you have asked the user questions and are happy with your final plan file - you should always call ExitPlanMode to indicate to the user that you are done planning.").
-		Paragraph("This is critical - your turn should only end with either asking the user a question or calling ExitPlanMode. Do not stop unless it's for these 2 reasons.").
+		)
+
+	switch exitMode {
+	case PlanExitTool:
+		b = b.
+			Heading(3, "Phase 5: Call ExitPlanMode").
+			Paragraph("At the very end of your turn, once you have asked the user questions and are happy with your final plan file - you should always call ExitPlanMode to indicate to the user that you are done planning.").
+			Paragraph("This is critical - your turn should only end with either asking the user a question or calling ExitPlanMode. Do not stop unless it's for these 2 reasons.")
+	case PlanExitMessage:
+		b = b.
+			Heading(3, "Phase 5: Present the Plan").
+			Paragraph("ExitPlanMode is not available in this mode. At the very end of your turn, once you have asked the user questions and are happy with your final plan file, summarize the plan directly in your response and ask the user to switch to build mode when they are ready to implement.").
+			Paragraph("Do not start implementing or make any edits outside the plan file - the user will switch modes to begin execution.")
+	}
+
+	content, err := b.
 		Hr(3).
 		Paragraph("**NOTE:** At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.").
 		Build(prompt.FormatMarkdown)
