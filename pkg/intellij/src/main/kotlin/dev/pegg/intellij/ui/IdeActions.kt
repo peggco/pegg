@@ -3,14 +3,13 @@ package dev.pegg.intellij.ui
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.requests.SimpleDiffRequest
-import com.intellij.execution.ExecutionManager
 import com.intellij.execution.executors.DefaultRunExecutor
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.ui.RunContentDescriptor
+import com.intellij.execution.ui.RunContentManager
 import com.intellij.ide.BrowserUtil
-import com.intellij.ide.actions.ShowFilePathAction
-import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.ide.actions.RevealFileAction
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
@@ -104,7 +103,7 @@ object IdeActions {
         val console = TextConsoleBuilderFactory.getInstance().createBuilder(project).console
         console.attachToProcess(handler)
         val descriptor = RunContentDescriptor(console, handler, console.component, title)
-        ExecutionManager.getInstance(project).getContentManager().showRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor)
+        RunContentManager.getInstance(project).showRunContent(DefaultRunExecutor.getRunExecutorInstance(), descriptor)
         handler.startNotify()
     }
 
@@ -115,13 +114,13 @@ object IdeActions {
             file.writeText("{}\n")
         }
         val virtual = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file) ?: return
-        FileEditorManager.getInstance(project).openFile(virtual, true)
+        OpenFileDescriptor(project, virtual).navigate(true)
     }
 
     fun revealProjectConfig(project: Project) {
         val root = project.basePath ?: return
         val dir = File(root, ".pegg")
         dir.mkdirs()
-        ShowFilePathAction.openFile(dir)
+        RevealFileAction.openDirectory(dir)
     }
 }
