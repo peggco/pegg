@@ -41,6 +41,7 @@ kotlin {
 sourceSets {
     main {
         resources.srcDir(layout.buildDirectory.dir("webview"))
+        kotlin.srcDir(layout.buildDirectory.dir("generated/pegg"))
     }
 }
 
@@ -65,6 +66,27 @@ intellijPlatform {
     }
 }
 
+val generateBuildInfo by tasks.registering {
+    val pluginVersion = providers.gradleProperty("pluginVersion")
+    val outputDir = layout.buildDirectory.dir("generated/pegg")
+    inputs.property("pluginVersion", pluginVersion.get())
+    outputs.dir(outputDir)
+    doLast {
+        val escaped = pluginVersion.get().replace("\\", "\\\\").replace("\"", "\\\"")
+        val file = outputDir.get().asFile.resolve("dev/pegg/intellij/BuildInfo.kt")
+        file.parentFile.mkdirs()
+        file.writeText(
+            """
+            package dev.pegg.intellij
+
+            object BuildInfo {
+                const val VERSION: String = "$escaped"
+            }
+            """.trimIndent() + "\n",
+        )
+    }
+}
+
 val buildWebview by tasks.registering(Exec::class) {
     workingDir = projectDir
     commandLine("node", "build-webview.mjs")
@@ -76,6 +98,10 @@ val buildWebview by tasks.registering(Exec::class) {
 
 tasks.named<ProcessResources>("processResources") {
     dependsOn(buildWebview)
+}
+
+tasks.named("compileKotlin") {
+    dependsOn(generateBuildInfo)
 }
 
 tasks.test {

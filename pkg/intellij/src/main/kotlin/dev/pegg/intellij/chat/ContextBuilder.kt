@@ -1,15 +1,17 @@
 package dev.pegg.intellij.chat
 
-import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
-import com.intellij.lang.annotation.HighlightSeverity
-import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.colors.CodeInsightColors
+import com.intellij.openapi.editor.impl.DocumentMarkupModel
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.util.Computable
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import dev.pegg.intellij.settings.PeggSettings
@@ -25,20 +27,22 @@ object ContextBuilder {
     private const val MAX_FILE_SNIPPET = 128 * 1024
     private const val MAX_DIFF = 400_000
 
+    private fun <T> readAction(action: () -> T): T =
+        ApplicationManager.getApplication().runReadAction(Computable<T> { action() })
+
     fun projectRoot(project: Project, file: VirtualFile? = null): VirtualFile? =
-        ReadAction.compute<VirtualFile?, RuntimeException> {
+        readAction {
             val target = file ?: FileEditorManager.getInstance(project).selectedFiles.firstOrNull()
             if (target != null) {
                 val index = ProjectFileIndex.getInstance(project)
-                index.getContentRootForFile(target)?.let { return@compute it }
+                index.getContentRootForFile(target)?.let { return@readAction it }
                 val module = index.getModuleForFile(target)
                 if (module != null) {
-                    return@compute ModuleRootManager.getInstance(module).contentRoots.firstOrNull()
+                    return@readAction ModuleRootManager.getInstance(module).contentRoots.firstOrNull()
                 }
             }
-            @Suppress("DEPRECATION")
             ProjectRootManager.getInstance(project).contentRoots.firstOrNull()
-                ?: project.baseDir
+                ?: project.basePath?.let { LocalFileSystem.getInstance().findFileByPath(it) }
         }
 
     fun activeFile(project: Project): VirtualFile? =
@@ -50,12 +54,12 @@ object ContextBuilder {
     }
 
     fun activeContext(project: Project, editor: Editor? = null): String =
-        ReadAction.compute<String, RuntimeException> {
+        readAction {
             val settings = PeggSettings.getInstance().state
             val active = editor ?: FileEditorManager.getInstance(project).selectedTextEditor
-                ?: return@compute ""
+                ?: return@readAction ""
             val file = FileDocumentManager.getInstance().getFile(active.document)
-                ?: return@compute ""
+                ?: return@readAction ""
             val parts = mutableListOf<String>()
             if (settings.includeActiveFile) parts.add("Active file: ${file.path}")
             val selection = active.selectionModel
@@ -69,12 +73,12 @@ object ContextBuilder {
         }
 
     fun fileSnippet(file: VirtualFile): String =
-        ReadAction.compute<String, RuntimeException> {
-            if (file.isDirectory) return@compute ""
-            if (file.length > MAX_FILE_SNIPPET) return@compute ""
+        readAction {
+            if (file.isDirectory) return@readAction ""
+            if (file.length > MAX_FILE_SNIPPET) return@readAction ""
             val bytes = runCatching { file.contentsToByteArray() }.getOrNull()
-                ?: return@compute ""
-            if (Attachments.isBinary(bytes)) return@compute ""
+                ?: return@readAction ""
+            if (Attachments.isBinary(bytes)) return@readAction ""
             val text = String(bytes, Charsets.UTF_8)
             "```${languageFor(file)}\n$text\n```"
         }
@@ -106,7 +110,7 @@ object ContextBuilder {
         else -> "plaintext"
     }
 
-    fun listFiles(project: Project): List<String> = ReadAction.compute<List<String>, RuntimeException> {
+    fun listFiles(project: Project): List<String> = readAction {
         val out = ArrayList<String>(4096)
         val index = ProjectFileIndex.getInstance(project)
         index.iterateContent { file ->
@@ -125,21 +129,29 @@ object ContextBuilder {
 
     fun diagnostics(project: Project, file: VirtualFile): List<String> {
         return runCatching {
-            ReadAction.compute<List<String>, RuntimeException> {
+            readAction {
                 val document = FileDocumentManager.getInstance().getDocument(file)
-                    ?: return@compute emptyList()
-                val highlights = DaemonCodeAnalyzerImpl.getHighlights(document, HighlightSeverity.WARNING, project)
-                    ?: return@compute emptyList()
-                highlights.asSequence()
-                    .filter {
-                        it.severity == HighlightSeverity.ERROR || it.severity == HighlightSeverity.WARNING
+                    ?: return@readAction emptyList()
+                val markup = DocumentMarkupModel.forDocument(document, project, false)
+                    ?: return@readAction emptyList()
+                markup.allHighlighters.asSequence()
+                    .filter { it.isValid }
+                    .mapNotNull { highlighter ->
+                        val severity = when (highlighter.textAttributesKey) {
+                            CodeInsightColors.ERRORS_ATTRIBUTES,
+                            CodeInsightColors.GENERIC_SERVER_ERROR_OR_WARNING,
+                            CodeInsightColors.RUNTIME_ERROR -> "error"
+                            CodeInsightColors.WARNINGS_ATTRIBUTES -> "warning"
+                            else -> return@mapNotNull null
+                        }
+                        val description = highlighter.gutterIconRenderer?.tooltipText
+                            ?.takeIf { it.isNotBlank() }
+                            ?: highlighter.errorStripeTooltip?.toString()
+                            ?: "problem"
+                        val line = document.getLineNumber(highlighter.startOffset) + 1
+                        "- $severity line $line: $description"
                     }
                     .take(100)
-                    .map { info ->
-                        val severity = if (info.severity == HighlightSeverity.ERROR) "error" else "warning"
-                        val line = document.getLineNumber(info.startOffset) + 1
-                        "- $severity line $line: ${info.description ?: "problem"}"
-                    }
                     .toList()
             }
         }.getOrElse { emptyList() }

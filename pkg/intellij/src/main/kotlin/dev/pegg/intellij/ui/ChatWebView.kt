@@ -1,6 +1,5 @@
 package dev.pegg.intellij.ui
 
-import com.intellij.ide.ui.LafManager
 import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
@@ -13,6 +12,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
+import com.intellij.ui.jcef.JBCefBrowserBase
 import com.intellij.ui.jcef.JBCefClient
 import com.intellij.ui.jcef.JBCefJSQuery
 import com.intellij.util.ui.JBUI
@@ -63,6 +63,7 @@ class ChatWebView(
     private val stateListener: (ChatState) -> Unit = { scheduleState() }
     private val composerListener: (String) -> Unit = { postComposerText(it) }
     private val lafListener = LafManagerListener { applyTheme() }
+    private val lafConnection = ApplicationManager.getApplication().messageBus.connect(this)
     private val settingsListener: () -> Unit = { scheduleState() }
 
     val component: JComponent
@@ -71,7 +72,7 @@ class ChatWebView(
         component = createComponent()
         controller.addStateListener(stateListener)
         controller.addComposerTextListener(composerListener)
-        LafManager.getInstance().addLafManagerListener(lafListener)
+        lafConnection.subscribe(LafManagerListener.TOPIC, lafListener)
         PeggSettings.getInstance().addListener(settingsListener)
     }
 
@@ -135,7 +136,7 @@ class ChatWebView(
             client.setProperty(JBCefClient.Properties.JS_QUERY_POOL_SIZE, 1)
             val created = JBCefBrowser.createBuilder().setClient(client).setCreateImmediately(true).build()
             browser = created
-            val jsQuery = JBCefJSQuery.create(created)
+            val jsQuery = JBCefJSQuery.create(created as JBCefBrowserBase)
             query = jsQuery
             jsQuery.addHandler { request ->
                 runCatching { handleMessage(request) }
@@ -452,7 +453,7 @@ class ChatWebView(
         stateTimer.stop()
         controller.removeStateListener(stateListener)
         controller.removeComposerTextListener(composerListener)
-        runCatching { LafManager.getInstance().removeLafManagerListener(lafListener) }
+        runCatching { lafConnection.disconnect() }
         runCatching { PeggSettings.getInstance().removeListener(settingsListener) }
         runCatching { browser?.dispose() }
         browser = null

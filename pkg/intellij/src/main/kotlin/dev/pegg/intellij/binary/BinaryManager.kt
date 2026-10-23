@@ -1,10 +1,9 @@
 package dev.pegg.intellij.binary
 
-import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.ide.trustedProjects.TrustedProjects
 import com.intellij.openapi.application.PathManager
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.project.Project
+import dev.pegg.intellij.BuildInfo
 import dev.pegg.intellij.chat.ContextBuilder
 import dev.pegg.intellij.log.PeggLog
 import dev.pegg.intellij.settings.PeggSettings
@@ -367,8 +366,7 @@ class BinaryManager(private val project: Project) {
         return if (Regex("^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$").matches(version)) "v$version" else "latest"
     }
 
-    private fun pluginVersion(): String =
-        PluginManagerCore.getPlugin(PluginId.getId("dev.pegg.ide"))?.version ?: "0.2.1"
+    private fun pluginVersion(): String = BuildInfo.VERSION
 
     private fun cachedDir(tag: String): File =
         File(PathManager.getConfigPath(), "pegg/bin/${tag.replace(Regex("[^A-Za-z0-9._-]"), "_")}")

@@ -29,6 +29,7 @@ import dev.pegg.intellij.acp.SessionUpdate
 import dev.pegg.intellij.acp.UsageState
 import dev.pegg.intellij.acp.VoiceResult
 import dev.pegg.intellij.acp.textOf
+import dev.pegg.intellij.BuildInfo
 import dev.pegg.intellij.binary.BinaryManager
 import dev.pegg.intellij.binary.searchDirs
 import dev.pegg.intellij.log.PeggLog
@@ -581,8 +582,7 @@ class ChatController(
         val env = LinkedHashMap<String, String>()
         runCatching { env["PATH"] = searchDirs().joinToString(File.pathSeparator) }
         env.putAll(PeggSettings.getInstance().state.env)
-        val version = com.intellij.ide.plugins.PluginManagerCore
-            .getPlugin(com.intellij.openapi.extensions.PluginId.getId("dev.pegg.ide"))?.version ?: "0.2.1"
+        val version = BuildInfo.VERSION
         val acp = AcpClient(
             cwd = File(root),
             binary = binary,

@@ -1,8 +1,7 @@
 package dev.pegg.intellij.ui
 
-import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.application.PathManager
-import com.intellij.openapi.extensions.PluginId
+import dev.pegg.intellij.BuildInfo
 import java.io.File
 
 object WebViewAssets {
@@ -10,7 +9,7 @@ object WebViewAssets {
 
     @Synchronized
     fun ensure(): File {
-        val version = PluginManagerCore.getPlugin(PluginId.getId("dev.pegg.ide"))?.version ?: "dev"
+        val version = BuildInfo.VERSION
         val dir = File(PathManager.getTempPath(), "pegg-webview/$version")
         dir.mkdirs()
         for (name in files) {
