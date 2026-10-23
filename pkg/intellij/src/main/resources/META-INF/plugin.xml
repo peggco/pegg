@@ -1,0 +1,216 @@
+<idea-plugin>
+    <id>dev.pegg.intellij</id>
+    <name>Pegg</name>
+    <vendor url="https://pegg.dev">Pegg</vendor>
+
+    <description><![CDATA[
+        <p>Pegg is a provider-agnostic AI coding agent. This plugin brings the same engine used by
+        the Pegg CLI, TUI, and VS Code extension into every JetBrains IDE.</p>
+        <ul>
+            <li>Streaming chat with markdown, tool cards, reasoning, plans, and usage.</li>
+            <li>Subagent activity with an in-place subagent transcript.</li>
+            <li>Sessions shared with the CLI and VS Code.</li>
+            <li>Permissions, ask-user questions, attachments, voice input, and skills.</li>
+            <li>Editor actions for explain, edit, review, tests, docs, and diagnostics.</li>
+        </ul>
+        <p>The plugin runs the local <code>pegg</code> binary over the Agent Client Protocol.</p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <p>0.2.0 — Initial IntelliJ Platform release with chat, sessions, tools, subagents,
+        permissions, attachments, voice, editor actions, and binary management.</p>
+    ]]></change-notes>
+
+    <idea-version since-build="253.1"/>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lang</depends>
+    <depends>com.intellij.modules.jcef</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Pegg"
+                    anchor="right"
+                    icon="icons/peggToolWindow.svg"
+                    factoryClass="dev.pegg.intellij.ui.PeggToolWindowFactory"/>
+
+        <applicationConfigurable id="dev.pegg.settings"
+                                displayName="Pegg"
+                                parentId="tools"
+                                instance="dev.pegg.intellij.settings.PeggConfigurable"/>
+
+        <statusBarWidgetFactory id="PeggStatus"
+                                implementation="dev.pegg.intellij.integrations.PeggStatusBarWidgetFactory"/>
+
+        <notificationGroup id="Pegg"
+                           displayType="BALLOON"
+                           isLogByDefault="true"/>
+
+        <intentionAction>
+            <className>dev.pegg.intellij.actions.PeggExplainIntention</className>
+            <category>Pegg</category>
+        </intentionAction>
+        <intentionAction>
+            <className>dev.pegg.intellij.actions.PeggFixIntention</className>
+            <category>Pegg</category>
+        </intentionAction>
+        <intentionAction>
+            <className>dev.pegg.intellij.actions.PeggReviewIntention</className>
+            <category>Pegg</category>
+        </intentionAction>
+        <intentionAction>
+            <className>dev.pegg.intellij.actions.PeggGenerateTestsIntention</className>
+            <category>Pegg</category>
+        </intentionAction>
+        <intentionAction>
+            <className>dev.pegg.intellij.actions.PeggAddToChatIntention</className>
+            <category>Pegg</category>
+        </intentionAction>
+        <intentionAction>
+            <className>dev.pegg.intellij.actions.PeggExplainDiagnosticIntention</className>
+            <category>Pegg</category>
+        </intentionAction>
+        <intentionAction>
+            <className>dev.pegg.intellij.actions.PeggFixDiagnosticIntention</className>
+            <category>Pegg</category>
+        </intentionAction>
+    </extensions>
+
+    <actions>
+        <group id="Pegg.EditorGroup" text="Pegg" popup="true" icon="icons/peggToolWindow.svg">
+            <action id="Pegg.ExplainSelection" class="dev.pegg.intellij.actions.PeggExplainSelectionAction"
+                    text="Explain Selection" description="Explain the selected code with Pegg">
+                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt E"/>
+                <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt E"/>
+            </action>
+            <action id="Pegg.EditSelection" class="dev.pegg.intellij.actions.PeggEditSelectionAction"
+                    text="Edit Selection…" description="Apply a custom instruction to the selected code">
+                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt X"/>
+                <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt X"/>
+            </action>
+            <action id="Pegg.AskSelection" class="dev.pegg.intellij.actions.PeggAskSelectionAction"
+                    text="Ask About Selection…" description="Ask Pegg a question about the selection">
+                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt Q"/>
+                <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt Q"/>
+            </action>
+            <separator/>
+            <action id="Pegg.FixSelection" class="dev.pegg.intellij.actions.PeggFixSelectionAction"
+                    text="Fix Selection" description="Find and fix bugs in the selection"/>
+            <action id="Pegg.FindBugs" class="dev.pegg.intellij.actions.PeggFindBugsAction"
+                    text="Find Bugs in Selection" description="Report correctness issues"/>
+            <action id="Pegg.ReviewSelection" class="dev.pegg.intellij.actions.PeggReviewSelectionAction"
+                    text="Review Selection" description="Review the selection"/>
+            <action id="Pegg.SecurityReview" class="dev.pegg.intellij.actions.PeggSecurityReviewAction"
+                    text="Security Review" description="Review the selection for vulnerabilities"/>
+            <separator/>
+            <action id="Pegg.Refactor" class="dev.pegg.intellij.actions.PeggRefactorAction"
+                    text="Refactor Selection" description="Refactor the selection"/>
+            <action id="Pegg.Optimize" class="dev.pegg.intellij.actions.PeggOptimizeAction"
+                    text="Optimize Selection" description="Optimize the selection"/>
+            <action id="Pegg.DocumentSelection" class="dev.pegg.intellij.actions.PeggDocumentSelectionAction"
+                    text="Document Selection" description="Add or improve documentation"/>
+            <action id="Pegg.GenerateTests" class="dev.pegg.intellij.actions.PeggGenerateTestsAction"
+                    text="Generate Tests" description="Write tests for the selection"/>
+            <separator/>
+            <action id="Pegg.AddSelectionToChat" class="dev.pegg.intellij.actions.PeggAddSelectionToChatAction"
+                    text="Add Selection to Pegg Chat" description="Attach the selection to the composer"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </group>
+
+        <group id="Pegg.ProjectGroup" text="Pegg" popup="true" icon="icons/peggToolWindow.svg">
+            <action id="Pegg.ExplainFile" class="dev.pegg.intellij.actions.PeggExplainFileAction"
+                    text="Explain File" description="Explain this file with Pegg"/>
+            <action id="Pegg.EditFile" class="dev.pegg.intellij.actions.PeggEditFileAction"
+                    text="Edit File…" description="Apply a custom instruction to this file"/>
+            <action id="Pegg.AskFile" class="dev.pegg.intellij.actions.PeggAskFileAction"
+                    text="Ask About File…" description="Ask Pegg about this file"/>
+            <action id="Pegg.ReviewFile" class="dev.pegg.intellij.actions.PeggReviewFileAction"
+                    text="Review File" description="Review this file"/>
+            <action id="Pegg.DocumentFile" class="dev.pegg.intellij.actions.PeggDocumentFileAction"
+                    text="Document File" description="Add or improve documentation"/>
+            <action id="Pegg.GenerateTestsForFile" class="dev.pegg.intellij.actions.PeggGenerateTestsForFileAction"
+                    text="Generate Tests for File" description="Write tests for this file"/>
+            <action id="Pegg.FixDiagnostics" class="dev.pegg.intellij.actions.PeggFixDiagnosticsAction"
+                    text="Fix All Diagnostics in File" description="Fix errors and warnings in this file"/>
+            <action id="Pegg.AddFileToChat" class="dev.pegg.intellij.actions.PeggAddFileToChatAction"
+                    text="Add File to Pegg Chat" description="Attach this file to the composer"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
+        </group>
+
+        <group id="Pegg.ToolsGroup" text="Pegg" popup="true" icon="icons/peggToolWindow.svg">
+            <action id="Pegg.OpenChat" class="dev.pegg.intellij.actions.PeggOpenChatAction"
+                    text="Open Pegg Chat" description="Open the Pegg tool window">
+                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt P"/>
+                <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt P"/>
+            </action>
+            <action id="Pegg.NewSession" class="dev.pegg.intellij.actions.PeggNewSessionAction"
+                    text="New Session" description="Start a new Pegg session">
+                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt N"/>
+                <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt N"/>
+            </action>
+            <action id="Pegg.Stop" class="dev.pegg.intellij.actions.PeggStopAction"
+                    text="Stop Agent" description="Cancel the running Pegg agent"/>
+            <action id="Pegg.SelectMode" class="dev.pegg.intellij.actions.PeggSelectModeAction"
+                    text="Select Mode" description="Choose Auto, Plan, or Build">
+                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt M"/>
+                <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt M"/>
+            </action>
+            <action id="Pegg.SelectModel" class="dev.pegg.intellij.actions.PeggSelectModelAction"
+                    text="Select Model" description="Choose a provider and model"/>
+            <action id="Pegg.AiActions" class="dev.pegg.intellij.actions.PeggAiActionsAction"
+                    text="AI Actions…" description="Selection or file actions">
+                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt A"/>
+                <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt A"/>
+            </action>
+            <separator/>
+            <action id="Pegg.ResumeSession" class="dev.pegg.intellij.actions.PeggResumeSessionAction"
+                    text="Resume Session" description="Load a previous Pegg session"/>
+            <action id="Pegg.RenameSession" class="dev.pegg.intellij.actions.PeggRenameSessionAction"
+                    text="Rename Session" description="Rename a Pegg session"/>
+            <action id="Pegg.DeleteSession" class="dev.pegg.intellij.actions.PeggDeleteSessionAction"
+                    text="Delete Session" description="Delete a Pegg session"/>
+            <action id="Pegg.RefreshSessions" class="dev.pegg.intellij.actions.PeggRefreshSessionsAction"
+                    text="Refresh Sessions" description="Refresh the sessions list"/>
+            <separator/>
+            <action id="Pegg.ReviewChanges" class="dev.pegg.intellij.actions.PeggReviewChangesAction"
+                    text="Review Changes" description="Review the working-tree diff"/>
+            <action id="Pegg.ReviewCurrentFile" class="dev.pegg.intellij.actions.PeggReviewCurrentFileAction"
+                    text="Review Current File Changes" description="Review the working-tree diff for the current file"/>
+            <separator/>
+            <action id="Pegg.Login" class="dev.pegg.intellij.actions.PeggLoginAction"
+                    text="Provider Login" description="Run pegg login"/>
+            <action id="Pegg.Doctor" class="dev.pegg.intellij.actions.PeggDoctorAction"
+                    text="Run Doctor" description="Run pegg doctor"/>
+            <action id="Pegg.Update" class="dev.pegg.intellij.actions.PeggUpdateAction"
+                    text="Check for Updates" description="Run pegg update"/>
+            <action id="Pegg.Team" class="dev.pegg.intellij.actions.PeggTeamAction"
+                    text="Connect Team" description="Run pegg team"/>
+            <action id="Pegg.OpenGlobalConfig" class="dev.pegg.intellij.actions.PeggOpenGlobalConfigAction"
+                    text="Open Global Config" description="Open ~/.pegg/pegg.json"/>
+            <action id="Pegg.OpenProjectConfig" class="dev.pegg.intellij.actions.PeggOpenProjectConfigAction"
+                    text="Open Project .pegg Folder" description="Create and reveal the project .pegg folder"/>
+            <action id="Pegg.ShowLogs" class="dev.pegg.intellij.actions.PeggShowLogsAction"
+                    text="Show Logs" description="Show the Pegg log"/>
+            <action id="Pegg.RestartServer" class="dev.pegg.intellij.actions.PeggRestartServerAction"
+                    text="Restart Server" description="Restart the Pegg ACP server"/>
+            <action id="Pegg.InstallBinary" class="dev.pegg.intellij.actions.PeggInstallBinaryAction"
+                    text="Install or Update Binary" description="Download a verified Pegg binary"/>
+            <action id="Pegg.DiagnoseBinary" class="dev.pegg.intellij.actions.PeggDiagnoseBinaryAction"
+                    text="Diagnose Binary" description="Show binary resolution diagnostics"/>
+            <action id="Pegg.Settings" class="dev.pegg.intellij.actions.PeggSettingsAction"
+                    text="Settings…" description="Open Pegg settings"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </group>
+
+        <group id="Pegg.SessionsGroup" text="Pegg" popup="true">
+            <action id="Pegg.SessionResume" class="dev.pegg.intellij.actions.PeggResumeSessionAction"
+                    text="Resume Session"/>
+            <action id="Pegg.SessionRename" class="dev.pegg.intellij.actions.PeggRenameSessionAction"
+                    text="Rename Session…"/>
+            <action id="Pegg.SessionDelete" class="dev.pegg.intellij.actions.PeggDeleteSessionAction"
+                    text="Delete Session…"/>
+            <action id="Pegg.SessionRefresh" class="dev.pegg.intellij.actions.PeggRefreshSessionsAction"
+                    text="Refresh"/>
+        </group>
+    </actions>
+</idea-plugin>

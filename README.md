@@ -96,6 +96,21 @@ npm ci
 npm run build
 ```
 
+### JetBrains IDEs
+
+The Pegg plugin for IntelliJ IDEA, PhpStorm, WebStorm, PyCharm, CLion, Android
+Studio, and other IntelliJ Platform IDEs lives in [`pkg/intellij`](pkg/intellij).
+It runs the same agent over ACP and uses the same chat UI as the VS Code
+extension, with a Sessions tab, editor actions, intentions, voice input, and
+binary management. See the [IntelliJ guide](docs/pegg/usage/intellij.md).
+
+```bash
+npm --prefix pkg/vscode ci
+cd pkg/intellij
+npm ci
+./gradlew buildPlugin
+```
+
 ---
 
 ## What It Actually Does

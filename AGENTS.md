@@ -13,6 +13,7 @@ Pegg is a provider-agnostic AI coding agent written in Go. It runs as an interac
 - `docs/` - Documentation (system, SDK, plugin guides)
 - `pkg/sdk/` - Embeddable Go SDK
 - `pkg/vscode/` - TypeScript VS Code extension (sidebar chat, `@pegg` chat participant, ACP client)
+- `pkg/intellij/` - Kotlin IntelliJ Platform plugin (JCEF chat reusing the VS Code webview, sessions, actions)
 - `.pegg/` - Project-specific config, plans, and subagent state
 - `.github/workflows/` - CI/CD pipelines (test, fmt, vet, release)
 
@@ -42,6 +43,11 @@ make run
 
 # Debug mode
 PEGG_DEBUG=1 ./bin/pegg
+
+# IntelliJ plugin
+cd pkg/intellij
+./gradlew test buildPlugin      # zip in build/distributions/
+./gradlew runIde                # development IDE
 ```
 
 ## Code Style & Conventions

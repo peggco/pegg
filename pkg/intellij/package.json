@@ -1,0 +1,14 @@
+{
+  "name": "pegg-intellij-webview",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build-webview.mjs",
+    "watch": "node build-webview.mjs --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.2"
+  }
+}
