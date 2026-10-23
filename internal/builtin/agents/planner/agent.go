@@ -48,7 +48,7 @@ func newPlannerAgent(fs *vfs.VFS) (*agent.Agent, error) {
 		agent.WithMaxTokens(agentMaxTokens),
 		agent.WithMaxIterations(agentMaxIterations),
 	)
-	main.AttachReminder(plan.PlanModeReminder())
+	main.AttachReminder(plan.PlanModeReminder(plan.PlanExitNone))
 
 	return main, nil
 }

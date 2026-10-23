@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/peggco/pegg/internal/agent"
@@ -19,10 +20,17 @@ func TestApplyModePlanAttachesReminderAndRestrictsWrites(t *testing.T) {
 	a := agent.New("test-agent")
 	ApplyMode(a, fs, agent.ModePlan)
 
-	if r := a.StandingReminder(); r == nil || r.Tag != "plan_mode" {
+	r := a.StandingReminder()
+	if r == nil || r.Tag != "plan_mode" {
 		t.Fatalf("plan mode reminder not attached: %+v", r)
 	}
-	if _, err := fs.Write(".pegg/plans/plan.md", []byte("plan")); err != nil {
+	if !strings.Contains(r.Content, "Phase 5: Present the Plan") {
+		t.Errorf("reminder = %q, want present-the-plan phase", r.Content)
+	}
+	if strings.Contains(r.Content, "Phase 5: Call ExitPlanMode") {
+		t.Errorf("reminder = %q, must not tell the agent to call exitplanmode", r.Content)
+	}
+	if _, err := fs.Write(".pegg/plans/example-feature.md", []byte("plan")); err != nil {
 		t.Fatalf("write to plans: %v", err)
 	}
 	if _, err := fs.Write("main.go", []byte("x")); err == nil {

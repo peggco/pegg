@@ -56,7 +56,7 @@ The workflow:
 
 1. **Decompose** the task into independent chunks that can be parallelized.
 2. **Explore** the codebase to map the affected areas.
-3. **Plan** by writing a plan file under `.pegg/plans/YYYY-MM-DD-<feature>.md`.
+3. **Plan** by writing a plan file under `.pegg/plans/<feature-name>.md`.
 4. **Delegate** chunks to explorer, planner, and developer subagents via the
    `task` tool, running them concurrently.
 5. **Verify** the results before accepting them.

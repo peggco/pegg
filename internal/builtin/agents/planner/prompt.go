@@ -60,7 +60,7 @@ func generatePlannerPrompt(providerID, modelID string) (string, error) {
 		Heading(1, "Writing Plans").
 		Paragraph("Write comprehensive implementation plans assuming the engineer has zero context for our codebase and questionable taste. Document everything they need to know: which files to touch for each task, code, testing, docs they might need to check, how to test it. Give them the whole plan as bite-sized tasks. DRY. YAGNI. TDD. Frequent commits.").
 		Paragraph("Assume they are a skilled developer, but know almost nothing about our toolset or problem domain. Assume they don't know good test design very well.").
-		Paragraph("**Save plans to:** `.pegg/plans/YYYY-MM-DD-<feature-name>.md`").
+		Paragraph("**Save plans to:** `.pegg/plans/<feature-name>.md`").
 		List("(You do not have write permission for folders outside the .pegg/plans folder)").
 		Heading(2, "Scope Check").
 		Paragraph("If the spec covers multiple independent subsystems, it should have been broken into sub-project specs during brainstorming. If it wasn't, suggest breaking this into separate plans — one per subsystem. Each plan should produce working, testable software on its own.").
@@ -245,7 +245,7 @@ todo-3
 		Paragraph("The table MUST contain exactly these columns: `Todo ID`, `Title`, `Description`, `Priority`, `Depends On`, and `Parallelizable Tasks`.").
 		List("`Todo ID`: The exact persistent todo ID returned or used by the todo system.",
 			"`Title`: The exact concise todo title.",
-			"`Description`: The path to the feature's plan document and task reference (e.g., `Plan: .pegg/plans/YYYY-MM-DD-feature.md (Task 1)`). Do NOT list code file paths here.",
+			"`Description`: The path to the feature's plan document and task reference (e.g., `Plan: .pegg/plans/feature.md (Task 1)`). Do NOT list code file paths here.",
 			"`Priority`: The todo priority (`high`, `medium`, or `low`).",
 			"`Depends On`: The exact todo IDs that must be completed before this todo can start. Use `—` when there are no dependencies.",
 			"`Parallelizable Tasks`: The todo IDs and titles of tasks that can safely be executed at the same time as this todo based on the dependency graph. Use `—` when there are no parallelizable tasks.").
@@ -255,20 +255,20 @@ todo-3
 		Heading(2, "Todo Table Example").
 		Code("markdown", `| Todo ID | Title | Description | Priority | Depends On | Parallelizable Tasks |
 |---|---|---|---|---|---|
-| todo-1 | Add config foundation | Define YAML structs. Plan: '.pegg/plans/2026-08-27-auth.md' (Task 1) | high | — | todo-2 |
-| todo-2 | Add domain model | Define User entities. Plan: '.pegg/plans/2026-08-27-auth.md' (Task 2) | high | — | todo-1 |
-| todo-3 | Auth Providers | Interface and factories. Plan: '.pegg/plans/2026-08-27-auth.md' (Task 3) | high | todo-1, todo-2 | — |
-| todo-3.1 | Google Provider | Google OAuth2 client. Plan: '.pegg/plans/2026-08-27-auth.md' (Task 3.1) | medium | todo-3 | todo-3.2, todo-3.3, todo-3.4 |
-| todo-3.2 | GitHub Provider | GitHub OAuth2 client. Plan: '.pegg/plans/2026-08-27-auth.md' (Task 3.2) | medium | todo-3 | todo-3.1, todo-3.3, todo-3.4 |
-| todo-3.3 | Apple Provider | Apple SignIn client. Plan: '.pegg/plans/2026-08-27-auth.md' (Task 3.3) | low | todo-3 | todo-3.1, todo-3.2, todo-3.4 |
-| todo-3.4 | Magic Link | Email JWT auth. Plan: '.pegg/plans/2026-08-27-auth.md' (Task 3.4) | medium | todo-3 | todo-3.1, todo-3.2, todo-3.3 |
-| todo-4 | Auth Controller | REST API endpoints. Plan: '.pegg/plans/2026-08-27-auth.md' (Task 4) | high | todo-3.1, todo-3.2, todo-3.3, todo-3.4 | — |`).
+| todo-1 | Add config foundation | Define YAML structs. Plan: '.pegg/plans/auth.md' (Task 1) | high | — | todo-2 |
+| todo-2 | Add domain model | Define User entities. Plan: '.pegg/plans/auth.md' (Task 2) | high | — | todo-1 |
+| todo-3 | Auth Providers | Interface and factories. Plan: '.pegg/plans/auth.md' (Task 3) | high | todo-1, todo-2 | — |
+| todo-3.1 | Google Provider | Google OAuth2 client. Plan: '.pegg/plans/auth.md' (Task 3.1) | medium | todo-3 | todo-3.2, todo-3.3, todo-3.4 |
+| todo-3.2 | GitHub Provider | GitHub OAuth2 client. Plan: '.pegg/plans/auth.md' (Task 3.2) | medium | todo-3 | todo-3.1, todo-3.3, todo-3.4 |
+| todo-3.3 | Apple Provider | Apple SignIn client. Plan: '.pegg/plans/auth.md' (Task 3.3) | low | todo-3 | todo-3.1, todo-3.2, todo-3.4 |
+| todo-3.4 | Magic Link | Email JWT auth. Plan: '.pegg/plans/auth.md' (Task 3.4) | medium | todo-3 | todo-3.1, todo-3.2, todo-3.3 |
+| todo-4 | Auth Controller | REST API endpoints. Plan: '.pegg/plans/auth.md' (Task 4) | high | todo-3.1, todo-3.2, todo-3.3, todo-3.4 | — |`).
 		Heading(2, "Final Response Order").
 		Paragraph("The final response must follow this order:").
 		OrderedList("**Implementation Summary** — briefly explain what is being built and the architectural approach.",
 			"**Key Decisions** — summarize important design decisions, constraints, and trade-offs.",
 			"**Execution Strategy** — explain dependency phases and where multiple subagents can work concurrently.",
-			"**Plan File** — identify the exact `.pegg/plans/YYYY-MM-DD-<feature-name>.md` path.",
+			"**Plan File** — identify the exact `.pegg/plans/<feature-name>.md` path.",
 			"**Todo Synchronization** — state that the persistent todo hierarchy was created or updated from the final plan.",
 			"**Todo Table** — provide the complete Markdown todo table as the final section of the response.").
 		Paragraph("Do not omit todos from the table. Do not invent todos that were not created with `todowrite`. The table is a human-readable projection of the persistent todo state and must match it exactly at the time the plan is finalized.").

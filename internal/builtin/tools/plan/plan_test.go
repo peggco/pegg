@@ -31,6 +31,38 @@ func TestEnterPlanModeAttachesReminder(t *testing.T) {
 	if !strings.Contains(r.Content, "READ-ONLY") {
 		t.Errorf("content = %q, want read-only constraint", r.Content)
 	}
+	if !strings.Contains(r.Content, "Phase 5: Call ExitPlanMode") {
+		t.Errorf("content = %q, want ExitPlanMode phase in auto mode", r.Content)
+	}
+	if !strings.Contains(r.Content, "`.pegg/plans/<feature-name>.md`") {
+		t.Errorf("content = %q, want feature-specific plan path", r.Content)
+	}
+	if strings.Contains(r.Content, "plans/plan.md") {
+		t.Errorf("content = %q, must not point at plans/plan.md", r.Content)
+	}
+}
+
+func TestPlanModeReminderVariants(t *testing.T) {
+	tool := PlanModeReminder(PlanExitTool)
+	if !strings.Contains(tool.Content, "Phase 5: Call ExitPlanMode") {
+		t.Errorf("PlanExitTool content = %q, want exitplanmode phase", tool.Content)
+	}
+
+	message := PlanModeReminder(PlanExitMessage)
+	if !strings.Contains(message.Content, "Phase 5: Present the Plan") {
+		t.Errorf("PlanExitMessage content = %q, want present-the-plan phase", message.Content)
+	}
+	if !strings.Contains(message.Content, "switch to build mode") {
+		t.Errorf("PlanExitMessage content = %q, want build-mode request", message.Content)
+	}
+	if strings.Contains(message.Content, "Phase 5: Call ExitPlanMode") {
+		t.Errorf("PlanExitMessage content = %q, must not tell the agent to call exitplanmode", message.Content)
+	}
+
+	none := PlanModeReminder(PlanExitNone)
+	if strings.Contains(none.Content, "Phase 5") {
+		t.Errorf("PlanExitNone content = %q, want no exit phase", none.Content)
+	}
 }
 
 func TestExitPlanModeDetachesReminder(t *testing.T) {
@@ -72,7 +104,7 @@ func TestPlanModeRestrictsWritesToPlans(t *testing.T) {
 	if _, err := enterplanmodeTool(fs).Execute(ctx, "{}"); err != nil {
 		t.Fatalf("enterplanmode: %v", err)
 	}
-	if _, err := fs.Write(".pegg/plans/plan.md", []byte("plan")); err != nil {
+	if _, err := fs.Write(".pegg/plans/example-feature.md", []byte("plan")); err != nil {
 		t.Fatalf("write to plans while in plan mode: %v", err)
 	}
 	if _, err := fs.Write("main.go", []byte("x")); err == nil {
