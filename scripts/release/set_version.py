@@ -245,7 +245,19 @@ class Sync:
             capture_output=True,
         )
         if exists.returncode == 0:
-            print(f"Tag {tag} already exists; leaving it unchanged.")
+            tag_commit = exists.stdout.strip()
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            ).stdout.strip()
+            if tag_commit != head:
+                raise SystemExit(
+                    f"Tag {tag} points to {tag_commit}, but HEAD is {head}. "
+                    "Delete or move the tag, or choose a new version."
+                )
+            print(f"Tag {tag} already points to HEAD; leaving it unchanged.")
             return
         self.git("tag", tag)
 
@@ -315,6 +327,12 @@ def main() -> None:
     if args.check:
         sync.check()
         return
+
+    if args.tag and not args.commit:
+        print(
+            "warning: --tag without --commit tags HEAD; make sure the synced changes are committed.",
+            file=sys.stderr,
+        )
 
     print(f"Pegg version -> {version}")
     sync.apply()
