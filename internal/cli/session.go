@@ -20,6 +20,7 @@ func (c *CLI) newSessionCommand() *cobra.Command {
 	cmd.AddCommand(
 		c.newSessionListCommand(),
 		c.newSessionShowCommand(),
+		c.newSessionCancelCommand(),
 	)
 	return cmd
 }
@@ -123,4 +124,32 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return strings.TrimSpace(s[:n-3]) + "..."
+}
+
+func (c *CLI) newSessionCancelCommand() *cobra.Command {
+	var runID string
+	cmd := &cobra.Command{
+		Use:   "cancel <session-id>",
+		Short: "Cancel a run that is active in any client",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if c.runCoord == nil {
+				return fmt.Errorf("cli: shared run store unavailable")
+			}
+			if runID == "" {
+				active, err := c.runCoord.Active(args[0])
+				if err != nil || active == nil {
+					return fmt.Errorf("cli: session %s is not running", args[0])
+				}
+				runID = active.ID
+			}
+			if err := c.runCoord.Cancel(runID); err != nil {
+				return fmt.Errorf("cli: cancel run: %w", err)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "cancel requested for session %s (run %s)\n", args[0], runID)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&runID, "run", "", "run ID to cancel (defaults to the session's active run)")
+	return cmd
 }

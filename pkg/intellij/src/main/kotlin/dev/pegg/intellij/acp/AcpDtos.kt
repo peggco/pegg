@@ -89,6 +89,9 @@ data class SessionUpdate(
     val agentName: String? = null,
     val error: String? = null,
     val contents: List<ToolCallContent>? = null,
+    val runId: String? = null,
+    val runState: String? = null,
+    val baseSeq: Int? = null,
 )
 
 @Serializable

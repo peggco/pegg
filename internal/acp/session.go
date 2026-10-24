@@ -150,6 +150,7 @@ func (s *Server) handleSessionNew(ctx context.Context, params json.RawMessage) (
 	}
 
 	s.addSession(acpSess)
+	s.startSessionFollow(acpSess)
 	s.notifyMode(acpID, string(mode))
 	s.notifyCommands(acpID)
 	return SessionNewResult{
@@ -183,8 +184,21 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 	orch.SetMode(mode)
 	s.applyStoredModel(orch, vs)
 
+	var active *session.Run
+	if s.runs != nil {
+		active, _ = s.runs.Active(vs.ID)
+	}
 	msgs, err := s.sessions.Messages(vs.ID)
 	if err == nil {
+		if active != nil && active.BaseSeq > 0 {
+			filtered := make([]session.Message, 0, len(msgs))
+			for _, m := range msgs {
+				if m.Seq <= active.BaseSeq {
+					filtered = append(filtered, m)
+				}
+			}
+			msgs = filtered
+		}
 		for _, msg := range msgs {
 			updateType := "agent_message_chunk"
 			if msg.Role == llm.RoleUser {
@@ -251,6 +265,7 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 
 	s.notifyMode(string(req.SessionId), string(mode))
 	s.notifyCommands(string(req.SessionId))
+	s.startSessionFollow(acpSess)
 
 	return nil, nil
 }
@@ -293,6 +308,7 @@ func (s *Server) handleSessionResume(ctx context.Context, params json.RawMessage
 
 	s.notifyMode(string(req.SessionId), string(mode))
 	s.notifyCommands(string(req.SessionId))
+	s.startSessionFollow(acpSess)
 
 	return map[string]any{}, nil
 }
@@ -301,6 +317,9 @@ func (s *Server) handleSessionDelete(ctx context.Context, params json.RawMessage
 	var req SessionDeleteParams
 	if err := json.Unmarshal(params, &req); err != nil {
 		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid session/delete params"}
+	}
+	if s.runs != nil {
+		_ = s.runs.CancelSession(string(req.SessionId))
 	}
 	if err := s.sessions.Delete(string(req.SessionId)); err != nil {
 		return nil, &RPCError{Code: ErrCodeInternal, Message: "failed to delete session"}

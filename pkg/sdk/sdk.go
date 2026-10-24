@@ -15,9 +15,11 @@ import (
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/decision"
+	"github.com/peggco/pegg/internal/live"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/memory"
 	"github.com/peggco/pegg/internal/router"
+	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/schedule"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/vfs"
@@ -44,21 +46,24 @@ type Options struct {
 }
 
 type Engine struct {
-	opts      Options
-	cfg       *Config
-	bus       event.Bus
-	log       *Logger
-	llm       *llm.Manager
-	decisions *decision.Manager
-	memory    *memory.Manager
-	router    *router.Router
-	sessions  *session.Manager
-	rec       *session.Recorder
-	sched     *schedule.Manager
-	fs        *VFS
-	store     cache.Cache
-	mu        sync.Mutex
-	closed    bool
+	opts             Options
+	cfg              *Config
+	bus              event.Bus
+	log              *Logger
+	llm              *llm.Manager
+	decisions        *decision.Manager
+	memory           *memory.Manager
+	router           *router.Router
+	sessions         *session.Manager
+	rec              *session.Recorder
+	runs             *runpkg.Coordinator
+	live             *live.Hub
+	sched            *schedule.Manager
+	stopSessionWatch func()
+	fs               *VFS
+	store            cache.Cache
+	mu               sync.Mutex
+	closed           bool
 }
 
 var (
@@ -150,6 +155,9 @@ func (e *Engine) init() error {
 			return fmt.Errorf("sdk: start session recorder: %w", err)
 		}
 	}
+	e.runs = runpkg.New(e.sessions, e.bus, e.log)
+	e.runs.StartMaintenance()
+	e.live = live.New(e.runs, e.sessions, e.bus, e.log)
 
 	fsOpts := vfs.Options{Log: e.log}
 	if path, err := vfs.SnapshotPathIn(e.configDir(), e.workspaceRoot()); err == nil {
@@ -197,6 +205,12 @@ func (e *Engine) init() error {
 func (e *Engine) cleanup() {
 	if e == nil {
 		return
+	}
+	if e.live != nil {
+		e.live.Close()
+	}
+	if e.runs != nil {
+		e.runs.Stop()
 	}
 	if e.rec != nil {
 		_ = e.rec.Stop(e.bus)

@@ -60,6 +60,9 @@ type SessionUpdate struct {
 	AgentName     string             `json:"agentName,omitempty"`
 	Error         string             `json:"error,omitempty"`
 	Contents      []ToolCallContent  `json:"contents,omitempty"`
+	RunID         string             `json:"runId,omitempty"`
+	RunState      string             `json:"runState,omitempty"`
+	BaseSeq       int                `json:"baseSeq,omitempty"`
 }
 
 type ToolCallContent struct {

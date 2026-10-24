@@ -63,6 +63,7 @@ func (c *Connector) registerSessionMethods() {
 	c.dispatch.register("session.revert", ScopeSessionsWrite, c.handleSessionRevert)
 	c.dispatch.register("session.undo_revert", ScopeSessionsWrite, c.handleSessionUndoRevert)
 	c.dispatch.register("session.fork", ScopeSessionsWrite, c.handleSessionFork)
+	c.dispatch.register("run.attach", ScopeChat, c.handleRunAttach)
 }
 
 type sessionListParams struct {

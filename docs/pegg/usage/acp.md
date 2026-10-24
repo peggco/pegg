@@ -82,8 +82,16 @@ handler does not apply the HTTP API's auth or CORS middleware.
 | `stt/transcribe` | `audio` (base64), `mediaType?`, `fileName?` | `{ "text": "...", "provider": "...", "model": "..." }` |
 | `stt/record/start` | — | `{ "recording": true }` |
 | `stt/record/stop` | — | `{ "text": "...", "provider": "...", "model": "..." }` |
-| `session/cancel` | `sessionId` | no response |
+| `session/cancel` | `sessionId` | no response (cancels a local or remote run) |
 | `$/cancelRequest` | — | no response (no-op) |
+
+`session/load` and `session/resume` also attach to a run that is already active
+in another client: the server replays the shared run journal as `session/update`
+notifications and keeps streaming it. The ACP session stays subscribed after the
+run ends, so a later message started from another client is streamed into the
+editor as well. It emits a `run_state_update` update
+(`runId`, `runState`, `baseSeq`) so clients can show the running state. A
+`session/prompt` on a session that is already running returns an error.
 
 Unknown methods return `-32601`.
 

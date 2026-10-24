@@ -51,6 +51,9 @@ export interface SessionUpdate {
   agentName?: string;
   error?: string;
   contents?: ToolCallContent[];
+  runId?: string;
+  runState?: string;
+  baseSeq?: number;
 }
 
 export interface PlanEntry {

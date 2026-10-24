@@ -68,3 +68,41 @@ type SessionCompacted struct {
 	Strategy        string
 	MessageCount    int
 }
+
+const (
+	TopicRunStarted     = "run.started"
+	TopicRunFinished    = "run.finished"
+	TopicRunAskResolved = "run.ask.resolved"
+	TopicSessionChanged = "session.changed"
+)
+
+type RunStarted struct {
+	RunID     string
+	SessionID string
+	AgentID   string
+	AgentName string
+	Provider  string
+	Model     string
+	BaseSeq   int
+}
+
+type RunFinished struct {
+	RunID     string
+	SessionID string
+	AgentID   string
+	State     RunState
+	Error     string
+}
+
+type RunAskResolved struct {
+	RunID     string
+	SessionID string
+	AgentID   string
+	Answers   map[string]string
+}
+
+type SessionChanged struct {
+	SessionID string
+	Kind      string
+	Origin    string
+}

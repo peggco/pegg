@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/llm"
+	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 )
 
@@ -143,6 +145,20 @@ func (e *Engine) chat(ctx context.Context, req ChatRequest, handler func(ChatEve
 	}
 
 	history := append([]Message(nil), req.History...)
+	if req.SessionID == "" && e.rec != nil {
+		dir := e.workspaceRoot()
+		sess, cerr := e.sessions.Create(session.CreateOptions{
+			Provider:        prov.Name(),
+			Model:           mdl.ID,
+			ReasoningEffort: orch.ReasoningEffort,
+			Mode:            string(mode),
+			ProjectDir:      dir,
+		})
+		if cerr != nil {
+			return ChatResponse{}, fmt.Errorf("sdk: create session: %w", cerr)
+		}
+		req.SessionID = sess.ID
+	}
 	if req.SessionID != "" {
 		msgs, err := e.sessions.Messages(req.SessionID)
 		if err != nil {
@@ -153,6 +169,24 @@ func (e *Engine) chat(ctx context.Context, req ChatRequest, handler func(ChatEve
 			AgentID:   orch.ID,
 			SessionID: req.SessionID,
 		})
+	}
+
+	var lease *runpkg.Lease
+	if e.runs != nil && req.SessionID != "" {
+		lease, err = e.runs.Claim(ctx, runpkg.ClaimRequest{
+			SessionID: req.SessionID,
+			AgentID:   orch.ID,
+			AgentName: orch.Name,
+			Provider:  prov.Name(),
+			Model:     mdl.ID,
+			BaseSeq:   e.runs.BaseSeq(req.SessionID),
+		})
+		if err != nil {
+			if errors.Is(err, session.ErrRunBusy) {
+				return ChatResponse{}, ErrSessionBusy
+			}
+			return ChatResponse{}, fmt.Errorf("sdk: claim session: %w", err)
+		}
 	}
 
 	sessCh := make(chan string, 1)
@@ -176,7 +210,9 @@ func (e *Engine) chat(ctx context.Context, req ChatRequest, handler func(ChatEve
 	}
 
 	var result *agent.RunResult
-	if len(history) > 0 {
+	if e.runs != nil {
+		result, err = e.runs.Stream(ctx, lease, orch, req.Input, history, stream)
+	} else if len(history) > 0 {
 		result, err = orch.ResumeStream(ctx, req.Input, history, stream)
 	} else {
 		result, err = orch.RunStream(ctx, req.Input, stream)
@@ -185,10 +221,12 @@ func (e *Engine) chat(ctx context.Context, req ChatRequest, handler func(ChatEve
 		return ChatResponse{}, fmt.Errorf("sdk: run: %w", err)
 	}
 
-	sessID := ""
-	select {
-	case sessID = <-sessCh:
-	default:
+	sessID := req.SessionID
+	if sessID == "" {
+		select {
+		case sessID = <-sessCh:
+		default:
+		}
 	}
 
 	resp := ChatResponse{

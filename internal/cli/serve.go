@@ -57,7 +57,7 @@ With --acp --stdio starts the ACP server over stdio (stdin/stdout).`,
 }
 
 func (c *CLI) runHTTPServe() error {
-	srv := server.New(c.cfg, c.bus, c.log, c.fs, c.sessions, c.llmMgr, c.mcpMgr, c.lspMgr)
+	srv := server.New(c.cfg, c.bus, c.log, c.fs, c.sessions, c.llmMgr, c.mcpMgr, c.lspMgr, c.runCoord, c.liveHub)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -76,7 +76,7 @@ func (c *CLI) runHTTPServe() error {
 }
 
 func (c *CLI) runACPServe(stdio bool) error {
-	srv := acp.New(c.cfg, c.bus, c.log, c.fs, c.sessions, c.llmMgr)
+	srv := acp.New(c.cfg, c.bus, c.log, c.fs, c.sessions, c.llmMgr, c.runCoord, c.liveHub)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

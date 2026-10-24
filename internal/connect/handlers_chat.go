@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/peggco/pegg/internal/llm"
+	"github.com/peggco/pegg/internal/session"
 )
 
 func (c *Connector) registerChatMethods() {
@@ -101,4 +102,37 @@ func (c *Connector) handleRunAnswer(_ context.Context, req *Request) (any, error
 
 func (c *Connector) handleRunList(_ context.Context, _ *Request) (any, error) {
 	return map[string]any{"runs": c.runs.List()}, nil
+}
+
+type runAttachParams struct {
+	RunID     string `json:"run_id"`
+	SessionID string `json:"session_id"`
+	After     int64  `json:"after"`
+}
+
+func (c *Connector) handleRunAttach(_ context.Context, req *Request) (any, error) {
+	var p runAttachParams
+	_ = req.Decode(&p)
+	if p.RunID == "" {
+		p.RunID = req.RunID
+	}
+	if p.SessionID == "" {
+		p.SessionID = req.SessionID
+	}
+	if c.deps.Runs == nil {
+		return nil, &FrameError{Code: ErrCodeUnavailable, Message: "run store unavailable"}
+	}
+	var run *session.Run
+	var err error
+	if p.RunID != "" {
+		run, err = c.deps.Runs.Get(p.RunID)
+	} else if p.SessionID != "" {
+		run, err = c.deps.Runs.Active(p.SessionID)
+	}
+	if err != nil || run == nil {
+		return nil, &FrameError{Code: ErrCodeNotFound, Message: "run not found"}
+	}
+	info := runInfoFromRun(run)
+	c.enrichRun(&info)
+	return info, nil
 }

@@ -21,6 +21,7 @@ func (c *Connector) subscribeBus(bus event.Bus) error {
 	if err := bus.Subscribe(topicAgentAsk, c.onAgentAsk); err != nil {
 		return fmt.Errorf("connect: subscribe agent ask: %w", err)
 	}
+	_ = bus.Subscribe(agent.TopicAgentAskAnswer, c.onAgentAskAnswer)
 	_ = bus.Subscribe(agent.TopicAgentError, c.onAgentError)
 	_ = bus.Subscribe(agent.TopicErrorMessage, c.onErrorMessage)
 	_ = bus.Subscribe(agent.TopicErrorMessageFinished, c.onErrorMessageFinished)
@@ -143,6 +144,17 @@ func (c *Connector) onAgentAsk(e agent.AgentAsk) {
 		event = eventRunPermission
 	}
 	c.emit(event, run.sessionID, run.id, runAskPayload{AgentName: e.AgentName, Questions: e.Questions})
+}
+
+func (c *Connector) onAgentAskAnswer(e agent.AgentAskAnswer) {
+	run := c.runs.byAgent(e.AgentID)
+	if run == nil {
+		return
+	}
+	c.emit(eventRunAskResolved, run.sessionID, run.id, map[string]any{
+		"run_id":  run.id,
+		"answers": e.Answers,
+	})
 }
 
 func (c *Connector) onAgentError(e agent.AgentError) {

@@ -310,7 +310,7 @@ func newRunTestCLI(t *testing.T) (*CLI, *config.Config, *llm.Manager) {
 	}
 
 	addRunProvider(t, cfg, mgr, "runprov", "m1")
-	return New(bus, cfg, log, fs, sess, mgr, nil, nil, nil, nil, nil, nil, nil), cfg, mgr
+	return New(bus, cfg, log, fs, sess, mgr, nil, nil, nil, nil, nil, nil, nil, nil, nil), cfg, mgr
 }
 
 func addRunProvider(t *testing.T, cfg *config.Config, mgr *llm.Manager, name string, modelIDs ...string) {

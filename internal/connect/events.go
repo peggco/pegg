@@ -11,6 +11,7 @@ type runStartedPayload struct {
 	AgentID   string `json:"agent_id"`
 	Provider  string `json:"provider"`
 	Model     string `json:"model"`
+	BaseSeq   int    `json:"base_seq,omitempty"`
 }
 
 type runTokenPayload struct {

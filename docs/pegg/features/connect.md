@@ -43,7 +43,7 @@ That's it. The next time you open the website, your agent is already connected.
 
 | Page | What it gives you |
 |---|---|
-| **Connect** | Chat with the agent — sessions, streaming answers, reasoning blocks, tool cards, diffs, file attachments, and a composer that can stop a run |
+| **Connect** | Chat with the agent — sessions, streaming answers, reasoning blocks, tool cards, diffs, file attachments, and a composer that can stop a run. Runs started in the TUI/IDE are mirrored live, and opening a busy session attaches instead of forking a second run |
 | **Agents** | Every machine connected to your team: online/offline state, workspace, rename, granted scopes, revoke, re-enable, delete |
 | **Agent settings** | Change the provider, model, reasoning effort, permissions, compaction, memory, MCP servers, skills, rules, plugins — the same settings as the TUI, saved on the machine |
 | **Plan & Billing** | How many agents your plan allows, what is connected right now, and one-click **Add agents** |

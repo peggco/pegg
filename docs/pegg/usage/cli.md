@@ -46,6 +46,8 @@ pegg run --stt
 | `--show-thinking` | `false` | Print raw reasoning content instead of a `Thinking...` indicator |
 | `--show-subagent` | `false` | Print subagent messages instead of a `Subagent` indicator |
 | `--chat` | `false` | Keep chatting after the first run ends |
+| `--attach` | `false` | Attach to a session already running in another client (requires `--session`) |
+| `--follow` | `false` | With `--attach`, keep following later runs on the session |
 | `--stt` | `false` | Record voice; press Enter to stop and use the transcript as the message |
 | `--plan` | `false` | Start in plan mode (read-only planning) |
 | `--build` | `false` | Start in build mode (execute without plan tools) |
@@ -342,6 +344,7 @@ the only `config` subcommand.
 |---|---|
 | `pegg sessions list` | List sessions for the current project |
 | `pegg sessions show ID` | Show session metadata and messages |
+| `pegg sessions cancel ID` | Cancel the session's active run in any client |
 
 `list` flags:
 
@@ -355,6 +358,8 @@ the only `config` subcommand.
 ```bash
 pegg sessions list --all --search refactor
 pegg sessions show 3f2b1c8e-...
+pegg sessions cancel 3f2b1c8e-...
+pegg run --session 3f2b1c8e-... --attach   # follow a run owned by another client
 ```
 
 See [Sessions](../features/sessions.md).

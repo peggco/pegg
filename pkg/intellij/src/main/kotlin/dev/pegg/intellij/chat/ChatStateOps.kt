@@ -57,6 +57,7 @@ object ChatStateOps {
                 cost = update.cost?.amount ?: state.usage.cost,
             )
             "current_mode_update" -> if (update.mode != null) state.mode = update.mode
+            "run_state_update" -> state.running = update.runState == "running"
             "current_model_update" -> {
                 if (update.provider != null) state.provider = update.provider
                 if (update.model != null) state.model = update.model

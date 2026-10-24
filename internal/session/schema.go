@@ -68,14 +68,72 @@ var (
 		{"messages", "TEXT NOT NULL"},
 	}
 
+	runColumns = []columnDef{
+		{"id", "TEXT PRIMARY KEY"},
+		{"session_id", "TEXT NOT NULL"},
+		{"state", "TEXT NOT NULL"},
+		{"owner_instance", "TEXT NOT NULL DEFAULT ''"},
+		{"owner_pid", "INTEGER NOT NULL DEFAULT 0"},
+		{"agent_id", "TEXT NOT NULL DEFAULT ''"},
+		{"agent_name", "TEXT NOT NULL DEFAULT ''"},
+		{"provider", "TEXT NOT NULL DEFAULT ''"},
+		{"model", "TEXT NOT NULL DEFAULT ''"},
+		{"base_seq", "INTEGER NOT NULL DEFAULT 0"},
+		{"cancel_requested", "INTEGER NOT NULL DEFAULT 0"},
+		{"error", "TEXT NOT NULL DEFAULT ''"},
+		{"started_at", "DATETIME NOT NULL"},
+		{"updated_at", "DATETIME NOT NULL"},
+		{"finished_at", "DATETIME"},
+	}
+
+	runEventColumns = []columnDef{
+		{"seq", "INTEGER PRIMARY KEY AUTOINCREMENT"},
+		{"run_id", "TEXT NOT NULL"},
+		{"session_id", "TEXT NOT NULL"},
+		{"type", "TEXT NOT NULL"},
+		{"agent_id", "TEXT NOT NULL DEFAULT ''"},
+		{"parent_agent_id", "TEXT NOT NULL DEFAULT ''"},
+		{"agent_name", "TEXT NOT NULL DEFAULT ''"},
+		{"data", "TEXT NOT NULL DEFAULT '{}'"},
+		{"created_at", "DATETIME NOT NULL"},
+	}
+
+	sessionEventColumns = []columnDef{
+		{"seq", "INTEGER PRIMARY KEY AUTOINCREMENT"},
+		{"type", "TEXT NOT NULL"},
+		{"session_id", "TEXT NOT NULL"},
+		{"data", "TEXT NOT NULL DEFAULT '{}'"},
+		{"origin", "TEXT NOT NULL DEFAULT ''"},
+		{"created_at", "DATETIME NOT NULL"},
+	}
+
+	runCommandColumns = []columnDef{
+		{"id", "INTEGER PRIMARY KEY AUTOINCREMENT"},
+		{"run_id", "TEXT NOT NULL"},
+		{"kind", "TEXT NOT NULL"},
+		{"payload", "TEXT NOT NULL DEFAULT '{}'"},
+		{"created_at", "DATETIME NOT NULL"},
+		{"consumed_at", "DATETIME"},
+	}
+
 	sessionSchemas = []tableSchema{
 		{name: "sessions", columns: sessionColumns},
 		{name: "session_messages", columns: messageColumns},
 		{name: "session_snapshots", columns: snapshotColumns},
+		{name: "session_runs", columns: runColumns},
+		{name: "session_run_events", columns: runEventColumns},
+		{name: "session_run_commands", columns: runCommandColumns},
+		{name: "session_events", columns: sessionEventColumns},
 	}
 
 	sessionIndexes = []string{
 		"CREATE INDEX IF NOT EXISTS idx_session_messages_session_seq ON session_messages (session_id, seq)",
+		"CREATE UNIQUE INDEX IF NOT EXISTS idx_session_runs_active ON session_runs (session_id) WHERE state = 'running'",
+		"CREATE INDEX IF NOT EXISTS idx_session_runs_state ON session_runs (state)",
+		"CREATE INDEX IF NOT EXISTS idx_session_run_events_run_seq ON session_run_events (run_id, seq)",
+		"CREATE INDEX IF NOT EXISTS idx_session_run_events_session_seq ON session_run_events (session_id, seq)",
+		"CREATE INDEX IF NOT EXISTS idx_session_run_commands_pending ON session_run_commands (run_id, consumed_at)",
+		"CREATE INDEX IF NOT EXISTS idx_session_events_seq ON session_events (seq)",
 	}
 )
 

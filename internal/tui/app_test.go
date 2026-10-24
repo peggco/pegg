@@ -647,7 +647,7 @@ func TestPrepareAgentRunAppliesModelChange(t *testing.T) {
 	}
 	app.model = selectedModel{provider: "tui-model-prov", model: llm.Model{ID: "new"}}
 
-	_, cancel, _ := app.prepareAgentRun("hi", nil)
+	_, _, cancel, _, _ := app.prepareAgentRun("hi", nil)
 	cancel()
 
 	if app.agent.Model.ID != "new" {

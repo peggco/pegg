@@ -9,9 +9,11 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
+	"github.com/peggco/pegg/internal/live"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/lsp"
 	"github.com/peggco/pegg/internal/mcp"
+	"github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/vfs"
 )
@@ -25,6 +27,8 @@ type Server struct {
 	mcpMgr   *mcp.Manager
 	lspMgr   *lsp.Manager
 	fs       *vfs.VFS
+	runs     *run.Coordinator
+	live     *live.Hub
 	httpSrv  *http.Server
 }
 
@@ -37,6 +41,8 @@ func New(
 	llmMgr *llm.Manager,
 	mcpMgr *mcp.Manager,
 	lspMgr *lsp.Manager,
+	runs *run.Coordinator,
+	liveHub *live.Hub,
 ) *Server {
 	s := &Server{
 		cfg:      cfg,
@@ -47,6 +53,8 @@ func New(
 		mcpMgr:   mcpMgr,
 		lspMgr:   lspMgr,
 		fs:       vfs,
+		runs:     runs,
+		live:     liveHub,
 	}
 
 	mux := http.NewServeMux()
@@ -88,4 +96,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions/{id}/messages", s.handleGetSessionMessages)
 	mux.HandleFunc("PUT /api/sessions/{id}/mode", s.handleSetSessionMode)
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.handleDeleteSession)
+	mux.HandleFunc("GET /api/sessions/{id}/stream", s.handleSessionStream)
+	mux.HandleFunc("GET /api/runs", s.handleListRuns)
+	mux.HandleFunc("GET /api/runs/{id}", s.handleGetRun)
+	mux.HandleFunc("POST /api/runs/{id}/cancel", s.handleCancelRun)
+	mux.HandleFunc("POST /api/runs/{id}/answer", s.handleAnswerRun)
 }
