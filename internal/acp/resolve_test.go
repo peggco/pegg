@@ -40,7 +40,7 @@ func TestResolveModelSmartRouterThroughManager(t *testing.T) {
 	_ = router.New(router.Deps{Config: cfg, LLM: mgr}, log)
 
 	sessMgr := session.NewManager(newMockStore(), bus, log)
-	s := New(cfg, bus, log, nil, sessMgr, mgr)
+	s := New(cfg, bus, log, nil, sessMgr, mgr, nil, nil)
 	s.newAgentFn = mockAgentFn()
 
 	prov, mdl, err := s.resolveModel("", router.SmartRouterModel)

@@ -16,6 +16,7 @@ import (
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/decision"
 	_ "github.com/peggco/pegg/internal/decision/providers"
+	"github.com/peggco/pegg/internal/live"
 	"github.com/peggco/pegg/internal/llm"
 	_ "github.com/peggco/pegg/internal/llm/drivers"
 	_ "github.com/peggco/pegg/internal/llm/providers"
@@ -25,6 +26,7 @@ import (
 	"github.com/peggco/pegg/internal/notification"
 	"github.com/peggco/pegg/internal/plugin"
 	"github.com/peggco/pegg/internal/router"
+	"github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/schedule"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/skill"
@@ -120,6 +122,12 @@ func Run(args []string) error {
 	}
 	defer rec.Stop(bus)
 
+	runCoord := run.New(sess, bus, log)
+	runCoord.StartMaintenance()
+	defer runCoord.Stop()
+	liveHub := live.New(runCoord, sess, bus, log)
+	defer liveHub.Close()
+
 	sched, err := schedule.New(schedule.Deps{
 		Config:   cfg,
 		Bus:      bus,
@@ -172,7 +180,7 @@ func Run(args []string) error {
 
 	log.Info("application started")
 
-	app := cli.New(bus, cfg, log, fs, sess, mgr, decMgr, memMgr, mcpMgr, lspMgr, cacheStore, pluginMgr, sched)
+	app := cli.New(bus, cfg, log, fs, sess, mgr, decMgr, memMgr, mcpMgr, lspMgr, cacheStore, pluginMgr, sched, runCoord, liveHub)
 	if err := app.Execute(args); err != nil {
 		return fmt.Errorf("bootstrap: cli: %w", err)
 	}

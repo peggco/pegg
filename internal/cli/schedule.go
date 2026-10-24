@@ -18,6 +18,7 @@ import (
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
 	"github.com/peggco/pegg/internal/llm"
+	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/schedule"
 	"github.com/peggco/pegg/internal/session"
 )
@@ -616,7 +617,27 @@ func (c *CLI) runScheduled(out io.Writer, id, runID, sessionID string) error {
 		rec.PID = os.Getpid()
 	}
 
-	result, runErr := orch.ResumeStream(ctx, s.Prompt, history, func(agent.StreamEvent) error { return nil })
+	lease, claimErr := c.claimRun(ctx, sess, orch, prov, mdl)
+	if claimErr != nil {
+		if errors.As(claimErr, new(*runpkg.BusyError)) {
+			rec.Status = schedule.StatusFailed
+			rec.Error = "session is already running in another client"
+			if err := c.sched.FinishRun(rec); err != nil && c.log != nil {
+				c.log.Fwarn("schedule: record run finish: %v", err)
+			}
+			return fmt.Errorf("scheduled run: %s", rec.Error)
+		}
+		return claimErr
+	}
+	var (
+		result *agent.RunResult
+		runErr error
+	)
+	if c.runCoord != nil {
+		result, runErr = c.runCoord.Stream(ctx, lease, orch, s.Prompt, history, func(agent.StreamEvent) error { return nil })
+	} else {
+		result, runErr = orch.ResumeStream(ctx, s.Prompt, history, func(agent.StreamEvent) error { return nil })
+	}
 	if result != nil {
 		rec.Usage = result.Usage
 	}

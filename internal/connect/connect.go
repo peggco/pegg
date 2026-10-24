@@ -16,11 +16,13 @@ import (
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/decision"
+	"github.com/peggco/pegg/internal/live"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/lsp"
 	"github.com/peggco/pegg/internal/mcp"
 	"github.com/peggco/pegg/internal/memory"
 	"github.com/peggco/pegg/internal/plugin"
+	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/vfs"
 )
@@ -45,6 +47,8 @@ type Deps struct {
 	LSP      *lsp.Manager
 	Cache    cache.Cache
 	Plugin   *plugin.Manager
+	Runs     *runpkg.Coordinator
+	Live     *live.Hub
 	Version  string
 	Trace    func(format string, args ...any)
 }
@@ -63,6 +67,9 @@ type Connector struct {
 	log       *logger.Logger
 
 	cur atomic.Pointer[connState]
+
+	mirrorMu sync.Mutex
+	liveSub  *live.Subscription
 
 	mu       sync.Mutex
 	scopes   []string
@@ -135,6 +142,7 @@ func (c *Connector) Stop() {
 			c.runCancel()
 		}
 		c.runs.cancelAll()
+		c.stopLiveMirror()
 		c.closeSTTStreams()
 		if cs := c.cur.Swap(nil); cs != nil {
 			if cs.cancel != nil {

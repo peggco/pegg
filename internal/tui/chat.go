@@ -2,7 +2,9 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/peggco/pegg/internal/builtin/middlewares/compaction"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/llm"
+	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/tui/components"
 	"github.com/peggco/pegg/internal/tui/i18n"
@@ -97,7 +100,10 @@ func (a *App) subscribeChat(bus event.Bus) error {
 		{agent.TopicErrorMessageFinished, a.onErrorMessageFinished},
 		{session.TopicSessionAttached, a.onSessionAttached},
 		{session.TopicSessionCompacted, a.onSessionCompacted},
+		{session.TopicSessionUpdated, a.onSessionUpdated},
+		{session.TopicSessionDeleted, a.onSessionDeleted},
 		{agent.TopicAgentAsk, a.onAgentAsk},
+		{agent.TopicAgentAskAnswer, a.onAgentAskAnswer},
 		{agent.TopicSubAgentNotification, a.onSubAgentNotification},
 		{compaction.TopicCompactionFinished, a.onCompactionFinished},
 	}
@@ -127,7 +133,10 @@ func (a *App) unsubscribeChat(bus event.Bus) {
 		{agent.TopicErrorMessageFinished, a.onErrorMessageFinished},
 		{session.TopicSessionAttached, a.onSessionAttached},
 		{session.TopicSessionCompacted, a.onSessionCompacted},
+		{session.TopicSessionUpdated, a.onSessionUpdated},
+		{session.TopicSessionDeleted, a.onSessionDeleted},
 		{agent.TopicAgentAsk, a.onAgentAsk},
+		{agent.TopicAgentAskAnswer, a.onAgentAskAnswer},
 		{agent.TopicSubAgentNotification, a.onSubAgentNotification},
 		{compaction.TopicCompactionFinished, a.onCompactionFinished},
 	}
@@ -445,6 +454,9 @@ func (a *App) onCompactionFinished(e compaction.Event) {
 }
 
 func (a *App) onAgentAsk(e agent.AgentAsk) {
+	a.chatMu.Lock()
+	a.askAgentID = e.AgentID
+	a.chatMu.Unlock()
 	qs := make([]components.AskQuestion, len(e.Questions))
 	for i, q := range e.Questions {
 		qs[i] = components.AskQuestion{
@@ -456,17 +468,38 @@ func (a *App) onAgentAsk(e agent.AgentAsk) {
 		}
 	}
 	a.home.SetAsk(qs)
+	attachRunID := a.attachRunID
 	a.home.AskPicker().SetOnSend(func(answers map[string]string) {
+		if attachRunID != "" && a.deps.Runs != nil {
+			_ = a.deps.Runs.Answer(attachRunID, answers)
+			return
+		}
 		a.bus.Publish(agent.TopicAgentAskAnswer, agent.AgentAskAnswer{
 			AgentID: e.AgentID,
 			Answers: answers,
 		})
 	})
 	a.home.AskPicker().SetOnDone(func() {
+		a.chatMu.Lock()
+		a.askAgentID = ""
+		a.chatMu.Unlock()
 		a.home.ClearAsk()
 		a.requestRedraw()
 	})
 	a.requestRedraw()
+}
+
+func (a *App) onAgentAskAnswer(e agent.AgentAskAnswer) {
+	a.chatMu.Lock()
+	match := a.askAgentID == "" || a.askAgentID == e.AgentID
+	if match {
+		a.askAgentID = ""
+	}
+	a.chatMu.Unlock()
+	if match && a.home != nil && a.home.AskOpen() {
+		a.home.ClearAsk()
+		a.requestRedraw()
+	}
 }
 
 func (a *App) onAgentUsage(e agent.AgentUsage) {
@@ -660,12 +693,22 @@ func (a *App) runAgent(input string) {
 }
 
 func (a *App) runAgentWithAttachments(input string, attachments []llm.Attachment) {
-	ctx, cancel, history := a.prepareAgentRun(input, attachments)
+	lease, ctx, cancel, history, err := a.prepareAgentRun(input, attachments)
+	if err != nil {
+		a.chatMu.Lock()
+		a.running = false
+		a.refreshHomeLocked()
+		a.chatMu.Unlock()
+		a.showError(err.Error())
+		return
+	}
 	defer a.finishAgentRun(cancel)
 
 	handler := func(agent.StreamEvent) error { return nil }
 	var result *agent.RunResult
-	if len(history) > 0 {
+	if a.deps.Runs != nil {
+		result, _ = a.deps.Runs.Stream(ctx, lease, a.agent, input, history, handler)
+	} else if len(history) > 0 {
 		result, _ = a.agent.ResumeStream(ctx, input, history, handler)
 	} else {
 		result, _ = a.agent.RunStream(ctx, input, handler)
@@ -673,7 +716,7 @@ func (a *App) runAgentWithAttachments(input string, attachments []llm.Attachment
 	a.completeAgentRun(result)
 }
 
-func (a *App) prepareAgentRun(input string, attachments []llm.Attachment) (context.Context, context.CancelFunc, []llm.Message) {
+func (a *App) prepareAgentRun(input string, attachments []llm.Attachment) (*runpkg.Lease, context.Context, context.CancelFunc, []llm.Message, error) {
 	ctx, cancel := context.WithCancel(a.ctx)
 
 	a.chatMu.Lock()
@@ -692,15 +735,72 @@ func (a *App) prepareAgentRun(input string, attachments []llm.Attachment) (conte
 	orch.ReasoningEffort = a.reasoningEffort
 	orch.Attachments = attachments
 	history := a.history
+
+	if a.session == nil && a.deps.Sessions != nil {
+		dir, _ := os.Getwd()
+		sess, err := a.deps.Sessions.Create(session.CreateOptions{
+			Provider:        a.model.provider,
+			Model:           a.model.model.ID,
+			ReasoningEffort: a.reasoningEffort,
+			Mode:            string(a.mode),
+			ProjectDir:      dir,
+		})
+		if err != nil {
+			a.chatMu.Unlock()
+			cancel()
+			return nil, ctx, cancel, nil, fmt.Errorf("create session: %w", err)
+		}
+		a.session = &activeSession{
+			info: settings.SessionInfo{
+				ID:              sess.ID,
+				Title:           sess.Title,
+				Provider:        sess.Provider,
+				Model:           sess.Model,
+				ReasoningEffort: sess.ReasoningEffort,
+				Mode:            sess.Mode,
+				Usage:           sess.Usage,
+			},
+			viewID: sess.ID,
+		}
+	}
+
+	sessionID := ""
 	if a.session != nil {
+		sessionID = a.session.info.ID
 		a.bus.Publish(session.TopicSessionResume, session.SessionResume{
 			AgentID:   orch.ID,
-			SessionID: a.session.info.ID,
+			SessionID: sessionID,
 		})
 	}
 	a.chatMu.Unlock()
 
-	return ctx, cancel, history
+	var lease *runpkg.Lease
+	if a.deps.Runs != nil && sessionID != "" {
+		var err error
+		lease, err = a.deps.Runs.Claim(ctx, runpkg.ClaimRequest{
+			SessionID: sessionID,
+			AgentID:   orch.ID,
+			AgentName: orch.Name,
+			Provider:  a.model.provider,
+			Model:     a.model.model.ID,
+			BaseSeq:   a.deps.Runs.BaseSeq(sessionID),
+		})
+		if err != nil {
+			var busy *runpkg.BusyError
+			if errors.As(err, &busy) {
+				cancel()
+				return nil, ctx, cancel, nil, fmt.Errorf("this session is running in another client; wait for it to finish or cancel it there")
+			}
+			cancel()
+			return nil, ctx, cancel, nil, fmt.Errorf("claim session: %w", err)
+		}
+		a.chatMu.Lock()
+		a.agentLease = lease
+		a.chatMu.Unlock()
+		a.ensureFollow(sessionID)
+	}
+
+	return lease, ctx, cancel, history, nil
 }
 
 func (a *App) syncHistorySystemPromptLocked() {
@@ -714,8 +814,13 @@ func (a *App) syncHistorySystemPromptLocked() {
 
 func (a *App) finishAgentRun(cancel context.CancelFunc) {
 	a.chatMu.Lock()
+	lease := a.agentLease
+	a.agentLease = nil
 	a.agentCancel = nil
 	a.chatMu.Unlock()
+	if lease != nil {
+		lease.Finish(session.RunStateDone, "")
+	}
 	cancel()
 }
 
@@ -736,16 +841,25 @@ func (a *App) completeAgentRun(result *agent.RunResult) {
 
 func (a *App) continueAgent() {
 	a.chatMu.Lock()
-	if a.running || a.agentCancel != nil {
+	if a.running || a.agentCancel != nil || a.attachRunID != "" {
 		a.chatMu.Unlock()
 		return
 	}
 	a.chatMu.Unlock()
 
-	ctx, cancel, history := a.prepareAgentRun("", nil)
+	lease, ctx, cancel, history, err := a.prepareAgentRun("", nil)
+	if err != nil {
+		a.showError(err.Error())
+		return
+	}
 	defer a.finishAgentRun(cancel)
 
-	result, _ := a.agent.Continue(ctx, history)
+	var result *agent.RunResult
+	if a.deps.Runs != nil {
+		result, _ = a.deps.Runs.Continue(ctx, lease, a.agent, history)
+	} else {
+		result, _ = a.agent.Continue(ctx, history)
+	}
 	a.completeAgentRun(result)
 }
 
@@ -1232,4 +1346,58 @@ func messageContent(m llm.Message) string {
 		}
 	}
 	return ""
+}
+
+func (a *App) onSessionUpdated(e session.SessionUpdated) {
+	if a.deps.Sessions == nil {
+		return
+	}
+	a.chatMu.Lock()
+	active := a.session != nil && a.session.info.ID == e.SessionID
+	a.chatMu.Unlock()
+	if !active {
+		return
+	}
+	sess, err := a.deps.Sessions.Get(e.SessionID)
+	if err != nil {
+		return
+	}
+	a.chatMu.Lock()
+	if a.session != nil && a.session.info.ID == e.SessionID {
+		a.session.info.Title = sess.Title
+		a.session.info.Provider = sess.Provider
+		a.session.info.Model = sess.Model
+		a.session.info.Mode = sess.Mode
+		a.session.info.ReasoningEffort = sess.ReasoningEffort
+		a.session.info.Usage = sess.Usage
+		if sess.Mode != "" {
+			a.mode = agent.NormalizeMode(agent.Mode(sess.Mode))
+			if a.agent != nil {
+				a.agent.SetMode(a.mode)
+			}
+		}
+		a.refreshHomeLocked()
+	}
+	a.chatMu.Unlock()
+	a.requestRedraw()
+}
+
+func (a *App) onSessionDeleted(e session.SessionDeleted) {
+	a.chatMu.Lock()
+	active := a.session != nil && a.session.info.ID == e.SessionID
+	a.chatMu.Unlock()
+	if !active {
+		return
+	}
+	a.stopAttach()
+	a.chatMu.Lock()
+	a.session = nil
+	a.history = nil
+	a.usage = llm.Usage{}
+	a.chat.Clear()
+	a.main = nil
+	a.running = false
+	a.refreshHomeLocked()
+	a.chatMu.Unlock()
+	a.requestRedraw()
 }

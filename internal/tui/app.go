@@ -24,6 +24,7 @@ import (
 	"github.com/peggco/pegg/internal/core/update"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/router"
+	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/skill"
 	"github.com/peggco/pegg/internal/tui/components"
@@ -78,7 +79,16 @@ type App struct {
 
 	lastEsc     time.Time
 	agentCancel context.CancelFunc
+	agentLease  *runpkg.Lease
 	escTimer    *time.Timer
+
+	attachCancel    context.CancelFunc
+	attachRunID     string
+	attachAgentID   string
+	attachOwner     string
+	followSessionID string
+	followGen       int
+	askAgentID      string
 
 	lastCtrlC  time.Time
 	ctrlCTimer *time.Timer
@@ -257,6 +267,7 @@ func (a *App) start() error {
 		a.ctx, a.cancel = context.WithCancel(context.Background())
 	}
 	defer a.cancel()
+	defer a.stopAttach()
 
 	a.build()
 	dispatchReady()
@@ -528,8 +539,19 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 			a.clearEscHint()
 			a.chatMu.Unlock()
 		} else if !a.lastEsc.IsZero() && time.Since(a.lastEsc) < doubleEscWindow {
-			if a.agentCancel != nil {
-				a.agentCancel()
+			a.chatMu.Lock()
+			lease := a.agentLease
+			agentCancel := a.agentCancel
+			attachRunID := a.attachRunID
+			a.chatMu.Unlock()
+			if agentCancel != nil {
+				agentCancel()
+			}
+			if lease != nil {
+				lease.Finish(session.RunStateCanceled, "canceled")
+			}
+			if attachRunID != "" && a.deps.Runs != nil {
+				_ = a.deps.Runs.Cancel(attachRunID)
 			}
 			a.chatMu.Lock()
 			a.clearEscHint()
@@ -645,6 +667,7 @@ func (a *App) openSettings() {
 		a.activateSession(info)
 	})
 	s.SetOnSessionClear(func() {
+		a.stopAttach()
 		a.chatMu.Lock()
 		a.session = nil
 		a.history = nil
@@ -868,31 +891,20 @@ func (a *App) refreshMentionItemsLocked() {
 }
 
 func (a *App) activateSession(info settings.SessionInfo) {
-	a.chatMu.Lock()
-	a.session = &activeSession{info: info, viewID: info.ID}
-	a.mode = agent.NormalizeMode(agent.Mode(info.Mode))
-	if a.agent != nil {
-		a.agent.SetMode(a.mode)
-	}
-	a.reasoningEffort = info.ReasoningEffort
-	if a.deps.LLM != nil && info.Provider != "" && info.Model != "" {
-		if res := a.deps.LLM.Select(llm.SelectRequest{
-			Mode:     llm.SelectModeExact,
-			Provider: info.Provider,
-			Model:    info.Model,
-		}); res.Err == nil {
-			a.model = selectedModel{provider: res.Provider, model: res.Model}
-		}
-	}
-	a.loadSessionIntoChatLocked()
-	a.refreshHomeLocked()
-	a.chatMu.Unlock()
-	a.requestRedraw()
+	a.beginSessionFollow(info)
 }
 
 func (a *App) loadSessionIntoChatLocked() {
 	if a.session == nil {
 		return
+	}
+	if a.main != nil {
+		a.main.assistant = nil
+		a.main.thinking = nil
+		a.main.toolByID = make(map[string]*components.ChatItem)
+		a.main.done = false
+		a.main.err = ""
+		a.main.started = false
 	}
 	if a.main == nil {
 		id := ""

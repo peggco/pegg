@@ -3,6 +3,7 @@ package connect
 import (
 	json "github.com/goccy/go-json"
 
+	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/llm"
 )
 
@@ -22,29 +23,31 @@ const (
 )
 
 const (
-	eventRunStarted    = "run.started"
-	eventRunToken      = "run.token"
-	eventRunReasoning  = "run.reasoning"
-	eventRunToolCall   = "run.tool_call"
-	eventRunToolResult = "run.tool_result"
-	eventRunAsk        = "run.ask"
-	eventRunPermission = "run.permission"
-	eventRunUsage      = "run.usage"
-	eventRunCompaction = "run.compaction"
-	eventRunProgress   = "run.progress"
-	eventRunDone       = "run.done"
-	eventRunError      = "run.error"
-	eventRunAgentError = "run.agent_error"
-	eventRunWarning    = "run.warning"
-	eventRunWarnClear  = "run.warning.clear"
-	eventSessionUpdate = "session.updated"
-	eventSettings      = "settings.changed"
-	eventStatus        = "status.changed"
-	eventSTTStarted    = "stt.started"
-	eventSTTPartial    = "stt.partial"
-	eventSTTFinished   = "stt.finished"
-	eventSTTError      = "stt.error"
-	eventHeartbeat     = "heartbeat"
+	eventRunStarted     = "run.started"
+	eventRunInput       = "run.input"
+	eventRunToken       = "run.token"
+	eventRunReasoning   = "run.reasoning"
+	eventRunToolCall    = "run.tool_call"
+	eventRunToolResult  = "run.tool_result"
+	eventRunAsk         = "run.ask"
+	eventRunAskResolved = "run.ask.resolved"
+	eventRunPermission  = "run.permission"
+	eventRunUsage       = "run.usage"
+	eventRunCompaction  = "run.compaction"
+	eventRunProgress    = "run.progress"
+	eventRunDone        = "run.done"
+	eventRunError       = "run.error"
+	eventRunAgentError  = "run.agent_error"
+	eventRunWarning     = "run.warning"
+	eventRunWarnClear   = "run.warning.clear"
+	eventSessionUpdate  = "session.updated"
+	eventSettings       = "settings.changed"
+	eventStatus         = "status.changed"
+	eventSTTStarted     = "stt.started"
+	eventSTTPartial     = "stt.partial"
+	eventSTTFinished    = "stt.finished"
+	eventSTTError       = "stt.error"
+	eventHeartbeat      = "heartbeat"
 )
 
 const (
@@ -126,12 +129,30 @@ type ModelInfo struct {
 }
 
 type RunInfo struct {
-	ID        string `json:"id"`
-	SessionID string `json:"session_id"`
-	Provider  string `json:"provider"`
-	Model     string `json:"model"`
-	State     string `json:"state"`
-	StartedAt int64  `json:"started_at"`
+	ID        string              `json:"id"`
+	SessionID string              `json:"session_id"`
+	Provider  string              `json:"provider"`
+	Model     string              `json:"model"`
+	State     string              `json:"state"`
+	StartedAt int64               `json:"started_at"`
+	AgentID   string              `json:"agent_id,omitempty"`
+	AgentName string              `json:"agent_name,omitempty"`
+	BaseSeq   int                 `json:"base_seq,omitempty"`
+	Owner     string              `json:"owner,omitempty"`
+	Content   string              `json:"content,omitempty"`
+	Reasoning string              `json:"reasoning,omitempty"`
+	Tools     []RunToolInfo       `json:"tools,omitempty"`
+	Questions []agent.AskQuestion `json:"questions,omitempty"`
+	EventSeq  int64               `json:"event_seq,omitempty"`
+}
+
+type RunToolInfo struct {
+	CallID   string `json:"call_id,omitempty"`
+	ToolName string `json:"tool_name"`
+	Args     string `json:"args,omitempty"`
+	Output   string `json:"output,omitempty"`
+	Error    string `json:"error,omitempty"`
+	Done     bool   `json:"done"`
 }
 
 type SessionMessage struct {

@@ -5,6 +5,10 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
+
+	json "github.com/goccy/go-json"
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/builtin/middlewares/compaction"
@@ -31,6 +35,20 @@ type Recorder struct {
 	sessions map[string]*sessionInfo
 	resumed  map[string]string
 	pending  map[string]*pendingMessage
+
+	runs          RunStore
+	runByAgent    map[string]string
+	runSession    map[string]string
+	runAgent      map[string]string
+	parentByAgent map[string]string
+
+	evMu      sync.Mutex
+	events    []RunEvent
+	flushStop chan struct{}
+	flushDone chan struct{}
+
+	titleWg      sync.WaitGroup
+	titleStopped atomic.Bool
 }
 
 type pendingMessage struct {
@@ -42,15 +60,29 @@ type pendingMessage struct {
 
 func NewRecorder(mgr *Manager, log *logger.Logger) *Recorder {
 	return &Recorder{
-		mgr:      mgr,
-		log:      log,
-		sessions: make(map[string]*sessionInfo),
-		resumed:  make(map[string]string),
-		pending:  make(map[string]*pendingMessage),
+		mgr:           mgr,
+		log:           log,
+		sessions:      make(map[string]*sessionInfo),
+		resumed:       make(map[string]string),
+		pending:       make(map[string]*pendingMessage),
+		runByAgent:    make(map[string]string),
+		runSession:    make(map[string]string),
+		runAgent:      make(map[string]string),
+		parentByAgent: make(map[string]string),
 	}
 }
 
 func (r *Recorder) Start(bus event.Bus) error {
+	if r.mgr != nil {
+		if store, err := r.mgr.Runs(); err == nil {
+			r.runs = store
+		}
+	}
+	if r.runs != nil {
+		r.flushStop = make(chan struct{})
+		r.flushDone = make(chan struct{})
+		go r.flushLoop()
+	}
 	subs := []struct {
 		topic string
 		fn    any
@@ -59,10 +91,19 @@ func (r *Recorder) Start(bus event.Bus) error {
 		{agent.TopicAgentInput, r.handleInput},
 		{agent.TopicAgentToken, r.handleToken},
 		{agent.TopicAgentMessage, r.handleMessage},
+		{agent.TopicAgentToolCall, r.handleToolCall},
 		{agent.TopicAgentToolResult, r.handleToolResult},
+		{agent.TopicAgentUsage, r.handleUsage},
+		{agent.TopicAgentAsk, r.handleAsk},
+		{agent.TopicAgentAskAnswer, r.handleAskAnswer},
 		{agent.TopicAgentFinished, r.handleFinished},
 		{agent.TopicAgentError, r.handleError},
+		{agent.TopicErrorMessage, r.handleErrorMessage},
+		{agent.TopicErrorMessageFinished, r.handleErrorMessageFinished},
+		{agent.TopicSubAgentNotification, r.handleSubAgentNotification},
 		{TopicSessionResume, r.handleResume},
+		{TopicRunStarted, r.handleRunStarted},
+		{TopicRunFinished, r.handleRunFinished},
 		{compaction.TopicCompactionFinished, r.handleCompaction},
 	}
 	for _, s := range subs {
@@ -82,10 +123,19 @@ func (r *Recorder) Stop(bus event.Bus) error {
 		{agent.TopicAgentInput, r.handleInput},
 		{agent.TopicAgentToken, r.handleToken},
 		{agent.TopicAgentMessage, r.handleMessage},
+		{agent.TopicAgentToolCall, r.handleToolCall},
 		{agent.TopicAgentToolResult, r.handleToolResult},
+		{agent.TopicAgentUsage, r.handleUsage},
+		{agent.TopicAgentAsk, r.handleAsk},
+		{agent.TopicAgentAskAnswer, r.handleAskAnswer},
 		{agent.TopicAgentFinished, r.handleFinished},
 		{agent.TopicAgentError, r.handleError},
+		{agent.TopicErrorMessage, r.handleErrorMessage},
+		{agent.TopicErrorMessageFinished, r.handleErrorMessageFinished},
+		{agent.TopicSubAgentNotification, r.handleSubAgentNotification},
 		{TopicSessionResume, r.handleResume},
+		{TopicRunStarted, r.handleRunStarted},
+		{TopicRunFinished, r.handleRunFinished},
 		{compaction.TopicCompactionFinished, r.handleCompaction},
 	}
 	var firstErr error
@@ -94,6 +144,22 @@ func (r *Recorder) Stop(bus event.Bus) error {
 			firstErr = fmt.Errorf("session recorder: unsubscribe %s: %w", s.topic, err)
 		}
 	}
+	r.titleStopped.Store(true)
+	titleDone := make(chan struct{})
+	go func() {
+		r.titleWg.Wait()
+		close(titleDone)
+	}()
+	select {
+	case <-titleDone:
+	case <-time.After(2 * time.Second):
+	}
+	if r.flushStop != nil {
+		close(r.flushStop)
+		<-r.flushDone
+		r.flushStop = nil
+	}
+	r.flushEvents()
 	return firstErr
 }
 
@@ -132,6 +198,16 @@ func (r *Recorder) handleResume(e SessionResume) {
 }
 
 func (r *Recorder) handleStarted(e agent.AgentStarted) {
+	r.mapAgentRun(e.AgentID, e.ParentAgentID)
+	r.recordRunEvent(e.AgentID, AgentEventStarted, map[string]any{
+		"agent_id":         e.AgentID,
+		"agent_name":       e.AgentName,
+		"display_name":     e.DisplayName,
+		"parent_agent_id":  e.ParentAgentID,
+		"provider":         providerName(e.Provider),
+		"model":            e.Model.ID,
+		"reasoning_effort": e.ReasoningEffort,
+	})
 	r.mu.Lock()
 	if info, ok := r.sessions[e.AgentID]; ok {
 		info.provider = e.Provider
@@ -257,6 +333,12 @@ func joinTitle(parentTitle, name string) string {
 }
 
 func (r *Recorder) handleInput(e agent.AgentInput) {
+	r.recordRunEvent(e.AgentID, AgentEventInput, map[string]any{
+		"agent_id":    e.AgentID,
+		"agent_name":  e.AgentName,
+		"input":       e.Input,
+		"attachments": e.Attachments,
+	})
 	id, ok := r.sessionID(e.AgentID)
 	if !ok {
 		return
@@ -273,7 +355,11 @@ func (r *Recorder) handleInput(e agent.AgentInput) {
 
 	if first {
 		if info, ok := r.getSessionInfo(e.AgentID); ok && info.provider != nil && !info.subagent {
-			go r.generateTitle(id, info.provider, info.model, stripAttachmentsBlock(e.Input))
+			r.titleWg.Add(1)
+			go func() {
+				defer r.titleWg.Done()
+				r.generateTitle(id, info.provider, info.model, stripAttachmentsBlock(e.Input))
+			}()
 		}
 	}
 }
@@ -309,7 +395,7 @@ func (r *Recorder) generateTitle(sessionID string, provider llm.Provider, model 
 		r.log.Fdebug("session recorder: generate title: %v", err)
 		return
 	}
-	if title == "" {
+	if title == "" || r.titleStopped.Load() {
 		return
 	}
 	if err := r.mgr.SetTitle(sessionID, title); err != nil {
@@ -340,6 +426,10 @@ func (r *Recorder) updateChildTitles(parentSessionID, parentTitle string) {
 }
 
 func (r *Recorder) handleToken(e agent.AgentToken) {
+	r.recordRunEvent(e.AgentID, AgentEventToken, map[string]any{
+		"content":   e.Content,
+		"reasoning": e.Reasoning,
+	})
 	r.mu.Lock()
 	info, ok := r.sessions[e.AgentID]
 	p := r.pending[e.AgentID]
@@ -362,6 +452,7 @@ func (r *Recorder) handleToken(e agent.AgentToken) {
 }
 
 func (r *Recorder) handleMessage(e agent.AgentMessage) {
+	r.recordRunEvent(e.AgentID, AgentEventMessage, map[string]any{"message": e.Message})
 	id, ok := r.sessionID(e.AgentID)
 	if !ok {
 		return
@@ -395,6 +486,15 @@ func (r *Recorder) handleMessage(e agent.AgentMessage) {
 }
 
 func (r *Recorder) handleError(e agent.AgentError) {
+	msg := ""
+	if e.Err != nil {
+		msg = e.Err.Error()
+	}
+	r.recordRunEvent(e.AgentID, AgentEventError, map[string]any{
+		"agent_id":   e.AgentID,
+		"agent_name": e.AgentName,
+		"message":    msg,
+	})
 	if id, ok := r.sessionID(e.AgentID); ok {
 		r.commitPending(e.AgentID, id)
 	}
@@ -437,6 +537,16 @@ func (r *Recorder) commitPendingWithToolCalls(agentID, sessID string, toolCalls 
 }
 
 func (r *Recorder) handleToolResult(e agent.AgentToolResult) {
+	errMsg := ""
+	if e.Err != nil {
+		errMsg = e.Err.Error()
+	}
+	r.recordRunEvent(e.AgentID, AgentEventToolResult, map[string]any{
+		"call_id":   e.CallID,
+		"tool_name": e.ToolName,
+		"output":    e.Output,
+		"error":     errMsg,
+	})
 	if id, ok := r.sessionID(e.AgentID); ok {
 		if _, err := r.mgr.AppendMessage(id, llm.ToolMessage(e.Output, e.CallID)); err != nil {
 			r.log.Fdebug("session recorder: append tool result: %v", err)
@@ -445,6 +555,12 @@ func (r *Recorder) handleToolResult(e agent.AgentToolResult) {
 }
 
 func (r *Recorder) handleFinished(e agent.AgentFinished) {
+	r.recordRunEvent(e.AgentID, AgentEventFinished, map[string]any{
+		"output":        e.Output,
+		"usage":         e.Usage,
+		"iterations":    e.Iterations,
+		"finish_reason": e.FinishReason,
+	})
 	if id, ok := r.sessionID(e.AgentID); ok {
 		if err := r.mgr.AccumulateUsage(id, e.Usage); err != nil {
 			r.log.Fdebug("session recorder: accumulate usage: %v", err)
@@ -453,6 +569,11 @@ func (r *Recorder) handleFinished(e agent.AgentFinished) {
 }
 
 func (r *Recorder) handleCompaction(e compaction.Event) {
+	r.recordRunEvent(e.AgentID, AgentEventCompaction, map[string]any{
+		"strategy": e.Strategy,
+		"messages": e.Messages,
+		"tokens":   e.Tokens,
+	})
 	r.mu.Lock()
 	info, ok := r.sessions[e.AgentID]
 	r.mu.Unlock()
@@ -472,4 +593,172 @@ func (r *Recorder) handleCompaction(e compaction.Event) {
 	r.mu.Unlock()
 
 	r.log.Fdebug("session recorder: compacted session %s -> %s (%s)", oldID, newSess.ID, e.Strategy)
+}
+
+func providerName(p llm.Provider) string {
+	if p == nil {
+		return ""
+	}
+	return p.Name()
+}
+
+func (r *Recorder) mapAgentRun(agentID, parentAgentID string) {
+	if agentID == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if parentAgentID != "" {
+		r.parentByAgent[agentID] = parentAgentID
+		if runID := r.runByAgent[parentAgentID]; runID != "" {
+			r.runByAgent[agentID] = runID
+		}
+	}
+}
+
+func (r *Recorder) handleRunStarted(e RunStarted) {
+	if e.RunID == "" || e.AgentID == "" {
+		return
+	}
+	r.mu.Lock()
+	r.runByAgent[e.AgentID] = e.RunID
+	r.runSession[e.RunID] = e.SessionID
+	r.runAgent[e.RunID] = e.AgentID
+	r.mu.Unlock()
+}
+
+func (r *Recorder) handleRunFinished(e RunFinished) {
+	r.flushEvents()
+	r.mu.Lock()
+	for agentID, runID := range r.runByAgent {
+		if runID == e.RunID {
+			delete(r.runByAgent, agentID)
+			delete(r.parentByAgent, agentID)
+		}
+	}
+	delete(r.runSession, e.RunID)
+	delete(r.runAgent, e.RunID)
+	r.mu.Unlock()
+}
+
+func (r *Recorder) handleToolCall(e agent.AgentToolCall) {
+	r.recordRunEvent(e.AgentID, AgentEventToolCall, map[string]any{
+		"call_id":   e.Call.ID,
+		"tool_name": e.Call.Function.Name,
+		"args":      e.Call.Function.Arguments,
+		"call":      e.Call,
+	})
+}
+
+func (r *Recorder) handleUsage(e agent.AgentUsage) {
+	r.recordRunEvent(e.AgentID, AgentEventUsage, map[string]any{"usage": e.Usage})
+}
+
+func (r *Recorder) handleAskAnswer(e agent.AgentAskAnswer) {
+	if e.AgentID == "" {
+		return
+	}
+	r.mu.Lock()
+	runID := r.runByAgent[e.AgentID]
+	sessionID := r.runSession[runID]
+	r.mu.Unlock()
+	if runID == "" || sessionID == "" {
+		return
+	}
+	r.appendRunEventForRun(runID, sessionID, e.AgentID, "", RunEventAskResolved, map[string]any{
+		"answers": e.Answers,
+	})
+}
+
+func (r *Recorder) handleAsk(e agent.AgentAsk) {
+	r.recordRunEvent(e.AgentID, AgentEventAsk, map[string]any{
+		"agent_id":   e.AgentID,
+		"agent_name": e.AgentName,
+		"questions":  e.Questions,
+	})
+}
+
+func (r *Recorder) handleErrorMessage(e agent.ErrorMessage) {
+	r.recordRunEvent(e.AgentID, AgentEventErrorMessage, map[string]any{"message": e.Message})
+}
+
+func (r *Recorder) handleErrorMessageFinished(e agent.ErrorMessageFinished) {
+	r.recordRunEvent(e.AgentID, AgentEventErrorMessageFinish, map[string]any{})
+}
+
+func (r *Recorder) handleSubAgentNotification(e agent.SubAgentNotification) {
+	r.recordRunEvent(e.ParentAgentID, AgentEventSubAgentNotice, map[string]any{
+		"parent_agent_id": e.ParentAgentID,
+		"subagent_name":   e.SubAgentName,
+		"task_ids":        e.TaskIDs,
+		"output":          e.Output,
+		"error":           e.Err,
+	})
+}
+
+func (r *Recorder) recordRunEvent(agentID, eventType string, data map[string]any) {
+	if r.runs == nil {
+		return
+	}
+	r.mu.Lock()
+	runID := r.runByAgent[agentID]
+	sessionID := r.runSession[runID]
+	parentID := r.parentByAgent[agentID]
+	r.mu.Unlock()
+	if runID == "" || sessionID == "" {
+		return
+	}
+	r.appendRunEventForRun(runID, sessionID, agentID, parentID, eventType, data)
+}
+
+func (r *Recorder) appendRunEventForRun(runID, sessionID, agentID, parentID, eventType string, data any) {
+	if r.runs == nil || runID == "" {
+		return
+	}
+	payload, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	r.evMu.Lock()
+	r.events = append(r.events, RunEvent{
+		RunID:         runID,
+		SessionID:     sessionID,
+		Type:          eventType,
+		AgentID:       agentID,
+		ParentAgentID: parentID,
+		Data:          payload,
+		CreatedAt:     time.Now(),
+	})
+	r.evMu.Unlock()
+}
+
+func (r *Recorder) flushLoop() {
+	defer close(r.flushDone)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.flushStop:
+			return
+		case <-ticker.C:
+			r.flushEvents()
+		}
+	}
+}
+
+func (r *Recorder) flushEvents() {
+	if r.runs == nil {
+		return
+	}
+	r.evMu.Lock()
+	if len(r.events) == 0 {
+		r.evMu.Unlock()
+		return
+	}
+	events := r.events
+	r.events = nil
+	r.evMu.Unlock()
+	if err := r.runs.AppendRunEvents(events); err != nil && r.log != nil {
+		r.log.Fdebug("session recorder: append run events: %v", err)
+	}
 }

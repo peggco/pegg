@@ -20,6 +20,9 @@ func (s *Server) handleSessionCancel(ctx context.Context, params json.RawMessage
 	}
 	if acpSess, ok := s.getSession(string(req.SessionId)); ok {
 		acpSess.Cancel()
+		if s.runs != nil && acpSess.PeggSessionID != "" {
+			_ = s.runs.CancelSession(acpSess.PeggSessionID)
+		}
 	}
 	return nil
 }

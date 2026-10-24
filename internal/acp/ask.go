@@ -6,12 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	json "github.com/goccy/go-json"
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/session"
 )
 
 const (
@@ -51,6 +53,8 @@ func (s *Server) subscribeAsk() {
 	}
 	_ = s.bus.Subscribe(agent.TopicAgentAsk, s.handleAgentAsk)
 	_ = s.bus.Subscribe(agent.TopicAgentStarted, s.handleAgentStarted)
+	_ = s.bus.Subscribe(session.TopicRunAskResolved, s.handleRunAskResolved)
+	_ = s.bus.Subscribe(session.TopicSessionUpdated, s.handleSessionUpdated)
 	s.subscribeSubagents()
 }
 
@@ -90,7 +94,19 @@ func (s *Server) handleAgentAsk(ev agent.AgentAsk) {
 		ctx = context.Background()
 	}
 
-	answers, err := s.askClient(ctx, acpSess, ev)
+	askCtx, cancel := context.WithCancel(ctx)
+	key := "agent:" + ev.AgentID
+	if s.runs != nil && acpSess.PeggSessionID != "" {
+		if active, aerr := s.runs.Active(acpSess.PeggSessionID); aerr == nil && active != nil {
+			key = "run:" + active.ID
+		}
+	}
+	p := s.registerAsk(key, acpSess.ID, cancel)
+	answers, err := s.askClient(askCtx, acpSess, ev)
+	s.endAsk(key)
+	if p.resolved.Load() {
+		return
+	}
 	if err != nil {
 		s.log.Fdebug("acp: ask failed: %v", err)
 		answers = deniedAnswers(ev.Questions)
@@ -102,6 +118,87 @@ func (s *Server) handleAgentAsk(ev agent.AgentAsk) {
 		AgentID: ev.AgentID,
 		Answers: answers,
 	})
+}
+
+type pendingAsk struct {
+	acpSessionID string
+	cancel       context.CancelFunc
+	resolved     atomic.Bool
+}
+
+func (s *Server) registerAsk(key, acpSessionID string, cancel context.CancelFunc) *pendingAsk {
+	p := &pendingAsk{acpSessionID: acpSessionID, cancel: cancel}
+	s.askMu.Lock()
+	s.pendingAsks[key] = p
+	s.askMu.Unlock()
+	return p
+}
+
+func (s *Server) endAsk(key string) {
+	s.askMu.Lock()
+	delete(s.pendingAsks, key)
+	s.askMu.Unlock()
+}
+
+// resolveAsk cancels a pending client ask and tells the editor to dismiss the
+// modal when another client answered first.
+func (s *Server) resolveAsk(key, runID, agentID, fallbackSessionID string) {
+	s.askMu.Lock()
+	p := s.pendingAsks[key]
+	if p != nil {
+		delete(s.pendingAsks, key)
+		p.resolved.Store(true)
+		p.cancel()
+		if fallbackSessionID == "" {
+			fallbackSessionID = p.acpSessionID
+		}
+	}
+	s.askMu.Unlock()
+	if fallbackSessionID == "" {
+		return
+	}
+	s.notify(fallbackSessionID, SessionUpdate{
+		SessionUpdate: "run_ask_resolved",
+		RunID:         runID,
+		AgentID:       agentID,
+	})
+}
+
+func (s *Server) handleRunAskResolved(e session.RunAskResolved) {
+	s.resolveAsk("agent:"+e.AgentID, e.RunID, e.AgentID, "")
+	s.resolveAsk("run:"+e.RunID, e.RunID, e.AgentID, "")
+}
+
+func (s *Server) handleSessionUpdated(e session.SessionUpdated) {
+	if s.sessions == nil {
+		return
+	}
+	sess, err := s.sessions.Get(e.SessionID)
+	if err != nil {
+		return
+	}
+	if sess.Mode == "" {
+		return
+	}
+	mode := agent.NormalizeMode(agent.Mode(sess.Mode))
+	s.mu.RLock()
+	var targets []*ACPSession
+	for _, acpSess := range s.active {
+		if acpSess.PeggSessionID == e.SessionID {
+			targets = append(targets, acpSess)
+		}
+	}
+	s.mu.RUnlock()
+	for _, acpSess := range targets {
+		changed := false
+		if acpSess.Agent != nil && acpSess.Agent.CurrentMode() != mode {
+			acpSess.Agent.SetMode(mode)
+			changed = true
+		}
+		if changed {
+			s.notifyMode(acpSess.ID, string(mode))
+		}
+	}
 }
 
 func (s *Server) askClient(ctx context.Context, acpSess *ACPSession, ev agent.AgentAsk) (map[string]string, error) {

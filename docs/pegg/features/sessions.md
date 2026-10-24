@@ -74,6 +74,33 @@ current project.
 Resuming publishes a `session.resume` event so the recorder re-attaches the run to
 the same session rather than creating a new one.
 
+## Live runs across clients
+
+A run is owned by exactly one process (TUI, CLI, HTTP server, ACP/IDE, Connect,
+or the SDK engine). Its stream is journaled in the shared session store, so every
+other client that opens the same session attaches to the live run instead of
+showing a stale transcript.
+
+- Opening a session that is already running replays the journal and continues
+  streaming tokens, reasoning, tool calls, and compaction events live. The
+  subscription stays open after the run finishes, so the next message sent from
+  any client is streamed too.
+- A single process-wide watcher tails the shared journal (250 ms when idle, faster
+  while a run is active); individual clients do not poll independently.
+- While a run is active, sending a new prompt from another client is rejected;
+  the client stays in read-only attach mode until the run finishes.
+- Canceling the run (TUI double-Esc, `pegg sessions cancel`, HTTP
+  `POST /api/runs/{id}/cancel`, ACP `session/cancel`, or the Connect stop button)
+  is delivered to the owner process and propagates to every attached client.
+- If the owning process crashes, its heartbeat stops and other clients mark the
+  run as failed after ~15 seconds.
+- Permission/ask questions are journaled too, so any attached client can answer
+  them; the first answer wins and the others dismiss the prompt.
+
+This coordination requires the `sqlite` session driver (the default) so
+processes can share the run registry. The `json` driver keeps working in-process
+but does not synchronize separate processes.
+
 ## Listing and inspecting
 
 === "CLI"

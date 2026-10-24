@@ -14,11 +14,13 @@ import (
 	"github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/decision"
+	"github.com/peggco/pegg/internal/live"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/lsp"
 	"github.com/peggco/pegg/internal/mcp"
 	"github.com/peggco/pegg/internal/memory"
 	"github.com/peggco/pegg/internal/plugin"
+	"github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/schedule"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/tui"
@@ -40,13 +42,15 @@ type CLI struct {
 	cache     cache.Cache
 	pluginMgr *plugin.Manager
 	sched     *schedule.Manager
+	runCoord  *run.Coordinator
+	liveHub   *live.Hub
 	added     bool
 	root      *cobra.Command
 	commands  hook.Hook[[]*cobra.Command]
 	picker    func(items []string, label string) (int, error)
 }
 
-func New(bus event.Bus, cfg *config.Config, log *logger.Logger, vfs *vfs.VFS, sessions *session.Manager, llmMgr *llm.Manager, decMgr *decision.Manager, memMgr *memory.Manager, mcpMgr *mcp.Manager, lspMgr *lsp.Manager, cache cache.Cache, pluginMgr *plugin.Manager, sched *schedule.Manager) *CLI {
+func New(bus event.Bus, cfg *config.Config, log *logger.Logger, vfs *vfs.VFS, sessions *session.Manager, llmMgr *llm.Manager, decMgr *decision.Manager, memMgr *memory.Manager, mcpMgr *mcp.Manager, lspMgr *lsp.Manager, cache cache.Cache, pluginMgr *plugin.Manager, sched *schedule.Manager, runCoord *run.Coordinator, liveHub *live.Hub) *CLI {
 	c := &CLI{
 		bus:       bus,
 		cfg:       cfg,
@@ -61,6 +65,8 @@ func New(bus event.Bus, cfg *config.Config, log *logger.Logger, vfs *vfs.VFS, se
 		lspMgr:    lspMgr,
 		pluginMgr: pluginMgr,
 		sched:     sched,
+		runCoord:  runCoord,
+		liveHub:   liveHub,
 		root:      newRootCommand(),
 		picker:    defaultPicker,
 	}
@@ -156,6 +162,8 @@ func (c *CLI) tuiDeps() (settings.Deps, error) {
 		VFS:      c.fs,
 		Cache:    c.cache,
 		Plugin:   c.pluginMgr,
+		Runs:     c.runCoord,
+		Live:     c.liveHub,
 	}, nil
 }
 

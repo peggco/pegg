@@ -24,12 +24,15 @@ func (c *Connector) serve(ctx context.Context, conn *websocket.Conn) error {
 		c.scopes = nil
 		c.sessID = ""
 		c.mu.Unlock()
+		cancel()
+		c.stopLiveMirror()
 		close(cs.done)
 		Audit("disconnected", map[string]any{"relay": c.cfg.RelayURL})
 	}()
 
 	go c.writerLoop(ctx, cs)
 	go c.heartbeatLoop(ctx, cs)
+	c.startLiveMirror(ctx)
 	c.emitStatus()
 
 	for {

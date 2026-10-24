@@ -11,6 +11,8 @@ import (
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/llm"
+	runpkg "github.com/peggco/pegg/internal/run"
+	"github.com/peggco/pegg/internal/session"
 )
 
 const (
@@ -29,6 +31,7 @@ type run struct {
 	state     string
 	startedAt time.Time
 	cancel    context.CancelFunc
+	lease     *runpkg.Lease
 
 	mu        sync.Mutex
 	questions []agent.AskQuestion
@@ -82,6 +85,8 @@ func (r *run) snapshot() RunInfo {
 		Model:     r.model,
 		State:     r.state,
 		StartedAt: r.startedAt.Unix(),
+		AgentID:   r.agentID,
+		Owner:     "local",
 	}
 }
 
@@ -148,6 +153,11 @@ func (m *runManager) tryAcquire() bool {
 }
 
 func (m *runManager) Cancel(id string) error {
+	if m.c.deps.Runs != nil {
+		if err := m.c.deps.Runs.Cancel(id); err == nil {
+			return nil
+		}
+	}
 	r := m.get(id)
 	if r == nil {
 		return &FrameError{Code: ErrCodeNotFound, Message: "run not found: " + id}
@@ -160,6 +170,11 @@ func (m *runManager) Answer(id string, answers map[string]string) error {
 	r := m.get(id)
 	if r == nil {
 		return &FrameError{Code: ErrCodeNotFound, Message: "run not found: " + id}
+	}
+	if m.c.deps.Runs != nil {
+		if err := m.c.deps.Runs.Answer(id, answers); err == nil {
+			return nil
+		}
 	}
 	if m.c.deps.Bus == nil {
 		return &FrameError{Code: ErrCodeUnavailable, Message: "event bus unavailable"}
@@ -179,11 +194,44 @@ func (m *runManager) List() []RunInfo {
 	}
 	m.mu.Unlock()
 	out := make([]RunInfo, 0, len(runs))
+	seen := make(map[string]bool, len(runs))
 	for _, r := range runs {
-		out = append(out, r.snapshot())
+		info := r.snapshot()
+		m.c.enrichRun(&info)
+		out = append(out, info)
+		seen[info.ID] = true
+	}
+	if m.c.deps.Runs != nil {
+		if active, err := m.c.deps.Runs.ActiveRuns(); err == nil {
+			for i := range active {
+				r := active[i]
+				if seen[r.ID] {
+					continue
+				}
+				out = append(out, runInfoFromRun(&r))
+			}
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt > out[j].StartedAt })
 	return out
+}
+
+func runInfoFromRun(r *session.Run) RunInfo {
+	if r == nil {
+		return RunInfo{}
+	}
+	return RunInfo{
+		ID:        r.ID,
+		SessionID: r.SessionID,
+		Provider:  r.Provider,
+		Model:     r.Model,
+		State:     string(r.State),
+		StartedAt: r.StartedAt.Unix(),
+		AgentID:   r.AgentID,
+		AgentName: r.AgentName,
+		BaseSeq:   r.BaseSeq,
+		Owner:     r.OwnerInstance,
+	}
 }
 
 func (m *runManager) cancelAll() {

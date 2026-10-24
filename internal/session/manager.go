@@ -17,10 +17,11 @@ type Manager struct {
 	log     *logger.Logger
 	mu      sync.RWMutex
 	current string
+	origin  string
 }
 
 func NewManager(store Store, bus event.Bus, log *logger.Logger) *Manager {
-	return &Manager{store: store, bus: bus, log: log}
+	return &Manager{store: store, bus: bus, log: log, origin: uuid.NewString()}
 }
 
 func (m *Manager) Create(opts CreateOptions) (*Session, error) {
@@ -43,6 +44,7 @@ func (m *Manager) Create(opts CreateOptions) (*Session, error) {
 		return nil, err
 	}
 	m.publish(TopicSessionCreated, SessionCreated{SessionID: s.ID})
+	m.persistChange(SessionEventCreated, s.ID, map[string]any{"id": s.ID})
 	return s, nil
 }
 
@@ -55,6 +57,11 @@ func (m *Manager) List(q query.Query) ([]Session, int, error) {
 }
 
 func (m *Manager) Delete(id string) error {
+	if rs, err := m.Runs(); err == nil {
+		if active, aerr := rs.ActiveRun(id); aerr == nil && active != nil {
+			_ = rs.RequestRunCancel(active.ID)
+		}
+	}
 	children, err := m.store.CompactionChildren(id)
 	if err != nil {
 		return err
@@ -73,6 +80,7 @@ func (m *Manager) Delete(id string) error {
 	}
 	m.mu.Unlock()
 	m.publish(TopicSessionDeleted, SessionDeleted{SessionID: id})
+	m.persistChange(SessionEventDeleted, id, map[string]any{"id": id})
 	return nil
 }
 
@@ -90,6 +98,7 @@ func (m *Manager) SetTitle(id, title string) error {
 		return err
 	}
 	m.publish(TopicSessionUpdated, SessionUpdated{SessionID: id})
+	m.persistChange(SessionEventUpdated, id, map[string]any{"id": id})
 	return nil
 }
 
@@ -104,6 +113,7 @@ func (m *Manager) SetMode(id, mode string) error {
 		return err
 	}
 	m.publish(TopicSessionUpdated, SessionUpdated{SessionID: id})
+	m.persistChange(SessionEventUpdated, id, map[string]any{"id": id})
 	return nil
 }
 
@@ -122,6 +132,7 @@ func (m *Manager) SetModel(id, provider, model string) error {
 		return err
 	}
 	m.publish(TopicSessionUpdated, SessionUpdated{SessionID: id})
+	m.persistChange(SessionEventUpdated, id, map[string]any{"id": id})
 	return nil
 }
 
@@ -223,6 +234,7 @@ func (m *Manager) Fork(sourceID, atMessageID string) (*Session, error) {
 		ParentID:        src.ID,
 		ParentMessageID: atMessageID,
 	})
+	m.persistChange(SessionEventCreated, fork.ID, map[string]any{"id": fork.ID, "parent_id": src.ID})
 	return &fork, nil
 }
 
@@ -272,6 +284,7 @@ func (m *Manager) ForkBefore(sourceID, atMessageID string) (*Session, error) {
 		ParentID:        src.ID,
 		ParentMessageID: atMessageID,
 	})
+	m.persistChange(SessionEventCreated, fork.ID, map[string]any{"id": fork.ID, "parent_id": src.ID})
 	return &fork, nil
 }
 
@@ -446,6 +459,7 @@ func (m *Manager) CompactSession(sourceID string, compactedMessages []llm.Messag
 		}
 	}
 
+	m.persistChange(SessionEventCreated, newSess.ID, map[string]any{"id": newSess.ID, "compaction_parent_id": src.ID})
 	m.publish(TopicSessionCompacted, SessionCompacted{
 		SessionID:       newSess.ID,
 		ParentSessionID: src.ID,

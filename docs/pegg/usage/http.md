@@ -71,6 +71,11 @@ All responses are JSON. Errors always use the same shape:
 | `GET` | `/api/sessions/{id}` | Get one session |
 | `GET` | `/api/sessions/{id}/messages` | Get a session's messages |
 | `DELETE` | `/api/sessions/{id}` | Delete a session |
+| `GET` | `/api/sessions/{id}/stream` | Attach to the live run and replay its journal (SSE) |
+| `GET` | `/api/runs` | List active runs |
+| `GET` | `/api/runs/{id}` | Get one run |
+| `POST` | `/api/runs/{id}/cancel` | Cancel a run, local or remote |
+| `POST` | `/api/runs/{id}/answer` | Answer an ask/permission question |
 
 ### `GET /api/health`
 
@@ -136,6 +141,11 @@ STT is configured on the server machine; the initial language follows the
 return `502`.
 
 ### `POST /api/run`
+
+If the session already has an active run in any client, the server returns
+`409 Conflict` with the active run in the `run` field instead of starting a
+second run. Attach with `GET /api/sessions/{id}/stream?after=0`, or cancel it
+with `POST /api/runs/{id}/cancel`.
 
 Request body:
 

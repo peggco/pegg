@@ -12,7 +12,9 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
+	"github.com/peggco/pegg/internal/live"
 	"github.com/peggco/pegg/internal/llm"
+	"github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/vfs"
 )
@@ -33,6 +35,9 @@ type ACPSession struct {
 
 	reqID   any
 	running bool
+
+	attachCancel context.CancelFunc
+	attachRunID  string
 }
 
 func (s *ACPSession) SetCancel(cancel context.CancelFunc, reqID any) {
@@ -85,6 +90,26 @@ func (s *ACPSession) Cancel() {
 	}
 }
 
+func (s *ACPSession) SetAttach(cancel context.CancelFunc, runID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.attachCancel != nil {
+		s.attachCancel()
+	}
+	s.attachCancel = cancel
+	s.attachRunID = runID
+}
+
+func (s *ACPSession) ClearAttach() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.attachCancel != nil {
+		s.attachCancel()
+	}
+	s.attachCancel = nil
+	s.attachRunID = ""
+}
+
 type Server struct {
 	cfg      *config.Config
 	bus      event.Bus
@@ -92,6 +117,8 @@ type Server struct {
 	sessions *session.Manager
 	llmMgr   *llm.Manager
 	fs       *vfs.VFS
+	runs     *run.Coordinator
+	live     *live.Hub
 
 	transport Transport
 	client    *Client
@@ -111,6 +138,9 @@ type Server struct {
 
 	subStreams *subagentStreamState
 
+	askMu       sync.Mutex
+	pendingAsks map[string]*pendingAsk
+
 	closed chan struct{}
 	once   sync.Once
 }
@@ -122,17 +152,22 @@ func New(
 	fs *vfs.VFS,
 	sessions *session.Manager,
 	llmMgr *llm.Manager,
+	runs *run.Coordinator,
+	liveHub *live.Hub,
 ) *Server {
 	s := &Server{
-		cfg:      cfg,
-		bus:      bus,
-		log:      log,
-		sessions: sessions,
-		llmMgr:   llmMgr,
-		fs:       fs,
-		active:   make(map[string]*ACPSession),
-		agents:   make(map[string]string),
-		closed:   make(chan struct{}),
+		cfg:         cfg,
+		bus:         bus,
+		log:         log,
+		sessions:    sessions,
+		llmMgr:      llmMgr,
+		fs:          fs,
+		runs:        runs,
+		live:        liveHub,
+		active:      make(map[string]*ACPSession),
+		agents:      make(map[string]string),
+		pendingAsks: make(map[string]*pendingAsk),
+		closed:      make(chan struct{}),
 	}
 	s.client = NewClient(s.sendRaw)
 	s.newAgentFn = s.newOrchestratorAgent
@@ -142,6 +177,7 @@ func New(
 
 func (s *Server) Serve(ctx context.Context, transport Transport) error {
 	defer s.cleanupRecording()
+	defer s.cleanupAttach()
 	s.transport = transport
 	inbound, err := transport.Start(ctx)
 	if err != nil {
@@ -344,10 +380,14 @@ func (s *Server) HTTPHandler() http.Handler {
 
 func (s *Server) addSession(acpSess *ACPSession) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	old := s.active[acpSess.ID]
 	s.active[acpSess.ID] = acpSess
 	if acpSess.Agent != nil {
 		s.agents[acpSess.Agent.ID] = acpSess.ID
+	}
+	s.mu.Unlock()
+	if old != nil && old != acpSess {
+		old.ClearAttach()
 	}
 }
 
@@ -358,10 +398,23 @@ func (s *Server) getSession(id string) (*ACPSession, bool) {
 	return acpSess, ok
 }
 
+func (s *Server) cleanupAttach() {
+	s.mu.RLock()
+	sessions := make([]*ACPSession, 0, len(s.active))
+	for _, acpSess := range s.active {
+		sessions = append(sessions, acpSess)
+	}
+	s.mu.RUnlock()
+	for _, acpSess := range sessions {
+		acpSess.ClearAttach()
+	}
+}
+
 func (s *Server) removeSession(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if acpSess, ok := s.active[id]; ok {
+		acpSess.ClearAttach()
 		acpSess.Cancel()
 		for agentID, sessionID := range s.agents {
 			if sessionID == id {

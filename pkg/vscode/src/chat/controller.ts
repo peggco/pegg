@@ -63,6 +63,7 @@ export class ChatController extends EventEmitter {
   private forceFallback = false;
   private legacyStreaming = false;
   private loadingSession = false;
+  private binaryFingerprint: string | undefined;
   private voiceStart: Promise<void> | undefined;
   private disposed = false;
 
@@ -473,7 +474,15 @@ export class ChatController extends EventEmitter {
 
   private async ensureStarted(): Promise<void> {
     if (this.disposed) throw new Error('Pegg controller is disposed');
-    if (this.started) return;
+    if (this.started) {
+      const current = await this.binary.fingerprint();
+      if (current && this.binaryFingerprint && current !== this.binaryFingerprint) {
+        this.log.info('Pegg binary changed on disk; restarting ACP server');
+        await this.restart();
+        return;
+      }
+      return;
+    }
     if (!this.starting) {
       this.starting = this.startClient().finally(() => {
         this.starting = undefined;
@@ -524,6 +533,7 @@ export class ChatController extends EventEmitter {
     this.client = client;
     try {
       await client.start();
+      this.binaryFingerprint = await this.binary.fingerprint();
       const capabilities = await client.initialize();
       this.capabilities = capabilities.agentCapabilities;
       this.log.info('Pegg capabilities', JSON.stringify(capabilities.agentCapabilities?.pegg ?? {}));
@@ -561,6 +571,19 @@ export class ChatController extends EventEmitter {
     const update = params?.update as SessionUpdate | undefined;
     if (!update) return;
     if (sessionId && this.state.acpSessionId && sessionId !== this.state.acpSessionId) return;
+
+    if (update.sessionUpdate === 'run_ask_resolved') {
+      this.rejectPending('Answered in another client');
+      this.emit('update', update, this.state);
+      return;
+    }
+
+    if (update.sessionUpdate === 'run_state_update') {
+      this.state = { ...this.state, running: update.runState === 'running' };
+      this.emit('update', update, this.state);
+      this.emitState();
+      return;
+    }
 
     if (
       this.legacyStreaming &&

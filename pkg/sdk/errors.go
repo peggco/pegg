@@ -19,6 +19,7 @@ var (
 	ErrNoSession     = errors.New("sdk: session not found")
 	ErrEmptyInput    = errors.New("sdk: input must not be empty")
 	ErrModelTimeout  = errors.New("sdk: timed out selecting a model")
+	ErrSessionBusy   = session.ErrRunBusy
 )
 
 var (

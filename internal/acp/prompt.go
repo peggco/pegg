@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/llm"
+	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 )
 
@@ -70,9 +72,17 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 		acpSess.Agent.Attachments = attachments
 	}
 
-	var history []llm.Message
+	var (
+		history []llm.Message
+		baseSeq int
+	)
 	if acpSess.PeggSessionID != "" {
 		if msgs, err := s.sessions.Messages(acpSess.PeggSessionID); err == nil && len(msgs) > 0 {
+			for _, m := range msgs {
+				if m.Seq > baseSeq {
+					baseSeq = m.Seq
+				}
+			}
 			if acpSess.Agent.SystemPrompt != "" {
 				history = append(history, llm.SystemMessage(acpSess.Agent.SystemPrompt))
 			}
@@ -81,6 +91,26 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 				AgentID:   acpSess.Agent.ID,
 				SessionID: acpSess.PeggSessionID,
 			})
+		}
+	}
+
+	var lease *runpkg.Lease
+	if s.runs != nil && acpSess.PeggSessionID != "" {
+		var claimErr error
+		lease, claimErr = s.runs.Claim(promptCtx, runpkg.ClaimRequest{
+			SessionID: acpSess.PeggSessionID,
+			AgentID:   acpSess.Agent.ID,
+			AgentName: acpSess.Agent.Name,
+			Provider:  acpSess.Provider,
+			Model:     acpSess.Model,
+			BaseSeq:   baseSeq,
+		})
+		if claimErr != nil {
+			var busy *runpkg.BusyError
+			if errors.As(claimErr, &busy) {
+				return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "session is already running in another client"}
+			}
+			return nil, &RPCError{Code: ErrCodeInternal, Message: claimErr.Error()}
 		}
 	}
 
@@ -108,7 +138,9 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 	}
 	var result *agent.RunResult
 	var runErr error
-	if len(history) > 0 {
+	if s.runs != nil {
+		result, runErr = s.runs.Stream(promptCtx, lease, acpSess.Agent, input, history, stream)
+	} else if len(history) > 0 {
 		result, runErr = acpSess.Agent.ResumeStream(promptCtx, input, history, stream)
 	} else {
 		result, runErr = acpSess.Agent.RunStream(promptCtx, input, stream)

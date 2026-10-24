@@ -137,6 +137,8 @@ func (c *CLI) connectDeps() connect.Deps {
 		Cache:    c.cache,
 		Plugin:   c.pluginMgr,
 		Version:  config.AppVersion,
+		Runs:     c.runCoord,
+		Live:     c.liveHub,
 		Trace: func(format string, args ...any) {
 			fmt.Fprintf(os.Stderr, "[connect] "+format+"\n", args...)
 		},

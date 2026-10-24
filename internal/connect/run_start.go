@@ -2,12 +2,14 @@ package connect
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
 	"github.com/peggco/pegg/internal/llm"
+	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 )
 
@@ -119,6 +121,27 @@ func (m *runManager) Start(p StartParams) (RunInfo, error) {
 	orch.SetMode(mode)
 
 	runCtx, cancel := context.WithCancel(m.base)
+	var lease *runpkg.Lease
+	if m.c.deps.Runs != nil {
+		lease, err = m.c.deps.Runs.Claim(runCtx, runpkg.ClaimRequest{
+			SessionID: sessionID,
+			AgentID:   orch.ID,
+			AgentName: orch.Name,
+			Provider:  prov.Name(),
+			Model:     mdl.ID,
+			BaseSeq:   m.c.deps.Runs.BaseSeq(sessionID),
+		})
+		if err != nil {
+			cancel()
+			var busy *runpkg.BusyError
+			if errors.As(err, &busy) {
+				return RunInfo{}, &FrameError{Code: ErrCodeConflict, Message: "session is already running in another client"}
+			}
+			return RunInfo{}, &FrameError{Code: ErrCodeInternal, Message: "claim session: " + err.Error()}
+		}
+		runCtx = lease.Context()
+		runID = lease.ID()
+	}
 	r := &run{
 		id:        runID,
 		sessionID: sessionID,
@@ -128,6 +151,7 @@ func (m *runManager) Start(p StartParams) (RunInfo, error) {
 		state:     runStateRunning,
 		startedAt: time.Now(),
 		cancel:    cancel,
+		lease:     lease,
 	}
 	m.register(r)
 	acquired = false

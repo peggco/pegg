@@ -133,7 +133,7 @@ func newTestServer(t *testing.T) *Server {
 	store := newMockStore()
 	sessMgr := session.NewManager(store, bus, &logger.Logger{})
 	cfg := config.DefaultConfig()
-	s := New(cfg, bus, &logger.Logger{}, nil, sessMgr, nil)
+	s := New(cfg, bus, &logger.Logger{}, nil, sessMgr, nil, nil, nil)
 	s.newAgentFn = mockAgentFn()
 	return s
 }

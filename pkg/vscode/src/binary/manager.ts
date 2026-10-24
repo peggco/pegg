@@ -82,6 +82,21 @@ export class BinaryManager {
     return this.version;
   }
 
+  currentPath(): string | undefined {
+    return this.cached;
+  }
+
+  /** Cheap identity for the resolved binary, used to notice rebuilds. */
+  async fingerprint(): Promise<string | undefined> {
+    if (!this.cached) return undefined;
+    try {
+      const info = await stat(this.cached);
+      return `${info.mtimeMs}:${info.size}`;
+    } catch {
+      return undefined;
+    }
+  }
+
   async diagnose(): Promise<BinaryDiagnostic> {
     const cfg = getConfig();
     const target = detectTarget();

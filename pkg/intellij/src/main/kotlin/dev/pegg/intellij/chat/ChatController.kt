@@ -634,6 +634,10 @@ class ChatController(
             return
         }
         if (sessionId != null && state.acpSessionId != null && sessionId != state.acpSessionId && !loadingSession) return
+        if (update.sessionUpdate == "run_ask_resolved") {
+            rejectPending("Answered in another client")
+            return
+        }
         if (loadingSession && sessionId != null && state.acpSessionId != sessionId) {
             synchronized(stateLock) { state.acpSessionId = sessionId }
         }

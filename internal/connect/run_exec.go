@@ -15,12 +15,17 @@ import (
 func (m *runManager) execute(ctx context.Context, r *run, orch *agent.Agent, message string, history []llm.Message) {
 	defer m.release(r)
 
+	baseSeq := 0
+	if r.lease != nil {
+		baseSeq = r.lease.BaseSeq()
+	}
 	m.c.emit(eventRunStarted, r.sessionID, r.id, runStartedPayload{
 		RunID:     r.id,
 		SessionID: r.sessionID,
 		AgentID:   r.agentID,
 		Provider:  r.provider,
 		Model:     r.model,
+		BaseSeq:   baseSeq,
 	})
 
 	progressDone := make(chan struct{})
@@ -41,7 +46,9 @@ func (m *runManager) execute(ctx context.Context, r *run, orch *agent.Agent, mes
 		result *agent.RunResult
 		err    error
 	)
-	if len(history) > 0 {
+	if m.c.deps.Runs != nil {
+		result, err = m.c.deps.Runs.Stream(ctx, r.lease, orch, message, history, handler)
+	} else if len(history) > 0 {
 		result, err = orch.ResumeStream(ctx, message, history, handler)
 	} else {
 		result, err = orch.RunStream(ctx, message, handler)

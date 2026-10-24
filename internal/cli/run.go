@@ -27,6 +27,7 @@ import (
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/router"
+	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/utils/query"
 )
@@ -41,6 +42,8 @@ type runOptions struct {
 	showThinking  bool
 	showSubagent  bool
 	chat          bool
+	attach        bool
+	follow        bool
 	stt           bool
 	mode          agent.Mode
 	modeSet       bool
@@ -74,6 +77,8 @@ func (c *CLI) newRunCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.showThinking, "show-thinking", false, "show the model's raw thinking (reasoning) content instead of a Thinking indicator")
 	cmd.Flags().BoolVar(&opts.showSubagent, "show-subagent", false, "show subagent messages (their content) instead of a Subagent indicator")
 	cmd.Flags().BoolVar(&opts.chat, "chat", false, "keep chatting with the agent after the run finishes (type exit/quit to end)")
+	cmd.Flags().BoolVar(&opts.attach, "attach", false, "attach to a session that is already running in another client (requires --session)")
+	cmd.Flags().BoolVar(&opts.follow, "follow", false, "with --attach, keep following later runs on the session")
 	cmd.Flags().BoolVar(&opts.stt, "stt", false, "record voice input; press Enter to stop and use the transcript as the message")
 	cmd.Flags().BoolVar(&modePlan, "plan", false, "start in plan mode (read-only planning)")
 	cmd.Flags().BoolVar(&modeBuild, "build", false, "start in build mode (execute without planning tools)")
@@ -130,6 +135,13 @@ func (c *CLI) runRun(out io.Writer, in io.Reader, message string, opts runOption
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if opts.attach {
+		if opts.session == "" {
+			return fmt.Errorf("cli: --attach requires --session")
+		}
+		return c.attachSession(ctx, out, in, opts.session, opts.follow)
+	}
 
 	if opts.stt {
 		transcript, err := c.recordSTT(ctx, in, out)
@@ -206,16 +218,41 @@ func (c *CLI) runRun(out io.Writer, in io.Reader, message string, opts runOption
 		})
 	}
 
-	if strings.TrimSpace(message) != "" {
-		var result *agent.RunResult
-		if resume != nil {
-			result, err = orch.ResumeStream(ctx, message, history, func(agent.StreamEvent) error { return nil })
-		} else {
-			result, err = orch.RunStream(ctx, message, func(agent.StreamEvent) error { return nil })
+	if resume == nil && (strings.TrimSpace(message) != "" || opts.chat) {
+		sess, cerr := c.createRunSession(prov, mdl, orch.ReasoningEffort, mode)
+		if cerr != nil {
+			return cerr
 		}
+		resume = sess
+		c.bus.Publish(session.TopicSessionResume, session.SessionResume{
+			AgentID:   orch.ID,
+			SessionID: sess.ID,
+		})
+	}
+
+	var lease *runpkg.Lease
+	if strings.TrimSpace(message) != "" {
+		lease, err = c.claimRun(ctx, resume, orch, prov, mdl)
 		if err != nil {
-			if !opts.chat || !errors.Is(err, context.Canceled) || result == nil {
-				return fmt.Errorf("orchestrator: %w", err)
+			return err
+		}
+	}
+
+	if strings.TrimSpace(message) != "" {
+		var (
+			result *agent.RunResult
+			runErr error
+		)
+		if c.runCoord != nil {
+			result, runErr = c.runCoord.Stream(ctx, lease, orch, message, history, func(agent.StreamEvent) error { return nil })
+		} else if len(history) > 0 {
+			result, runErr = orch.ResumeStream(ctx, message, history, func(agent.StreamEvent) error { return nil })
+		} else {
+			result, runErr = orch.RunStream(ctx, message, func(agent.StreamEvent) error { return nil })
+		}
+		if runErr != nil {
+			if !opts.chat || !errors.Is(runErr, context.Canceled) || result == nil {
+				return fmt.Errorf("orchestrator: %w", runErr)
 			}
 		}
 		if result != nil {
@@ -225,7 +262,56 @@ func (c *CLI) runRun(out io.Writer, in io.Reader, message string, opts runOption
 			return nil
 		}
 	}
-	return c.runChatLoop(ctx, orch, renderer, history, in)
+	return c.runChatLoop(ctx, orch, renderer, history, in, resume)
+}
+
+func (c *CLI) createRunSession(prov llm.Provider, mdl llm.Model, effort string, mode agent.Mode) (*session.Session, error) {
+	dir, _ := os.Getwd()
+	provider := ""
+	if prov != nil {
+		provider = prov.Name()
+	}
+	sess, err := c.sessions.Create(session.CreateOptions{
+		Provider:        provider,
+		Model:           mdl.ID,
+		ReasoningEffort: effort,
+		Mode:            string(mode),
+		ProjectDir:      dir,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cli: create session: %w", err)
+	}
+	return sess, nil
+}
+
+func (c *CLI) claimRun(ctx context.Context, sess *session.Session, orch *agent.Agent, prov llm.Provider, mdl llm.Model) (*runpkg.Lease, error) {
+	if sess == nil || c.runCoord == nil {
+		return nil, nil
+	}
+	provider := ""
+	if prov != nil {
+		provider = prov.Name()
+	}
+	lease, err := c.runCoord.Claim(ctx, runpkg.ClaimRequest{
+		SessionID: sess.ID,
+		AgentID:   orch.ID,
+		AgentName: orch.Name,
+		Provider:  provider,
+		Model:     mdl.ID,
+		BaseSeq:   c.runCoord.BaseSeq(sess.ID),
+	})
+	if err != nil {
+		var busy *runpkg.BusyError
+		if errors.As(err, &busy) {
+			runID := ""
+			if busy.Run != nil {
+				runID = busy.Run.ID
+			}
+			return nil, fmt.Errorf("session is already running in another client (run %s); cancel it there first: %w", runID, busy)
+		}
+		return nil, fmt.Errorf("cli: claim session: %w", err)
+	}
+	return lease, nil
 }
 
 func (c *CLI) resolveSession(opts runOptions) (*session.Session, error) {
@@ -304,7 +390,7 @@ func (c *CLI) selectSession() (string, error) {
 	}
 }
 
-func (c *CLI) runChatLoop(ctx context.Context, orch *agent.Agent, renderer *runRenderer, history []llm.Message, in io.Reader) error {
+func (c *CLI) runChatLoop(ctx context.Context, orch *agent.Agent, renderer *runRenderer, history []llm.Message, in io.Reader, sess *session.Session) error {
 	renderer.chatMode = true
 	renderer.write("\n%s\n", renderer.dim("chat mode: type a message, exit/quit to end"))
 
@@ -354,7 +440,7 @@ func (c *CLI) runChatLoop(ctx context.Context, orch *agent.Agent, renderer *runR
 				renderer.write("> %s\n", line)
 			}
 			var err error
-			history, err = c.runChatAgent(ctx, orch, line, history)
+			history, err = c.runChatAgent(ctx, orch, line, history, sess)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					renderer.write("%s\n", renderer.dim("run cancelled; send a new message to continue"))
@@ -366,7 +452,24 @@ func (c *CLI) runChatLoop(ctx context.Context, orch *agent.Agent, renderer *runR
 			if tty {
 				renderer.write("\n")
 			}
-			result, err := orch.Continue(ctx, history)
+			lease, lerr := c.claimRun(ctx, sess, orch, orch.Provider, orch.Model)
+			if lerr != nil {
+				return lerr
+			}
+			var (
+				result *agent.RunResult
+				err    error
+			)
+			if lease != nil {
+				result, err = orch.Continue(lease.Context(), history)
+				if err == nil {
+					lease.Finish(session.RunStateDone, "")
+				} else {
+					lease.Finish(session.RunStateError, err.Error())
+				}
+			} else {
+				result, err = orch.Continue(ctx, history)
+			}
 			if err != nil {
 				return fmt.Errorf("orchestrator: %w", err)
 			}
@@ -379,13 +482,18 @@ func (c *CLI) runChatLoop(ctx context.Context, orch *agent.Agent, renderer *runR
 	}
 }
 
-func (c *CLI) runChatAgent(ctx context.Context, orch *agent.Agent, line string, history []llm.Message) ([]llm.Message, error) {
+func (c *CLI) runChatAgent(ctx context.Context, orch *agent.Agent, line string, history []llm.Message, sess *session.Session) ([]llm.Message, error) {
+	lease, err := c.claimRun(ctx, sess, orch, orch.Provider, orch.Model)
+	if err != nil {
+		return history, err
+	}
 	var result *agent.RunResult
-	var err error
-	if len(history) == 0 {
-		result, err = orch.RunStream(ctx, line, func(agent.StreamEvent) error { return nil })
-	} else {
+	if c.runCoord != nil {
+		result, err = c.runCoord.Stream(ctx, lease, orch, line, history, func(agent.StreamEvent) error { return nil })
+	} else if len(history) > 0 {
 		result, err = orch.ResumeStream(ctx, line, history, func(agent.StreamEvent) error { return nil })
+	} else {
+		result, err = orch.RunStream(ctx, line, func(agent.StreamEvent) error { return nil })
 	}
 	if result != nil {
 		history = result.History

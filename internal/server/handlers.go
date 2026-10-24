@@ -16,6 +16,7 @@ import (
 	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/llm"
+	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/utils/query"
 )
@@ -104,30 +105,96 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 	defer stop()
 
 	var history []llm.Message
-	if req.SessionID != "" {
-		msgs, err := s.sessions.Messages(req.SessionID)
-		if err != nil {
-			writeError(w, http.StatusNotFound, "session not found")
+	if req.SessionID == "" {
+		dir, _ := os.Getwd()
+		if s.fs != nil && s.fs.Root() != "" {
+			dir = s.fs.Root()
+		}
+		sess, cerr := s.sessions.Create(session.CreateOptions{
+			Provider:        prov.Name(),
+			Model:           mdl.ID,
+			ReasoningEffort: orch.ReasoningEffort,
+			Mode:            string(mode),
+			ProjectDir:      dir,
+		})
+		if cerr != nil {
+			writeError(w, http.StatusInternalServerError, "create session: "+cerr.Error())
 			return
 		}
-		if orch.SystemPrompt != "" {
-			history = append(history, llm.SystemMessage(orch.SystemPrompt))
+		req.SessionID = sess.ID
+	}
+	msgs, err := s.sessions.Messages(req.SessionID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if orch.SystemPrompt != "" {
+		history = append(history, llm.SystemMessage(orch.SystemPrompt))
+	}
+	history = append(history, session.MessagesToLLM(msgs)...)
+	s.bus.Publish(session.TopicSessionResume, session.SessionResume{
+		AgentID:   orch.ID,
+		SessionID: req.SessionID,
+	})
+
+	var lease *runpkg.Lease
+	if s.runs != nil {
+		baseSeq := 0
+		if len(msgs) > 0 {
+			for _, m := range msgs {
+				if m.Seq > baseSeq {
+					baseSeq = m.Seq
+				}
+			}
 		}
-		history = append(history, session.MessagesToLLM(msgs)...)
-		s.bus.Publish(session.TopicSessionResume, session.SessionResume{
-			AgentID:   orch.ID,
+		lease, err = s.runs.Claim(ctx, runpkg.ClaimRequest{
 			SessionID: req.SessionID,
+			AgentID:   orch.ID,
+			AgentName: orch.Name,
+			Provider:  prov.Name(),
+			Model:     mdl.ID,
+			BaseSeq:   baseSeq,
 		})
+		if err != nil {
+			var busy *runpkg.BusyError
+			if errors.As(err, &busy) {
+				writeJSON(w, http.StatusConflict, map[string]any{
+					"error": "session is already running in another client",
+					"run":   runInfo(busy.Run),
+				})
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	if req.Stream {
-		s.handleRunStream(w, ctx, orch, req.Message, history)
+		s.handleRunStream(w, ctx, lease, orch, req.Message, history)
 	} else {
-		s.handleRunSync(w, ctx, orch, req.Message, history)
+		s.handleRunSync(w, ctx, lease, orch, req.Message, history)
 	}
 }
 
-func (s *Server) handleRunStream(w http.ResponseWriter, ctx context.Context, orch *agent.Agent, message string, history []llm.Message) {
+func runInfo(r *session.Run) map[string]any {
+	if r == nil {
+		return nil
+	}
+	return map[string]any{
+		"id":             r.ID,
+		"session_id":     r.SessionID,
+		"state":          string(r.State),
+		"agent_id":       r.AgentID,
+		"agent_name":     r.AgentName,
+		"provider":       r.Provider,
+		"model":          r.Model,
+		"base_seq":       r.BaseSeq,
+		"owner_instance": r.OwnerInstance,
+		"started_at":     r.StartedAt.Unix(),
+	}
+}
+
+func (s *Server) handleRunStream(w http.ResponseWriter, ctx context.Context, lease *runpkg.Lease, orch *agent.Agent, message string, history []llm.Message) {
 	sse, err := NewSSEWriter(w)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "sse not supported")
@@ -173,7 +240,15 @@ func (s *Server) handleRunStream(w http.ResponseWriter, ctx context.Context, orc
 	}()
 
 	var result *agent.RunResult
-	if len(history) > 0 {
+	if s.runs != nil {
+		result, err = s.runs.Stream(ctx, lease, orch, message, history, func(ev agent.StreamEvent) error {
+			select {
+			case eventCh <- ev:
+			default:
+			}
+			return nil
+		})
+	} else if len(history) > 0 {
 		result, err = orch.ResumeStream(ctx, message, history, func(ev agent.StreamEvent) error {
 			select {
 			case eventCh <- ev:
@@ -206,11 +281,13 @@ func (s *Server) handleRunStream(w http.ResponseWriter, ctx context.Context, orc
 	sse.WriteEvent("done", finalEvent)
 }
 
-func (s *Server) handleRunSync(w http.ResponseWriter, ctx context.Context, orch *agent.Agent, message string, history []llm.Message) {
+func (s *Server) handleRunSync(w http.ResponseWriter, ctx context.Context, lease *runpkg.Lease, orch *agent.Agent, message string, history []llm.Message) {
 	var result *agent.RunResult
 	var err error
 
-	if len(history) > 0 {
+	if s.runs != nil {
+		result, err = s.runs.Stream(ctx, lease, orch, message, history, func(ev agent.StreamEvent) error { return nil })
+	} else if len(history) > 0 {
 		result, err = orch.ResumeStream(ctx, message, history, func(ev agent.StreamEvent) error { return nil })
 	} else {
 		result, err = orch.RunStream(ctx, message, func(ev agent.StreamEvent) error { return nil })
@@ -334,9 +411,18 @@ func (s *Server) handleGetSessionMessages(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp := make([]MessageResponse, len(msgs))
-	for i, m := range msgs {
-		resp[i] = toMessageResponse(&m)
+	maxSeq := 0
+	if raw := r.URL.Query().Get("max_seq"); raw != "" {
+		if n, perr := strconv.Atoi(raw); perr == nil {
+			maxSeq = n
+		}
+	}
+	resp := make([]MessageResponse, 0, len(msgs))
+	for i := range msgs {
+		if maxSeq > 0 && msgs[i].Seq > maxSeq {
+			continue
+		}
+		resp = append(resp, toMessageResponse(&msgs[i]))
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
