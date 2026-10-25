@@ -22,7 +22,11 @@ type runState struct {
 	provider           string
 	stream             StreamHandler
 	pendingAttachments []llm.Attachment
+	continuation       string
+	emptyResponses     int
 }
+
+const maxEmptyResponseRetries = 3
 
 func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*RunResult, error) {
 	if strings.TrimSpace(input) == "" && len(a.Attachments) == 0 {
@@ -179,13 +183,13 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 		}
 		if !emptyAssistantMessage(msg) {
 			state.history = append(state.history, msg)
+			a.publish(TopicAgentMessage, AgentMessage{
+				AgentID:   a.ID,
+				AgentName: a.Name,
+				Model:     a.Model,
+				Message:   msg,
+			})
 		}
-		a.publish(TopicAgentMessage, AgentMessage{
-			AgentID:   a.ID,
-			AgentName: a.Name,
-			Model:     a.Model,
-			Message:   msg,
-		})
 		if len(calls) > 0 {
 			for _, call := range calls {
 				if err := a.executeTool(ctx, state, call); err != nil {
@@ -193,11 +197,30 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 				}
 			}
 			a.attachToolAttachments(state)
+			state.emptyResponses = 0
 			continue
 		}
 		if a.HasPendingNotifications() {
 			continue
 		}
+		if emptyAssistantMessage(msg) {
+			if ctx.Err() != nil {
+				return a.partialResult(state), a.fail(ctx, ctx.Err())
+			}
+			canRetry := a.MaxIterations <= 0 || state.iterations < a.MaxIterations
+			if !canRetry {
+				finished = true
+				break
+			}
+			if state.emptyResponses >= maxEmptyResponseRetries {
+				err := fmt.Errorf("%w after %d attempts", ErrEmptyResponse, state.emptyResponses)
+				return a.partialResult(state), a.fail(ctx, err)
+			}
+			state.emptyResponses++
+			state.continuation = "Your previous turn ended without producing any response content or tool calls. Continue the task and provide the response now."
+			continue
+		}
+		state.emptyResponses = 0
 		finished = true
 		break
 	}
@@ -292,7 +315,7 @@ func (a *Agent) attachToolAttachments(state *runState) {
 }
 
 func emptyAssistantMessage(m llm.Message) bool {
-	return m.Role == llm.RoleAssistant && len(m.ToolCalls) == 0 && llm.MessageText(m) == ""
+	return m.Role == llm.RoleAssistant && len(m.ToolCalls) == 0 && strings.TrimSpace(llm.MessageText(m)) == ""
 }
 
 func appendReminder(msgs []llm.Message, text string) []llm.Message {
@@ -338,6 +361,10 @@ func (a *Agent) iterate(ctx context.Context, state *runState, prov llm.Provider)
 		if formatted := reminder.FormatAll(notifications); formatted != "" {
 			req.Messages = append(req.Messages, llm.SystemMessage(formatted))
 		}
+	}
+	if state.continuation != "" {
+		req.Messages = append(req.Messages, llm.SystemMessage(state.continuation))
+		state.continuation = ""
 	}
 
 	if err := a.chain.BeforeLLM(ctx, req); err != nil {
