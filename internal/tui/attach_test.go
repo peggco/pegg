@@ -558,11 +558,11 @@ func TestSessionUpdatedSyncsModeAndClosesAsk(t *testing.T) {
 	msgs, _ := mgr.Messages(sess.ID)
 	app.activateSession(settings.SessionInfo{ID: info.ID, Title: info.Title, Mode: info.Mode, Messages: msgs})
 
-	app.onAgentAsk(agent.AgentAsk{AgentID: "a1", Questions: []agent.AskQuestion{{ID: "q", Question: "Q", Type: "text"}}})
+	app.onAgentAsk(agent.AgentAsk{AgentID: orch.ID, Questions: []agent.AskQuestion{{ID: "q", Question: "Q", Type: "text"}}})
 	if !app.home.AskOpen() {
 		t.Fatal("ask did not open")
 	}
-	app.onAgentAskAnswer(agent.AgentAskAnswer{AgentID: "a1", Answers: map[string]string{"q": "A"}})
+	app.onAgentAskAnswer(agent.AgentAskAnswer{AgentID: orch.ID, Answers: map[string]string{"q": "A"}})
 	if app.home.AskOpen() {
 		t.Fatal("ask was not closed by another client's answer")
 	}
