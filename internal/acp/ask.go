@@ -140,8 +140,6 @@ func (s *Server) endAsk(key string) {
 	s.askMu.Unlock()
 }
 
-// resolveAsk cancels a pending client ask and tells the editor to dismiss the
-// modal when another client answered first.
 func (s *Server) resolveAsk(key, runID, agentID, fallbackSessionID string) {
 	s.askMu.Lock()
 	p := s.pendingAsks[key]

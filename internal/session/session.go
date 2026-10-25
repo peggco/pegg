@@ -37,6 +37,7 @@ type Session struct {
 	ProjectDir         string
 	ParentID           string
 	CompactionParentID string
+	IsSubagent         bool
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	Usage              llm.Usage
@@ -93,4 +94,5 @@ type CreateOptions struct {
 	ReasoningEffort string
 	Mode            string
 	ProjectDir      string
+	IsSubagent      bool
 }

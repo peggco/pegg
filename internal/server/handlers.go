@@ -361,6 +361,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		Page: query.Page{Number: page, Size: size},
 		Sort: []query.Sort{{Column: "updated_at", Dir: query.Desc}},
 		Filters: []query.Filter{
+			session.MainSessionsFilter(),
 			{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""},
 		},
 	}

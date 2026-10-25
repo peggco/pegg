@@ -252,51 +252,62 @@ func (r *registry) byAgentID(agentID string) *SubAgent {
 	return nil
 }
 
-func IsSubagentSession(sessionID string) bool {
-	if sessionID == "" {
-		return false
-	}
+func SessionIDs() map[string]struct{} {
+	ids := make(map[string]struct{})
 	if err := store.init(); err != nil {
-		return false
+		return ids
 	}
 	store.mu.Lock()
 	for _, ss := range store.sessions {
 		for _, sa := range ss.agents {
-			if sa.SessionID == sessionID {
-				store.mu.Unlock()
-				return true
+			if sa.SessionID != "" {
+				ids[sa.SessionID] = struct{}{}
 			}
 		}
 	}
 	store.mu.Unlock()
 
-	dir, err := config.GetProjectConfigPath("subagents")
-	if err != nil {
-		return false
+	dirs := make([]string, 0, 2)
+	if dir, err := config.GetProjectConfigPath("subagents"); err == nil {
+		dirs = append(dirs, dir)
 	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return false
+	if global, err := config.GetConfigDir(); err == nil {
+		matches, _ := filepath.Glob(filepath.Join(global, "projects", "*", "subagents"))
+		dirs = append(dirs, matches...)
 	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
 		if err != nil {
 			continue
 		}
-		var list []*SubAgent
-		if err := json.Unmarshal(data, &list); err != nil {
-			continue
-		}
-		for _, sa := range list {
-			if sa.SessionID == sessionID {
-				return true
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+			if err != nil {
+				continue
+			}
+			var list []*SubAgent
+			if err := json.Unmarshal(data, &list); err != nil {
+				continue
+			}
+			for _, sa := range list {
+				if sa.SessionID != "" {
+					ids[sa.SessionID] = struct{}{}
+				}
 			}
 		}
 	}
-	return false
+	return ids
+}
+
+func IsSubagentSession(sessionID string) bool {
+	if sessionID == "" {
+		return false
+	}
+	_, ok := SessionIDs()[sessionID]
+	return ok
 }
 
 func (r *registry) onStarted(agentID string) {

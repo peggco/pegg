@@ -244,6 +244,7 @@ func (r *Recorder) handleStarted(e agent.AgentStarted) {
 		if dir, err := os.Getwd(); err == nil {
 			opts.ProjectDir = dir
 		}
+		opts.IsSubagent = subagent
 		if subagent {
 			parentTitle := r.sessionTitle(parentSessionID)
 			if isPlaceholderTitle(parentTitle) {

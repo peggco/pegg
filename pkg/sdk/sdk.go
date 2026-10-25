@@ -360,7 +360,7 @@ func (e *Engine) sessionResolver(projectDir string) (string, string, bool) {
 		return "", "", false
 	}
 	for _, s := range msgs {
-		if s.ParentID != "" {
+		if s.IsSubagent || s.ParentID != "" {
 			continue
 		}
 		if s.Provider == "" || s.Model == "" {

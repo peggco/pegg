@@ -122,6 +122,12 @@ func Run(args []string) error {
 	}
 	defer rec.Stop(bus)
 
+	if ids := subagent.SessionIDs(); len(ids) > 0 {
+		if err := sess.MarkSubagents(ids); err != nil {
+			log.Fdebug("bootstrap: mark subagent sessions: %v", err)
+		}
+	}
+
 	runCoord := run.New(sess, bus, log)
 	runCoord.StartMaintenance()
 	defer runCoord.Stop()
@@ -193,18 +199,19 @@ func sessionModel(sess *session.Manager, dir string) (string, string, bool) {
 	q := query.Query{
 		Page: query.Page{Number: 1, Size: 20},
 		Sort: []query.Sort{{Column: "updated_at", Dir: query.Desc}},
+		Filters: []query.Filter{
+			session.MainSessionsFilter(),
+		},
 	}
 	if dir != "" {
-		q.Filters = []query.Filter{
-			{Column: "project_dir", Operator: query.OpEqual, Value: dir},
-		}
+		q.Filters = append(q.Filters, query.Filter{Column: "project_dir", Operator: query.OpEqual, Value: dir})
 	}
 	sessions, _, err := sess.List(q)
 	if err != nil {
 		return "", "", false
 	}
 	for _, s := range sessions {
-		if subagent.IsSubagentSession(s.ID) {
+		if s.IsSubagent {
 			continue
 		}
 		if s.Provider == "" || s.Model == "" {

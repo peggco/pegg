@@ -346,6 +346,7 @@ func (c *CLI) selectSession() (string, error) {
 		q := query.Query{
 			Page: query.Page{Number: page, Size: size},
 			Filters: []query.Filter{{Column: "project_dir", Operator: query.OpEqual, Value: dir},
+				session.MainSessionsFilter(),
 				{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""}},
 		}
 		sessions, total, err := c.sessions.List(q)

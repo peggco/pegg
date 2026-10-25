@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/utils/query"
 )
 
@@ -49,6 +50,7 @@ func (c *CLI) runSessionList(out io.Writer, search string, all bool, page, size 
 	q := query.Query{
 		Page: query.Page{Number: page, Size: size},
 		Filters: []query.Filter{
+			session.MainSessionsFilter(),
 			{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""},
 		},
 	}
