@@ -2,22 +2,53 @@ package session
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/peggco/pegg/internal/llm"
 )
 
 func MessagesToLLM(msgs []Message) []llm.Message {
 	out := make([]llm.Message, 0, len(msgs))
+	var pending []llm.Attachment
+	flush := func() {
+		if len(pending) == 0 {
+			return
+		}
+		names := make([]string, 0, len(pending))
+		for _, att := range pending {
+			if att.FileName != "" {
+				names = append(names, att.FileName)
+			}
+		}
+		text := "Images loaded by the read tool"
+		if len(names) > 0 {
+			text += ": " + strings.Join(names, ", ")
+		}
+		out = append(out, llm.UserMessage(llm.ContentWithAttachments(text, pending)))
+		pending = nil
+	}
 	for _, m := range msgs {
-		out = append(out, llm.Message{
+		msg := llm.Message{
 			Role:       m.Role,
 			Content:    normalizeContent(m.Content),
 			Reasoning:  m.Reasoning,
 			Name:       m.Name,
 			ToolCallID: m.ToolCallID,
 			ToolCalls:  m.ToolCalls,
-		})
+		}
+		if msg.Role == llm.RoleTool {
+			if content, ok := msg.Content.(llm.Content); ok && len(content.Attachments) > 0 {
+				atts := mediaOnly(content.Attachments)
+				msg.Content = content.Text
+				pending = append(pending, atts...)
+			}
+			out = append(out, msg)
+			continue
+		}
+		flush()
+		out = append(out, msg)
 	}
+	flush()
 	return out
 }
 

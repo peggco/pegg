@@ -12,16 +12,21 @@ import (
 )
 
 type runState struct {
-	agent        *Agent
-	history      []llm.Message
-	iterations   int
-	usage        llm.Usage
-	output       string
-	finishReason llm.FinishReason
-	modelID      string
-	provider     string
-	stream       StreamHandler
+	agent              *Agent
+	history            []llm.Message
+	iterations         int
+	usage              llm.Usage
+	output             string
+	finishReason       llm.FinishReason
+	modelID            string
+	provider           string
+	stream             StreamHandler
+	pendingAttachments []llm.Attachment
+	continuation       string
+	emptyResponses     int
 }
+
+const maxEmptyResponseRetries = 3
 
 func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*RunResult, error) {
 	if strings.TrimSpace(input) == "" && len(a.Attachments) == 0 {
@@ -178,24 +183,44 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 		}
 		if !emptyAssistantMessage(msg) {
 			state.history = append(state.history, msg)
+			a.publish(TopicAgentMessage, AgentMessage{
+				AgentID:   a.ID,
+				AgentName: a.Name,
+				Model:     a.Model,
+				Message:   msg,
+			})
 		}
-		a.publish(TopicAgentMessage, AgentMessage{
-			AgentID:   a.ID,
-			AgentName: a.Name,
-			Model:     a.Model,
-			Message:   msg,
-		})
 		if len(calls) > 0 {
 			for _, call := range calls {
 				if err := a.executeTool(ctx, state, call); err != nil {
 					return a.partialResult(state), a.fail(ctx, err)
 				}
 			}
+			a.attachToolAttachments(state)
+			state.emptyResponses = 0
 			continue
 		}
 		if a.HasPendingNotifications() {
 			continue
 		}
+		if emptyAssistantMessage(msg) {
+			if ctx.Err() != nil {
+				return a.partialResult(state), a.fail(ctx, ctx.Err())
+			}
+			canRetry := a.MaxIterations <= 0 || state.iterations < a.MaxIterations
+			if !canRetry {
+				finished = true
+				break
+			}
+			if state.emptyResponses >= maxEmptyResponseRetries {
+				err := fmt.Errorf("%w after %d attempts", ErrEmptyResponse, state.emptyResponses)
+				return a.partialResult(state), a.fail(ctx, err)
+			}
+			state.emptyResponses++
+			state.continuation = "Your previous turn ended without producing any response content or tool calls. Continue the task and provide the response now."
+			continue
+		}
+		state.emptyResponses = 0
 		finished = true
 		break
 	}
@@ -263,11 +288,34 @@ func (a *Agent) resolveInputCalls(ctx context.Context, state *runState, calls []
 			return err
 		}
 	}
+	a.attachToolAttachments(state)
 	return nil
 }
 
+func (a *Agent) attachToolAttachments(state *runState) {
+	if len(state.pendingAttachments) == 0 {
+		return
+	}
+	atts := attach.MediaAttachments(state.pendingAttachments, a.Model)
+	state.pendingAttachments = nil
+	if len(atts) == 0 {
+		return
+	}
+	names := make([]string, 0, len(atts))
+	for _, att := range atts {
+		if att.FileName != "" {
+			names = append(names, att.FileName)
+		}
+	}
+	text := "Images loaded by the read tool"
+	if len(names) > 0 {
+		text += ": " + strings.Join(names, ", ")
+	}
+	state.history = append(state.history, llm.UserMessage(llm.ContentWithAttachments(text, atts)))
+}
+
 func emptyAssistantMessage(m llm.Message) bool {
-	return m.Role == llm.RoleAssistant && len(m.ToolCalls) == 0 && llm.MessageText(m) == ""
+	return m.Role == llm.RoleAssistant && len(m.ToolCalls) == 0 && strings.TrimSpace(llm.MessageText(m)) == ""
 }
 
 func appendReminder(msgs []llm.Message, text string) []llm.Message {
@@ -313,6 +361,10 @@ func (a *Agent) iterate(ctx context.Context, state *runState, prov llm.Provider)
 		if formatted := reminder.FormatAll(notifications); formatted != "" {
 			req.Messages = append(req.Messages, llm.SystemMessage(formatted))
 		}
+	}
+	if state.continuation != "" {
+		req.Messages = append(req.Messages, llm.SystemMessage(state.continuation))
+		state.continuation = ""
 	}
 
 	if err := a.chain.BeforeLLM(ctx, req); err != nil {
@@ -471,41 +523,48 @@ func (a *Agent) executeTool(ctx context.Context, state *runState, call llm.ToolC
 	if err := a.chain.BeforeTool(ctx, call); err != nil {
 		output := fmt.Sprintf("Error: tool call aborted by middleware: %v", err)
 		state.history = append(state.history, llm.ToolMessage(output, call.ID))
-		a.emitToolResult(state, call, output, err)
+		a.emitToolResult(state, call, output, nil, err)
 		return nil
 	}
 
 	t, ok := a.Tools.Get(call.Function.Name)
 	var output string
 	var toolErr error
+	var attachments []llm.Attachment
 	if !ok {
 		output = fmt.Sprintf("Error: tool %q is not registered", call.Function.Name)
 		toolErr = fmt.Errorf("%w: %s", tool.ErrNotFound, call.Function.Name)
 	} else {
-		output, toolErr = a.chain.InvokeTool(ctx, call, func(ctx context.Context, call llm.ToolCall) (string, error) {
+		sink := tool.NewAttachmentSink()
+		toolCtx := tool.WithAttachmentSink(ctx, sink)
+		output, toolErr = a.chain.InvokeTool(toolCtx, call, func(ctx context.Context, call llm.ToolCall) (string, error) {
 			return t.Execute(ctx, call.Function.Arguments)
 		})
 		if toolErr != nil {
 			output = fmt.Sprintf("Error: %v", toolErr)
 			toolErr = fmt.Errorf("%w: %s: %v", ErrToolExecutionFailed, t.Name(), toolErr)
+		} else {
+			attachments = sink.Attachments()
+			state.pendingAttachments = append(state.pendingAttachments, attachments...)
 		}
 	}
 
 	_ = a.chain.AfterTool(ctx, call, output, toolErr)
 	state.history = append(state.history, llm.ToolMessage(output, call.ID))
-	a.emitToolResult(state, call, output, toolErr)
+	a.emitToolResult(state, call, output, attachments, toolErr)
 	return nil
 }
 
-func (a *Agent) emitToolResult(state *runState, call llm.ToolCall, output string, toolErr error) {
+func (a *Agent) emitToolResult(state *runState, call llm.ToolCall, output string, attachments []llm.Attachment, toolErr error) {
 	a.publish(TopicAgentToolResult, AgentToolResult{
-		AgentID:   a.ID,
-		AgentName: a.Name,
-		Model:     a.Model,
-		CallID:    call.ID,
-		ToolName:  call.Function.Name,
-		Output:    output,
-		Err:       toolErr,
+		AgentID:     a.ID,
+		AgentName:   a.Name,
+		Model:       a.Model,
+		CallID:      call.ID,
+		ToolName:    call.Function.Name,
+		Output:      output,
+		Attachments: attachments,
+		Err:         toolErr,
 	})
 	if state.stream != nil {
 		callCopy := call

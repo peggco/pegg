@@ -394,8 +394,9 @@ Settings → General → Theme. The choice is saved to the `theme` key in
 ## Session behavior
 
 Each submitted message resumes the active session; if none is active, one is created
-automatically and titled by a background model call. See
-[Sessions](../features/sessions.md).
+automatically and titled by a background model call. Switching sessions while a run
+is active leaves that run going in the background; switching back reattaches to its
+live stream. See [Sessions](../features/sessions.md).
 
 ## Limitations
 

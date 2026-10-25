@@ -49,6 +49,9 @@ func TestAccessCheckerPermittedPathGrant(t *testing.T) {
 	if path != filepath.Clean(outside) {
 		t.Fatalf("path = %q, want %q", path, outside)
 	}
+	if _, err := fs.ReadCtx(ctx, outside); err != nil {
+		t.Fatalf("ReadCtx with permitted path: %v", err)
+	}
 }
 
 func TestAccessCheckerNoGrantDenies(t *testing.T) {

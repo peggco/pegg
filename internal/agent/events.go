@@ -61,13 +61,14 @@ type AgentToolCall struct {
 }
 
 type AgentToolResult struct {
-	AgentID   string
-	AgentName string
-	Model     llm.Model
-	CallID    string
-	ToolName  string
-	Output    string
-	Err       error
+	AgentID     string
+	AgentName   string
+	Model       llm.Model
+	CallID      string
+	ToolName    string
+	Output      string
+	Attachments []llm.Attachment
+	Err         error
 }
 
 type AgentUsage struct {

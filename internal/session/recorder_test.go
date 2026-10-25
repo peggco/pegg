@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -184,7 +185,7 @@ func TestRecorderSkipsEventsWithoutStarted(t *testing.T) {
 	}
 }
 
-func TestRecorderCommitsTokenBatches(t *testing.T) {
+func TestRecorderAccumulatesStreamingMessage(t *testing.T) {
 	mgr, _, bus := newTestRecorder(t)
 	publishStarted(bus, "a1", "agent-one", "groq", "llama-3.3")
 	bus.Publish(agent.TopicAgentInput, agent.AgentInput{AgentID: "a1", Input: "go"})
@@ -199,17 +200,11 @@ func TestRecorderCommitsTokenBatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) != 4 {
-		t.Fatalf("messages = %+v, want 4 (user + 2 batches + residual)", msgs)
+	if len(msgs) != 2 {
+		t.Fatalf("messages = %+v, want 2 (user + one assistant)", msgs)
 	}
-	if msgs[1].Role != llm.RoleAssistant || msgs[1].Content != "xxxxxxxxxx" {
-		t.Fatalf("msgs[1] = %+v", msgs[1])
-	}
-	if msgs[2].Role != llm.RoleAssistant || msgs[2].Content != "xxxxxxxxxx" {
-		t.Fatalf("msgs[2] = %+v", msgs[2])
-	}
-	if msgs[3].Role != llm.RoleAssistant || msgs[3].Content != "xxxxx" {
-		t.Fatalf("msgs[3] = %+v", msgs[3])
+	if msgs[1].Role != llm.RoleAssistant || msgs[1].Content != strings.Repeat("x", 25) {
+		t.Fatalf("assistant message = %+v", msgs[1])
 	}
 }
 
@@ -263,11 +258,11 @@ func TestRecorderStreamingMessageNotDuplicated(t *testing.T) {
 			assistant = append(assistant, m)
 		}
 	}
-	if len(assistant) != 2 {
-		t.Fatalf("assistant messages = %+v, want 2 (batch + residual)", assistant)
+	if len(assistant) != 1 {
+		t.Fatalf("assistant messages = %+v, want 1", assistant)
 	}
-	if assistant[0].Content != "abcdefghij" || assistant[1].Content != "klmno" {
-		t.Fatalf("assistant messages = %+v", assistant)
+	if assistant[0].Content != full {
+		t.Fatalf("assistant message = %+v", assistant[0])
 	}
 }
 
@@ -352,9 +347,13 @@ func TestRecorderStreamingReasoningSaved(t *testing.T) {
 	bus.Publish(agent.TopicAgentInput, agent.AgentInput{AgentID: "a1", Input: "go"})
 
 	bus.Publish(agent.TopicAgentToken, agent.AgentToken{AgentID: "a1", Reasoning: "thinking"})
-	for i := 0; i < chunksPerCommit-1; i++ {
+	for i := 0; i < 9; i++ {
 		bus.Publish(agent.TopicAgentToken, agent.AgentToken{AgentID: "a1", Content: "y"})
 	}
+	bus.Publish(agent.TopicAgentMessage, agent.AgentMessage{
+		AgentID: "a1", AgentName: "agent-one",
+		Message: llm.AssistantMessage("yyyyyyyyy"),
+	})
 
 	sessions, _, _ := mgr.List(query.Query{})
 	msgs, err := mgr.Messages(sessions[0].ID)
@@ -755,5 +754,79 @@ func TestRecorderCompactionCreatesLinkedSession(t *testing.T) {
 	}
 	if len(after) != len(compacted)+1 {
 		t.Fatalf("messages after follow-up = %d, want %d", len(after), len(compacted)+1)
+	}
+}
+
+func TestRecorderPersistsToolAttachments(t *testing.T) {
+	mgr, _, bus := newTestRecorder(t)
+	publishStarted(bus, "a1", "agent-one", "groq", "llama-3.3")
+	bus.Publish(agent.TopicAgentInput, agent.AgentInput{AgentID: "a1", Input: "look"})
+	img := llm.NewImageAttachmentFromBase64("image/png", "AAAA")
+	img.FileName = "pixel.png"
+	bus.Publish(agent.TopicAgentToolResult, agent.AgentToolResult{
+		AgentID: "a1", AgentName: "agent-one", CallID: "c1", ToolName: "read",
+		Output: "<image>", Attachments: []llm.Attachment{img},
+	})
+
+	sessions, _, err := mgr.List(query.Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := mgr.Messages(sessions[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var toolMsg *Message
+	for i := range msgs {
+		if msgs[i].Role == llm.RoleTool {
+			toolMsg = &msgs[i]
+		}
+	}
+	if toolMsg == nil {
+		t.Fatal("tool message not persisted")
+	}
+	content, ok := normalizeContent(toolMsg.Content).(llm.Content)
+	if !ok || content.Text != "<image>" || len(content.Attachments) != 1 {
+		t.Fatalf("tool content = %+v", toolMsg.Content)
+	}
+	if content.Attachments[0].FileName != "pixel.png" {
+		t.Fatalf("attachment = %+v", content.Attachments[0])
+	}
+}
+
+func TestRecorderPersistsPartialStreamingMessage(t *testing.T) {
+	mgr, _, bus := newTestRecorder(t)
+	publishStarted(bus, "a1", "agent-one", "groq", "llama-3.3")
+	bus.Publish(agent.TopicAgentInput, agent.AgentInput{AgentID: "a1", Input: "go"})
+
+	for i := 0; i < chunksPerCommit+5; i++ {
+		bus.Publish(agent.TopicAgentToken, agent.AgentToken{AgentID: "a1", Content: "x"})
+	}
+	sessions, _, _ := mgr.List(query.Query{})
+	msgs, err := mgr.Messages(sessions[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("messages = %+v, want user + one streaming assistant", msgs)
+	}
+	if msgs[1].Role != llm.RoleAssistant || msgs[1].Content != strings.Repeat("x", chunksPerCommit) {
+		t.Fatalf("partial assistant = %+v", msgs[1])
+	}
+
+	for i := 0; i < 5; i++ {
+		bus.Publish(agent.TopicAgentToken, agent.AgentToken{AgentID: "a1", Content: "x"})
+	}
+	bus.Publish(agent.TopicAgentError, agent.AgentError{AgentID: "a1", Err: context.Canceled})
+
+	msgs, err = mgr.Messages(sessions[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("messages after interruption = %+v, want one assistant message", msgs)
+	}
+	if msgs[1].Content != strings.Repeat("x", chunksPerCommit+10) {
+		t.Fatalf("partial assistant after interruption = %+v", msgs[1])
 	}
 }

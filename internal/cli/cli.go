@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
 	"github.com/peggco/pegg/internal/core/cache"
 	"github.com/peggco/pegg/internal/core/config"
@@ -158,12 +159,15 @@ func (c *CLI) tuiDeps() (settings.Deps, error) {
 		MCP:      c.mcpMgr,
 		Sessions: c.sessions,
 		Agent:    orch,
-		Bus:      c.bus,
-		VFS:      c.fs,
-		Cache:    c.cache,
-		Plugin:   c.pluginMgr,
-		Runs:     c.runCoord,
-		Live:     c.liveHub,
+		AgentFactory: func() (*agent.Agent, error) {
+			return agents.New("orchestrator")
+		},
+		Bus:    c.bus,
+		VFS:    c.fs,
+		Cache:  c.cache,
+		Plugin: c.pluginMgr,
+		Runs:   c.runCoord,
+		Live:   c.liveHub,
 	}, nil
 }
 

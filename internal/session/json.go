@@ -175,6 +175,27 @@ func (s *JSONStore) InsertMessage(m Message) error {
 	return s.persist(f)
 }
 
+func (s *JSONStore) UpdateMessage(m Message) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, err := s.load(m.SessionID)
+	if err != nil {
+		return err
+	}
+	for i := range f.Messages {
+		if f.Messages[i].ID != m.ID {
+			continue
+		}
+		f.Messages[i].Content = m.Content
+		f.Messages[i].Reasoning = m.Reasoning
+		f.Messages[i].Name = m.Name
+		f.Messages[i].ToolCallID = m.ToolCallID
+		f.Messages[i].ToolCalls = m.ToolCalls
+		return s.persist(f)
+	}
+	return ErrMessageNotFound
+}
+
 func (s *JSONStore) Messages(sessionID string) ([]Message, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

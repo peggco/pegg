@@ -89,9 +89,9 @@ func (l *List) rebuild() {
 		return []string{l.all[i].Label, l.all[i].Detail}
 	})
 	l.filtered = append(l.filtered[:0], filtered...)
-	if l.index >= len(l.filtered) {
-		l.index = 0
-	}
+	l.index = 0
+	l.scroll = 0
+	l.SelectFirstEnabled()
 }
 
 func (l *List) MoveUp() {

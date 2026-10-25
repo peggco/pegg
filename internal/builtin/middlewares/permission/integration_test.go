@@ -2,6 +2,7 @@ package permission
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/tool"
+	"github.com/peggco/pegg/internal/builtin/tools/file"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/llm"
@@ -154,5 +156,67 @@ func TestAgentRunPermissionFlow(t *testing.T) {
 	}
 	if approvals != 2 {
 		t.Fatalf("approved tool results in history = %d, want 2", approvals)
+	}
+}
+
+func TestReadImageOutsideWorkspaceAfterAllow(t *testing.T) {
+	fs, err := vfs.New(t.TempDir(), vfs.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(filepath.Dir(fs.Root()), "pixel.png")
+	data, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outside, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var read tool.Tool
+	for _, candidate := range file.Tools(fs) {
+		if candidate.Name() == "read" {
+			read = candidate
+		}
+	}
+	if read == nil {
+		t.Fatal("read tool not found")
+	}
+	mw := testMiddleware(t, Deps{})
+	fs.OnAccessCheck(mw.AccessChecker)
+
+	bus := event.New()
+	asks := 0
+	bus.Subscribe(agent.TopicAgentAsk, func(e agent.AgentAsk) {
+		asks++
+		bus.Publish(agent.TopicAgentAskAnswer, agent.AgentAskAnswer{AgentID: e.AgentID, Answers: map[string]string{"decision": "Allow"}})
+	})
+	prov := &scriptedProvider{responses: []*llm.Response{
+		toolCallResponse("c1", "read", `{"filePath": "`+outside+`"}`),
+		textResponse("done"),
+	}}
+	a := agent.New("orch",
+		agent.WithModel(llm.Model{ID: "mock"}),
+		agent.WithProvider(prov),
+		agent.WithTool(read),
+		agent.WithMiddleware(mw),
+		agent.WithBus(bus),
+		agent.WithLogger(logger.New(logger.LevelDebug, discardHandler{})),
+	)
+	res, err := a.Run(context.Background(), "read the image")
+	if err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+	if asks == 0 {
+		t.Fatal("expected a permission prompt")
+	}
+	var output string
+	for _, m := range res.History {
+		if m.Role == llm.RoleTool {
+			output, _ = m.Content.(string)
+		}
+	}
+	if !strings.Contains(output, "<image>") {
+		t.Fatalf("tool output = %q, want image output", output)
 	}
 }

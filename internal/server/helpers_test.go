@@ -61,6 +61,16 @@ func (m *mockStore) InsertMessage(msg session.Message) error {
 	return nil
 }
 
+func (m *mockStore) UpdateMessage(msg session.Message) error {
+	for i := range m.messages[msg.SessionID] {
+		if m.messages[msg.SessionID][i].ID == msg.ID {
+			m.messages[msg.SessionID][i] = msg
+			return nil
+		}
+	}
+	return session.ErrMessageNotFound
+}
+
 func (m *mockStore) Messages(sessionID string) ([]session.Message, error) {
 	if _, ok := m.sessions[sessionID]; !ok {
 		return nil, session.ErrNotFound

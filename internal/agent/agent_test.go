@@ -1386,3 +1386,91 @@ func TestAgentClone(t *testing.T) {
 		t.Fatal("clone tools missing")
 	}
 }
+
+func TestRunContinuesEmptyResponses(t *testing.T) {
+	a, prov := newTestAgent(t)
+	prov.responses = []mockResponse{
+		{},
+		{reasoning: "thinking without content"},
+		{content: "done"},
+	}
+
+	res, err := a.Run(context.Background(), "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Output != "done" {
+		t.Fatalf("output = %q, want done", res.Output)
+	}
+	if res.Iterations != 3 {
+		t.Fatalf("iterations = %d, want 3", res.Iterations)
+	}
+	if len(res.History) != 2 || res.History[1].Role != llm.RoleAssistant {
+		t.Fatalf("history = %+v, want user + final assistant", res.History)
+	}
+}
+
+func TestRunContinuesEmptyResponseAfterTool(t *testing.T) {
+	a, prov := newTestAgent(t, WithTool(echoTool()))
+	prov.responses = []mockResponse{
+		{calls: []llm.ToolCall{toolCall("c1", "echo", `"hi"`)}},
+		{},
+		{content: "final answer"},
+	}
+
+	res, err := a.Run(context.Background(), "do it")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Output != "final answer" {
+		t.Fatalf("output = %q", res.Output)
+	}
+	if res.Iterations != 3 {
+		t.Fatalf("iterations = %d, want 3", res.Iterations)
+	}
+}
+
+func TestRunEmptyResponseLimit(t *testing.T) {
+	a, prov := newTestAgent(t)
+	prov.responses = []mockResponse{{}, {}, {}, {}}
+
+	_, err := a.Run(context.Background(), "hi")
+	if !errors.Is(err, ErrEmptyResponse) {
+		t.Fatalf("err = %v, want ErrEmptyResponse", err)
+	}
+}
+
+type cancelOnEmptyProvider struct {
+	cancel context.CancelFunc
+	calls  int
+}
+
+func (p *cancelOnEmptyProvider) Name() string { return "cancel-empty" }
+func (p *cancelOnEmptyProvider) ListModels(context.Context) ([]llm.Model, error) {
+	return []llm.Model{{ID: "mock-model"}}, nil
+}
+func (p *cancelOnEmptyProvider) Chat(context.Context, *llm.Request) (*llm.Response, error) {
+	p.calls++
+	p.cancel()
+	return responseOf(mockResponse{}), nil
+}
+func (p *cancelOnEmptyProvider) ChatStream(context.Context, *llm.Request, llm.StreamHandler) error {
+	return errors.New("not used")
+}
+
+func TestRunDoesNotContinueAfterUserCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	prov := &cancelOnEmptyProvider{cancel: cancel}
+	a := New("test-agent",
+		WithModel(llm.Model{ID: "mock-model"}),
+		WithProvider(prov),
+		WithLogger(logger.New(logger.LevelDebug, discardHandler{})),
+	)
+	_, err := a.Run(ctx, "hi")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if prov.calls != 1 {
+		t.Fatalf("provider calls = %d, want 1", prov.calls)
+	}
+}

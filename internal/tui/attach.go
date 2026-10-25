@@ -30,7 +30,7 @@ func (a *App) beginSessionFollow(info settings.SessionInfo) {
 		active   *session.Run
 	)
 	if a.deps.Live != nil {
-		events, seq, err := a.deps.Live.SnapshotSession(info.ID, false)
+		events, seq, err := a.deps.Live.SnapshotSession(info.ID, true)
 		if err == nil {
 			snapshot = events
 			since = seq
@@ -47,11 +47,7 @@ func (a *App) beginSessionFollow(info settings.SessionInfo) {
 	}
 
 	a.chatMu.Lock()
-	a.session = &activeSession{info: info, viewID: info.ID}
 	a.mode = agent.NormalizeMode(agent.Mode(info.Mode))
-	if a.agent != nil {
-		a.agent.SetMode(a.mode)
-	}
 	a.reasoningEffort = info.ReasoningEffort
 	if a.deps.LLM != nil && info.Provider != "" && info.Model != "" {
 		if res := a.deps.LLM.Select(llm.SelectRequest{
@@ -62,12 +58,38 @@ func (a *App) beginSessionFollow(info settings.SessionInfo) {
 			a.model = selectedModel{provider: res.Provider, model: res.Model}
 		}
 	}
+	rt := a.runtimeForLocked(info.ID)
+	a.session = &activeSession{info: info, viewID: info.ID}
+	a.agentCancel = nil
+	a.agentLease = nil
+	a.running = false
+	if rt != nil {
+		rt.mode = a.mode
+		rt.reasoningEffort = a.reasoningEffort
+		rt.model = a.model
+		a.agent = rt.agent
+		a.agentCancel = rt.cancel
+		a.agentLease = rt.lease
+		a.running = rt.running
+	}
+	a.resetTranscriptsLocked()
+	if a.agent != nil {
+		a.viewID = a.agent.ID
+	} else {
+		a.viewID = ""
+	}
+	if a.agent != nil {
+		a.agent.SetMode(a.mode)
+	}
 	a.loadSessionIntoChatLocked()
+	if rt != nil {
+		rt.history = a.history
+	}
 	a.refreshHomeLocked()
 	a.chatMu.Unlock()
 
 	if a.deps.Live != nil {
-		sub := a.deps.Live.SubscribeSession(info.ID, false, since)
+		sub := a.deps.Live.SubscribeSession(info.ID, true, since)
 		a.chatMu.Lock()
 		a.attachCancel = sub.Close
 		a.followSessionID = info.ID
@@ -90,11 +112,11 @@ func (a *App) ensureFollow(sessionID string) {
 	}
 	a.chatMu.Unlock()
 
-	snapshot, since, err := a.deps.Live.SnapshotSession(sessionID, false)
+	snapshot, since, err := a.deps.Live.SnapshotSession(sessionID, true)
 	if err != nil {
 		return
 	}
-	sub := a.deps.Live.SubscribeSession(sessionID, false, since)
+	sub := a.deps.Live.SubscribeSession(sessionID, true, since)
 
 	a.chatMu.Lock()
 	old := a.attachCancel
@@ -224,7 +246,13 @@ func (a *App) finishAttach(sessionID, runID string) {
 		a.attachOwner = ""
 	}
 	if a.session != nil && a.session.info.ID == sessionID {
+		oldID := a.session.info.ID
 		a.session.info.ID = sess.ID
+		agentID := ""
+		if a.agent != nil {
+			agentID = a.agent.ID
+		}
+		a.remapRuntimeLocked(oldID, sess.ID, agentID)
 		a.session.info.CompactionParentID = sess.CompactionParentID
 		a.session.viewID = sess.ID
 		a.session.info.Title = sess.Title
@@ -266,6 +294,14 @@ func (a *App) handleAttachedEvent(e session.RunEvent, mainAgentID string) {
 	if !ok {
 		return
 	}
+	a.chatMu.Lock()
+	a.handlingAttached = true
+	a.chatMu.Unlock()
+	defer func() {
+		a.chatMu.Lock()
+		a.handlingAttached = false
+		a.chatMu.Unlock()
+	}()
 	if ev.AgentID == mainAgentID {
 		ev.AgentID = a.agent.ID
 	}

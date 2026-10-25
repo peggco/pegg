@@ -101,6 +101,9 @@ func (a *Agent) Clone(name string) *Agent {
 	c.chain = a.chain.Clone()
 	c.mode = a.CurrentMode()
 	c.modeController = a.modeController
+	c.ToolNames = append(c.ToolNames, a.ToolNames...)
+	c.middlewareNames = append(c.middlewareNames, a.middlewareNames...)
+	c.namesResolved = a.namesResolved
 	for _, t := range a.Tools.List() {
 		_ = c.Tools.Register(t)
 	}

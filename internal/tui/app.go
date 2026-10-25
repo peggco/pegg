@@ -58,17 +58,20 @@ type App struct {
 	model selectedModel
 	voice voiceController
 
-	main            *agentTranscript
-	subs            map[string]*agentTranscript
-	subItemByID     map[string]*components.ChatItem
-	viewID          string
-	running         bool
-	usage           llm.Usage
-	history         []llm.Message
-	session         *activeSession
-	loadedFloor     int
-	reasoningEffort string
-	mode            agent.Mode
+	main             *agentTranscript
+	subs             map[string]*agentTranscript
+	subItemByID      map[string]*components.ChatItem
+	runtimes         map[string]*sessionRuntime
+	agentSessions    map[string]string
+	handlingAttached bool
+	viewID           string
+	running          bool
+	usage            llm.Usage
+	history          []llm.Message
+	session          *activeSession
+	loadedFloor      int
+	reasoningEffort  string
+	mode             agent.Mode
 
 	baseMentionItems []components.ListItem
 
@@ -115,6 +118,18 @@ type activeSession struct {
 	info settings.SessionInfo
 
 	viewID string
+}
+
+type sessionRuntime struct {
+	id              string
+	agent           *agent.Agent
+	history         []llm.Message
+	model           selectedModel
+	reasoningEffort string
+	mode            agent.Mode
+	cancel          context.CancelFunc
+	lease           *runpkg.Lease
+	running         bool
 }
 
 func (a *App) modelDisplay() string {
@@ -669,20 +684,19 @@ func (a *App) openSettings() {
 	s.SetOnSessionClear(func() {
 		a.stopAttach()
 		a.chatMu.Lock()
+		a.agent = nil
+		a.agentCancel = nil
+		a.agentLease = nil
 		a.session = nil
 		a.history = nil
 		a.usage = llm.Usage{}
-		a.chat.Clear()
-		a.main = nil
+		a.running = false
 		a.mode = agent.ModeAuto
-		if a.agent != nil {
-			a.agent.SetMode(agent.ModeAuto)
-		}
+		a.resetTranscriptsLocked()
+		a.viewID = ""
 		a.refreshHomeLocked()
 		a.chatMu.Unlock()
-		if a.agent != nil && a.bus != nil {
-			a.bus.Publish(session.TopicSessionResume, session.SessionResume{AgentID: a.agent.ID})
-		}
+		a.requestRedraw()
 	})
 	s.SetOnClose(func() { a.setOverlay(nil) })
 	s.SetOnSTTChange(func() {
@@ -936,6 +950,9 @@ func (a *App) loadSessionIntoChatLocked() {
 	}
 	a.refreshHomeLocked()
 	a.seedHistoryFromSessionLocked()
+	if rt := a.runtimes[a.session.info.ID]; rt != nil {
+		rt.history = a.history
+	}
 }
 
 func (a *App) seedHistoryFromSessionLocked() {

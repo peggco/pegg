@@ -17,17 +17,18 @@ import (
 )
 
 type Deps struct {
-	Config   *config.Config
-	LLM      *llm.Manager
-	Decision *decision.Manager
-	Memory   *memory.Manager
-	MCP      *mcp.Manager
-	Sessions *session.Manager
-	Agent    *agent.Agent
-	Bus      event.Bus
-	VFS      *vfs.VFS
-	Cache    cache.Cache
-	Plugin   *plugin.Manager
-	Runs     *run.Coordinator
-	Live     *live.Hub
+	Config       *config.Config
+	LLM          *llm.Manager
+	Decision     *decision.Manager
+	Memory       *memory.Manager
+	MCP          *mcp.Manager
+	Sessions     *session.Manager
+	Agent        *agent.Agent
+	AgentFactory func() (*agent.Agent, error)
+	Bus          event.Bus
+	VFS          *vfs.VFS
+	Cache        cache.Cache
+	Plugin       *plugin.Manager
+	Runs         *run.Coordinator
+	Live         *live.Hub
 }
