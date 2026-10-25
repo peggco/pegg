@@ -102,6 +102,29 @@ func TestListFilter(t *testing.T) {
 	}
 }
 
+func TestListFilterResetsSelectionToTop(t *testing.T) {
+	l := NewList("test")
+	l.SetSearchable(true)
+	l.SetItems([]ListItem{
+		{Label: "alpha", Detail: "one"},
+		{Label: "beta", Detail: "two"},
+		{Label: "gamma", Detail: "three"},
+		{Label: "delta", Detail: "four"},
+	})
+	l.MoveDown()
+	l.MoveDown()
+	if it, _ := l.Selected(); it.Label != "gamma" {
+		t.Fatalf("selected = %q, want gamma", it.Label)
+	}
+	l.HandleKey(tcell.NewEventKey(tcell.KeyRune, 'a', 0))
+	if l.SelectedIndex() != 0 {
+		t.Fatalf("selected index = %d, want 0 after search", l.SelectedIndex())
+	}
+	if it, _ := l.Selected(); it.Label != "alpha" {
+		t.Fatalf("selected = %q, want alpha", it.Label)
+	}
+}
+
 func TestListFilterSelectAndEnter(t *testing.T) {
 	l := NewList("test")
 	l.SetSearchable(true)
