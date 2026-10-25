@@ -72,6 +72,7 @@ type Store interface {
 	List(q query.Query) ([]Session, int, error)
 
 	InsertMessage(m Message) error
+	UpdateMessage(m Message) error
 	Messages(sessionID string) ([]Message, error)
 	TruncateAfter(sessionID, messageID string) ([]Message, error)
 	TruncateFrom(sessionID, messageID string) ([]Message, error)

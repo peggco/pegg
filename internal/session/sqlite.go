@@ -176,6 +176,24 @@ func (s *SQLiteStore) InsertMessage(m Message) error {
 	return err
 }
 
+func (s *SQLiteStore) UpdateMessage(m Message) error {
+	res, err := s.db.Exec(
+		"UPDATE session_messages SET content = ?, reasoning = ?, name = ?, tool_call_id = ?, tool_calls = ? WHERE id = ?",
+		marshalJSON(m.Content), marshalJSON(m.Reasoning), m.Name, m.ToolCallID, marshalJSON(m.ToolCalls), m.ID,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrMessageNotFound
+	}
+	return nil
+}
+
 func (s *SQLiteStore) Messages(sessionID string) ([]Message, error) {
 	rows, err := s.db.Query(
 		"SELECT id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at FROM session_messages WHERE session_id = ? ORDER BY seq ASC",

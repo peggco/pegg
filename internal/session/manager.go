@@ -202,6 +202,13 @@ func (m *Manager) AppendMessage(sessionID string, msg llm.Message) (*Message, er
 	return &rec, nil
 }
 
+func (m *Manager) UpdateMessage(msg Message) error {
+	if msg.ID == "" {
+		return ErrMessageNotFound
+	}
+	return m.store.UpdateMessage(msg)
+}
+
 func (m *Manager) AccumulateUsage(sessionID string, u llm.Usage) error {
 	s, err := m.store.Get(sessionID)
 	if err != nil {

@@ -381,6 +381,51 @@ func TestSlidingWindowPreservesSystemAndRecent(t *testing.T) {
 	}
 }
 
+func TestSlidingWindowPreservesFirstSystemMessage(t *testing.T) {
+	m := New(Deps{
+		Config: &config.CompactionConfig{
+			Enabled:     true,
+			Strategy:    []string{"sliding-window"},
+			MaxMessages: 2,
+		},
+	})
+
+	msgs := []llm.Message{
+		{Role: llm.RoleSystem, Content: "system prompt"},
+		{Role: llm.RoleSystem, Content: "system reminder"},
+		{Role: llm.RoleUser, Content: "msg 1"},
+		{Role: llm.RoleAssistant, Content: "reply 1"},
+		{Role: llm.RoleUser, Content: "msg 2"},
+		{Role: llm.RoleAssistant, Content: "reply 2"},
+		{Role: llm.RoleUser, Content: "msg 3"},
+		{Role: llm.RoleAssistant, Content: "reply 3"},
+	}
+	ref := &msgs
+	ctx := agent.WithHistory(context.Background(), ref)
+	req := &llm.Request{Messages: msgs}
+
+	m.mu.Lock()
+	m.needsCompact = true
+	m.mu.Unlock()
+
+	_ = m.BeforeLLM(ctx, req)
+
+	if len(req.Messages) != 4 {
+		t.Fatalf("messages = %d, want 4 (system + notice + 2 recent): %+v", len(req.Messages), req.Messages)
+	}
+	if llm.MessageText(req.Messages[0]) != "system prompt" {
+		t.Fatalf("first system message was not preserved: %+v", req.Messages[0])
+	}
+	if !strings.Contains(llm.MessageText(req.Messages[1]), "compacted") {
+		t.Fatalf("compaction notice = %q", llm.MessageText(req.Messages[1]))
+	}
+	for _, msg := range req.Messages {
+		if llm.MessageText(msg) == "system reminder" {
+			t.Fatal("later system reminders should be discardable")
+		}
+	}
+}
+
 func TestSlidingWindowUsesContextWindowSize(t *testing.T) {
 	m := New(Deps{
 		Config: &config.CompactionConfig{

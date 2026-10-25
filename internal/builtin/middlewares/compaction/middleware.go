@@ -232,8 +232,20 @@ func (m *Middleware) compactSlidingWindow(ctx context.Context, req *llm.Request,
 	}
 
 	keepStart := len(history) - keepCount
+	if keepStart < 0 {
+		keepStart = 0
+	}
 	compacted := make([]llm.Message, 0, keepCount+2)
-	compacted = append(compacted, history[0])
+	systemIdx := -1
+	for i, msg := range history {
+		if msg.Role == llm.RoleSystem {
+			systemIdx = i
+			break
+		}
+	}
+	if systemIdx >= 0 && systemIdx < keepStart {
+		compacted = append(compacted, history[systemIdx])
+	}
 	compacted = append(compacted, llm.SystemMessage("[Context compacted: older messages removed]"))
 	compacted = append(compacted, history[keepStart:]...)
 

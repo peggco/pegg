@@ -9,7 +9,6 @@ import (
 
 type attachmentSinkKey struct{}
 
-// AttachmentSink collects attachments produced by tool calls.
 type AttachmentSink struct {
 	mu   sync.Mutex
 	atts []llm.Attachment

@@ -17,8 +17,6 @@ import (
 	"github.com/peggco/pegg/internal/llm"
 )
 
-const chunksPerCommit = 10
-
 type sessionInfo struct {
 	sessionID       string
 	provider        llm.Provider
@@ -51,11 +49,13 @@ type Recorder struct {
 	titleStopped atomic.Bool
 }
 
+const chunksPerCommit = 10
+
 type pendingMessage struct {
 	content   string
 	reasoning string
+	id        string
 	chunks    int
-	committed bool
 }
 
 func NewRecorder(mgr *Manager, log *logger.Logger) *Recorder {
@@ -114,6 +114,27 @@ func (r *Recorder) Start(bus event.Bus) error {
 	return nil
 }
 
+func (r *Recorder) flushPendingAll() {
+	type item struct {
+		agentID   string
+		sessionID string
+	}
+	r.mu.Lock()
+	items := make([]item, 0, len(r.pending))
+	for agentID, p := range r.pending {
+		if p == nil || (p.id == "" && p.chunks == 0 && p.content == "" && p.reasoning == "") {
+			continue
+		}
+		if info, ok := r.sessions[agentID]; ok {
+			items = append(items, item{agentID: agentID, sessionID: info.sessionID})
+		}
+	}
+	r.mu.Unlock()
+	for _, it := range items {
+		r.finalizePending(it.agentID, it.sessionID, nil)
+	}
+}
+
 func (r *Recorder) Stop(bus event.Bus) error {
 	subs := []struct {
 		topic string
@@ -144,6 +165,7 @@ func (r *Recorder) Stop(bus event.Bus) error {
 			firstErr = fmt.Errorf("session recorder: unsubscribe %s: %w", s.topic, err)
 		}
 	}
+	r.flushPendingAll()
 	r.titleStopped.Store(true)
 	titleDone := make(chan struct{})
 	go func() {
@@ -432,7 +454,6 @@ func (r *Recorder) handleToken(e agent.AgentToken) {
 		"reasoning": e.Reasoning,
 	})
 	r.mu.Lock()
-	info, ok := r.sessions[e.AgentID]
 	p := r.pending[e.AgentID]
 	if p == nil {
 		p = &pendingMessage{}
@@ -441,14 +462,13 @@ func (r *Recorder) handleToken(e agent.AgentToken) {
 	p.content += e.Content
 	p.reasoning += e.Reasoning
 	p.chunks++
-	commit := p.chunks >= chunksPerCommit
+	flush := p.chunks >= chunksPerCommit
 	r.mu.Unlock()
 
-	if !ok {
-		return
-	}
-	if commit {
-		r.commitPending(e.AgentID, info.sessionID)
+	if flush {
+		if id, ok := r.sessionID(e.AgentID); ok {
+			r.flushPending(e.AgentID, id)
+		}
 	}
 }
 
@@ -459,26 +479,11 @@ func (r *Recorder) handleMessage(e agent.AgentMessage) {
 		return
 	}
 	r.mu.Lock()
-	streaming := r.pending[e.AgentID] != nil && r.pending[e.AgentID].chunks > 0
-	committed := r.pending[e.AgentID] != nil && r.pending[e.AgentID].committed
+	p := r.pending[e.AgentID]
+	streamed := p != nil && (p.id != "" || p.chunks > 0 || p.content != "" || p.reasoning != "")
 	r.mu.Unlock()
-	if streaming {
-		r.commitPendingWithToolCalls(e.AgentID, id, e.Message.ToolCalls)
-		return
-	}
-	if committed {
-		r.mu.Lock()
-		if p := r.pending[e.AgentID]; p != nil {
-			p.committed = false
-		}
-		r.mu.Unlock()
-		if len(e.Message.ToolCalls) > 0 {
-			msg := llm.AssistantMessage("")
-			msg.ToolCalls = e.Message.ToolCalls
-			if _, err := r.mgr.AppendMessage(id, msg); err != nil {
-				r.log.Fdebug("session recorder: append tool calls: %v", err)
-			}
-		}
+	if streamed {
+		r.finalizePending(e.AgentID, id, &e.Message)
 		return
 	}
 	if _, err := r.mgr.AppendMessage(id, e.Message); err != nil {
@@ -497,44 +502,93 @@ func (r *Recorder) handleError(e agent.AgentError) {
 		"message":    msg,
 	})
 	if id, ok := r.sessionID(e.AgentID); ok {
-		r.commitPending(e.AgentID, id)
+		r.finalizePending(e.AgentID, id, nil)
 	}
 }
 
-func (r *Recorder) commitPending(agentID, sessID string) {
-	r.commitPendingWithToolCalls(agentID, sessID, nil)
-}
-
-func (r *Recorder) commitPendingWithToolCalls(agentID, sessID string, toolCalls []llm.ToolCall) {
+func (r *Recorder) flushPending(agentID, sessID string) {
 	r.mu.Lock()
-	p, ok := r.pending[agentID]
-	if !ok || p.chunks == 0 {
+	p := r.pending[agentID]
+	if p == nil || p.chunks == 0 {
 		r.mu.Unlock()
 		return
 	}
-	msg := llm.AssistantMessage(p.content)
-	if p.reasoning != "" {
-		msg.Reasoning = p.reasoning
-	}
-	if len(toolCalls) > 0 {
-		msg.ToolCalls = toolCalls
-	}
-	p.content = ""
-	p.reasoning = ""
+	content := p.content
+	reasoning := p.reasoning
+	id := p.id
 	p.chunks = 0
 	r.mu.Unlock()
 
-	if msg.Content == "" && msg.Reasoning == "" && len(msg.ToolCalls) == 0 {
+	msg := assistantMessage(content, reasoning, nil)
+	if id != "" {
+		if err := r.mgr.UpdateMessage(Message{
+			ID: id, SessionID: sessID, Content: msg.Content, Reasoning: msg.Reasoning, ToolCalls: msg.ToolCalls,
+		}); err != nil {
+			r.log.Fdebug("session recorder: update streaming message: %v", err)
+		}
+		return
+	}
+	rec, err := r.mgr.AppendMessage(sessID, msg)
+	if err != nil {
+		r.log.Fdebug("session recorder: append streaming message: %v", err)
 		return
 	}
 	r.mu.Lock()
 	if p := r.pending[agentID]; p != nil {
-		p.committed = true
+		p.id = rec.ID
 	}
 	r.mu.Unlock()
-	if _, err := r.mgr.AppendMessage(sessID, msg); err != nil {
-		r.log.Fdebug("session recorder: append tokens: %v", err)
+}
+
+func (r *Recorder) finalizePending(agentID, sessID string, final *llm.Message) {
+	r.mu.Lock()
+	p := r.pending[agentID]
+	if p == nil {
+		r.mu.Unlock()
+		return
 	}
+	content := p.content
+	reasoning := p.reasoning
+	id := p.id
+	var calls []llm.ToolCall
+	if final != nil {
+		if text := llm.MessageText(*final); text != "" {
+			content = text
+		}
+		if text, ok := final.Reasoning.(string); ok && text != "" {
+			reasoning = text
+		}
+		calls = final.ToolCalls
+	}
+	delete(r.pending, agentID)
+	r.mu.Unlock()
+
+	if content == "" && reasoning == "" && len(calls) == 0 {
+		return
+	}
+	msg := assistantMessage(content, reasoning, calls)
+	if id != "" {
+		if err := r.mgr.UpdateMessage(Message{
+			ID: id, SessionID: sessID, Content: msg.Content, Reasoning: msg.Reasoning, ToolCalls: msg.ToolCalls,
+		}); err != nil {
+			r.log.Fdebug("session recorder: finalize streaming message: %v", err)
+		}
+		return
+	}
+	if _, err := r.mgr.AppendMessage(sessID, msg); err != nil {
+		r.log.Fdebug("session recorder: append streamed message: %v", err)
+	}
+}
+
+func assistantMessage(content, reasoning string, calls []llm.ToolCall) llm.Message {
+	msg := llm.AssistantMessage(content)
+	if reasoning != "" {
+		msg.Reasoning = reasoning
+	}
+	if len(calls) > 0 {
+		msg.ToolCalls = calls
+	}
+	return msg
 }
 
 func (r *Recorder) handleToolResult(e agent.AgentToolResult) {
@@ -567,6 +621,7 @@ func (r *Recorder) handleFinished(e agent.AgentFinished) {
 		"finish_reason": e.FinishReason,
 	})
 	if id, ok := r.sessionID(e.AgentID); ok {
+		r.finalizePending(e.AgentID, id, nil)
 		if err := r.mgr.AccumulateUsage(id, e.Usage); err != nil {
 			r.log.Fdebug("session recorder: accumulate usage: %v", err)
 		}
