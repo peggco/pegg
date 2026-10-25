@@ -1,16 +1,30 @@
 package file
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
+	"mime"
+	"path/filepath"
 	"strings"
 
 	json "github.com/goccy/go-json"
 
 	"github.com/peggco/pegg/internal/agent/prompt"
 	"github.com/peggco/pegg/internal/agent/tool"
+	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/vfs"
 )
+
+const maxReadImageBytes = 5 << 20
+
+var readImageMediaTypes = map[string]struct{}{
+	"image/gif":  {},
+	"image/jpeg": {},
+	"image/png":  {},
+	"image/webp": {},
+}
 
 func generateReadToolPrompt() (string, error) {
 	sys, err := readToolPromptBuilder().
@@ -74,6 +88,13 @@ func readTool(fs *vfs.VFS) tool.Tool {
 					return "", fmt.Errorf("read: %w", err)
 				}
 				return formatListResult(result), nil
+			}
+
+			if att, out, ok, err := readImageAttachment(ctx, fs, params.FilePath, fi.Size); err != nil {
+				return "", err
+			} else if ok {
+				tool.AddAttachment(ctx, att)
+				return out, nil
 			}
 
 			offset := params.Offset
@@ -150,4 +171,48 @@ func formatReadOutput(vfsOutput string, offset, limit int) string {
 	}
 
 	return b.String()
+}
+
+func readImageAttachment(ctx context.Context, fs *vfs.VFS, path string, size int64) (llm.Attachment, string, bool, error) {
+	mediaType := mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
+	if idx := strings.IndexByte(mediaType, ';'); idx >= 0 {
+		mediaType = strings.TrimSpace(mediaType[:idx])
+	}
+	if _, ok := readImageMediaTypes[mediaType]; !ok {
+		return llm.Attachment{}, "", false, nil
+	}
+	if size > maxReadImageBytes {
+		return llm.Attachment{}, "", false, fmt.Errorf("read: image %q is too large to attach (%d bytes, max %d)", path, size, maxReadImageBytes)
+	}
+	data, rel, err := fs.ReadBytesCtx(ctx, path)
+	if err != nil {
+		return llm.Attachment{}, "", false, fmt.Errorf("read: %w", err)
+	}
+	detected := detectImageMediaType(data)
+	if _, ok := readImageMediaTypes[detected]; !ok {
+		return llm.Attachment{}, "", false, nil
+	}
+	out := fmt.Sprintf("<image>\nPath: %s\nMedia type: %s\nSize: %d bytes\nImage content is attached for visual inspection when the model supports image input.\n</image>", rel, detected, len(data))
+	att := llm.Attachment{
+		Type:      llm.AttachmentTypeImage,
+		MediaType: detected,
+		Data:      base64.StdEncoding.EncodeToString(data),
+		FileName:  filepath.Base(rel),
+		Path:      rel,
+	}
+	return att, out, true, nil
+}
+
+func detectImageMediaType(data []byte) string {
+	switch {
+	case bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")):
+		return "image/png"
+	case len(data) >= 3 && data[0] == 0xff && data[1] == 0xd8 && data[2] == 0xff:
+		return "image/jpeg"
+	case bytes.HasPrefix(data, []byte("GIF87a")), bytes.HasPrefix(data, []byte("GIF89a")):
+		return "image/gif"
+	case len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP":
+		return "image/webp"
+	}
+	return ""
 }

@@ -1,10 +1,13 @@
 package file
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/peggco/pegg/internal/agent/tool"
+	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/vfs"
 )
 
@@ -150,4 +153,52 @@ func containsStr(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestReadToolAttachesImage(t *testing.T) {
+	fs := setupTestVFS(t, map[string]string{})
+	path, err := fs.Resolve("pixel.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sink := tool.NewAttachmentSink()
+	ctx := tool.WithAttachmentSink(t.Context(), sink)
+	out, err := readTool(fs).Execute(ctx, `{"filePath":"pixel.png"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contains(t, out, "<file>") || !contains(t, out, "<image>") {
+		t.Fatalf("expected image output, got:\n%s", out)
+	}
+	atts := sink.Attachments()
+	if len(atts) != 1 {
+		t.Fatalf("attachments = %d, want 1", len(atts))
+	}
+	att := atts[0]
+	if att.Type != llm.AttachmentTypeImage || att.MediaType != "image/png" {
+		t.Fatalf("attachment = %+v", att)
+	}
+	if att.FileName != "pixel.png" || att.Path != "pixel.png" || att.Data == "" {
+		t.Fatalf("attachment metadata = %+v", att)
+	}
+}
+
+func TestReadToolDoesNotAttachSVG(t *testing.T) {
+	fs := setupTestVFS(t, map[string]string{"icon.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"})
+	sink := tool.NewAttachmentSink()
+	out, err := readTool(fs).Execute(tool.WithAttachmentSink(t.Context(), sink), `{"filePath":"icon.svg"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(t, out, "<file>") || len(sink.Attachments()) != 0 {
+		t.Fatalf("SVG should be read as text: out=%q atts=%d", out, len(sink.Attachments()))
+	}
 }

@@ -409,6 +409,22 @@ func (v *VFS) ReadRangeCtx(ctx context.Context, vpath string, offset, limit int)
 	return v.readRange(ctx, vpath, offset, limit)
 }
 
+func (v *VFS) ReadBytesCtx(ctx context.Context, vpath string) ([]byte, string, error) {
+	phys, rel, _, err := v.resolveCheckedCtx(ctx, vpath)
+	if err != nil {
+		return nil, "", err
+	}
+	data, err := os.ReadFile(phys)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, "", ErrNotFound
+		}
+		return nil, "", err
+	}
+	v.setSnapshot(rel, hashBytes(data))
+	return data, rel, nil
+}
+
 func (v *VFS) readRange(ctx context.Context, vpath string, offset, limit int) (string, error) {
 	phys, rel, _, err := v.resolveCheckedCtx(ctx, vpath)
 	if err != nil {

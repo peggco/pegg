@@ -59,3 +59,31 @@ func TestNormalizeContentPlain(t *testing.T) {
 		t.Fatalf("llm.Content = %v", got)
 	}
 }
+
+func TestMessagesToLLMAddsToolImagesAfterToolBatch(t *testing.T) {
+	img := llm.NewImageAttachmentFromBase64("image/png", "AAAA")
+	img.FileName = "pixel.png"
+	msgs := []Message{
+		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "1"}, {ID: "2"}}},
+		{Role: llm.RoleTool, ToolCallID: "1", Content: llm.ContentWithAttachments("image read", []llm.Attachment{img})},
+		{Role: llm.RoleTool, ToolCallID: "2", Content: "plain tool"},
+		{Role: llm.RoleAssistant, Content: "done"},
+	}
+	got := MessagesToLLM(msgs)
+	if len(got) != 5 {
+		t.Fatalf("messages = %d, want 5: %+v", len(got), got)
+	}
+	if got[1].Role != llm.RoleTool || got[1].Content != "image read" {
+		t.Fatalf("tool message = %+v", got[1])
+	}
+	if got[2].Role != llm.RoleTool || got[2].Content != "plain tool" {
+		t.Fatalf("second tool message = %+v", got[2])
+	}
+	content, ok := got[3].Content.(llm.Content)
+	if got[3].Role != llm.RoleUser || !ok || len(content.Attachments) != 1 {
+		t.Fatalf("image message = %+v", got[3])
+	}
+	if content.Attachments[0].FileName != "pixel.png" || content.Attachments[0].Type != llm.AttachmentTypeImage {
+		t.Fatalf("attachment = %+v", content.Attachments[0])
+	}
+}

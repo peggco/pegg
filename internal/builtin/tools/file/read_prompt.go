@@ -12,7 +12,8 @@ func readToolPromptBuilder() *prompt.Prompt {
 			"You can optionally specify a line offset and limit (especially handy for long files), but it's recommended to read the whole file by not providing these parameters",
 			"Any lines longer than 2000 characters will be truncated",
 			"Results are returned using cat -n format, with line numbers starting at 1",
-			"This tool cannot read binary files, including images",
+			"Image files (PNG, JPEG, GIF, WebP) are attached to the conversation for visual inspection",
+			"This tool cannot read other binary files",
 			"You have the capability to call multiple tools in a single response. It is always better to speculatively read multiple files as a batch that are potentially useful.",
 			"If you read a file that exists but has empty contents you will receive a system reminder warning in place of file contents.")
 }

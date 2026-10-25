@@ -757,3 +757,40 @@ func TestRecorderCompactionCreatesLinkedSession(t *testing.T) {
 		t.Fatalf("messages after follow-up = %d, want %d", len(after), len(compacted)+1)
 	}
 }
+
+func TestRecorderPersistsToolAttachments(t *testing.T) {
+	mgr, _, bus := newTestRecorder(t)
+	publishStarted(bus, "a1", "agent-one", "groq", "llama-3.3")
+	bus.Publish(agent.TopicAgentInput, agent.AgentInput{AgentID: "a1", Input: "look"})
+	img := llm.NewImageAttachmentFromBase64("image/png", "AAAA")
+	img.FileName = "pixel.png"
+	bus.Publish(agent.TopicAgentToolResult, agent.AgentToolResult{
+		AgentID: "a1", AgentName: "agent-one", CallID: "c1", ToolName: "read",
+		Output: "<image>", Attachments: []llm.Attachment{img},
+	})
+
+	sessions, _, err := mgr.List(query.Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := mgr.Messages(sessions[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var toolMsg *Message
+	for i := range msgs {
+		if msgs[i].Role == llm.RoleTool {
+			toolMsg = &msgs[i]
+		}
+	}
+	if toolMsg == nil {
+		t.Fatal("tool message not persisted")
+	}
+	content, ok := normalizeContent(toolMsg.Content).(llm.Content)
+	if !ok || content.Text != "<image>" || len(content.Attachments) != 1 {
+		t.Fatalf("tool content = %+v", toolMsg.Content)
+	}
+	if content.Attachments[0].FileName != "pixel.png" {
+		t.Fatalf("attachment = %+v", content.Attachments[0])
+	}
+}
