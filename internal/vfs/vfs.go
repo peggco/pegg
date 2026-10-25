@@ -478,7 +478,11 @@ func (v *VFS) readRange(ctx context.Context, vpath string, offset, limit int) (s
 }
 
 func (v *VFS) Stat(vpath string) (FileInfo, error) {
-	phys, rel, isDir, err := v.resolveChecked(vpath)
+	return v.StatCtx(nil, vpath)
+}
+
+func (v *VFS) StatCtx(ctx context.Context, vpath string) (FileInfo, error) {
+	phys, rel, isDir, err := v.resolveCheckedCtx(ctx, vpath)
 	if err != nil {
 		return FileInfo{}, err
 	}

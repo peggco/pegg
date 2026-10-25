@@ -77,7 +77,7 @@ func readTool(fs *vfs.VFS) tool.Tool {
 				return "", fmt.Errorf("read: filePath is required")
 			}
 
-			fi, err := fs.Stat(params.FilePath)
+			fi, err := fs.StatCtx(ctx, params.FilePath)
 			if err != nil {
 				return "", fmt.Errorf("read: %w", err)
 			}
