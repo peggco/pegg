@@ -365,7 +365,7 @@ func (s *JSONStore) Close() error {
 
 var allowedColumns = map[string]struct{}{
 	"id": {}, "title": {}, "provider": {}, "model": {}, "mode": {},
-	"project_dir": {}, "parent_id": {}, "compaction_parent_id": {}, "created_at": {}, "updated_at": {},
+	"project_dir": {}, "parent_id": {}, "compaction_parent_id": {}, "is_subagent": {}, "created_at": {}, "updated_at": {},
 }
 
 func filterSessions(all []Session, q query.Query) ([]Session, error) {
@@ -463,6 +463,11 @@ func columnValue(s Session, col string) (any, bool) {
 		return s.ParentID, true
 	case "compaction_parent_id":
 		return s.CompactionParentID, true
+	case "is_subagent":
+		if s.IsSubagent {
+			return 1, true
+		}
+		return 0, true
 	case "created_at":
 		return s.CreatedAt, true
 	case "updated_at":

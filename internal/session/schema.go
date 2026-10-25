@@ -41,6 +41,7 @@ var (
 		{"project_dir", "TEXT NOT NULL DEFAULT ''"},
 		{"parent_id", "TEXT NOT NULL DEFAULT ''"},
 		{"compaction_parent_id", "TEXT NOT NULL DEFAULT ''"},
+		{"is_subagent", "INTEGER NOT NULL DEFAULT 0"},
 		{"created_at", "DATETIME NOT NULL"},
 		{"updated_at", "DATETIME NOT NULL"},
 		{"usage", "TEXT NOT NULL DEFAULT '{}'"},

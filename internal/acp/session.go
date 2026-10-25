@@ -370,6 +370,7 @@ func (s *Server) handleSessionList(ctx context.Context, params json.RawMessage) 
 		size = 50
 	}
 	filters := []query.Filter{
+		session.MainSessionsFilter(),
 		{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""},
 	}
 	if req.Cwd != "" && !req.All {

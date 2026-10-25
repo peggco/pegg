@@ -74,18 +74,18 @@ func newSQLiteStore(db *sql.DB) (*SQLiteStore, error) {
 
 func (s *SQLiteStore) Create(sess Session) error {
 	_, err := s.db.Exec(
-		"INSERT INTO sessions (id, title, provider, model, reasoning_effort, mode, project_dir, parent_id, compaction_parent_id, created_at, updated_at, usage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO sessions (id, title, provider, model, reasoning_effort, mode, project_dir, parent_id, compaction_parent_id, is_subagent, created_at, updated_at, usage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		sess.ID, sess.Title, sess.Provider, sess.Model, sess.ReasoningEffort, sess.Mode, sess.ProjectDir,
-		sess.ParentID, sess.CompactionParentID, sess.CreatedAt, sess.UpdatedAt, marshalJSON(sess.Usage),
+		sess.ParentID, sess.CompactionParentID, boolInt(sess.IsSubagent), sess.CreatedAt, sess.UpdatedAt, marshalJSON(sess.Usage),
 	)
 	return err
 }
 
 func (s *SQLiteStore) Update(sess Session) error {
 	res, err := s.db.Exec(
-		"UPDATE sessions SET title = ?, provider = ?, model = ?, reasoning_effort = ?, mode = ?, project_dir = ?, parent_id = ?, compaction_parent_id = ?, created_at = ?, updated_at = ?, usage = ? WHERE id = ?",
+		"UPDATE sessions SET title = ?, provider = ?, model = ?, reasoning_effort = ?, mode = ?, project_dir = ?, parent_id = ?, compaction_parent_id = ?, is_subagent = ?, created_at = ?, updated_at = ?, usage = ? WHERE id = ?",
 		sess.Title, sess.Provider, sess.Model, sess.ReasoningEffort, sess.Mode, sess.ProjectDir,
-		sess.ParentID, sess.CompactionParentID, sess.CreatedAt, sess.UpdatedAt, marshalJSON(sess.Usage), sess.ID,
+		sess.ParentID, sess.CompactionParentID, boolInt(sess.IsSubagent), sess.CreatedAt, sess.UpdatedAt, marshalJSON(sess.Usage), sess.ID,
 	)
 	if err != nil {
 		return err
@@ -98,13 +98,13 @@ func (s *SQLiteStore) Update(sess Session) error {
 
 func (s *SQLiteStore) Get(id string) (*Session, error) {
 	row := s.db.QueryRow(
-		"SELECT id, title, provider, model, reasoning_effort, project_dir, parent_id, compaction_parent_id, created_at, updated_at, usage, mode FROM sessions WHERE id = ?", id,
+		"SELECT id, title, provider, model, reasoning_effort, project_dir, parent_id, compaction_parent_id, is_subagent, created_at, updated_at, usage, mode FROM sessions WHERE id = ?", id,
 	)
 	var sess Session
 	var usage string
 	if err := row.Scan(
 		&sess.ID, &sess.Title, &sess.Provider, &sess.Model, &sess.ReasoningEffort, &sess.ProjectDir,
-		&sess.ParentID, &sess.CompactionParentID, &sess.CreatedAt, &sess.UpdatedAt, &usage, &sess.Mode,
+		&sess.ParentID, &sess.CompactionParentID, &sess.IsSubagent, &sess.CreatedAt, &sess.UpdatedAt, &usage, &sess.Mode,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrNotFound
@@ -151,7 +151,7 @@ func (s *SQLiteStore) List(q query.Query) ([]Session, int, error) {
 		var usage string
 		if err := rows.Scan(
 			&sess.ID, &sess.Title, &sess.Provider, &sess.Model, &sess.ReasoningEffort, &sess.ProjectDir,
-			&sess.ParentID, &sess.CompactionParentID, &sess.CreatedAt, &sess.UpdatedAt, &usage, &sess.Mode,
+			&sess.ParentID, &sess.CompactionParentID, &sess.IsSubagent, &sess.CreatedAt, &sess.UpdatedAt, &usage, &sess.Mode,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -414,7 +414,7 @@ func (s *SQLiteStore) Close() error {
 
 func (s *SQLiteStore) CompactionChildren(sessionID string) ([]Session, error) {
 	rows, err := s.db.Query(
-		"SELECT id, title, provider, model, reasoning_effort, project_dir, parent_id, compaction_parent_id, created_at, updated_at, usage, mode FROM sessions WHERE compaction_parent_id = ? ORDER BY created_at ASC",
+		"SELECT id, title, provider, model, reasoning_effort, project_dir, parent_id, compaction_parent_id, is_subagent, created_at, updated_at, usage, mode FROM sessions WHERE compaction_parent_id = ? ORDER BY created_at ASC",
 		sessionID,
 	)
 	if err != nil {
@@ -428,7 +428,7 @@ func (s *SQLiteStore) CompactionChildren(sessionID string) ([]Session, error) {
 		var usage string
 		if err := rows.Scan(
 			&sess.ID, &sess.Title, &sess.Provider, &sess.Model, &sess.ReasoningEffort, &sess.ProjectDir,
-			&sess.ParentID, &sess.CompactionParentID, &sess.CreatedAt, &sess.UpdatedAt, &usage, &sess.Mode,
+			&sess.ParentID, &sess.CompactionParentID, &sess.IsSubagent, &sess.CreatedAt, &sess.UpdatedAt, &usage, &sess.Mode,
 		); err != nil {
 			return nil, err
 		}

@@ -7,6 +7,7 @@ import (
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/llm"
+	"github.com/peggco/pegg/internal/utils/query"
 )
 
 type discardHandler struct{}
@@ -352,5 +353,37 @@ func TestManagerSetTitle(t *testing.T) {
 	}
 	if err := mgr.SetTitle(s.ID, ""); !errors.Is(err, ErrEmptyTitle) {
 		t.Fatalf("want ErrEmptyTitle, got %v", err)
+	}
+}
+
+func TestListExcludesSubagentSessions(t *testing.T) {
+	mgr, _ := newTestManager(t)
+	main, err := mgr.Create(CreateOptions{Title: "main", Provider: "p", Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub, err := mgr.Create(CreateOptions{Title: "sub", Provider: "p", Model: "m", IsSubagent: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manual, err := mgr.Create(CreateOptions{Title: "legacy sub", Provider: "p", Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mgr.SetSubagent(manual.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	sessions, total, err := mgr.List(query.Query{
+		Page:    query.Page{Number: 1, Size: 50},
+		Filters: []query.Filter{MainSessionsFilter()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(sessions) != 1 || sessions[0].ID != main.ID {
+		t.Fatalf("sessions=%+v total=%d, want only %s", sessions, total, main.ID)
+	}
+	if got, err := mgr.Get(sub.ID); err != nil || !got.IsSubagent {
+		t.Fatalf("subagent flag = %+v err=%v", got, err)
 	}
 }

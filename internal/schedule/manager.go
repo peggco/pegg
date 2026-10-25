@@ -701,6 +701,7 @@ func (m *Manager) projectModel(dir string) (string, string, bool) {
 		Page: query.Page{Number: 1, Size: 20},
 		Sort: []query.Sort{{Column: "updated_at", Dir: query.Desc}},
 		Filters: []query.Filter{
+			session.MainSessionsFilter(),
 			{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""},
 		},
 	}

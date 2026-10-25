@@ -5,6 +5,7 @@ import (
 
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/llm"
+	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/utils/query"
 )
 
@@ -19,6 +20,7 @@ func listQuery(page, size int) query.Query {
 		Page: query.Page{Number: page, Size: size},
 		Sort: []query.Sort{{Column: "updated_at", Dir: query.Desc}},
 		Filters: []query.Filter{
+			session.MainSessionsFilter(),
 			{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""},
 		},
 	}

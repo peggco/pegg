@@ -37,6 +37,7 @@ func (m *Manager) Create(opts CreateOptions) (*Session, error) {
 		ReasoningEffort: opts.ReasoningEffort,
 		Mode:            opts.Mode,
 		ProjectDir:      opts.ProjectDir,
+		IsSubagent:      opts.IsSubagent,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -46,6 +47,10 @@ func (m *Manager) Create(opts CreateOptions) (*Session, error) {
 	m.publish(TopicSessionCreated, SessionCreated{SessionID: s.ID})
 	m.persistChange(SessionEventCreated, s.ID, map[string]any{"id": s.ID})
 	return s, nil
+}
+
+func MainSessionsFilter() query.Filter {
+	return query.Filter{Column: "is_subagent", Operator: query.OpEqual, Value: 0}
 }
 
 func (m *Manager) Get(id string) (*Session, error) {
@@ -81,6 +86,28 @@ func (m *Manager) Delete(id string) error {
 	m.mu.Unlock()
 	m.publish(TopicSessionDeleted, SessionDeleted{SessionID: id})
 	m.persistChange(SessionEventDeleted, id, map[string]any{"id": id})
+	return nil
+}
+
+func (m *Manager) SetSubagent(id string, subagent bool) error {
+	s, err := m.store.Get(id)
+	if err != nil {
+		return err
+	}
+	if s.IsSubagent == subagent {
+		return nil
+	}
+	s.IsSubagent = subagent
+	s.UpdatedAt = time.Now()
+	return m.store.Update(*s)
+}
+
+func (m *Manager) MarkSubagents(ids map[string]struct{}) error {
+	for id := range ids {
+		if err := m.SetSubagent(id, true); err != nil && err != ErrNotFound {
+			return err
+		}
+	}
 	return nil
 }
 
