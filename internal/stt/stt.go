@@ -16,6 +16,7 @@ type Manager struct {
 	model    string
 	language string
 	stream   bool
+	models   []Model
 }
 
 func New(cfg *config.Config) *Manager {
@@ -36,7 +37,12 @@ func New(cfg *config.Config) *Manager {
 		m.err = fmt.Errorf("stt: provider %q has no API key", m.name)
 		return m
 	}
-	providerCfg := config.LLMConfig{Provider: m.name, APIKey: entry.APIKey, BaseURL: entry.BaseURL}
+	providerCfg := config.LLMConfig{
+		Provider: m.name,
+		Driver:   entry.Driver,
+		APIKey:   entry.APIKey,
+		BaseURL:  entry.BaseURL,
+	}
 	provider, err := NewProvider(m.name, providerCfg, settings)
 	if err != nil {
 		m.err = err
@@ -44,8 +50,30 @@ func New(cfg *config.Config) *Manager {
 	}
 	m.provider = provider
 	m.language = cfg.Language
-	m.stream = provider.SupportsStream() && IsStreamModel(m.name, m.model)
+	m.models = ModelsForConfig(m.name, settings)
+	m.stream = provider.SupportsStream() && modelStreaming(m.models, m.model)
 	return m
+}
+
+func modelStreaming(models []Model, id string) bool {
+	for _, model := range models {
+		if model.ID == id {
+			return model.Streaming
+		}
+	}
+	return false
+}
+
+func transcribeModel(models []Model, provider, id string) string {
+	if !modelStreaming(models, id) {
+		return id
+	}
+	for _, model := range models {
+		if !model.Streaming {
+			return model.ID
+		}
+	}
+	return DefaultModel(provider)
 }
 
 func (m *Manager) Configured() bool { return m != nil && m.provider != nil }
@@ -77,10 +105,7 @@ func (m *Manager) Transcribe(ctx context.Context, audio []byte, mediaType, fileN
 	if language == "" {
 		language = m.language
 	}
-	model := m.model
-	if IsStreamModel(m.name, model) {
-		model = DefaultModel(m.name)
-	}
+	model := transcribeModel(m.models, m.name, m.model)
 	return m.provider.Transcribe(ctx, &Request{
 		Model:     model,
 		Language:  language,
@@ -139,6 +164,9 @@ func (m *Manager) StreamWithOptions(ctx context.Context, r io.Reader, opts Strea
 func (m *Manager) ModelsFor() []Model {
 	if m == nil || m.name == "" {
 		return nil
+	}
+	if len(m.models) > 0 {
+		return m.models
 	}
 	return ModelsFor(m.name)
 }

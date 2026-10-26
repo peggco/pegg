@@ -1,6 +1,10 @@
 package stt
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/peggco/pegg/internal/core/config"
+)
 
 var providerBaseURLs = map[string]string{
 	"assemblyai": "https://api.assemblyai.com",
@@ -115,4 +119,74 @@ func IsAsyncModel(provider, id string) bool {
 		}
 	}
 	return false
+}
+
+func ModelsForConfig(provider string, cfg *config.STTConfig) []Model {
+	if cfg != nil {
+		if entry, ok := cfg.ProviderConfig(provider); ok && len(entry.Models) > 0 {
+			seen := make(map[string]struct{}, len(entry.Models))
+			out := make([]Model, 0, len(entry.Models))
+			for _, m := range entry.Models {
+				if m.ID == "" {
+					continue
+				}
+				if _, ok := seen[m.ID]; ok {
+					continue
+				}
+				seen[m.ID] = struct{}{}
+				out = append(out, Model{
+					Provider:  provider,
+					ID:        m.ID,
+					Name:      m.Name,
+					Streaming: m.Streaming,
+				})
+			}
+			if len(out) > 0 {
+				return out
+			}
+		}
+	}
+	return ModelsFor(provider)
+}
+
+func ProvidersForConfig(cfg *config.STTConfig) []string {
+	seen := make(map[string]struct{})
+	add := func(name string) {
+		if name != "" {
+			seen[name] = struct{}{}
+		}
+	}
+	for _, name := range Providers() {
+		add(name)
+	}
+	if cfg != nil {
+		for _, p := range cfg.Providers {
+			add(p.Provider)
+		}
+		if cfg.Provider != "" && cfg.APIKey != "" {
+			add(cfg.Provider)
+		}
+	}
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func DefaultModelForConfig(provider string, cfg *config.STTConfig) string {
+	if models := ModelsForConfig(provider, cfg); len(models) > 0 {
+		return models[0].ID
+	}
+	return DefaultModel(provider)
+}
+
+func IsStreamModelConfig(provider, id string, cfg *config.STTConfig) bool {
+	for _, model := range ModelsForConfig(provider, cfg) {
+		if model.ID == id {
+			return model.Streaming
+		}
+	}
+	return IsStreamModel(provider, id)
 }

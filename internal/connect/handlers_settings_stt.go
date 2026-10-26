@@ -44,7 +44,7 @@ func configuredSTTProviders(cfg *config.STTConfig) []string {
 func sttModelsForConfig(cfg *config.STTConfig) []stt.Model {
 	var models []stt.Model
 	for _, name := range configuredSTTProviders(cfg) {
-		models = append(models, stt.ModelsFor(name)...)
+		models = append(models, stt.ModelsForConfig(name, cfg)...)
 	}
 	return models
 }

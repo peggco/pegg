@@ -351,14 +351,16 @@ func (c *CLI) newTeamRemoveCommand() *cobra.Command {
 				}
 				if peggCfg.STT != nil {
 					kept := peggCfg.STT.Providers[:0]
+					removedSTT := ""
 					for _, entry := range peggCfg.STT.Providers {
-						if entry.Provider == "pegg-team" && entry.BaseURL == removed.BaseURL {
+						if entry.Provider == name || (isTeamProvider(entry.Provider) && entry.BaseURL == removed.BaseURL) {
+							removedSTT = entry.Provider
 							continue
 						}
 						kept = append(kept, entry)
 					}
 					peggCfg.STT.Providers = kept
-					if peggCfg.STT.Provider == "pegg-team" {
+					if removedSTT != "" && peggCfg.STT.Provider == removedSTT {
 						peggCfg.STT.Provider = ""
 						peggCfg.STT.Model = ""
 						peggCfg.STT.StreamingModel = ""
@@ -382,24 +384,27 @@ func (c *CLI) newTeamRemoveCommand() *cobra.Command {
 	}
 }
 
-func teamModels(models []teamModelConfig) []config.Model {
-	if len(models) == 0 {
-		return nil
+func teamSTTModels(models []teamModelConfig, defaults *teamSTT) []config.STTModel {
+	seen := make(map[string]struct{})
+	out := make([]config.STTModel, 0)
+	add := func(id, name string) {
+		if id == "" {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		out = append(out, config.STTModel{ID: id, Name: name})
 	}
-	out := make([]config.Model, 0, len(models))
 	for _, m := range models {
-		if m.ID == "" {
+		if m.Kind != "stt" {
 			continue
 		}
-		entry := config.Model{ID: m.ID, Name: m.Name}
-		if len(m.Config) > 0 {
-			var modelConfig config.ModelConfig
-			if err := json.Unmarshal(m.Config, &modelConfig); err == nil {
-				modelConfig.Normalize()
-				entry.Config = &modelConfig
-			}
-		}
-		out = append(out, entry)
+		add(m.ID, m.Name)
+	}
+	if defaults != nil {
+		add(defaults.Model, defaults.Model)
 	}
 	return out
 }
@@ -425,7 +430,6 @@ func applyTeamConfig(peggCfg *config.Config, cfg *teamConfig) {
 		Headers:         cfg.Provider.Headers,
 		Timeout:         timeout,
 		SystemFirstOnly: cfg.Provider.SystemFirstOnly,
-		Models:          teamModels(cfg.Models),
 	}
 	replaced := false
 	for i := range peggCfg.Providers {
@@ -474,18 +478,23 @@ func applyTeamConfig(peggCfg *config.Config, cfg *teamConfig) {
 		}
 	}
 
-	if cfg.Defaults.STT != nil && cfg.Defaults.STT.Model != "" {
+	sttModels := teamSTTModels(cfg.Models, cfg.Defaults.STT)
+	if cfg.Defaults.STT != nil || len(sttModels) > 0 {
 		if peggCfg.STT == nil {
 			peggCfg.STT = &config.STTConfig{MaxDurationSecs: config.DefaultSTTMaxDurationSecs}
 		}
-		peggCfg.STT.Provider = "pegg-team"
-		peggCfg.STT.Model = cfg.Defaults.STT.Model
-		peggCfg.STT.StreamingModel = cfg.Defaults.STT.StreamingModel
 		peggCfg.STT.UpsertProvider(config.STTProviderConfig{
-			Provider: "pegg-team",
+			Provider: providerName,
+			Driver:   driver,
 			BaseURL:  cfg.Provider.BaseURL,
 			APIKey:   cfg.Provider.APIKey,
+			Models:   sttModels,
 		})
+		if cfg.Defaults.STT != nil && cfg.Defaults.STT.Model != "" {
+			peggCfg.STT.Provider = providerName
+			peggCfg.STT.Model = cfg.Defaults.STT.Model
+			peggCfg.STT.StreamingModel = cfg.Defaults.STT.StreamingModel
+		}
 	}
 }
 

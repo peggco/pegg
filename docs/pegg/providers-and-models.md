@@ -56,6 +56,38 @@ upstream keys on **Team AI** in the website, not with `pegg login`.
 
 See [Team AI](features/team-ai.md).
 
+### Speech-to-text providers
+
+Speech-to-text has its own provider list under `stt`, separate from chat
+providers. Five providers are registered out of the box:
+
+| Provider | Driver | Default base URL |
+|---|---|---|
+| `assemblyai` | assemblyai | `https://api.assemblyai.com` |
+| `fireworks` | openai | `https://api.fireworks.ai/inference/v1` |
+| `groq` | openai | `https://api.groq.com/openai/v1` |
+| `openai` | openai | `https://api.openai.com/v1` |
+| `together` | openai | `https://api.together.xyz/v1` |
+
+Each provider has a built-in model catalogue. Choose a pair with `stt.provider`
+and `stt.model`; models marked *stream* also support realtime streaming.
+
+| Provider | Built-in models |
+|---|---|
+| `assemblyai` | `best`, `nano`, `universal-3-6-pro` (stream), `universal-3-5-pro` (stream), `universal-streaming-english` (stream), `universal-streaming-multilingual` (stream) |
+| `fireworks` | `whisper-v3` |
+| `groq` | `whisper-large-v3`, `whisper-large-v3-turbo`, `distil-whisper-large-v3-en` |
+| `openai` | `whisper-1`, `gpt-4o-transcribe`, `gpt-4o-mini-transcribe` |
+| `together` | `openai/whisper-large-v3` |
+
+Custom OpenAI-compatible endpoints are declared under `stt.providers` with a
+`driver` and `base_url`. A `models` array supplies their catalogue; when it is
+present it replaces the built-in list for that provider. This is how `pegg team`
+wires the team gateway as `pegg-team <team>` (driver `openai`).
+
+See [Declaring STT models](config.md#declaring-stt-models) and the
+[`stt` config reference](config.md#stt).
+
 ### Authentication
 
 | Driver | Auth mechanism |

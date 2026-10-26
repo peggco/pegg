@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	json "github.com/goccy/go-json"
 )
@@ -116,11 +117,19 @@ const DefaultConnectConcurrency = 4
 
 const DefaultConnectResponseTimeoutSecs = 180
 
+type STTModel struct {
+	ID        string `json:"id"`
+	Name      string `json:"name,omitempty"`
+	Streaming bool   `json:"streaming,omitempty"`
+}
+
 type STTProviderConfig struct {
-	Provider  string `json:"provider"`
-	APIKey    string `json:"api_key,omitempty"`
-	BaseURL   string `json:"base_url,omitempty"`
-	StreamURL string `json:"stream_url,omitempty"`
+	Provider  string     `json:"provider"`
+	Driver    string     `json:"driver"`
+	APIKey    string     `json:"api_key,omitempty"`
+	BaseURL   string     `json:"base_url,omitempty"`
+	StreamURL string     `json:"stream_url,omitempty"`
+	Models    []STTModel `json:"models,omitempty"`
 }
 
 type STTConfig struct {
@@ -437,7 +446,24 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	normalizeSTTDrivers(config)
+
 	return config, nil
+}
+
+func normalizeSTTDrivers(cfg *Config) {
+	if cfg == nil || cfg.STT == nil {
+		return
+	}
+	for i := range cfg.STT.Providers {
+		entry := &cfg.STT.Providers[i]
+		if entry.Driver != "" {
+			continue
+		}
+		if entry.Provider == "pegg-team" || strings.HasPrefix(entry.Provider, "pegg-team ") {
+			entry.Driver = "openai"
+		}
+	}
 }
 
 func Save(config *Config) error {
