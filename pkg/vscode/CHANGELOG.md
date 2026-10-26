@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.2
+
 ## 0.2.1
 
 - The binary version check now reports why a candidate was rejected instead of
