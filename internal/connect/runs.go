@@ -96,6 +96,7 @@ type runManager struct {
 	mu         sync.Mutex
 	runs       map[string]*run
 	byAgentMap map[string]*run
+	known      map[string]struct{}
 	sem        chan struct{}
 }
 
@@ -109,6 +110,7 @@ func newRunManager(c *Connector) *runManager {
 		base:       c.runCtx,
 		runs:       make(map[string]*run),
 		byAgentMap: make(map[string]*run),
+		known:      make(map[string]struct{}),
 		sem:        make(chan struct{}, n),
 	}
 }
@@ -129,7 +131,15 @@ func (m *runManager) register(r *run) {
 	m.mu.Lock()
 	m.runs[r.id] = r
 	m.byAgentMap[r.agentID] = r
+	m.known[r.id] = struct{}{}
 	m.mu.Unlock()
+}
+
+func (m *runManager) knows(id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.known[id]
+	return ok
 }
 
 func (m *runManager) release(r *run) {

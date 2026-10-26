@@ -10,6 +10,7 @@ import (
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
+	"github.com/peggco/pegg/internal/llm"
 	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 )
@@ -248,5 +249,44 @@ func TestSnapshotThenSubscribeDoesNotDuplicate(t *testing.T) {
 		case <-deadline:
 			t.Fatalf("timed out: inputs=%d tokens=%d", inputs, tokens)
 		}
+	}
+}
+
+func TestSummarizeRunFiltersOtherAgents(t *testing.T) {
+	_, coord, hub, bus, sess := newLiveTest(t)
+	lease, err := coord.Claim(context.Background(), runpkg.ClaimRequest{
+		SessionID: sess.ID, AgentID: "agent-1", AgentName: "orchestrator", Provider: "p", Model: "m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Finish(session.RunStateCanceled, "test")
+
+	bus.Publish(agent.TopicAgentStarted, agent.AgentStarted{AgentID: "agent-1", AgentName: "orchestrator"})
+	bus.Publish(agent.TopicAgentToken, agent.AgentToken{AgentID: "agent-1", AgentName: "orchestrator", Content: "main"})
+	bus.Publish(agent.TopicAgentToolCall, agent.AgentToolCall{
+		AgentID: "agent-1", AgentName: "orchestrator",
+		Call: llm.ToolCall{ID: "c1", Function: llm.Function{Name: "read"}},
+	})
+
+	bus.Publish(agent.TopicAgentStarted, agent.AgentStarted{
+		AgentID: "sub-1", AgentName: "explorer", ParentAgentID: "agent-1",
+	})
+	bus.Publish(agent.TopicAgentToken, agent.AgentToken{AgentID: "sub-1", AgentName: "explorer", Content: "sub"})
+	bus.Publish(agent.TopicAgentToolCall, agent.AgentToolCall{
+		AgentID: "sub-1", AgentName: "explorer",
+		Call: llm.ToolCall{ID: "c2", Function: llm.Function{Name: "bash"}},
+	})
+	time.Sleep(200 * time.Millisecond)
+
+	summary, err := hub.SummarizeRun(lease.ID(), "agent-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Content != "main" {
+		t.Fatalf("content = %q, want main", summary.Content)
+	}
+	if len(summary.Tools) != 1 || summary.Tools[0].CallID != "c1" {
+		t.Fatalf("tools = %+v, want only c1", summary.Tools)
 	}
 }
