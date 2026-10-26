@@ -54,7 +54,7 @@ func (s *Settings) sttModelValue() string {
 }
 
 func (s *Settings) sttModelKnown(provider, model string) bool {
-	for _, m := range stt.ModelsFor(provider) {
+	for _, m := range stt.ModelsForConfig(provider, s.sttConfig()) {
 		if m.ID == model {
 			return true
 		}
@@ -67,7 +67,7 @@ func (s *Settings) openSTTProviders() {
 	l.SetSearchable(true)
 	cfg := s.sttConfig()
 	var items []components.ListItem
-	for _, name := range stt.Providers() {
+	for _, name := range stt.ProvidersForConfig(cfg) {
 		_, configured := cfg.ProviderConfig(name)
 		detail, marked := i18n.T("settings.provider.notConfigured"), false
 		if configured {
@@ -110,7 +110,7 @@ func (s *Settings) selectSTTProvider(name string) {
 	cfg := s.sttConfig()
 	cfg.Provider = name
 	if cfg.Model == "" || !s.sttModelKnown(name, cfg.Model) {
-		cfg.Model = stt.DefaultModel(name)
+		cfg.Model = stt.DefaultModelForConfig(name, cfg)
 	}
 	s.saveSTTConfig(cfg)
 }
@@ -137,7 +137,7 @@ func (s *Settings) openSTTAPIKey(name string) {
 		cfg.UpsertProvider(entry)
 		cfg.Provider = name
 		if cfg.Model == "" || !s.sttModelKnown(name, cfg.Model) {
-			cfg.Model = stt.DefaultModel(name)
+			cfg.Model = stt.DefaultModelForConfig(name, cfg)
 		}
 		s.saveSTTConfig(cfg)
 	})
@@ -151,7 +151,7 @@ func (s *Settings) openSTTModels() {
 	cfg := s.sttConfig()
 	var items []components.ListItem
 	for _, provider := range cfg.Providers {
-		for _, model := range stt.ModelsFor(provider.Provider) {
+		for _, model := range stt.ModelsForConfig(provider.Provider, cfg) {
 			hint := ""
 			if model.Streaming {
 				hint = i18n.T("settings.stt.streamBadge")

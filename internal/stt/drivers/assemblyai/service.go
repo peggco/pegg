@@ -24,10 +24,12 @@ const (
 )
 
 type ServiceConfig struct {
+	Name      string
 	APIKey    string
 	BaseURL   string
 	StreamURL string
 	Timeout   time.Duration
+	Models    []stt.Model
 }
 
 type Service struct {
@@ -36,6 +38,9 @@ type Service struct {
 }
 
 func New(cfg ServiceConfig) *Service {
+	if cfg.Name == "" {
+		cfg.Name = ProviderName
+	}
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = DefaultBaseURL
 	}
@@ -49,11 +54,16 @@ func New(cfg ServiceConfig) *Service {
 	return &Service{cfg: cfg, client: &http.Client{Timeout: cfg.Timeout}}
 }
 
-func (s *Service) Name() string { return ProviderName }
+func (s *Service) Name() string { return s.cfg.Name }
 
 func (s *Service) SupportsStream() bool { return true }
 
-func (s *Service) Models() []stt.Model { return stt.ModelsFor(ProviderName) }
+func (s *Service) Models() []stt.Model {
+	if len(s.cfg.Models) > 0 {
+		return s.cfg.Models
+	}
+	return stt.ModelsFor(s.cfg.Name)
+}
 
 func (s *Service) Transcribe(ctx context.Context, req *stt.Request) (*stt.Result, error) {
 	if len(req.Audio) == 0 {
@@ -94,7 +104,7 @@ func (s *Service) Transcribe(ctx context.Context, req *stt.Request) (*stt.Result
 			}
 			return &stt.Result{
 				Text:     strings.TrimSpace(created.Text),
-				Provider: ProviderName,
+				Provider: s.cfg.Name,
 				Model:    req.Model,
 				Duration: float64(created.AudioDuration),
 			}, nil

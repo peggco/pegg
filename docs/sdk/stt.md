@@ -27,6 +27,8 @@ STT uses the `stt` block from `pegg.json` (or `Options.Config`):
 
 - `provider` + `model` select the active pair.
 - `providers` stores API keys for any number of STT providers.
+- Custom providers can set `driver` (for example `openai`) plus `base_url` to
+  reuse a registered driver for an OpenAI-compatible endpoint.
 - Selecting a model enables STT; there is no separate enabled flag.
 - The spoken language follows the top-level `language`.
 - If the selected model supports streaming, `TranscribeStream` is available.

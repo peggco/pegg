@@ -42,7 +42,7 @@ func TestApplyTeamConfigSystemFirstOnly(t *testing.T) {
 	t.Fatal("team provider was not added")
 }
 
-func TestApplyTeamConfigModels(t *testing.T) {
+func TestApplyTeamConfigDoesNotStoreLLMModels(t *testing.T) {
 	peggCfg := config.DefaultConfig()
 	cfg := &teamConfig{
 		Team: struct {
@@ -56,13 +56,8 @@ func TestApplyTeamConfigModels(t *testing.T) {
 			APIKey:  "vsk_live_test",
 		},
 		Models: []teamModelConfig{
-			{
-				ID:     "gpt-4.1",
-				Name:   "GPT-4.1",
-				Kind:   "llm",
-				Config: []byte(`{"max_input_tokens":1047576,"modalities":{"input":["text"]},"tool_call":true}`),
-			},
-			{ID: "plain", Name: "Plain"},
+			{ID: "gpt-4.1", Name: "GPT-4.1", Kind: "llm"},
+			{ID: "whisper-large-v3", Name: "Whisper Large v3", Kind: "stt"},
 		},
 	}
 
@@ -77,24 +72,12 @@ func TestApplyTeamConfigModels(t *testing.T) {
 	if provider == nil {
 		t.Fatal("team provider was not added")
 	}
-	if len(provider.Models) != 2 {
-		t.Fatalf("models = %+v", provider.Models)
+	if len(provider.Models) != 0 {
+		t.Fatalf("llm models must not be persisted: %+v", provider.Models)
 	}
-	first := provider.Models[0]
-	if first.ID != "gpt-4.1" || first.Name != "GPT-4.1" {
-		t.Fatalf("model = %+v", first)
-	}
-	if first.Config == nil || first.Config.MaxInputTokens != 1047576 {
-		t.Fatalf("config = %+v", first.Config)
-	}
-	if first.Config.Modalities == nil || len(first.Config.Modalities.Input) != 1 {
-		t.Fatalf("modalities = %+v", first.Config.Modalities)
-	}
-	if !first.Config.ToolCall {
-		t.Fatal("tool_call must be carried over")
-	}
-	if provider.Models[1].Config != nil {
-		t.Fatalf("plain model must not have a config: %+v", provider.Models[1].Config)
+	entry, ok := peggCfg.STT.ProviderConfig("pegg-team Acme")
+	if !ok || entry.Driver != "openai" || len(entry.Models) != 1 || entry.Models[0].ID != "whisper-large-v3" {
+		t.Fatalf("stt entry = %+v (ok=%v)", entry, ok)
 	}
 }
 
@@ -111,6 +94,10 @@ func TestApplyTeamConfig(t *testing.T) {
 			BaseURL: "https://team.example.com/v1",
 			APIKey:  "vsk_live_test",
 			Timeout: 120,
+		},
+		Models: []teamModelConfig{
+			{ID: "gpt-4.1", Name: "GPT-4.1", Kind: "llm"},
+			{ID: "whisper-large-v3", Name: "Whisper Large v3", Kind: "stt"},
 		},
 		Defaults: teamDefaults{
 			Agents: map[string]teamAgentDefault{
@@ -149,6 +136,9 @@ func TestApplyTeamConfig(t *testing.T) {
 	if provider.Driver != "openai" || provider.APIKey != "vsk_live_test" {
 		t.Fatalf("provider = %#v", provider)
 	}
+	if len(provider.Models) != 0 {
+		t.Fatalf("llm models must not be persisted: %+v", provider.Models)
+	}
 	if got := peggCfg.AgentDefaults["orchestrator"]; got.Model != "gpt-4.1" || got.Provider != "pegg-team Acme" {
 		t.Fatalf("agent default = %#v", got)
 	}
@@ -158,11 +148,15 @@ func TestApplyTeamConfig(t *testing.T) {
 	if peggCfg.SmartRouter.Provider != "pegg-team Acme" || peggCfg.SmartRouter.Model != "gpt-4.1" {
 		t.Fatalf("smart router = %#v", peggCfg.SmartRouter)
 	}
-	if peggCfg.STT == nil || peggCfg.STT.Provider != "pegg-team" || peggCfg.STT.Model != "whisper-large-v3" {
+	if peggCfg.STT == nil || peggCfg.STT.Provider != "pegg-team Acme" || peggCfg.STT.Model != "whisper-large-v3" {
 		t.Fatalf("stt = %#v", peggCfg.STT)
 	}
-	if _, ok := peggCfg.STT.ProviderConfig("pegg-team"); !ok {
+	entry, ok := peggCfg.STT.ProviderConfig("pegg-team Acme")
+	if !ok {
 		t.Fatal("pegg-team stt provider was not stored")
+	}
+	if entry.Driver != "openai" || len(entry.Models) != 1 || entry.Models[0].ID != "whisper-large-v3" {
+		t.Fatalf("stt entry = %+v", entry)
 	}
 }
 
@@ -239,5 +233,41 @@ func TestVerifyTeamProviderIncludesResponseBody(t *testing.T) {
 	if !strings.Contains(err.Error(), "HTTP 401") ||
 		!strings.Contains(err.Error(), "invalid or missing api key") {
 		t.Fatalf("error = %q, want status and response body", err)
+	}
+}
+
+func TestApplyTeamConfigSTTModelsWithoutDefault(t *testing.T) {
+	peggCfg := config.DefaultConfig()
+	cfg := &teamConfig{
+		Team: struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		}{ID: 7, Name: "Acme"},
+		Provider: teamProviderConfig{
+			Name:    "pegg-team Acme",
+			Driver:  "openai",
+			BaseURL: "https://team.example.com/v1",
+			APIKey:  "vsk_live_test",
+		},
+		Models: []teamModelConfig{
+			{ID: "gpt-4.1", Name: "GPT-4.1", Kind: "llm"},
+			{ID: "whisper-large-v3", Name: "Whisper Large v3", Kind: "stt"},
+		},
+	}
+
+	applyTeamConfig(peggCfg, cfg)
+
+	if peggCfg.STT == nil {
+		t.Fatal("stt config was not created")
+	}
+	entry, ok := peggCfg.STT.ProviderConfig("pegg-team Acme")
+	if !ok {
+		t.Fatal("pegg-team stt provider was not stored")
+	}
+	if entry.Driver != "openai" || len(entry.Models) != 1 || entry.Models[0].ID != "whisper-large-v3" {
+		t.Fatalf("stt entry = %+v", entry)
+	}
+	if peggCfg.STT.Provider != "" || peggCfg.STT.Model != "" {
+		t.Fatalf("stt defaults should not be changed: %+v", peggCfg.STT)
 	}
 }

@@ -16,6 +16,8 @@ Open **Settings → General** and use the **STT provider** and **STT model** row
   that already has a key asks whether to use the saved key or replace it.
 - Each provider's key is saved in `pegg.json` under `stt.providers`, so multiple
   providers can be kept side by side.
+- Custom providers can specify a `driver` (for example `openai`) together with
+  `base_url` to use an OpenAI-compatible endpoint.
 - The model list contains every model from every configured provider.
 - Streaming-capable models show a muted **stream** label on the right. Streaming
   is enabled automatically for those models.

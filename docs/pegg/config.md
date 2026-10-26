@@ -293,33 +293,74 @@ manages that agent.
 
 ### `stt`
 
-Speech-to-text settings. `pegg team` writes the team's default STT model here.
+Speech-to-text settings. `pegg team` writes the team's default STT provider,
+models and selection here. See [Speech-to-text providers](providers-and-models.md#speech-to-text-providers)
+for the built-in catalogue.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `providers` | array | — | Per-provider credentials: `{ provider, api_key, base_url, stream_url }` |
-| `provider` | string | — | Selected STT provider (`pegg-team` for Team AI) |
+| `providers` | array | — | Per-provider credentials and model catalogue. See [`stt.providers[]`](#sttproviders) |
+| `provider` | string | — | Selected STT provider (`pegg-team <team>` for Team AI) |
 | `model` | string | — | Selected STT model key |
 | `streaming_model` | string | — | Optional streaming model written by Team AI defaults; the current CLI uses `model` for batch transcription |
 | `record_command` | string | — | Custom recording command |
 | `max_duration_secs` | int | `120` | Maximum recording length |
 
+The legacy top-level `api_key`, `base_url`, and `stream_url` are still accepted
+as fallbacks for the selected provider, but new configurations should place them
+inside the matching `providers` entry.
+
+#### `stt.providers[]`
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `provider` | string | — | Provider name. Either a registered STT provider (for example `"openai"`) or a custom name |
+| `driver` | string | — | Raw STT wire protocol: `"openai"` or `"assemblyai"`. Used when `provider` is not a registered provider. `"openai"` requires `base_url` |
+| `api_key` | string | — | API key, stored in plaintext |
+| `base_url` | string | — | Override the endpoint |
+| `stream_url` | string | — | Override the streaming WebSocket endpoint (AssemblyAI) |
+| `models` | array | — | Model catalogue for this provider. When non-empty it replaces the built-in catalogue |
+
+#### `stt.providers[].models[]`
+
+| Key | Type | Description |
+|---|---|---|
+| `id` | string | Model ID sent to the provider |
+| `name` | string | Display name shown in the TUI and settings |
+| `streaming` | bool | Marks the model as usable for realtime streaming (the provider must also support streaming) |
+
+#### Declaring STT models
+
+Declared STT models have a smaller shape than LLM models — there is no metadata
+or `config` object. When `models` is omitted or empty, Pegg uses the built-in
+model list for that provider. When it is non-empty, it replaces the built-in list
+for that provider (unlike LLM models, STT models are not merged).
+
 ```json
 {
   "stt": {
-    "provider": "pegg-team",
+    "provider": "pegg-team Acme",
     "model": "whisper-large-v3",
     "providers": [
       {
-        "provider": "pegg-team",
+        "provider": "pegg-team Acme",
+        "driver": "openai",
         "base_url": "https://team.example.com/v1",
-        "api_key": "vsk_live_..."
+        "api_key": "vsk_live_...",
+        "models": [
+          { "id": "whisper-large-v3", "name": "Whisper Large v3" },
+          { "id": "gpt-4o-transcribe", "name": "GPT-4o Transcribe" }
+        ]
       }
     ],
     "max_duration_secs": 120
   }
 }
 ```
+
+The selected `model` must exist in the provider's configured or built-in model
+list. A model marked `"streaming": true` is offered for realtime streaming;
+otherwise it is used for batch transcription only.
 
 ### `memory`
 
