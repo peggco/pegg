@@ -152,9 +152,9 @@ func (h *Hub) hasSubscribers() bool {
 }
 
 func (h *Hub) dispatch(e session.RunEvent) {
-	runInfo, ok := h.runFor(e)
-	local := ok && runInfo.OwnerInstance != "" && runInfo.OwnerInstance == h.instance
-	if h.coord != nil {
+	runInfo, _ := h.runFor(e)
+	local := runInfo.OwnerInstance != "" && runInfo.OwnerInstance == h.instance
+	if !local && h.coord != nil {
 		local = h.coord.IsLocal(e.RunID)
 	}
 
