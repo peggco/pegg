@@ -205,3 +205,29 @@ func TestSystemFirstOnlySurvivesConfigRoundTrip(t *testing.T) {
 		t.Fatal("system_first_only was not persisted")
 	}
 }
+
+func TestLoadNormalizesLegacyTeamSTTDriver(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	cfg := DefaultConfig()
+	cfg.STT = &STTConfig{
+		Provider: "pegg-team",
+		Model:    "whisper-1",
+		Providers: []STTProviderConfig{{
+			Provider: "pegg-team",
+			APIKey:   "test-key",
+			BaseURL:  "https://team.example.com/v1",
+		}},
+	}
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.STT.Providers) != 1 || loaded.STT.Providers[0].Driver != "openai" {
+		t.Fatalf("stt providers = %+v", loaded.STT.Providers)
+	}
+}

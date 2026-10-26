@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/peggco/pegg/internal/stt"
+	_ "github.com/peggco/pegg/internal/stt/drivers"
 	_ "github.com/peggco/pegg/internal/stt/providers"
 )
 

@@ -23,6 +23,7 @@ type ServiceConfig struct {
 	APIKey  string
 	Headers map[string]string
 	Timeout time.Duration
+	Models  []stt.Model
 }
 
 type Service struct {
@@ -43,7 +44,12 @@ func (s *Service) Name() string { return s.name }
 
 func (s *Service) SupportsStream() bool { return false }
 
-func (s *Service) Models() []stt.Model { return stt.ModelsFor(s.name) }
+func (s *Service) Models() []stt.Model {
+	if len(s.cfg.Models) > 0 {
+		return s.cfg.Models
+	}
+	return stt.ModelsFor(s.name)
+}
 
 func (s *Service) Transcribe(ctx context.Context, req *stt.Request) (*stt.Result, error) {
 	if req == nil || len(req.Audio) == 0 {
