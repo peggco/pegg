@@ -47,7 +47,7 @@ func newLiveTest(t *testing.T) (*session.Manager, *runpkg.Coordinator, *Hub, eve
 
 func TestHubDeliversShortRunAfterSubscription(t *testing.T) {
 	_, coord, hub, bus, sess := newLiveTest(t)
-	sub := hub.SubscribeSession(sess.ID, false, 0)
+	sub := hub.SubscribeSession(sess.ID, true, 0)
 	t.Cleanup(sub.Close)
 
 	lease, err := coord.Claim(context.Background(), runpkg.ClaimRequest{
@@ -118,7 +118,7 @@ func TestHubSnapshotActiveRun(t *testing.T) {
 
 func TestHubFollowsSecondRunAfterFirstFinishes(t *testing.T) {
 	_, coord, hub, bus, sess := newLiveTest(t)
-	sub := hub.SubscribeSession(sess.ID, false, 0)
+	sub := hub.SubscribeSession(sess.ID, true, 0)
 	t.Cleanup(sub.Close)
 
 	run := func(tag string) {
@@ -160,7 +160,7 @@ func TestHubFollowsSecondRunAfterFirstFinishes(t *testing.T) {
 
 func TestHubDoesNotDuplicateEvents(t *testing.T) {
 	_, coord, hub, bus, sess := newLiveTest(t)
-	sub := hub.SubscribeSession(sess.ID, false, 0)
+	sub := hub.SubscribeSession(sess.ID, true, 0)
 	t.Cleanup(sub.Close)
 
 	lease, err := coord.Claim(context.Background(), runpkg.ClaimRequest{
@@ -192,6 +192,29 @@ func TestHubDoesNotDuplicateEvents(t *testing.T) {
 		case <-deadline:
 			t.Fatalf("timed out: %+v", counts)
 		}
+	}
+}
+
+func TestLocalOnlySubscriberIgnoresFinishedLocalRun(t *testing.T) {
+	_, coord, hub, bus, sess := newLiveTest(t)
+	sub := hub.SubscribeSession(sess.ID, false, 0)
+	t.Cleanup(sub.Close)
+
+	lease, err := coord.Claim(context.Background(), runpkg.ClaimRequest{
+		SessionID: sess.ID, AgentID: "agent-1", AgentName: "orchestrator", Provider: "p", Model: "m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus.Publish(agent.TopicAgentStarted, agent.AgentStarted{AgentID: "agent-1", AgentName: "orchestrator"})
+	bus.Publish(agent.TopicAgentInput, agent.AgentInput{AgentID: "agent-1", AgentName: "orchestrator", Input: "hello"})
+	bus.Publish(agent.TopicAgentToken, agent.AgentToken{AgentID: "agent-1", AgentName: "orchestrator", Content: "hi"})
+	lease.Finish(session.RunStateDone, "")
+
+	select {
+	case e := <-sub.C:
+		t.Fatalf("local run leaked to a subscriber that excludes local runs: %+v", e)
+	case <-time.After(time.Second):
 	}
 }
 
