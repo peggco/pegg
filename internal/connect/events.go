@@ -72,3 +72,31 @@ type runAgentErrorPayload struct {
 type runWarningPayload struct {
 	Message string `json:"message"`
 }
+
+type runSubagentStartedPayload struct {
+	AgentID       string `json:"agent_id"`
+	AgentName     string `json:"agent_name,omitempty"`
+	DisplayName   string `json:"display_name,omitempty"`
+	ParentAgentID string `json:"parent_agent_id,omitempty"`
+}
+
+type runSubagentMessagePayload struct {
+	AgentID string         `json:"agent_id"`
+	Message SessionMessage `json:"message"`
+}
+
+type runSubagentUsagePayload struct {
+	AgentID string    `json:"agent_id"`
+	Usage   llm.Usage `json:"usage"`
+}
+
+type runSubagentDonePayload struct {
+	AgentID string    `json:"agent_id"`
+	Output  string    `json:"output,omitempty"`
+	Usage   llm.Usage `json:"usage"`
+}
+
+type runSubagentErrorPayload struct {
+	AgentID string `json:"agent_id"`
+	Message string `json:"message"`
+}

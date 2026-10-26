@@ -22,7 +22,7 @@ type Summary struct {
 	EventSeq  int64
 }
 
-func (h *Hub) SummarizeRun(runID string) (Summary, error) {
+func (h *Hub) SummarizeRun(runID, agentID string) (Summary, error) {
 	var (
 		out   Summary
 		tools = make(map[string]*ToolSummary)
@@ -36,6 +36,9 @@ func (h *Hub) SummarizeRun(runID string) (Summary, error) {
 		}
 		for _, e := range events {
 			last = e.Seq
+			if agentID != "" && e.AgentID != "" && e.AgentID != agentID {
+				continue
+			}
 			ev, ok := DecodeAgentEvent(e)
 			if !ok {
 				continue
