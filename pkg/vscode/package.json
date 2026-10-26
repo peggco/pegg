@@ -2,7 +2,7 @@
   "name": "pegg-vscode",
   "displayName": "Pegg",
   "description": "Pegg AI coding agent for VS Code: chat, tools, sessions, permissions, attachments, and editor integrations.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "publisher": "peggco",
   "license": "FSL-1.1-MIT",
   "icon": "media/icon.png",

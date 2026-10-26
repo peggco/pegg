@@ -80,7 +80,7 @@ export class AcpClient extends EventEmitter {
   async initialize(): Promise<any> {
     return this.request('initialize', {
       protocolVersion: 1,
-      clientInfo: { name: 'pegg-vscode', title: 'Pegg for VS Code', version: this.options.version ?? '0.2.1' },
+      clientInfo: { name: 'pegg-vscode', title: 'Pegg for VS Code', version: this.options.version ?? '0.2.2' },
       clientCapabilities: {
         terminal: true,
         fs: { readTextFile: true, writeTextFile: false },
