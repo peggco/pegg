@@ -104,5 +104,8 @@ func (e *Engine) Provider(ctx context.Context, name string) (Provider, error) {
 }
 
 func (e *Engine) Providers() []string {
-	return llm.ListProviders()
+	if e.cfg == nil {
+		return llm.ListProviders()
+	}
+	return llm.ListProviderNames(e.cfg.Providers)
 }

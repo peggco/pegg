@@ -109,6 +109,37 @@ func TestListProviders(t *testing.T) {
 	}
 }
 
+func TestListProviderNamesIncludesConfiguredProviders(t *testing.T) {
+	RegisterProvider("names-registered", func(config.LLMConfig) (Provider, error) {
+		return &namedMockProvider{name: "names-registered"}, nil
+	})
+
+	names := ListProviderNames([]config.LLMConfig{
+		{Provider: "pegg-team Acme", Driver: "openai"},
+		{Provider: "names-registered"},
+		{Driver: "names-driver-only"},
+		{},
+	})
+
+	for _, want := range []string{"names-registered", "pegg-team Acme", "names-driver-only"} {
+		if !slices.Contains(names, want) {
+			t.Fatalf("ListProviderNames = %v, want to contain %q", names, want)
+		}
+	}
+	seen := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		if _, ok := seen[name]; ok {
+			t.Fatalf("ListProviderNames = %v, contains duplicate %q", names, name)
+		}
+		seen[name] = struct{}{}
+	}
+	for i := 1; i < len(names); i++ {
+		if names[i-1] > names[i] {
+			t.Fatalf("ListProviderNames = %v, not sorted", names)
+		}
+	}
+}
+
 func TestHasProvider(t *testing.T) {
 	RegisterProvider("has-a", func(config.LLMConfig) (Provider, error) {
 		return &namedMockProvider{name: "has-a"}, nil

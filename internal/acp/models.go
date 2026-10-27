@@ -5,6 +5,7 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/llm"
 )
 
@@ -41,9 +42,15 @@ func (s *Server) handleListModels(ctx context.Context, params json.RawMessage) (
 	}
 	s.llmMgr.WaitUntilReady()
 
-	providers := make([]string, 0, len(s.cfg.Providers))
-	seen := make(map[string]bool, len(s.cfg.Providers))
-	for _, p := range s.cfg.Providers {
+	cfg := s.cfg
+	if fresh, err := config.Load(); err == nil {
+		cfg = fresh
+	}
+	s.llmMgr.EnsureProviders(ctx, cfg.Providers)
+
+	providers := make([]string, 0, len(cfg.Providers))
+	seen := make(map[string]bool, len(cfg.Providers))
+	for _, p := range cfg.Providers {
 		name := p.Provider
 		if name == "" {
 			name = p.Driver

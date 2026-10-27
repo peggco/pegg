@@ -184,8 +184,10 @@ a failed fetch does not block the add, run `pegg providers refresh` to retry.
 
 ### TUI
 
-Open Settings with `Ctrl+P` → **General** → **Provider**. Existing providers show
-*Use existing configuration* / *Configure again*; new ones prompt for an API key.
+Open Settings with `Ctrl+P` → **General** → **Provider**. The list includes both
+built-in providers and any configured provider whose name is not registered, such
+as custom endpoints and `pegg-team <team>`. Existing providers show *Use existing
+configuration* / *Configure again*; new ones prompt for an API key.
 
 ### Config file
 

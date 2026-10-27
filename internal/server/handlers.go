@@ -31,20 +31,33 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 	s.llmMgr.WaitUntilReady()
 
+	cfg := s.cfg
+	if fresh, err := config.Load(); err == nil {
+		cfg = fresh
+	}
+	s.llmMgr.EnsureProviders(r.Context(), cfg.Providers)
+
 	type modelEntry struct {
 		Provider string `json:"provider"`
 		Model    any    `json:"model"`
 	}
 
 	var entries []modelEntry
-	for _, p := range s.cfg.Providers {
-		models, err := s.llmMgr.Models(p.Provider)
+	for _, p := range cfg.Providers {
+		name := p.Provider
+		if name == "" {
+			name = p.Driver
+		}
+		if name == "" {
+			continue
+		}
+		models, err := s.llmMgr.Models(name)
 		if err != nil {
 			continue
 		}
 		for _, m := range models {
 			entries = append(entries, modelEntry{
-				Provider: p.Provider,
+				Provider: name,
 				Model:    m,
 			})
 		}

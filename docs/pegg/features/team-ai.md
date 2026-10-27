@@ -95,8 +95,9 @@ pegg team
    the provider as `pegg-team <team>`.
 
 In [VS Code](../usage/vscode.md), run **Pegg: Connect Team** from the command
-palette. It opens an integrated terminal and runs `pegg team`. After connecting,
-run **Pegg: Restart Server** so the extension reloads the team provider.
+palette. It opens an integrated terminal and runs `pegg team`. The next model
+picker refresh lists the team provider without a restart. Restart the server if
+you also want startup-time settings such as team defaults to be reloaded.
 
 The API key is reused for later connections to the same team and user. It is
 stored encrypted on the server; revoking it on the website forces a new key on

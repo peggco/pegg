@@ -188,6 +188,36 @@ func TestListModalHandleKey(t *testing.T) {
 	}
 }
 
+func TestOpenProvidersIncludesConfiguredProviders(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Providers = []config.LLMConfig{{
+		Provider: "pegg-team Acme",
+		Driver:   "openai",
+		BaseURL:  "https://team.example.com/v1",
+	}}
+
+	s := New(Deps{Config: cfg})
+	s.openProviders()
+
+	modal, ok := s.sub.(*listModal)
+	if !ok {
+		t.Fatalf("openProviders did not open a list modal: %T", s.sub)
+	}
+	found := false
+	for _, item := range modal.list.Items() {
+		if item.Label != "pegg-team Acme" {
+			continue
+		}
+		found = true
+		if !item.Marked {
+			t.Fatal("configured team provider should be marked as configured")
+		}
+	}
+	if !found {
+		t.Fatalf("configured team provider missing from provider list: %+v", modal.list.Items())
+	}
+}
+
 func TestSettingsAllTabsDraw(t *testing.T) {
 	styles.RegisterDefaults()
 	styles.Set("dark")
