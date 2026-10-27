@@ -296,6 +296,9 @@ func (p *Page) DrawErrorBanner(s tcell.Screen, bounds layout.Region, msg string,
 }
 
 func (p *Page) HandleKey(ev *tcell.EventKey) bool {
+	if isTypingKey(ev) {
+		p.logo.Typed(time.Now())
+	}
 	if p.askPicker.Active() {
 		return p.askPicker.HandleKey(ev)
 	}
@@ -478,8 +481,24 @@ func (p *Page) syncPickers() {
 
 func (p *Page) OnTick(blinkOn bool) {
 	p.input.SetBlink(blinkOn)
-	p.logo.SetBlink(p.input.CursorVisible(time.Now()))
 	p.chat.OnTick(blinkOn)
+}
+
+func (p *Page) Animate(now time.Time) bool {
+	if p.chat.HasItems() {
+		return false
+	}
+	return p.logo.Animate(now)
+}
+
+func isTypingKey(ev *tcell.EventKey) bool {
+	switch ev.Key() {
+	case tcell.KeyBackspace, tcell.KeyBackspace2, tcell.KeyDelete:
+		return true
+	case tcell.KeyRune:
+		return ev.Rune() != 0 && ev.Modifiers()&(tcell.ModCtrl|tcell.ModAlt) == 0
+	}
+	return false
 }
 
 func (p *Page) Draw(s tcell.Screen, bounds layout.Region, focused bool) {

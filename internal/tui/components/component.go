@@ -1,6 +1,8 @@
 package components
 
 import (
+	"time"
+
 	"github.com/gdamore/tcell/v2"
 
 	"github.com/peggco/pegg/internal/tui/layout"
@@ -13,6 +15,10 @@ type Component interface {
 
 type Ticker interface {
 	OnTick(blinkOn bool)
+}
+
+type Animator interface {
+	Animate(now time.Time) bool
 }
 
 type Focusable interface {

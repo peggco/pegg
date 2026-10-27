@@ -491,6 +491,11 @@ func (a *App) loop() error {
 				a.redrawPending.Store(true)
 				lastFullRepaint = now
 			}
+			if a.getOverlay() == nil {
+				if anim, ok := a.root.(components.Animator); ok && anim.Animate(now) {
+					a.redrawPending.Store(true)
+				}
+			}
 			if a.redrawPending.Swap(false) {
 				a.draw()
 			}
