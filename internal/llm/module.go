@@ -50,6 +50,26 @@ func ListProviders() []string {
 	return names
 }
 
+func ListProviderNames(cfgs []config.LLMConfig) []string {
+	seen := make(map[string]struct{}, len(cfgs))
+	for _, name := range ListProviders() {
+		seen[name] = struct{}{}
+	}
+	for _, cfg := range cfgs {
+		name := providerName(cfg)
+		if name != "" {
+			seen[name] = struct{}{}
+		}
+	}
+
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func HasProvider(name string) bool {
 	providersMu.RLock()
 	defer providersMu.RUnlock()

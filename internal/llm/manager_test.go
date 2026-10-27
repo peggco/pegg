@@ -81,6 +81,18 @@ func TestManagerSyncAndExactSelect(t *testing.T) {
 	}
 }
 
+func TestManagerEnsureProvidersLoadsMissing(t *testing.T) {
+	mgr, _ := newTestManager(t)
+	registerMockProvider(t, "mgr-ensure-a", []Model{{ID: "e1"}, {ID: "e2"}})
+
+	mgr.EnsureProviders(context.Background(), []config.LLMConfig{{Provider: "mgr-ensure-a"}})
+
+	models, err := mgr.Models("mgr-ensure-a")
+	if err != nil || len(models) != 2 {
+		t.Fatalf("models = %+v, err = %v", models, err)
+	}
+}
+
 func TestManagerExactGlobal(t *testing.T) {
 	mgr, _ := newTestManager(t)
 	registerMockProvider(t, "mgr-glob-a", []Model{{ID: "a1"}})

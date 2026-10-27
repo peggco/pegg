@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -225,6 +226,26 @@ func (m *Manager) Sync(ctx context.Context, cfgs []config.LLMConfig) {
 
 	wg.Wait()
 	m.markReady()
+}
+
+func (m *Manager) EnsureProviders(ctx context.Context, cfgs []config.LLMConfig) {
+	for _, cfg := range cfgs {
+		name := providerName(cfg)
+		if name == "" {
+			continue
+		}
+
+		m.mu.RLock()
+		entry, ok := m.entries[name]
+		unchanged := ok && reflect.DeepEqual(entry.cfg, cfg)
+		m.mu.RUnlock()
+		if unchanged {
+			continue
+		}
+
+		m.log.Fdebug("llm: loading provider %q after config change", name)
+		m.loadProvider(ctx, cfg)
+	}
 }
 
 func (m *Manager) handleProviderAdded(cfg config.LLMConfig) {

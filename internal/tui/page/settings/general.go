@@ -143,8 +143,12 @@ func (s *Settings) providerValue() string {
 func (s *Settings) openProviders() {
 	l := components.NewList(i18n.T("settings.provider.selectTitle"))
 	l.SetSearchable(true)
+	var configuredProviders []config.LLMConfig
+	if s.deps.Config != nil {
+		configuredProviders = s.deps.Config.Providers
+	}
 	var items []components.ListItem
-	for _, name := range llm.ListProviders() {
+	for _, name := range llm.ListProviderNames(configuredProviders) {
 		detail, marked := i18n.T("settings.provider.notConfigured"), false
 		if _, ok := s.configured(name); ok {
 			detail, marked = i18n.T("settings.provider.configured"), true
