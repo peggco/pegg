@@ -12,7 +12,7 @@ import (
 
 func TestCycleModeOrder(t *testing.T) {
 	a := &App{mode: agent.ModeAuto}
-	for _, want := range []agent.Mode{agent.ModeBuild, agent.ModePlan, agent.ModeAuto, agent.ModeBuild} {
+	for _, want := range []agent.Mode{agent.ModePlan, agent.ModeBuild, agent.ModeAuto, agent.ModePlan} {
 		a.cycleMode()
 		if a.mode != want {
 			t.Fatalf("cycleMode() mode = %q, want %q", a.mode, want)
