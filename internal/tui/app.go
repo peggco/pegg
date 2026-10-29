@@ -851,12 +851,12 @@ func (a *App) cycleMode() {
 	}
 	var next agent.Mode
 	switch a.mode {
-	case agent.ModeBuild:
-		next = agent.ModePlan
 	case agent.ModePlan:
+		next = agent.ModeBuild
+	case agent.ModeBuild:
 		next = agent.ModeAuto
 	default:
-		next = agent.ModeBuild
+		next = agent.ModePlan
 	}
 	a.setMode(next)
 }
