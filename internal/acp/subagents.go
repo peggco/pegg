@@ -2,6 +2,7 @@ package acp
 
 import (
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/agent/attach"
 )
 
 func (s *Server) subscribeSubagents() {
@@ -24,7 +25,7 @@ func (s *Server) handleSubagentInput(ev agent.AgentInput) {
 		AgentID:       ev.AgentID,
 		AgentName:     ev.AgentName,
 		Status:        "running",
-		Title:         ev.Input,
+		Title:         attach.StripBlock(ev.Input),
 	})
 }
 

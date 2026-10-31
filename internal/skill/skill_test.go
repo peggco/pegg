@@ -190,7 +190,7 @@ Load the plan, review it, execute tasks.
 		in   string
 		want string
 	}{
-		{"Use the /executing-plans skill", "Use the  skill"},
+		{"Use the /executing-plans skill", "/executing-plans"},
 		{"Unknown /no-such-skill stays", "/no-such-skill"},
 		{"URL https://example.com/foo must survive", "https://example.com/foo"},
 		{"Path a/b/c must survive", "a/b/c"},
@@ -204,8 +204,8 @@ Load the plan, review it, execute tasks.
 	}
 
 	got := ExpandMessage(agent.MessageInput{Text: "Use /executing-plans now"})
-	if got.Text != "Use  now" {
-		t.Fatalf("token must be stripped: %q", got.Text)
+	if got.Text != "Use /executing-plans now" {
+		t.Fatalf("skill token must be kept: %q", got.Text)
 	}
 	if len(got.Calls) != 1 {
 		t.Fatalf("calls = %d, want 1", len(got.Calls))

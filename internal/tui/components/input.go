@@ -38,9 +38,10 @@ type Input struct {
 	undo         []inputSnapshot
 	redo         []inputSnapshot
 
-	chips     []string
-	mentions  []string
-	longTexts map[rune]string
+	chips         []string
+	mentions      []string
+	mentionLabels []string
+	longTexts     map[rune]string
 
 	history      []string
 	historyPos   int
@@ -108,7 +109,20 @@ func chipWidth(r rune, chips []string) int {
 
 func (in *Input) mentionChipRune(name string) rune {
 	in.mentions = append(in.mentions, name)
+	in.mentionLabels = append(in.mentionLabels, truncateMentionLabel(name))
 	return mentionBase + rune(len(in.mentions)-1)
+}
+
+const maxMentionLabel = 32
+
+func truncateMentionLabel(name string) string {
+	runes := []rune(name)
+	if len(runes) <= maxMentionLabel {
+		return name
+	}
+	head := maxMentionLabel/2 - 1
+	tail := maxMentionLabel - head - 1
+	return string(runes[:head]) + "…" + string(runes[len(runes)-tail:])
 }
 
 func mentionNameOf(r rune, mentions []string) (string, bool) {
@@ -122,9 +136,20 @@ func mentionNameOf(r rune, mentions []string) (string, bool) {
 	return "", false
 }
 
-func mentionWidth(r rune, mentions []string) int {
-	if name, ok := mentionNameOf(r, mentions); ok {
-		return len(name) + 1
+func mentionLabelOf(r rune, labels []string) (string, bool) {
+	if r < mentionBase {
+		return "", false
+	}
+	i := int(r - mentionBase)
+	if i >= 0 && i < len(labels) {
+		return labels[i], true
+	}
+	return "", false
+}
+
+func mentionWidth(r rune, labels []string) int {
+	if label, ok := mentionLabelOf(r, labels); ok {
+		return len([]rune(label)) + 1
 	}
 	return 1
 }
@@ -524,8 +549,8 @@ func (in *Input) runeWidth(r rune) int {
 	if _, ok := chipNameOf(r, in.chips); ok {
 		return chipWidth(r, in.chips)
 	}
-	if _, ok := mentionNameOf(r, in.mentions); ok {
-		return mentionWidth(r, in.mentions)
+	if _, ok := mentionLabelOf(r, in.mentionLabels); ok {
+		return mentionWidth(r, in.mentionLabels)
 	}
 	return 1
 }
@@ -1113,6 +1138,7 @@ func (in *Input) resetContent() {
 	in.undo, in.redo = nil, nil
 	in.chips = nil
 	in.mentions = nil
+	in.mentionLabels = nil
 	in.longTexts = make(map[rune]string)
 }
 
@@ -1208,6 +1234,57 @@ func (in *Input) SetValue(text string) {
 	in.col = len([]rune(in.lines[in.row]))
 	in.lastActivity = time.Now()
 	in.ensureCursorVisible()
+}
+
+func (in *Input) ConvertTokens(mentions, skills []string) {
+	if len(mentions) == 0 && len(skills) == 0 {
+		return
+	}
+	mentionSet := make(map[string]bool, len(mentions))
+	for _, name := range mentions {
+		mentionSet[name] = true
+	}
+	skillSet := make(map[string]bool, len(skills))
+	for _, name := range skills {
+		skillSet[name] = true
+	}
+	for i, line := range in.lines {
+		in.lines[i] = in.convertLineTokens(line, mentionSet, skillSet)
+	}
+	in.row = len(in.lines) - 1
+	in.col = len([]rune(in.lines[in.row]))
+	in.ensureCursorVisible()
+}
+
+func (in *Input) convertLineTokens(line string, mentions, skills map[string]bool) string {
+	rs := []rune(line)
+	out := make([]rune, 0, len(rs))
+	for i := 0; i < len(rs); {
+		r := rs[i]
+		if (r == '@' || r == '/') && (i == 0 || isSpace(rs[i-1])) {
+			end := i + 1
+			for end < len(rs) && !isSpace(rs[end]) {
+				end++
+			}
+			name := string(rs[i+1 : end])
+			known := mentions[name]
+			if r == '/' {
+				known = skills[name]
+			}
+			if name != "" && known {
+				if r == '@' {
+					out = append(out, in.mentionChipRune(name))
+				} else {
+					out = append(out, in.chipRune(name))
+				}
+				i = end
+				continue
+			}
+		}
+		out = append(out, r)
+		i++
+	}
+	return string(out)
 }
 
 func (in *Input) HandleKey(ev *tcell.EventKey) bool {
@@ -1459,17 +1536,17 @@ func (in *Input) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 				x += len(label)
 				continue
 			}
-			if name, ok := mentionNameOf(rs[j], in.mentions); ok {
+			if name, ok := mentionLabelOf(rs[j], in.mentionLabels); ok {
 				style := th.Base().Foreground(th.InputBg).Background(th.Mention)
 				switch {
 				case selected:
 					style = th.Base().Foreground(th.Mention).Background(th.Selection)
 				}
 				label := "@" + name
-				if x+len(label) <= bounds.Right()-1 {
+				if x+len([]rune(label)) <= bounds.Right()-1 {
 					drawLabel(s, x, y, label, style, cursorHere, th)
 				}
-				x += len(label)
+				x += len([]rune(label))
 				continue
 			}
 			style := textStyle

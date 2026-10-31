@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/live"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
@@ -125,7 +126,7 @@ func (c *Connector) handleMainLiveEvent(r session.Run, ev live.AgentEvent) {
 	switch ev.Type {
 	case session.AgentEventInput:
 		c.emit(eventRunInput, r.SessionID, r.ID, map[string]any{
-			"input":       ev.Input,
+			"input":       attach.StripBlock(ev.Input),
 			"attachments": ev.Attachments,
 		})
 	case session.AgentEventToken:
@@ -179,9 +180,10 @@ func (c *Connector) handleSubagentLiveEvent(r session.Run, e session.RunEvent, e
 			ParentAgentID: ev.ParentAgentID,
 		})
 	case session.AgentEventInput:
-		msg := llm.UserMessage(ev.Input)
+		text := attach.StripBlock(ev.Input)
+		msg := llm.UserMessage(text)
 		if len(ev.Attachments) > 0 {
-			msg = llm.UserMessage(llm.ContentWithAttachments(ev.Input, ev.Attachments))
+			msg = llm.UserMessage(llm.ContentWithAttachments(text, ev.Attachments))
 		}
 		c.emitSubagentMessage(r, e, agentID, msg)
 	case session.AgentEventMessage:

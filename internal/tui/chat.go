@@ -11,6 +11,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/builtin/middlewares/compaction"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/llm"
@@ -152,11 +153,12 @@ func (a *App) onAgentInput(e agent.AgentInput) {
 		return
 	}
 	t := a.transcriptFor(e.AgentID, e.AgentName)
-	it := &components.ChatItem{Kind: components.ItemUser, ID: e.AgentID, Text: e.Input, Attachments: e.Attachments}
+	text := attach.StripBlock(e.Input)
+	it := &components.ChatItem{Kind: components.ItemUser, ID: e.AgentID, Text: text, Attachments: e.Attachments}
 	a.appendItem(t, it)
 	if e.AgentID != a.agent.ID {
 		if sub := a.subItemByID[e.AgentID]; sub != nil {
-			sub.SubagentTask = e.Input
+			sub.SubagentTask = text
 			if a.viewID == a.agent.ID {
 				a.chat.InvalidateItemPtr(sub)
 			}
@@ -1206,8 +1208,24 @@ func (a *App) restoreToInput(it *components.ChatItem) {
 		a.home.AttachmentBar().Add(att)
 	}
 	a.refreshMentionItemsLocked()
+	a.linkInputTokensLocked()
 	a.refreshHomeLocked()
 	a.requestRedraw()
+}
+
+func (a *App) linkInputTokensLocked() {
+	mentionItems := a.home.MentionPicker().All()
+	mentions := make([]string, 0, len(mentionItems))
+	for _, it := range mentionItems {
+		mentions = append(mentions, it.Label)
+	}
+	skillItems := a.home.SkillPicker().All()
+	skills := make([]string, 0, len(skillItems))
+	for _, it := range skillItems {
+		skills = append(skills, it.Label)
+	}
+	a.home.Input().ConvertTokens(mentions, skills)
+	a.home.DismissPickers()
 }
 
 func (a *App) openSubagentHistory(agentID string) {

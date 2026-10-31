@@ -589,3 +589,21 @@ func TestHomeMentionPickerMidSentence(t *testing.T) {
 		t.Errorf("Value = %q, want 'ask @developer ' (auto space at EOL)", got)
 	}
 }
+
+func TestDismissPickersKeepsPickerClosed(t *testing.T) {
+	p := New()
+	p.SetMentionItems([]components.ListItem{{Label: "clipboard.png"}})
+	p.Input().SetValue("@clipboard.png")
+	p.syncPickers()
+	if !p.PickOpen() {
+		t.Fatal("expected mention picker to open")
+	}
+	p.DismissPickers()
+	if p.PickOpen() {
+		t.Fatal("picker should be closed after dismiss")
+	}
+	p.syncPickers()
+	if p.PickOpen() {
+		t.Fatal("picker should stay closed for the same token")
+	}
+}

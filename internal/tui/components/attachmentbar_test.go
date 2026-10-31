@@ -91,8 +91,17 @@ func TestAttachmentBarRequiredHeight(t *testing.T) {
 		t.Fatalf("expected 0 for empty bar")
 	}
 	ab.Add(llm.Attachment{Type: llm.AttachmentTypeFile, FileName: "f.txt"})
+	if ab.RequiredHeight() != cardHeight {
+		t.Fatalf("expected %d without pagination, got %d", cardHeight, ab.RequiredHeight())
+	}
+	for i := 0; i < 3; i++ {
+		ab.Add(llm.Attachment{Type: llm.AttachmentTypeFile, FileName: "f.txt"})
+	}
 	if ab.RequiredHeight() != cardHeight+paginationHeight {
-		t.Fatalf("expected %d, got %d", cardHeight+paginationHeight, ab.RequiredHeight())
+		t.Fatalf("expected %d with pagination, got %d", cardHeight+paginationHeight, ab.RequiredHeight())
+	}
+	if ab.RequiredHeightFor(1000) != cardHeight {
+		t.Fatalf("wide bar should fit without pagination, got %d", ab.RequiredHeightFor(1000))
 	}
 }
 

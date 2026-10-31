@@ -118,11 +118,17 @@ func (ab *AttachmentBar) SetPage(p int) {
 }
 
 func (ab *AttachmentBar) TotalPages() int {
-	mv := ab.maxVisible
-	if len(ab.attachments) <= mv {
+	return ab.totalPages(ab.maxVisible)
+}
+
+func (ab *AttachmentBar) totalPages(maxVisible int) int {
+	if maxVisible < 1 {
+		maxVisible = 1
+	}
+	if len(ab.attachments) <= maxVisible {
 		return 1
 	}
-	return (len(ab.attachments) + mv - 1) / mv
+	return (len(ab.attachments) + maxVisible - 1) / maxVisible
 }
 
 func (ab *AttachmentBar) syncPage() {
@@ -175,10 +181,21 @@ func (ab *AttachmentBar) HandleKey(ev *tcell.EventKey) bool {
 }
 
 func (ab *AttachmentBar) RequiredHeight() int {
+	return ab.RequiredHeightFor(0)
+}
+
+func (ab *AttachmentBar) RequiredHeightFor(width int) int {
 	if len(ab.attachments) == 0 {
 		return 0
 	}
-	return cardHeight + paginationHeight
+	maxVisible := ab.maxVisible
+	if width > 0 {
+		maxVisible = ab.computeMaxVisible(width)
+	}
+	if ab.totalPages(maxVisible) > 1 {
+		return cardHeight + paginationHeight
+	}
+	return cardHeight
 }
 
 func (ab *AttachmentBar) Draw(s tcell.Screen, bounds layout.Region, focused bool) {

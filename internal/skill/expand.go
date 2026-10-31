@@ -25,7 +25,7 @@ func ExpandMessage(in agent.MessageInput) agent.MessageInput {
 		if len(parts) != 3 {
 			return m
 		}
-		prefix, token := parts[1], parts[2]
+		token := parts[2]
 		s, ok := Get(strings.TrimPrefix(token, "/"))
 		if !ok {
 			return m
@@ -42,7 +42,7 @@ func ExpandMessage(in agent.MessageInput) agent.MessageInput {
 				Arguments: string(args),
 			},
 		})
-		return prefix
+		return m
 	})
 	return in
 }
