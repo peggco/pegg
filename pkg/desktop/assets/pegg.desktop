@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Pegg
+GenericName=AI coding agent
+Comment=Provider-agnostic AI coding agent
+Exec=pegg-desktop %U
+Icon=pegg
+Terminal=false
+Categories=Development;Utility;
+Keywords=ai;agent;code;chat;
+StartupNotify=true
+StartupWMClass=pegg

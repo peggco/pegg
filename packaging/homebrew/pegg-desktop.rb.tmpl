@@ -1,0 +1,15 @@
+cask "pegg-desktop" do
+  version "@VERSION@"
+  on_arm do
+    sha256 "@SHA_ARM@"
+    url "https://github.com/peggco/pegg/releases/download/v#{version}/pegg-desktop_#{version}_darwin_arm64.zip"
+  end
+  on_intel do
+    sha256 "@SHA_INTEL@"
+    url "https://github.com/peggco/pegg/releases/download/v#{version}/pegg-desktop_#{version}_darwin_amd64.zip"
+  end
+  name "Pegg"
+  desc "Native desktop client for the Pegg AI coding agent"
+  homepage "https://pegg.dev"
+  app "pegg-desktop.app"
+end

@@ -1,0 +1,271 @@
+.md {
+  font-size: inherit;
+  line-height: 1.7;
+  color: inherit;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p {
+  margin: 0 0 0.85em;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.4em 0 0.55em;
+  letter-spacing: -0.01em;
+}
+
+.md h1 {
+  font-size: 27px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.md h2 {
+  font-size: 19px;
+}
+
+.md h3 {
+  font-size: 16px;
+}
+
+.md h4 {
+  font-size: 14.5px;
+}
+
+.md strong {
+  font-weight: 620;
+}
+
+.md em {
+  font-style: italic;
+}
+
+.md ul,
+.md ol {
+  margin: 0 0 0.9em;
+  padding-left: 1.4em;
+}
+
+.md li {
+  margin: 0.22em 0;
+}
+
+.md li::marker {
+  color: var(--pg-muted);
+}
+
+.md blockquote {
+  margin: 0 0 0.9em;
+  padding: 6px 0 6px 14px;
+  border-left: 2px solid color-mix(in srgb, var(--pg-accent) 45%, var(--pg-border));
+  color: var(--pg-text-2);
+}
+
+.md blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--pg-border);
+  margin: 1.3em 0;
+}
+
+.md a {
+  color: var(--pg-accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--pg-accent) 35%, transparent);
+  text-underline-offset: 2px;
+}
+
+.md a:hover {
+  text-decoration-color: var(--pg-accent);
+}
+
+.md code {
+  font-family: var(--pg-font-mono);
+  font-size: 0.86em;
+  background: var(--pg-code-bg);
+  border: 1px solid color-mix(in srgb, var(--pg-code-border) 70%, transparent);
+  border-radius: 5px;
+  padding: 0.1em 0.4em;
+  color: var(--pg-code-text);
+}
+
+.md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 1em;
+  font-size: 13px;
+}
+
+.md th,
+.md td {
+  border: 1px solid var(--pg-border);
+  padding: 6px 9px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.md th {
+  background: var(--pg-surface-2);
+  font-weight: 600;
+}
+
+.md img {
+  max-width: 100%;
+  border-radius: var(--pg-radius-sm);
+}
+
+.pg-code {
+  margin: 0.2em 0 1em;
+  border: 1px solid var(--pg-code-border);
+  border-radius: var(--pg-radius-sm);
+  background: var(--pg-code-bg);
+  overflow: hidden;
+}
+
+.pg-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px 5px 11px;
+  border-bottom: 1px solid var(--pg-code-border);
+  background: color-mix(in srgb, var(--pg-surface) 45%, transparent);
+}
+
+.pg-code-lang {
+  font-size: 10.5px;
+  color: var(--pg-muted);
+  text-transform: lowercase;
+  font-family: var(--pg-font-mono);
+}
+
+.pg-copy {
+  font-size: 10.5px;
+  color: var(--pg-muted);
+  padding: 2px 7px;
+  border-radius: 5px;
+  transition: background var(--pg-fast), color var(--pg-fast);
+}
+
+.pg-copy:hover {
+  background: var(--pg-surface-2);
+  color: var(--pg-text);
+}
+
+.pg-code pre {
+  margin: 0;
+  padding: 11px 12px;
+  overflow: auto;
+  max-height: 460px;
+}
+
+.pg-code pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--pg-code-text);
+  font-family: var(--pg-font-mono);
+  white-space: pre;
+  display: block;
+}
+
+.hljs {
+  color: var(--pg-code-text);
+  background: transparent;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--pg-syn-comment, var(--pg-muted));
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-doctag,
+.hljs-section,
+.hljs-type {
+  color: var(--pg-syn-keyword);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta .hljs-string {
+  color: var(--pg-syn-string);
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--pg-syn-number);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-function .hljs-title {
+  color: var(--pg-syn-function);
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: var(--pg-syn-name);
+}
+
+.hljs-built_in,
+.hljs-class .hljs-title,
+.hljs-title.class_ {
+  color: var(--pg-syn-type);
+}
+
+.hljs-attr,
+.hljs-property {
+  color: var(--pg-syn-generic);
+}
+
+.hljs-operator,
+.hljs-punctuation {
+  color: var(--pg-syn-operator);
+}
+
+.hljs-name,
+.hljs-tag {
+  color: var(--pg-syn-keyword);
+}
+
+.hljs-meta {
+  color: var(--pg-syn-comment);
+}
+
+.hljs-deletion {
+  color: var(--pg-danger);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
+}

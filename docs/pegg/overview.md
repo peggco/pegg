@@ -134,6 +134,20 @@ These are end-user applications built on top of Pegg's agent core:
 
     `code --install-extension peggco.pegg-vscode`
 
+- [:octicons-file-code-24:{ .lg } **Intellij**](usage/intellij.md)
+
+    The Pegg plugin for JetBrains IDEs embeds the same agent engine used by
+    the CLI, TUI, and VS Code extension
+
+    `idea installPlugins dev.pegg.ide`
+
+- [:octicons-device-desktop-24:{ .lg } **Desktop**](usage/desktop.md)
+
+    A cross-platform desktop client for Pegg built with Wails v2 
+    and a React 19 + TypeScript frontend.
+
+    `https://github.com/peggco/pegg/releases`
+
 - [:octicons-package-24:{ .lg } **Go SDK**](../sdk/index.md)
 
     Embed the engine in your own Go program: chat, completions, sessions, files,

@@ -69,7 +69,7 @@ See [Installation](pegg/installation.md) for npm, prebuilt binaries,
 | Section | Where to go |
 |---|---|
 | First steps | [Installation](pegg/installation.md), [Providers & Models](pegg/providers-and-models.md), [Config](pegg/config.md) |
-| Everyday use | [TUI](pegg/usage/tui.md), [VS Code](pegg/usage/vscode.md), [CLI](pegg/usage/cli.md), [Adding Context](pegg/features/adding-context.md), [Sessions](pegg/features/sessions.md) |
+| Everyday use | [TUI](pegg/usage/tui.md), [VS Code](pegg/usage/vscode.md), [CLI](pegg/usage/cli.md), [Desktop](pegg/usage/desktop.md), [Adding Context](pegg/features/adding-context.md), [Sessions](pegg/features/sessions.md) |
 | Configuration | [Tools](pegg/configurations/tools.md), [Skills](pegg/configurations/skills.md), [Rules](pegg/configurations/rules.md), [MCP](pegg/configurations/mcp.md), [LSP](pegg/configurations/lsp.md), [Plugins](pegg/configurations/plugins.md) |
 | Going deeper | [Subagents](pegg/features/subagents.md), [Permissions](pegg/features/permissions.md), [Memory](pegg/features/memory.md), [SDK](sdk/index.md) |
 | Getting unstuck | [Troubleshooting](pegg/troubleshooting.md) |
