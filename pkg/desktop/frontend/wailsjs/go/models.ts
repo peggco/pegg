@@ -450,6 +450,83 @@ export namespace main {
 	        this.maxToolOutputChars = source["maxToolOutputChars"];
 	    }
 	}
+	export class ConnectStatus {
+	    state: string;
+	    pid?: number;
+	    startedAt?: string;
+	    error?: string;
+	    logs: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ConnectStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.pid = source["pid"];
+	        this.startedAt = source["startedAt"];
+	        this.error = source["error"];
+	        this.logs = source["logs"];
+	    }
+	}
+	export class ConnectSettings {
+	    enabled: boolean;
+	    relayUrl: string;
+	    token?: string;
+	    clearToken?: boolean;
+	    tokenMasked: string;
+	    hasToken: boolean;
+	    deviceName: string;
+	    deviceId: string;
+	    publicKey: string;
+	    autoApprove: boolean;
+	    maxConcurrency: number;
+	    responseTimeout: number;
+	    allowedMethods: string[];
+	    status: ConnectStatus;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConnectSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.relayUrl = source["relayUrl"];
+	        this.token = source["token"];
+	        this.clearToken = source["clearToken"];
+	        this.tokenMasked = source["tokenMasked"];
+	        this.hasToken = source["hasToken"];
+	        this.deviceName = source["deviceName"];
+	        this.deviceId = source["deviceId"];
+	        this.publicKey = source["publicKey"];
+	        this.autoApprove = source["autoApprove"];
+	        this.maxConcurrency = source["maxConcurrency"];
+	        this.responseTimeout = source["responseTimeout"];
+	        this.allowedMethods = source["allowedMethods"];
+	        this.status = this.convertValues(source["status"], ConnectStatus);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class STTProviderEntry {
 	    name: string;
 	    configured: boolean;
@@ -1073,6 +1150,60 @@ export namespace main {
 	}
 	
 	
+	export class TeamProvider {
+	    name: string;
+	    baseUrl: string;
+	    apiKeyMasked: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TeamProvider(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.baseUrl = source["baseUrl"];
+	        this.apiKeyMasked = source["apiKeyMasked"];
+	    }
+	}
+	export class TeamStatus {
+	    state: string;
+	    url?: string;
+	    error?: string;
+	    logs: string[];
+	    providers: TeamProvider[];
+	
+	    static createFrom(source: any = {}) {
+	        return new TeamStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.url = source["url"];
+	        this.error = source["error"];
+	        this.logs = source["logs"];
+	        this.providers = this.convertValues(source["providers"], TeamProvider);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 

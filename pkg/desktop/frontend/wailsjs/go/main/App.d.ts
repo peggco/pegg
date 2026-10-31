@@ -23,6 +23,16 @@ export function Cancel(arg1:string):Promise<void>;
 
 export function Capabilities():Promise<acpclient.PeggCapabilities>;
 
+export function ConnectLogout():Promise<main.ConnectSettings>;
+
+export function ConnectResetDevice():Promise<main.ConnectSettings>;
+
+export function ConnectSettings():Promise<main.ConnectSettings>;
+
+export function ConnectStart():Promise<main.ConnectStatus>;
+
+export function ConnectStop():Promise<main.ConnectStatus>;
+
 export function CurrentSession():Promise<main.SessionInfo>;
 
 export function DeleteSession(arg1:string):Promise<void>;
@@ -87,6 +97,8 @@ export function RevertSession(arg1:string,arg2:string,arg3:number):Promise<acpcl
 
 export function SaveCompactionSettings(arg1:main.CompactionSettings):Promise<void>;
 
+export function SaveConnectSettings(arg1:main.ConnectSettings):Promise<main.ConnectSettings>;
+
 export function SaveGeneralSettings(arg1:main.GeneralSettings):Promise<void>;
 
 export function SaveMemorySettings(arg1:main.MemorySettings):Promise<void>;
@@ -114,6 +126,16 @@ export function SetTheme(arg1:string,arg2:string):Promise<prefs.Prefs>;
 export function SettingsSnapshot():Promise<main.SettingsSnapshot>;
 
 export function SlashCommands():Promise<Array<acpclient.SlashCommand>>;
+
+export function TeamCancel():Promise<main.TeamStatus>;
+
+export function TeamConnect():Promise<main.TeamStatus>;
+
+export function TeamRefresh(arg1:string):Promise<main.TeamStatus>;
+
+export function TeamRemove(arg1:string):Promise<main.TeamStatus>;
+
+export function TeamStatus():Promise<main.TeamStatus>;
 
 export function Themes():Promise<Array<themes.Theme>>;
 

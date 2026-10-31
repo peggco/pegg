@@ -34,6 +34,26 @@ export function Capabilities() {
   return window['go']['main']['App']['Capabilities']();
 }
 
+export function ConnectLogout() {
+  return window['go']['main']['App']['ConnectLogout']();
+}
+
+export function ConnectResetDevice() {
+  return window['go']['main']['App']['ConnectResetDevice']();
+}
+
+export function ConnectSettings() {
+  return window['go']['main']['App']['ConnectSettings']();
+}
+
+export function ConnectStart() {
+  return window['go']['main']['App']['ConnectStart']();
+}
+
+export function ConnectStop() {
+  return window['go']['main']['App']['ConnectStop']();
+}
+
 export function CurrentSession() {
   return window['go']['main']['App']['CurrentSession']();
 }
@@ -162,6 +182,10 @@ export function SaveCompactionSettings(arg1) {
   return window['go']['main']['App']['SaveCompactionSettings'](arg1);
 }
 
+export function SaveConnectSettings(arg1) {
+  return window['go']['main']['App']['SaveConnectSettings'](arg1);
+}
+
 export function SaveGeneralSettings(arg1) {
   return window['go']['main']['App']['SaveGeneralSettings'](arg1);
 }
@@ -216,6 +240,26 @@ export function SettingsSnapshot() {
 
 export function SlashCommands() {
   return window['go']['main']['App']['SlashCommands']();
+}
+
+export function TeamCancel() {
+  return window['go']['main']['App']['TeamCancel']();
+}
+
+export function TeamConnect() {
+  return window['go']['main']['App']['TeamConnect']();
+}
+
+export function TeamRefresh(arg1) {
+  return window['go']['main']['App']['TeamRefresh'](arg1);
+}
+
+export function TeamRemove(arg1) {
+  return window['go']['main']['App']['TeamRemove'](arg1);
+}
+
+export function TeamStatus() {
+  return window['go']['main']['App']['TeamStatus']();
 }
 
 export function Themes() {

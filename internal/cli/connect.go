@@ -16,6 +16,7 @@ import (
 
 	"github.com/peggco/pegg/internal/connect"
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/core/logger"
 )
 
 type tokenSource int
@@ -219,6 +220,9 @@ func (c *CLI) connectConfigForSave(cc *config.ConnectConfig) *config.ConnectConf
 }
 
 func (c *CLI) runConnect(out io.Writer, argToken, flagToken string, insecure, autoApprove bool, maxConcurrency int, allowed []string, deviceName string, responseTimeout int) error {
+	if os.Getenv("PEGG_CONNECT_LOG") == "console" && c.log != nil {
+		c.log.AddHandler(logger.NewConsoleHandler(config.LoggerConfig{}))
+	}
 	cc := c.connectConfig(flagToken, insecure, autoApprove, maxConcurrency, allowed, deviceName, responseTimeout)
 
 	token, source, err := resolveConnectToken(

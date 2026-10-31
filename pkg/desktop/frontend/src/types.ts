@@ -402,3 +402,42 @@ export interface SettingsSnapshot {
   rules: RuleSetting[];
   plugins: PluginSetting[];
 }
+
+export interface ConnectStatus {
+  state: string;
+  pid?: number;
+  startedAt?: string;
+  error?: string;
+  logs: string[];
+}
+
+export interface ConnectSettings {
+  enabled: boolean;
+  relayUrl: string;
+  token?: string;
+  clearToken?: boolean;
+  tokenMasked: string;
+  hasToken: boolean;
+  deviceName: string;
+  deviceId: string;
+  publicKey: string;
+  autoApprove: boolean;
+  maxConcurrency: number;
+  responseTimeout: number;
+  allowedMethods: string[];
+  status: ConnectStatus;
+}
+
+export interface TeamProvider {
+  name: string;
+  baseUrl: string;
+  apiKeyMasked: string;
+}
+
+export interface TeamStatus {
+  state: string;
+  url?: string;
+  error?: string;
+  logs: string[];
+  providers: TeamProvider[];
+}

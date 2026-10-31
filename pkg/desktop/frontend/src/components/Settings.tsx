@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  Users,
   X,
 } from 'lucide-react';
 import { api } from '../lib/bridge';
@@ -43,6 +44,7 @@ import {
   SessionPanel,
   SkillsPanel,
 } from './SettingsPanels';
+import { TeamPanel } from './TeamPanel';
 import { Card, Field, PageHead, Range, Segmented } from './SettingsUI';
 
 type Tab =
@@ -55,6 +57,7 @@ type Tab =
   | 'skills'
   | 'rules'
   | 'plugins'
+  | 'team'
   | 'system';
 
 const TAB_GROUPS: Array<{ label: string; tabs: Array<{ id: Tab; label: string; icon: typeof Settings2 }> }> = [
@@ -81,6 +84,10 @@ const TAB_GROUPS: Array<{ label: string; tabs: Array<{ id: Tab; label: string; i
       { id: 'rules', label: 'settings.rules', icon: BookOpen },
       { id: 'plugins', label: 'settings.plugins', icon: Puzzle },
     ],
+  },
+  {
+    label: 'settings.teamGroup',
+    tabs: [{ id: 'team', label: 'settings.team', icon: Users }],
   },
   {
     label: 'settings.systemGroup',
@@ -171,6 +178,7 @@ export function Settings() {
                   {tab === 'skills' ? <SkillsPanel snap={snap} refresh={refresh} /> : null}
                   {tab === 'rules' ? <RulesPanel snap={snap} refresh={refresh} /> : null}
                   {tab === 'plugins' ? <PluginsPanel snap={snap} refresh={refresh} /> : null}
+                  {tab === 'team' ? <TeamPanel /> : null}
                   {tab === 'system' ? <SystemPanel snap={snap} /> : null}
                 </>
               ) : null}

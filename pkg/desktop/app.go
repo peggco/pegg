@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -88,6 +89,17 @@ type App struct {
 
 	logMu sync.Mutex
 	log   *os.File
+
+	connectMu       sync.Mutex
+	connectCmd      *exec.Cmd
+	connectDone     chan struct{}
+	connectState    ConnectStatus
+	connectStopping bool
+
+	teamMu    sync.Mutex
+	teamCmd   *exec.Cmd
+	teamDone  chan struct{}
+	teamState TeamStatus
 }
 
 func NewApp() *App {
@@ -115,6 +127,7 @@ func (a *App) startup(ctx context.Context) {
 		a.binary = binary.Resolve(ctx, p.BinaryPath, p.Workspace)
 	}
 	a.logf("pegg desktop %s %s/%s", appVersion, goruntime.GOOS, goruntime.GOARCH)
+	go a.autoStartConnect()
 }
 
 func (a *App) beforeClose(ctx context.Context) bool {
@@ -130,6 +143,8 @@ func (a *App) shutdown(ctx context.Context) {
 	if c != nil {
 		c.Close()
 	}
+	_, _ = a.ConnectStop()
+	_, _ = a.TeamCancel()
 	a.logMu.Lock()
 	if a.log != nil {
 		_ = a.log.Close()

@@ -23,6 +23,9 @@ import type {
   PermissionsSettings,
   MemorySettings,
   Theme,
+  ConnectSettings,
+  ConnectStatus,
+  TeamStatus,
 } from '../types';
 
 export interface NewSessionInput {
@@ -123,6 +126,17 @@ const App = GoApp as unknown as {
   RecordStop(): Promise<STTResult>;
   RespondPermission(requestId: string, optionId: string): Promise<void>;
   RespondAsk(requestId: string, answers: Record<string, string>): Promise<void>;
+  ConnectSettings(): Promise<ConnectSettings>;
+  SaveConnectSettings(settings: ConnectSettings): Promise<ConnectSettings>;
+  ConnectStart(): Promise<ConnectStatus>;
+  ConnectStop(): Promise<ConnectStatus>;
+  ConnectLogout(): Promise<ConnectSettings>;
+  ConnectResetDevice(): Promise<ConnectSettings>;
+  TeamStatus(): Promise<TeamStatus>;
+  TeamConnect(): Promise<TeamStatus>;
+  TeamCancel(): Promise<TeamStatus>;
+  TeamRefresh(provider: string): Promise<TeamStatus>;
+  TeamRemove(provider: string): Promise<TeamStatus>;
 };
 
 export const api = App;
@@ -176,6 +190,14 @@ export function onFileDrop(cb: (paths: string[]) => void): Unsubscribe {
   return EventsOn('wails:file-drop', (_x: number, _y: number, paths: string[]) => {
     if (Array.isArray(paths) && paths.length) cb(paths);
   });
+}
+
+export function onConnectStatus(cb: (status: ConnectStatus) => void): Unsubscribe {
+  return on<ConnectStatus>('connect:status', cb);
+}
+
+export function onTeamStatus(cb: (status: TeamStatus) => void): Unsubscribe {
+  return on<TeamStatus>('team:status', cb);
 }
 
 export function offAll(events: string[]): void {
