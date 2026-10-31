@@ -622,6 +622,10 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 		return true
 	}
 
+	if kev.Key() == tcell.KeyCtrlV && a.attachClipboardImage() {
+		return true
+	}
+
 	if a.root != nil && a.root.HandleKey(kev) {
 		return true
 	}
@@ -1113,52 +1117,35 @@ func (a *App) handleFilePaste(text string) {
 
 	text = strings.TrimSpace(text)
 	if text == "" {
+		a.attachClipboardImage()
 		return
 	}
 
-	lines := strings.Split(text, "\n")
-	if len(lines) == 1 {
-		line := lines[0]
-		if _, err := os.Stat(line); err == nil {
-			a.tryAttachFile(line)
-			return
+	if paths := resolvePastedPaths(text); len(paths) > 0 {
+		for _, path := range paths {
+			a.tryAttachFile(path)
 		}
-		if len(line) > components.LongTextThreshold {
-			a.chatMu.Lock()
-			if a.home != nil {
-				a.home.Input().InsertLongText(line)
-			}
-			a.chatMu.Unlock()
-			a.requestRedraw()
-			return
-		}
-		a.pasteShortText(text)
 		return
 	}
 
-	anyAttached := false
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+	if len(text) > components.LongTextThreshold {
+		a.chatMu.Lock()
+		if a.home != nil {
+			a.home.Input().InsertLongText(text)
 		}
-		if _, err := os.Stat(line); err == nil {
-			a.tryAttachFile(line)
-			anyAttached = true
-		}
+		a.chatMu.Unlock()
+		a.requestRedraw()
+		return
 	}
-	if !anyAttached {
-		if len(text) > components.LongTextThreshold {
-			a.chatMu.Lock()
-			if a.home != nil {
-				a.home.Input().InsertLongText(text)
-			}
-			a.chatMu.Unlock()
-			a.requestRedraw()
-		} else {
-			a.pasteShortText(text)
-		}
+	a.pasteShortText(text)
+}
+
+func (a *App) attachClipboardImage() bool {
+	data, ok := readClipboardImage()
+	if !ok {
+		return false
 	}
+	return a.tryAttachBytes(clipboardImageName(data), data)
 }
 
 func (a *App) pasteShortText(text string) {
@@ -1185,7 +1172,7 @@ func (a *App) tryAttachFile(path string) {
 		return
 	}
 
-	if !a.validateFileForModel(path) {
+	if !a.validateMediaForModel(mime.TypeByExtension(filepath.Ext(path))) {
 		return
 	}
 
@@ -1195,6 +1182,25 @@ func (a *App) tryAttachFile(path string) {
 		return
 	}
 
+	a.addAttachment(att)
+}
+
+func (a *App) tryAttachBytes(name string, data []byte) bool {
+	if !a.validateMediaForModel(attach.MediaType(name, data)) {
+		return false
+	}
+
+	att, err := attach.FromBytes(name, data)
+	if err != nil {
+		a.showError(i18n.Tf("app.error.attach", err.Error()))
+		return false
+	}
+
+	a.addAttachment(att)
+	return true
+}
+
+func (a *App) addAttachment(att llm.Attachment) {
 	a.chatMu.Lock()
 	if a.home != nil {
 		a.home.AttachmentBar().Add(att)
@@ -1206,11 +1212,14 @@ func (a *App) tryAttachFile(path string) {
 }
 
 func (a *App) validateFileForModel(path string) bool {
+	return a.validateMediaForModel(mime.TypeByExtension(filepath.Ext(path)))
+}
+
+func (a *App) validateMediaForModel(mediaType string) bool {
 	if a.model.model.Config == nil {
 		return true
 	}
 
-	mediaType := mime.TypeByExtension(filepath.Ext(path))
 	config := a.model.model.Config
 
 	switch {
