@@ -902,15 +902,22 @@ func (a *App) refreshMentionItemsLocked() {
 	items := make([]components.ListItem, 0, len(a.baseMentionItems)+len(a.home.AttachmentBar().Attachments()))
 	items = append(items, agents...)
 	for _, att := range a.home.AttachmentBar().Attachments() {
-		name := att.FileName
-		if name == "" {
-			name = i18n.T("home.attachment")
-		}
-		name = strings.ReplaceAll(name, " ", "_")
-		items = append(items, components.ListItem{Label: name, Detail: string(att.Type), Data: "attachment"})
+		items = append(items, components.ListItem{Label: attachmentMentionName(att), Detail: string(att.Type), Data: "attachment"})
 	}
 	items = append(items, files...)
 	a.home.SetMentionItems(items)
+}
+
+func attachmentMentionName(att llm.Attachment) string {
+	name := att.FileName
+	if name == "" {
+		name = i18n.T("home.attachment")
+	}
+	fields := strings.Fields(name)
+	if len(fields) == 0 {
+		return i18n.T("home.attachment")
+	}
+	return strings.Join(fields, "_")
 }
 
 func (a *App) activateSession(info settings.SessionInfo) {
@@ -1191,6 +1198,8 @@ func (a *App) addAttachment(att llm.Attachment) {
 	a.chatMu.Lock()
 	if a.home != nil {
 		a.home.AttachmentBar().Add(att)
+		a.home.Input().InsertMention(attachmentMentionName(att))
+		a.home.Input().InsertRune(' ')
 		a.refreshMentionItemsLocked()
 		a.refreshHomeLocked()
 	}

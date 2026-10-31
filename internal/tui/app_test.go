@@ -700,3 +700,37 @@ func TestAppForkMessage(t *testing.T) {
 		t.Fatalf("original messages = %d, want 3", len(origMsgs))
 	}
 }
+
+func TestAddAttachmentInsertsMentionAtCursor(t *testing.T) {
+	a := &App{home: home.New(), chat: components.NewChat()}
+	a.home.Input().InsertText("look at ")
+	a.addAttachment(llm.Attachment{Type: llm.AttachmentTypeImage, FileName: "clipboard.png"})
+	a.addAttachment(llm.Attachment{Type: llm.AttachmentTypeFile, FileName: "my notes.txt"})
+
+	got := a.home.Input().Value()
+	want := "look at @clipboard.png @my_notes.txt "
+	if got != want {
+		t.Fatalf("input = %q, want %q", got, want)
+	}
+	if a.home.AttachmentBar().Count() != 2 {
+		t.Fatalf("attachments = %d, want 2", a.home.AttachmentBar().Count())
+	}
+}
+
+func TestAttachmentMentionNameCollapsesWhitespace(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"clipboard.png", "clipboard.png"},
+		{"my notes.txt", "my_notes.txt"},
+		{"line\nbreak\tname.png", "line_break_name.png"},
+		{"  spaced  ", "spaced"},
+	}
+	for _, tt := range tests {
+		att := llm.Attachment{FileName: tt.name}
+		if got := attachmentMentionName(att); got != tt.want {
+			t.Fatalf("attachmentMentionName(%q) = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}

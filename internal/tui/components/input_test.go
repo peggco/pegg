@@ -926,3 +926,25 @@ func TestInputInsertTextReplacesSelection(t *testing.T) {
 		t.Fatalf("value = %q", got)
 	}
 }
+
+func TestLongMentionLabelTruncatedButSerializesFull(t *testing.T) {
+	in := NewInput()
+	name := strings.Repeat("a", 100) + ".mp4"
+	in.InsertMention(name)
+	if got := in.Value(); got != "@"+name {
+		t.Fatalf("Value = %q, want full mention name", got)
+	}
+	if got := in.visualLineWidth(in.lines[0]); got != maxMentionLabel+1 {
+		t.Fatalf("visual width = %d, want %d", got, maxMentionLabel+1)
+	}
+	label, ok := mentionLabelOf([]rune(in.lines[0])[0], in.mentionLabels)
+	if !ok {
+		t.Fatal("mention label missing")
+	}
+	if len([]rune(label)) != maxMentionLabel {
+		t.Fatalf("label len = %d, want %d", len([]rune(label)), maxMentionLabel)
+	}
+	if !strings.HasSuffix(label, ".mp4") {
+		t.Fatalf("label = %q, want it to keep the extension", label)
+	}
+}
