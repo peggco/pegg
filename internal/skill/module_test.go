@@ -44,8 +44,8 @@ func TestMaterializedSkillParsesAndExpands(t *testing.T) {
 	}
 
 	out := ExpandMessage(agent.MessageInput{Text: "implement it /init"})
-	if out.Text != "implement it " {
-		t.Fatalf("skill token must be stripped: %q", out.Text)
+	if out.Text != "implement it /init" {
+		t.Fatalf("skill token must be kept: %q", out.Text)
 	}
 	if len(out.Calls) != 1 || out.Calls[0].Function.Name != "loadskill" {
 		t.Fatalf("expected a loadskill tool call, got %+v", out.Calls)
