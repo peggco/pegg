@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/live"
 	"github.com/peggco/pegg/internal/session"
 )
@@ -74,11 +75,11 @@ func (s *Server) handleAttachedRunEvent(st *promptState, acpSess *ACPSession, ru
 	}
 	switch ev.Type {
 	case session.AgentEventInput:
-		if ev.Input != "" {
+		if text := attach.StripBlock(ev.Input); text != "" {
 			s.notify(st.sessionID, SessionUpdate{
 				SessionUpdate: "user_message_chunk",
 				MessageID:     uuid.NewString(),
-				Content:       &ContentBlock{Type: "text", Text: ev.Input},
+				Content:       &ContentBlock{Type: "text", Text: text},
 			})
 		}
 	case session.AgentEventStarted:

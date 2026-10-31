@@ -1068,7 +1068,9 @@ func (r *runRenderer) renderSessionHistory(msgs []session.Message) {
 		switch lm.Role {
 		case llm.RoleUser:
 			if c := messageContent(lm); c != "" {
-				r.write("%s\n", r.bold("> "+c))
+				if text := attach.StripBlock(c); text != "" {
+					r.write("%s\n", r.bold("> "+text))
+				}
 			}
 		case llm.RoleAssistant:
 			if reasoning := messageReasoning(lm); reasoning != "" && r.showThinking {
@@ -1106,7 +1108,9 @@ func (r *runRenderer) onInput(e agent.AgentInput) {
 	if e.AgentID != r.mainID || r.chatMode {
 		return
 	}
-	r.write("%s\n", r.bold("> "+e.Input))
+	if text := attach.StripBlock(e.Input); text != "" {
+		r.write("%s\n", r.bold("> "+text))
+	}
 }
 
 func (r *runRenderer) prompt() {

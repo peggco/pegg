@@ -11,6 +11,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/builtin/middlewares/compaction"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
@@ -381,26 +382,9 @@ func (r *Recorder) handleInput(e agent.AgentInput) {
 			r.titleWg.Add(1)
 			go func() {
 				defer r.titleWg.Done()
-				r.generateTitle(id, info.provider, info.model, stripAttachmentsBlock(e.Input))
+				r.generateTitle(id, info.provider, info.model, attach.StripBlock(e.Input))
 			}()
 		}
-	}
-}
-
-func stripAttachmentsBlock(text string) string {
-	const open = "<attachments>"
-	const close = "</attachments>"
-	for {
-		start := strings.Index(text, open)
-		if start < 0 {
-			return strings.TrimSpace(text)
-		}
-		rest := text[start+len(open):]
-		end := strings.Index(rest, close)
-		if end < 0 {
-			return strings.TrimSpace(text[:start])
-		}
-		text = text[:start] + rest[end+len(close):]
 	}
 }
 

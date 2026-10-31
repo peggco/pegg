@@ -11,6 +11,7 @@ import (
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/skill"
@@ -489,6 +490,17 @@ func (s *Server) newOrchestratorAgent() (*agent.Agent, error) {
 }
 
 func extractContent(msg session.Message) *ContentBlock {
+	block := rawContent(msg)
+	if block != nil && msg.Role == llm.RoleUser {
+		block.Text = attach.StripBlock(block.Text)
+		if block.Text == "" {
+			return nil
+		}
+	}
+	return block
+}
+
+func rawContent(msg session.Message) *ContentBlock {
 	switch c := msg.Content.(type) {
 	case string:
 		return &ContentBlock{Type: "text", Text: c}

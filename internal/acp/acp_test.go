@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
 )
 
@@ -608,5 +609,24 @@ func TestSessionSetModeInvalid(t *testing.T) {
 		SessionId: SessionId(sessID), ModeId: "nope",
 	})); err == nil {
 		t.Fatal("expected error for invalid mode")
+	}
+}
+
+func TestExtractContentStripsAttachmentsBlock(t *testing.T) {
+	block := "<attachments>\n<attachment name=\"a.txt\" path=\"/tmp/a.txt\"/>\n</attachments>"
+	msg := session.Message{Role: llm.RoleUser, Content: "look at this\n" + block}
+	got := extractContent(msg)
+	if got == nil || got.Text != "look at this" {
+		t.Fatalf("user content = %+v, want stripped text", got)
+	}
+
+	msg = session.Message{Role: llm.RoleUser, Content: block}
+	if got := extractContent(msg); got != nil {
+		t.Fatalf("attachments-only content = %+v, want nil", got)
+	}
+
+	msg = session.Message{Role: llm.RoleAssistant, Content: "ok " + block}
+	if got := extractContent(msg); got == nil || got.Text != "ok "+block {
+		t.Fatalf("assistant content changed: %+v", got)
 	}
 }

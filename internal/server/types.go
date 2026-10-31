@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
 )
@@ -108,7 +109,7 @@ func toMessageResponse(m *session.Message) MessageResponse {
 		SessionID:  m.SessionID,
 		Seq:        m.Seq,
 		Role:       string(m.Role),
-		Content:    m.Content,
+		Content:    attach.StripMessageContent(m.Role, m.Content),
 		Reasoning:  m.Reasoning,
 		Name:       m.Name,
 		ToolCallID: m.ToolCallID,

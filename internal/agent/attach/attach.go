@@ -132,6 +132,11 @@ func MediaAttachments(atts []llm.Attachment, model llm.Model) []llm.Attachment {
 	return out
 }
 
+const (
+	BlockOpen  = "<attachments>"
+	BlockClose = "</attachments>"
+)
+
 func Block(atts []llm.Attachment) string {
 	lines := make([]string, 0, len(atts))
 	for _, a := range atts {
@@ -146,7 +151,59 @@ func Block(atts []llm.Attachment) string {
 	if len(lines) == 0 {
 		return ""
 	}
-	return "<attachments>\n" + strings.Join(lines, "\n") + "\n</attachments>"
+	return BlockOpen + "\n" + strings.Join(lines, "\n") + "\n" + BlockClose
+}
+
+func StripBlock(text string) string {
+	for {
+		start := strings.Index(text, BlockOpen)
+		if start < 0 {
+			break
+		}
+		rest := text[start+len(BlockOpen):]
+		end := strings.Index(rest, BlockClose)
+		if end < 0 {
+			text = text[:start]
+			break
+		}
+		text = text[:start] + rest[end+len(BlockClose):]
+	}
+	return strings.TrimSpace(text)
+}
+
+func StripMessageContent(role llm.Role, content any) any {
+	if role != llm.RoleUser {
+		return content
+	}
+	switch c := content.(type) {
+	case string:
+		return StripBlock(c)
+	case llm.Content:
+		c.Text = StripBlock(c.Text)
+		return c
+	case []any:
+		out := make([]any, 0, len(c))
+		for _, item := range c {
+			m, ok := item.(map[string]any)
+			if !ok {
+				out = append(out, item)
+				continue
+			}
+			text, isText := m["text"].(string)
+			if kind, _ := m["type"].(string); !isText || kind != "text" {
+				out = append(out, item)
+				continue
+			}
+			clone := make(map[string]any, len(m))
+			for k, v := range m {
+				clone[k] = v
+			}
+			clone["text"] = StripBlock(text)
+			out = append(out, clone)
+		}
+		return out
+	}
+	return content
 }
 
 func attachmentSize(a llm.Attachment) int {

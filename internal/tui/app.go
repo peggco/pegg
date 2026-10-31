@@ -1008,20 +1008,7 @@ func messageText(m session.Message) string {
 }
 
 func stripAttachmentsBlock(text string) string {
-	const open = "<attachments>"
-	const close = "</attachments>"
-	for {
-		start := strings.Index(text, open)
-		if start < 0 {
-			return text
-		}
-		rest := text[start+len(open):]
-		end := strings.Index(rest, close)
-		if end < 0 {
-			return strings.TrimRight(text[:start], " \t\r\n")
-		}
-		text = text[:start] + rest[end+len(close):]
-	}
+	return attach.StripBlock(text)
 }
 
 func messageRawText(m session.Message) string {
