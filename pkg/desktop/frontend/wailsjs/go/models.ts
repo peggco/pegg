@@ -718,6 +718,28 @@ export namespace main {
 	        this.model = source["model"];
 	    }
 	}
+	export class MCPServerInput {
+	    name: string;
+	    command: string;
+	    args: string[];
+	    env: Record<string, string>;
+	    url: string;
+	    headers: Record<string, string>;
+	
+	    static createFrom(source: any = {}) {
+	        return new MCPServerInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.command = source["command"];
+	        this.args = source["args"];
+	        this.env = source["env"];
+	        this.url = source["url"];
+	        this.headers = source["headers"];
+	    }
+	}
 	export class MCPServerSetting {
 	    name: string;
 	    type: string;

@@ -26,6 +26,7 @@ import type {
   ConnectSettings,
   ConnectStatus,
   TeamStatus,
+  MCPServerInput,
 } from '../types';
 
 export interface NewSessionInput {
@@ -81,6 +82,8 @@ const App = GoApp as unknown as {
   RemoveProvider(name: string): Promise<void>;
   AddSTTProvider(name: string, apiKey: string, baseURL: string): Promise<void>;
   RemoveSTTProvider(name: string): Promise<void>;
+  AddMCPServer(input: MCPServerInput): Promise<void>;
+  RemoveMCPServer(name: string): Promise<void>;
   SaveGeneralSettings(g: GeneralSettings): Promise<void>;
   SaveCompactionSettings(c: CompactionSettings): Promise<void>;
   SavePermissionSettings(p: PermissionsSettings): Promise<void>;
