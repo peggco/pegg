@@ -443,7 +443,6 @@ func (p *Page) syncPickers() {
 		p.pickTokenAt = -1
 		return
 	}
-
 	var newKind pickKind
 	var tokAt int
 	if atActive {
@@ -476,6 +475,25 @@ func (p *Page) syncPickers() {
 			_, q, _ := p.input.SlashToken()
 			p.skillPicker.Update(q)
 		}
+	}
+}
+
+func (p *Page) DismissPickers() {
+	atAt, _, atActive := p.input.AtToken()
+	slashAt, _, slashActive := p.input.SlashToken()
+	switch {
+	case atActive:
+		p.pickKind = pickNone
+		p.pickDismissed = true
+		p.pickTokenAt = atAt
+	case slashActive:
+		p.pickKind = pickNone
+		p.pickDismissed = true
+		p.pickTokenAt = slashAt
+	default:
+		p.pickKind = pickNone
+		p.pickDismissed = false
+		p.pickTokenAt = -1
 	}
 }
 

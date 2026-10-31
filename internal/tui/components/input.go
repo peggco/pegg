@@ -1236,6 +1236,57 @@ func (in *Input) SetValue(text string) {
 	in.ensureCursorVisible()
 }
 
+func (in *Input) ConvertTokens(mentions, skills []string) {
+	if len(mentions) == 0 && len(skills) == 0 {
+		return
+	}
+	mentionSet := make(map[string]bool, len(mentions))
+	for _, name := range mentions {
+		mentionSet[name] = true
+	}
+	skillSet := make(map[string]bool, len(skills))
+	for _, name := range skills {
+		skillSet[name] = true
+	}
+	for i, line := range in.lines {
+		in.lines[i] = in.convertLineTokens(line, mentionSet, skillSet)
+	}
+	in.row = len(in.lines) - 1
+	in.col = len([]rune(in.lines[in.row]))
+	in.ensureCursorVisible()
+}
+
+func (in *Input) convertLineTokens(line string, mentions, skills map[string]bool) string {
+	rs := []rune(line)
+	out := make([]rune, 0, len(rs))
+	for i := 0; i < len(rs); {
+		r := rs[i]
+		if (r == '@' || r == '/') && (i == 0 || isSpace(rs[i-1])) {
+			end := i + 1
+			for end < len(rs) && !isSpace(rs[end]) {
+				end++
+			}
+			name := string(rs[i+1 : end])
+			known := mentions[name]
+			if r == '/' {
+				known = skills[name]
+			}
+			if name != "" && known {
+				if r == '@' {
+					out = append(out, in.mentionChipRune(name))
+				} else {
+					out = append(out, in.chipRune(name))
+				}
+				i = end
+				continue
+			}
+		}
+		out = append(out, r)
+		i++
+	}
+	return string(out)
+}
+
 func (in *Input) HandleKey(ev *tcell.EventKey) bool {
 	if !in.focused {
 		return false

@@ -948,3 +948,31 @@ func TestLongMentionLabelTruncatedButSerializesFull(t *testing.T) {
 		t.Fatalf("label = %q, want it to keep the extension", label)
 	}
 }
+
+func TestConvertTokensMakesKnownChips(t *testing.T) {
+	in := NewInput()
+	in.SetValue("@clipboard.png /plan")
+	in.ConvertTokens([]string{"clipboard.png"}, []string{"plan"})
+
+	if got := in.Value(); got != "@clipboard.png /plan" {
+		t.Fatalf("Value = %q, want unchanged text", got)
+	}
+	if _, _, ok := in.AtToken(); ok {
+		t.Fatal("@ mention should be a chip, not a raw token")
+	}
+	if _, _, ok := in.SlashToken(); ok {
+		t.Fatal("/ skill should be a chip, not a raw token")
+	}
+}
+
+func TestConvertTokensLeavesUnknownTokens(t *testing.T) {
+	in := NewInput()
+	in.SetValue("@unknown /nope")
+	in.ConvertTokens([]string{"clipboard.png"}, []string{"plan"})
+	if _, _, ok := in.AtToken(); !ok {
+		t.Fatal("unknown @ token should remain as text")
+	}
+	if _, _, ok := in.SlashToken(); !ok {
+		t.Fatal("unknown / token should remain as text")
+	}
+}

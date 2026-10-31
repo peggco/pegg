@@ -1208,8 +1208,24 @@ func (a *App) restoreToInput(it *components.ChatItem) {
 		a.home.AttachmentBar().Add(att)
 	}
 	a.refreshMentionItemsLocked()
+	a.linkInputTokensLocked()
 	a.refreshHomeLocked()
 	a.requestRedraw()
+}
+
+func (a *App) linkInputTokensLocked() {
+	mentionItems := a.home.MentionPicker().All()
+	mentions := make([]string, 0, len(mentionItems))
+	for _, it := range mentionItems {
+		mentions = append(mentions, it.Label)
+	}
+	skillItems := a.home.SkillPicker().All()
+	skills := make([]string, 0, len(skillItems))
+	for _, it := range skillItems {
+		skills = append(skills, it.Label)
+	}
+	a.home.Input().ConvertTokens(mentions, skills)
+	a.home.DismissPickers()
 }
 
 func (a *App) openSubagentHistory(agentID string) {
