@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Brain,
+  Check,
   ChevronRight,
   FileText,
   Globe,
@@ -13,6 +14,13 @@ import { shortPath, toolKindLabel } from '../lib/format';
 import { highlightCode, languageForPath, stripAnsi } from '../lib/markdown';
 import { useT } from '../lib/i18n';
 import type { ToolState } from '../state/chat';
+
+function StatusMark({ status }: { status: string }) {
+  if (status === 'completed') {
+    return <Check size={12} className="status-check" aria-label="completed" />;
+  }
+  return <span className={`status-dot ${status}`} title={status} />;
+}
 
 function ToolIcon({ kind }: { kind?: string }) {
   switch (kind) {
@@ -115,7 +123,7 @@ function CompactTool({ tool }: { tool: ToolState }) {
             {showError ? t('common.hideError') : t('common.showError')}
           </button>
         ) : null}
-        <span className={`status-dot ${tool.status}`} title={tool.status} />
+        <StatusMark status={tool.status} />
       </div>
       {showError && tool.error ? <pre className="tool-error">{tool.error}</pre> : null}
     </div>
@@ -145,7 +153,7 @@ function BashTool({ tool }: { tool: ToolState }) {
         {tool.status === 'in_progress' ? <span className="terminal-status">running</span> : null}
         {tool.status === 'failed' ? <span className="terminal-status terminal-error">failed</span> : null}
         <span className="terminal-spacer" />
-        <span className={`status-dot ${tool.status}`} title={tool.status} />
+        <StatusMark status={tool.status} />
       </div>
       <div className="terminal-body">
         <div className="terminal-cmd">
@@ -202,7 +210,7 @@ function WriteTool({ tool }: { tool: ToolState }) {
           {tool.title}
         </span>
         <span className="tool-kind">write</span>
-        <span className={`status-dot ${tool.status}`} title={tool.status} />
+        <StatusMark status={tool.status} />
         {canExpand ? <ChevronRight size={13} className="tool-chevron" /> : null}
       </button>
       {content ? (
@@ -240,7 +248,7 @@ function EditTool({ tool }: { tool: ToolState }) {
           {tool.title}
         </span>
         <span className="tool-kind">edit</span>
-        <span className={`status-dot ${tool.status}`} title={tool.status} />
+        <StatusMark status={tool.status} />
       </div>
       {diff ? <DiffView diff={diff} expanded={expanded} onToggle={() => setExpanded((value) => !value)} /> : null}
       {tool.error ? <pre className="tool-error">{tool.error}</pre> : null}

@@ -104,3 +104,92 @@ describe('subagent routing', () => {
     expect(state.subagents['sub-1'].items[0]).toMatchObject({ kind: 'assistant', text: 'Looking around' });
   });
 });
+
+describe('tool completion reconciliation', () => {
+  it('settles pending tools when the assistant continues', () => {
+    let state = emptyChat();
+    state = applyUpdate(state, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 't1',
+      toolName: 'bash',
+      status: 'pending',
+    });
+    state = applyUpdate(state, chunk('moved on'));
+
+    const tool = state.items.find((item) => item.kind === 'tool');
+    expect(tool?.kind).toBe('tool');
+    if (tool?.kind === 'tool') expect(tool.tool.status).toBe('completed');
+  });
+
+  it('settles pending tools when the run ends', () => {
+    let state = emptyChat();
+    state = applyUpdate(state, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 't1',
+      toolName: 'write',
+      status: 'pending',
+    });
+    state = applyUpdate(state, { sessionUpdate: 'run_state_update', runState: 'finished' });
+
+    const tool = state.items.find((item) => item.kind === 'tool');
+    expect(tool?.kind).toBe('tool');
+    if (tool?.kind === 'tool') expect(tool.tool.status).toBe('completed');
+    expect(state.running).toBe(false);
+  });
+
+  it('settles subagent tools when the subagent finishes', () => {
+    let state = emptyChat();
+    state = applyUpdate(state, {
+      sessionUpdate: 'subagent',
+      agentId: 'sub-1',
+      agentName: 'Developer',
+      title: 'Edit files',
+      status: 'running',
+    });
+    state = applyUpdate(state, {
+      sessionUpdate: 'tool_call',
+      agentId: 'sub-1',
+      toolCallId: 't2',
+      toolName: 'edit',
+      status: 'pending',
+    });
+    state = applyUpdate(state, {
+      sessionUpdate: 'subagent',
+      agentId: 'sub-1',
+      agentName: 'Developer',
+      status: 'finished',
+    });
+
+    const sub = state.subagents['sub-1'];
+    expect(sub.items).toHaveLength(1);
+    const tool = sub.items[0];
+    expect(tool.kind).toBe('tool');
+    if (tool.kind === 'tool') expect(tool.tool.status).toBe('completed');
+  });
+});
+
+describe('tool status precedence', () => {
+  it('does not regress a completed tool when a late pending event arrives', () => {
+    let state = emptyChat();
+    state = applyUpdate(state, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 't1',
+      toolName: 'bash',
+      status: 'pending',
+    });
+    state = applyUpdate(state, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 't1',
+      status: 'completed',
+    });
+    state = applyUpdate(state, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 't1',
+      status: 'pending',
+    });
+
+    const tool = state.items[0];
+    expect(tool.kind).toBe('tool');
+    if (tool.kind === 'tool') expect(tool.tool.status).toBe('completed');
+  });
+});

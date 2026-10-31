@@ -21,7 +21,7 @@ func Light() Theme {
 		Warning:          c(0xF59E0B),
 		TextDim:          c(0x71717A),
 		Muted:            c(0xA1A1AA),
-		Success:          c(0x3B82F6),
+		Success:          c(0x22C55E),
 		Error:            c(0xEF4444),
 		Running:          c(0x3B82F6),
 		ThinkingDim:      c(0xBFDBFE),

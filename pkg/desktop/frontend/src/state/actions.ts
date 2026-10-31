@@ -20,6 +20,7 @@ import {
   resolveAsk,
   resolvePermission,
   setAskAnswer,
+  settlePendingTools,
   type ChatItem,
   type ChatState,
 } from './chat';
@@ -433,7 +434,8 @@ export async function sendPrompt(input: SendInput): Promise<void> {
       text,
       attachments: input.attachments,
     });
-    store.setChat((c) => ({ ...c, running: false }));
+    const toolStatus = result?.stopReason === 'cancelled' ? 'cancelled' : 'completed';
+    store.setChat((c) => ({ ...settlePendingTools(c, toolStatus), running: false }));
     if (result?.stopReason !== 'cancelled' && !document.hasFocus()) {
       const lastAssistant = [...store.get().chat.items]
         .reverse()
@@ -454,7 +456,7 @@ export async function sendPrompt(input: SendInput): Promise<void> {
     void loadSessions();
   } catch (err) {
     const message = errorText(err);
-    store.setChat((c) => addNotice({ ...c, running: false }, message, 'error'));
+    store.setChat((c) => addNotice({ ...settlePendingTools(c, 'failed'), running: false }, message, 'error'));
     store.toast('error', message);
   }
 }
@@ -589,6 +591,9 @@ export function handleUpdates(sessionId: string, updates: SessionUpdate[]): void
   if (sessionId !== chat.acpId && sessionId !== chat.peggId) return;
   store.setChat((c) => {
     let next = applyUpdates(c, updates);
+    if (updates.some((u) => u.sessionUpdate === 'agent_message_chunk' || u.sessionUpdate === 'user_message_chunk')) {
+      next = settlePendingTools(next, 'completed');
+    }
     if (updates.some((u) => u.sessionUpdate === 'error')) next = { ...next, running: false };
     return next;
   });
