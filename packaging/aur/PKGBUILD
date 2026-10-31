@@ -1,0 +1,19 @@
+# Maintainer: Pegg <info@pegg.dev>
+pkgname=pegg-desktop
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="Native desktop client for the Pegg AI coding agent"
+arch=('x86_64' 'aarch64')
+url="https://github.com/peggco/pegg"
+license=('FSL-1.1-MIT')
+depends=('gtk3' 'webkit2gtk-4.1')
+source_x86_64=("https://github.com/peggco/pegg/releases/download/v${pkgver}/pegg-desktop_${pkgver}_linux_amd64.tar.gz")
+source_aarch64=("https://github.com/peggco/pegg/releases/download/v${pkgver}/pegg-desktop_${pkgver}_linux_arm64.tar.gz")
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/pegg-desktop" "${pkgdir}/usr/bin/pegg-desktop"
+  install -Dm644 "${srcdir}/pegg.desktop" "${pkgdir}/usr/share/applications/pegg.desktop"
+  install -Dm644 "${srcdir}/pegg.png" "${pkgdir}/usr/share/icons/hicolor/512x512/apps/pegg.png"
+}

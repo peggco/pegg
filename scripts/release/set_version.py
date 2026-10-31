@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$")
-PACKAGE_DIRS = ("pkg/vscode", "pkg/chat-ui", "pkg/intellij")
+PACKAGE_DIRS = ("pkg/vscode", "pkg/chat-ui", "pkg/intellij", "pkg/desktop/frontend")
 
 
 class Sync:

@@ -12,6 +12,7 @@ Pegg is a provider-agnostic AI coding agent written in Go. It runs as an interac
 - `internal/` - Core packages (agent, llm, tools, skills, session, etc.)
 - `docs/` - Documentation (system, SDK, plugin guides)
 - `pkg/sdk/` - Embeddable Go SDK
+- `pkg/desktop/` - Cross-platform desktop GUI (Wails + React) and Go ACP client
 - `pkg/chat-ui/` - Shared React chat renderer, state types, markdown, and host bridge used by VS Code and JetBrains
 - `pkg/vscode/` - TypeScript VS Code extension (sidebar chat, `@pegg` chat participant, ACP client)
 - `pkg/intellij/` - Kotlin IntelliJ Platform plugin (JCEF chat reusing `pkg/chat-ui`, sessions, actions)
@@ -44,6 +45,12 @@ make run
 
 # Debug mode
 PEGG_DEBUG=1 ./bin/pegg
+
+# Desktop GUI (requires Wails CLI, Node, and WebKitGTK 4.1 on Linux)
+make desktop-deps
+make desktop-dev
+make desktop-build
+make desktop-test
 
 # Shared chat UI dependencies (needed by both webviews)
 npm --prefix pkg/chat-ui ci
@@ -91,6 +98,7 @@ npm ci
 - **Skill Engine** (`internal/skill/`): Dynamic skill loading with frontmatter metadata
 - **Session Management** (`internal/session/`): SQLite-based persistence with forking and replay
 - **TUI** (`internal/tui/`): tcell-based interface with chat viewport, command palette, agent graph view
+- **Desktop** (`pkg/desktop/`): Wails v2 GUI with a Go ACP client, TUI-generated themes, and a React design system
 
 ## Testing Strategy
 

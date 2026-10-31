@@ -1,0 +1,14 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "pegg-desktop",
+  "outputfilename": "pegg-desktop",
+  "frontend:install": "npm install --no-audit --no-fund",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "http://localhost:34115",
+  "author": {
+    "name": "Pegg",
+    "email": "hello@pegg.dev"
+  },
+  "wailsjsdir": "./frontend"
+}
