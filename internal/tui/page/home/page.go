@@ -260,7 +260,7 @@ func (p *Page) chatBounds(bounds layout.Region) layout.Region {
 		Height: inputH,
 	}.Clamp(bounds)
 
-	attachH := p.attachmentBar.RequiredHeight()
+	attachH := p.attachmentBar.RequiredHeightFor(bounds.Width - 4)
 	chatBottom := inputRegion.Top - 1
 	if attachH > 0 {
 		chatBottom = inputRegion.Top - attachH - 2
@@ -523,7 +523,7 @@ func (p *Page) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 		Height: inputH,
 	}.Clamp(bounds)
 
-	attachH := p.attachmentBar.RequiredHeight()
+	attachH := p.attachmentBar.RequiredHeightFor(bounds.Width - 4)
 	if p.askPicker.Active() {
 		attachH = 0
 	}
