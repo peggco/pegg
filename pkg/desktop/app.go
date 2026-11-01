@@ -97,6 +97,7 @@ type App struct {
 	connectDone     chan struct{}
 	connectState    ConnectStatus
 	connectStopping bool
+	connectDir      string
 
 	teamMu    sync.Mutex
 	teamCmd   *exec.Cmd
@@ -308,6 +309,7 @@ func (a *App) OpenWorkspace(path string) (string, error) {
 	if err := a.prefs.TouchWorkspace(abs, workspace.Name(abs)); err != nil {
 		return "", err
 	}
+	a.syncConnectWorkspace(abs)
 	return abs, nil
 }
 

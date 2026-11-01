@@ -264,8 +264,9 @@ func (a *App) ConnectStart() (ConnectStatus, error) {
 		return ConnectStatus{}, err
 	}
 
+	dir := a.currentWorkspace()
 	cmd := exec.Command(bin, "connect")
-	cmd.Dir = a.currentWorkspace()
+	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "PEGG_CONNECT_LOG=console")
 	hideWindow(cmd)
 
@@ -273,6 +274,7 @@ func (a *App) ConnectStart() (ConnectStatus, error) {
 	a.connectCmd = cmd
 	a.connectStopping = false
 	a.connectDone = make(chan struct{})
+	a.connectDir = dir
 	a.connectState = ConnectStatus{
 		State:     "starting",
 		StartedAt: time.Now().UTC().Format(time.RFC3339),
@@ -417,6 +419,25 @@ func (a *App) autoStartConnect() {
 	if _, err := a.ConnectStart(); err != nil {
 		a.logf("connect: auto-start failed: %v", err)
 	}
+}
+
+func (a *App) syncConnectWorkspace(dir string) {
+	a.connectMu.Lock()
+	running := a.connectCmd != nil
+	same := a.connectDir == dir
+	a.connectMu.Unlock()
+	if !running || same {
+		return
+	}
+	go func() {
+		if _, err := a.ConnectStop(); err != nil {
+			a.logf("connect: stop on workspace change: %v", err)
+			return
+		}
+		if _, err := a.ConnectStart(); err != nil {
+			a.logf("connect: restart on workspace change: %v", err)
+		}
+	}()
 }
 
 func (a *App) teamProviders() []TeamProvider {
