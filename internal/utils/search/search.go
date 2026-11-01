@@ -119,45 +119,39 @@ func findBestMatch(query, text string) *Match {
 		return nil
 	}
 
-	bestScore := -1
-	bestPositions := make([]int, 0)
-
-	var search func(qi, ti, prevPos, score int, positions []int)
-	search = func(qi, ti, prevPos, score int, positions []int) {
-		if qi == qLen {
-			if score > bestScore {
-				bestScore = score
-				bestPositions = make([]int, len(positions))
-				copy(bestPositions, positions)
+	positions := make([]int, 0, qLen)
+	ti := 0
+	for _, qr := range qRunes {
+		found := false
+		for ; ti < tLen; ti++ {
+			if tRunesLower[ti] == qr {
+				positions = append(positions, ti)
+				ti++
+				found = true
+				break
 			}
-			return
 		}
-
-		for i := ti; i < tLen; i++ {
-			if tRunesLower[i] == qRunes[qi] {
-				newScore := score + scoreMatch
-				if qi == 0 {
-					newScore += bonusFirstChar
-				} else {
-					newScore += gapCost(prevPos, i)
-					newScore += calculateCharBonus(tRunesOriginal, i)
-				}
-				search(qi+1, i+1, i, newScore, append(positions, i))
-			}
+		if !found {
+			return nil
 		}
 	}
 
-	search(0, 0, -1, 0, nil)
-
-	if bestScore < 0 {
-		return nil
+	score := 0
+	for qi, pos := range positions {
+		score += scoreMatch
+		if qi == 0 {
+			score += bonusFirstChar
+		} else {
+			score += gapCost(positions[qi-1], pos)
+			score += calculateCharBonus(tRunesOriginal, pos)
+		}
 	}
 
-	m := &Match{Score: bestScore, Positions: bestPositions}
+	m := &Match{Score: score, Positions: positions}
 
 	if qLen == tLen {
 		m.Score += bonusExactMatch
-	} else if m.Positions[0] == 0 && m.Positions[len(m.Positions)-1] < qLen {
+	} else if positions[0] == 0 && positions[len(positions)-1] < qLen {
 		m.Score += bonusPrefixMatch
 	}
 

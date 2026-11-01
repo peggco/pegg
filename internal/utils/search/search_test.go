@@ -2,6 +2,7 @@ package search
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -369,5 +370,15 @@ func TestFilterSkillNames(t *testing.T) {
 		if len(got) == 0 || got[0].label != name {
 			t.Errorf("query %q: expected %q first, got %+v", name, name, got)
 		}
+	}
+}
+
+func TestScoreLargeTextIsFast(t *testing.T) {
+	text := strings.Repeat("a", 5000) + "z"
+	if Score("z", text) <= 0 {
+		t.Fatal("expected a match in a large text")
+	}
+	if Score("aaaa", text) <= 0 {
+		t.Fatal("expected a subsequence match in a large text")
 	}
 }
