@@ -18,6 +18,7 @@ const en: Record<string, string> = {
   'date.previous7': 'Previous 7 days',
   'date.earlier': 'Earlier',
   'nav.noSessions': 'No sessions yet. Start a chat and your work will appear here.',
+  'nav.loadingMore': 'Loading…',
   'nav.commandPalette': 'Command palette',
   'nav.lightAppearance': 'Light appearance',
   'nav.darkAppearance': 'Dark appearance',
@@ -150,6 +151,7 @@ const en: Record<string, string> = {
   'subagent.history': 'Subagent history',
   'subagent.back': 'Back to chat',
   'subagent.empty': 'No subagent messages yet.',
+  'thread.loadingHistory': 'Loading older messages…',
   'thread.restoring': 'Restoring session…',
   'thread.empty': 'Send a message to start this session.',
 };
@@ -165,6 +167,7 @@ const tr: Record<string, string> = {
   'date.previous7': 'Son 7 gün',
   'date.earlier': 'Daha önce',
   'nav.noSessions': 'Henüz oturum yok. Bir sohbet başlatın; çalışmalarınız burada görünsün.',
+  'nav.loadingMore': 'Yükleniyor…',
   'nav.commandPalette': 'Komut paleti',
   'nav.lightAppearance': 'Açık görünüm',
   'nav.darkAppearance': 'Koyu görünüm',
@@ -297,6 +300,7 @@ const tr: Record<string, string> = {
   'subagent.history': 'Alt ajan geçmişi',
   'subagent.back': 'Sohbete dön',
   'subagent.empty': 'Henüz alt ajan mesajı yok.',
+  'thread.loadingHistory': 'Eski mesajlar yükleniyor…',
   'thread.restoring': 'Oturum geri yükleniyor…',
   'thread.empty': 'Bu oturumu başlatmak için bir mesaj gönderin.',
 };

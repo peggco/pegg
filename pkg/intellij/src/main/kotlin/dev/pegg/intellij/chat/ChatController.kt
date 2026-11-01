@@ -45,8 +45,11 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
@@ -79,6 +82,8 @@ class ChatController(
     @Volatile private var disposed = false
     @Volatile private var legacyStreaming = false
     @Volatile private var loadingSession = false
+    @Volatile private var loadingOlder = false
+    private var historyBuffer: MutableList<SessionUpdate> = mutableListOf()
     private var voiceStarting = false
     private var forceFallback = false
     private val resolvers = ConcurrentHashMap<String, CompletableFuture<JsonElement>>()
@@ -228,18 +233,21 @@ class ChatController(
         }
         emitState()
         loadingSession = true
+        var history: JsonElement? = null
         try {
-            request<JsonElement>(
+            history = request<JsonElement>(
                 "session/load",
                 buildJsonObject {
                     put("sessionId", peggSessionId)
                     put("cwd", root)
+                    put("historyLimit", 50)
                 },
                 60_000,
             )
         } finally {
             loadingSession = false
         }
+        val historyObj = history as? JsonObject
         val meta = runCatching { listSessions(false) }.getOrDefault(emptyList())
             .firstOrNull { it.id == peggSessionId }
         synchronized(stateLock) {
@@ -247,6 +255,10 @@ class ChatController(
             state.provider = meta?.provider ?: state.provider
             state.model = meta?.model ?: state.model
             state.mode = meta?.mode ?: state.mode
+            state.historyOldestSeq =
+                historyObj?.get("oldestSeq")?.jsonPrimitive?.intOrNull ?: 0
+            state.historyHasMore =
+                historyObj?.get("hasMore")?.jsonPrimitive?.booleanOrNull ?: false
             if (meta?.usage != null) {
                 state.usage = UsageState(
                     used = (meta.usage.totalTokens ?: 0).toInt(),
@@ -634,6 +646,10 @@ class ChatController(
             return
         }
         if (sessionId != null && state.acpSessionId != null && sessionId != state.acpSessionId && !loadingSession) return
+        if (update.historyPage && loadingOlder) {
+            synchronized(stateLock) { historyBuffer.add(update) }
+            return
+        }
         if (update.sessionUpdate == "run_ask_resolved") {
             rejectPending("Answered in another client")
             return
@@ -661,6 +677,47 @@ class ChatController(
 
         synchronized(stateLock) { ChatStateOps.applyUpdate(state, update) }
         emitState()
+    }
+
+    suspend fun loadOlderMessages() {
+        ensureStarted()
+        val sessionId = state.acpSessionId ?: return
+        if (!state.historyHasMore || state.historyLoading) return
+        loadingOlder = true
+        historyBuffer = mutableListOf()
+        synchronized(stateLock) { state.historyLoading = true }
+        emitState()
+        try {
+            val history = request<JsonElement>(
+                "session/history",
+                buildJsonObject {
+                    put("sessionId", sessionId)
+                    put("cwd", projectRoot() ?: "")
+                    put("limit", 50)
+                    put("beforeSeq", state.historyOldestSeq)
+                },
+                60_000,
+            )
+            val obj = history as? JsonObject
+            synchronized(stateLock) {
+                val buffered = historyBuffer
+                historyBuffer = mutableListOf()
+                ChatStateOps.applyHistory(state, buffered)
+                state.historyOldestSeq =
+                    obj?.get("oldestSeq")?.jsonPrimitive?.intOrNull ?: state.historyOldestSeq
+                state.historyHasMore =
+                    obj?.get("hasMore")?.jsonPrimitive?.booleanOrNull ?: false
+                state.historyLoading = false
+            }
+        } catch (e: Throwable) {
+            synchronized(stateLock) {
+                state.historyLoading = false
+                ChatStateOps.addNotice(state, e.message ?: e.javaClass.simpleName, "error")
+            }
+        } finally {
+            loadingOlder = false
+            emitState()
+        }
     }
 
     private suspend fun onServerRequest(method: String, params: JsonElement?): JsonElement {

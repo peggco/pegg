@@ -46,6 +46,18 @@ export interface LoadSessionInput {
   model?: string;
 }
 
+export interface LoadHistoryInput {
+  sessionId: string;
+  cwd?: string;
+  beforeSeq: number;
+  limit: number;
+}
+
+export interface HistoryPageResult {
+  oldestSeq: number;
+  hasMore: boolean;
+}
+
 export interface PromptInput {
   sessionId: string;
   text: string;
@@ -116,6 +128,8 @@ const App = GoApp as unknown as {
   ResetSession(): Promise<void>;
   LoadSession(input: LoadSessionInput): Promise<SessionInfo>;
   ListSessions(cwd: string, all: boolean): Promise<SessionListResult>;
+  LoadSessionsPage(cwd: string, all: boolean, offset: number, limit: number): Promise<SessionListResult>;
+  LoadHistory(input: LoadHistoryInput): Promise<HistoryPageResult>;
   SendPrompt(input: PromptInput): Promise<PromptResult>;
   Cancel(sessionId: string): Promise<void>;
   SetMode(sessionId: string, mode: string): Promise<SessionInfo>;

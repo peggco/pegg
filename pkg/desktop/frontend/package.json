@@ -13,6 +13,7 @@
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.5",
     "@fontsource-variable/jetbrains-mono": "^5.2.5",
+    "@tanstack/react-virtual": "^3.14.24",
     "dompurify": "^3.2.4",
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.468.0",

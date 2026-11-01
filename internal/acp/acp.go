@@ -240,6 +240,8 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleSessionNew(ctx, params)
 	case "session/load":
 		result, handlerErr = s.handleSessionLoad(ctx, params)
+	case "session/history":
+		result, handlerErr = s.handleSessionHistory(ctx, params)
 	case "session/resume":
 		result, handlerErr = s.handleSessionResume(ctx, params)
 	case "session/prompt":

@@ -413,20 +413,27 @@ func (a *App) LoadSession(req LoadSessionRequest) (*SessionInfo, error) {
 	a.emit("acp:loading", map[string]any{"sessionId": req.PeggID, "loading": true})
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	raw, err := client.Request(ctx, "session/load", acpclient.SessionLoadParams{SessionID: req.PeggID, Cwd: abs})
+	raw, err := client.Request(ctx, "session/load", acpclient.SessionLoadParams{
+		SessionID:    req.PeggID,
+		Cwd:          abs,
+		HistoryLimit: 50,
+	})
 	a.emit("acp:loading", map[string]any{"sessionId": req.PeggID, "loading": false})
 	if err != nil {
 		return nil, err
 	}
-	_ = raw
+	var history acpclient.SessionHistoryResult
+	_ = json.Unmarshal(raw, &history)
 	info := &SessionInfo{
-		ACPID:    req.PeggID,
-		PeggID:   req.PeggID,
-		Cwd:      abs,
-		Title:    req.Title,
-		Mode:     req.Mode,
-		Provider: req.Provider,
-		Model:    req.Model,
+		ACPID:            req.PeggID,
+		PeggID:           req.PeggID,
+		Cwd:              abs,
+		Title:            req.Title,
+		Mode:             req.Mode,
+		Provider:         req.Provider,
+		Model:            req.Model,
+		HistoryOldestSeq: history.OldestSeq,
+		HistoryHasMore:   history.HasMore,
 	}
 	if info.Title == "" {
 		info.Title = "Session"
@@ -458,6 +465,62 @@ func (a *App) ListSessions(cwd string, all bool) (acpclient.SessionListResult, e
 		return res, err
 	}
 	a.logf("session/list all=%v cwd=%s -> %d sessions", all, cwd, len(res.Sessions))
+	return res, nil
+}
+
+func (a *App) LoadSessionsPage(cwd string, all bool, offset, limit int) (acpclient.SessionListResult, error) {
+	client, err := a.ensureClient()
+	if err != nil {
+		return acpclient.SessionListResult{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if limit <= 0 || limit > 200 {
+		limit = 30
+	}
+	raw, err := client.Request(ctx, "session/list", acpclient.SessionListParams{
+		Cwd: cwd, All: all, Offset: offset, Limit: limit,
+	})
+	if err != nil {
+		return acpclient.SessionListResult{}, err
+	}
+	var res acpclient.SessionListResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return acpclient.SessionListResult{}, err
+	}
+	return res, nil
+}
+
+type LoadHistoryRequest struct {
+	SessionID string `json:"sessionId"`
+	Cwd       string `json:"cwd,omitempty"`
+	BeforeSeq int    `json:"beforeSeq"`
+	Limit     int    `json:"limit"`
+}
+
+func (a *App) LoadHistory(req LoadHistoryRequest) (acpclient.SessionHistoryResult, error) {
+	client, err := a.ensureClient()
+	if err != nil {
+		return acpclient.SessionHistoryResult{}, err
+	}
+	if strings.TrimSpace(req.SessionID) == "" {
+		return acpclient.SessionHistoryResult{}, errors.New("session id is required")
+	}
+	if req.Limit <= 0 || req.Limit > 200 {
+		req.Limit = 50
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	raw, err := client.Request(ctx, "session/history", acpclient.SessionHistoryParams{
+		SessionID: req.SessionID, Cwd: req.Cwd, BeforeSeq: req.BeforeSeq, Limit: req.Limit,
+	})
+	if err != nil {
+		return acpclient.SessionHistoryResult{}, err
+	}
+	var res acpclient.SessionHistoryResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return acpclient.SessionHistoryResult{}, err
+	}
 	return res, nil
 }
 

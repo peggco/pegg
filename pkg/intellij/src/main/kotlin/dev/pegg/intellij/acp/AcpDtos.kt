@@ -92,6 +92,8 @@ data class SessionUpdate(
     val runId: String? = null,
     val runState: String? = null,
     val baseSeq: Int? = null,
+    val seq: Int? = null,
+    val historyPage: Boolean = false,
 )
 
 @Serializable
@@ -404,6 +406,9 @@ data class ChatState(
     var error: String? = null,
     var counter: Int = 0,
     var historySupported: Boolean = false,
+    var historyOldestSeq: Int = 0,
+    var historyHasMore: Boolean = false,
+    var historyLoading: Boolean = false,
 )
 
 @Serializable

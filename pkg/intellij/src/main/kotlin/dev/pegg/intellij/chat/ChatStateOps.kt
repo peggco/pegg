@@ -42,6 +42,15 @@ object ChatStateOps {
 
     private fun findItem(state: ChatState, id: String): ChatItem? = state.items.firstOrNull { it.id == id }
 
+    fun applyHistory(input: ChatState, updates: List<SessionUpdate>): ChatState {
+        val history = initialState()
+        history.counter = input.counter
+        for (update in updates) applyUpdate(history, update)
+        input.items.addAll(0, history.items)
+        input.counter = maxOf(input.counter, history.counter)
+        return input
+    }
+
     fun applyUpdate(input: ChatState, update: SessionUpdate): ChatState {
         val state = input
         val now = System.currentTimeMillis()

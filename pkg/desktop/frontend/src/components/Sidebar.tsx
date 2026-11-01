@@ -17,6 +17,7 @@ import {
   chooseWorkspace,
   deleteSession,
   focusComposer,
+  loadMoreSessions,
   openSession,
   renameSession,
   setTheme,
@@ -129,7 +130,14 @@ export function Sidebar() {
           <span style={{ opacity: 0.6 }}>{sessions.length || ''}</span>
         </div>
 
-        <div className="recents" ref={recentsRef}>
+        <div
+          className="recents"
+          ref={recentsRef}
+          onScroll={(event) => {
+            const el = event.currentTarget;
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) void loadMoreSessions();
+          }}
+        >
           {loading && !sessions.length ? (
             <div className="recents-empty">
               <span className="spinner" /> {t('nav.recents')}…
@@ -138,6 +146,11 @@ export function Sidebar() {
           {!loading && !sessions.length ? (
             <div className="recents-empty">
               {t('nav.noSessions')}
+            </div>
+          ) : null}
+          {loading && sessions.length ? (
+            <div className="recents-empty">
+              <span className="spinner" /> {t('nav.loadingMore')}
             </div>
           ) : null}
           {grouped.map(([label, items]) => (

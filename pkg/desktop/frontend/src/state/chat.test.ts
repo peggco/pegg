@@ -4,6 +4,7 @@ import {
   addPermission,
   applyUpdate,
   emptyChat,
+  pruneChat,
   resolveAsk,
   resolvePermission,
   setAskAnswer,
@@ -191,5 +192,25 @@ describe('tool status precedence', () => {
     const tool = state.items[0];
     expect(tool.kind).toBe('tool');
     if (tool.kind === 'tool') expect(tool.tool.status).toBe('completed');
+  });
+});
+
+describe('history window', () => {
+  it('drops the oldest history items and keeps a reload cursor', () => {
+    let state = emptyChat();
+    for (let seq = 1; seq <= 200; seq += 1) {
+      state = applyUpdate(state, {
+        sessionUpdate: 'tool_call',
+        toolCallId: `t-${seq}`,
+        toolName: 'read',
+        status: 'completed',
+        seq,
+      });
+      state = { ...state, historyOldestSeq: seq };
+    }
+    const pruned = pruneChat(state);
+    expect(pruned.items).toHaveLength(160);
+    expect(pruned.items[0].seq).toBe(41);
+    expect(pruned.historyOldestSeq).toBe(41);
   });
 });

@@ -29,7 +29,7 @@ export interface ToolState {
   agentName?: string;
 }
 
-export type ChatItem =
+export type ChatItem = (
   | { kind: 'user'; id: string; text: string; createdAt: number; messageId?: string; agentId?: string }
   | { kind: 'assistant'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
   | { kind: 'reasoning'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
@@ -46,7 +46,8 @@ export type ChatItem =
       createdAt: number;
     }
   | { kind: 'notice'; id: string; text: string; level: 'info' | 'warn' | 'error'; createdAt: number }
-  | { kind: 'error'; id: string; text: string; createdAt: number };
+  | { kind: 'error'; id: string; text: string; createdAt: number }
+) & { seq?: number };
 
 export interface SubagentRun {
   agentId: string;
@@ -91,6 +92,10 @@ export interface ChatState {
   subagents: Record<string, SubagentRun>;
   error?: string;
   counter: number;
+  historyOldestSeq: number;
+  historyHasMore: boolean;
+  historyLoading: boolean;
+  stickToBottom: boolean;
 }
 
 export function emptyChat(): ChatState {
@@ -107,6 +112,10 @@ export function emptyChat(): ChatState {
     asks: [],
     subagents: {},
     counter: 0,
+    historyOldestSeq: 0,
+    historyHasMore: false,
+    historyLoading: false,
+    stickToBottom: true,
   };
 }
 
@@ -181,12 +190,35 @@ export function settlePendingTools(state: ChatState, status: ToolState['status']
   };
 }
 
+export const MAX_CHAT_ITEMS = 160;
+
+export function pruneChat(state: ChatState): ChatState {
+  if (state.items.length <= MAX_CHAT_ITEMS) return state;
+  let drop = state.items.length - MAX_CHAT_ITEMS;
+  let i = 0;
+  let droppedSeq = 0;
+  while (drop > 0 && i < state.items.length && state.items[i].seq !== undefined) {
+    droppedSeq = state.items[i].seq ?? droppedSeq;
+    i++;
+    drop--;
+  }
+  if (i === 0) return state;
+  const items = state.items.slice(i);
+  const firstSeq = items.find((item) => item.seq !== undefined)?.seq;
+  return {
+    ...state,
+    items,
+    historyOldestSeq: firstSeq ?? (droppedSeq > 0 ? droppedSeq + 1 : state.historyOldestSeq),
+  };
+}
+
 export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState {
   if (update.agentId && update.sessionUpdate !== 'subagent' && input.subagents[update.agentId]) {
     return applySubagentUpdate(input, update, update.agentId);
   }
   let state: ChatState = { ...input, items: input.items, plan: input.plan };
   const now = Date.now();
+  const seq = update.seq && update.seq > 0 ? update.seq : undefined;
 
   const replaceItem = (index: number, next: ChatItem) => {
     const items = state.items.slice();
@@ -227,6 +259,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           agentId: update.agentId,
           agentName: update.agentName,
           createdAt: now,
+          seq,
           ...(kind === 'user' && update.messageId ? { messageId: update.messageId } : {}),
         } as ChatItem);
       }
@@ -251,6 +284,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           agentId: update.agentId,
           agentName: update.agentName,
           createdAt: now,
+          seq,
         });
       }
       return state;
@@ -287,6 +321,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           kind: 'tool',
           id,
           createdAt: now,
+          seq,
           tool: {
             id,
             name: update.toolName,

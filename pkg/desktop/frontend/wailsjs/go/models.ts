@@ -151,6 +151,20 @@ export namespace acpclient {
 	        this.parentId = source["parentId"];
 	    }
 	}
+	export class SessionHistoryResult {
+	    oldestSeq: number;
+	    hasMore: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionHistoryResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.oldestSeq = source["oldestSeq"];
+	        this.hasMore = source["hasMore"];
+	    }
+	}
 	export class SessionUsage {
 	    prompt_tokens?: number;
 	    completion_tokens?: number;
@@ -696,6 +710,24 @@ export namespace main {
 		}
 	}
 	
+	export class LoadHistoryRequest {
+	    sessionId: string;
+	    cwd?: string;
+	    beforeSeq: number;
+	    limit: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new LoadHistoryRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.cwd = source["cwd"];
+	        this.beforeSeq = source["beforeSeq"];
+	        this.limit = source["limit"];
+	    }
+	}
 	export class LoadSessionRequest {
 	    peggId: string;
 	    cwd?: string;
@@ -1001,6 +1033,8 @@ export namespace main {
 	    permissionMode: string;
 	    reasoningEffort?: string;
 	    commands: acpclient.SlashCommand[];
+	    historyOldestSeq?: number;
+	    historyHasMore?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionInfo(source);
@@ -1018,6 +1052,8 @@ export namespace main {
 	        this.permissionMode = source["permissionMode"];
 	        this.reasoningEffort = source["reasoningEffort"];
 	        this.commands = this.convertValues(source["commands"], acpclient.SlashCommand);
+	        this.historyOldestSeq = source["historyOldestSeq"];
+	        this.historyHasMore = source["historyHasMore"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

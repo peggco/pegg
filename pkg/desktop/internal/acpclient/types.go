@@ -87,8 +87,22 @@ type SlashCommand struct {
 }
 
 type SessionLoadParams struct {
+	SessionID     string `json:"sessionId"`
+	Cwd           string `json:"cwd"`
+	HistoryLimit  int    `json:"historyLimit,omitempty"`
+	HistoryBefore int    `json:"historyBefore,omitempty"`
+}
+
+type SessionHistoryParams struct {
 	SessionID string `json:"sessionId"`
-	Cwd       string `json:"cwd"`
+	Cwd       string `json:"cwd,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
+	BeforeSeq int    `json:"beforeSeq,omitempty"`
+}
+
+type SessionHistoryResult struct {
+	OldestSeq int  `json:"oldestSeq"`
+	HasMore   bool `json:"hasMore"`
 }
 
 type SessionResumeParams struct {
@@ -120,6 +134,7 @@ type Cost struct {
 
 type SessionListParams struct {
 	Cursor string `json:"cursor,omitempty"`
+	Offset int    `json:"offset,omitempty"`
 	Limit  int    `json:"limit,omitempty"`
 	Cwd    string `json:"cwd,omitempty"`
 	All    bool   `json:"all,omitempty"`

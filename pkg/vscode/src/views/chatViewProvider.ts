@@ -152,6 +152,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'newSession':
           await this.controller.newSession();
           return;
+        case 'loadOlderMessages':
+          await this.controller.loadOlderMessages();
+          return;
         case 'setMode':
           await this.controller.setMode(message.mode);
           return;

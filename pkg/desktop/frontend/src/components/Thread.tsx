@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowLeft, ChevronRight, Copy, GitFork, Info, RotateCcw, TriangleAlert } from 'lucide-react';
 import { renderMarkdown } from '../lib/markdown';
-import { closeSubagent, forkMessage,openSubagent, revertMessage } from '../state/actions';
+import { closeSubagent, forkMessage, loadOlderMessages, openSubagent, revertMessage, setStickToBottom } from '../state/actions';
 import { store, useStore } from '../state/store';
 import { useT } from '../lib/i18n';
 import type { ChatItem } from '../state/chat';
@@ -13,6 +14,9 @@ export function Thread() {
   const plan = useStore((s) => s.chat.plan);
   const running = useStore((s) => s.chat.running);
   const loading = useStore((s) => s.chat.loading);
+  const historyLoading = useStore((s) => s.chat.historyLoading);
+  const historyHasMore = useStore((s) => s.chat.historyHasMore);
+  const acpId = useStore((s) => s.chat.acpId);
   const permissions = useStore((s) => s.chat.permissions);
   const asks = useStore((s) => s.chat.asks);
   const subagents = useStore((s) => s.chat.subagents);
@@ -21,14 +25,47 @@ export function Thread() {
   const items = activeRun?.items ?? mainItems;
   const scrollerRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
+  const pendingScrollRef = useRef<{ height: number; top: number } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const t = useT();
+
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollerRef.current,
+    estimateSize: () => 96,
+    overscan: 8,
+    getItemKey: (index) => items[index]?.id ?? index,
+  });
+  const totalSize = virtualizer.getTotalSize();
+
+  useEffect(() => {
+    stickRef.current = true;
+    pendingScrollRef.current = null;
+    setStickToBottom(true);
+    const frame = requestAnimationFrame(() => {
+      const el = scrollerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [acpId]);
 
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
     if (stickRef.current) el.scrollTop = el.scrollHeight;
-  }, [items, plan, permissions, asks, running]);
+  }, [items, plan, permissions, asks, running, totalSize]);
+
+  useEffect(() => {
+    const pending = pendingScrollRef.current;
+    const el = scrollerRef.current;
+    if (!pending || !el || historyLoading) return;
+    if (el.scrollHeight <= pending.height) {
+      pendingScrollRef.current = null;
+      return;
+    }
+    el.scrollTop = el.scrollHeight - pending.height + pending.top;
+    pendingScrollRef.current = null;
+  }, [items, totalSize, historyLoading]);
 
   const copy = async (text: string, key: string) => {
     try {
@@ -83,15 +120,16 @@ export function Thread() {
           <div className="thread">
             {activeRun.task ? <div className="subagent-modal-task">{activeRun.task}</div> : null}
             {items.map((entry) => (
-              <Item
-                key={entry.id}
-                item={entry}
-                streaming={false}
-                copied={copied}
-                onCopy={copy}
-                onOpenSubagent={openSubagent}
-                userMessageIndex={userIndices.get(entry.id)}
-              />
+              <div className="thread-item" key={entry.id}>
+                <Item
+                  item={entry}
+                  streaming={false}
+                  copied={copied}
+                  onCopy={copy}
+                  onOpenSubagent={openSubagent}
+                  userMessageIndex={userIndices.get(entry.id)}
+                />
+              </div>
             ))}
             {!items.length ? <div className="empty-state">{t('subagent.empty')}</div> : null}
           </div>
@@ -102,33 +140,63 @@ export function Thread() {
 
   return (
     <>
+    {loading ? (
+      <div className="thread-loading" style={{ padding: '6px 0' }}>
+        <span className="spinner" /> {t('thread.restoring')}
+      </div>
+    ) : null}
+    {historyLoading ? (
+      <div className="thread-loading" style={{ padding: '6px 0' }}>
+        <span className="spinner" /> {t('thread.loadingHistory')}
+      </div>
+    ) : null}
     <div
       className="thread-wrap"
       ref={scrollerRef}
       onScroll={(event) => {
         const el = event.currentTarget;
-        stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+        const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+        stickRef.current = stick;
+        setStickToBottom(stick);
+        if (el.scrollTop < 80 && historyHasMore && !historyLoading && !pendingScrollRef.current) {
+          pendingScrollRef.current = { height: el.scrollHeight, top: el.scrollTop };
+          void loadOlderMessages();
+        }
       }}
       onClick={onThreadClick}
     >
       <div className="thread">
-        {loading ? (
-          <div className="thread-loading">
-            <span className="spinner" /> {t('thread.restoring')}
+        {items.length ? (
+          <div style={{ height: totalSize, position: 'relative', width: '100%' }}>
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const item = items[virtualItem.index];
+              return (
+                <div
+                  className="thread-item"
+                  key={item.id}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                >
+                  <Item
+                    item={item}
+                    streaming={running && item.id === lastAssistantId}
+                    copied={copied}
+                    onCopy={copy}
+                    onOpenSubagent={openSubagent}
+                    userMessageIndex={userIndices.get(item.id)}
+                  />
+                </div>
+              );
+            })}
           </div>
         ) : null}
-
-        {items.map((item) => (
-          <Item
-            key={item.id}
-            item={item}
-            streaming={running && item.id === lastAssistantId}
-            copied={copied}
-            onCopy={copy}
-            onOpenSubagent={openSubagent}
-            userMessageIndex={userIndices.get(item.id)}
-          />
-        ))}
 
         {plan.length ? <PlanCard entries={plan} /> : null}
 

@@ -51,7 +51,11 @@ export function ListModels(arg1:string):Promise<acpclient.ModelListResult>;
 
 export function ListSessions(arg1:string,arg2:boolean):Promise<acpclient.SessionListResult>;
 
+export function LoadHistory(arg1:main.LoadHistoryRequest):Promise<acpclient.SessionHistoryResult>;
+
 export function LoadSession(arg1:main.LoadSessionRequest):Promise<main.SessionInfo>;
+
+export function LoadSessionsPage(arg1:string,arg2:boolean,arg3:number,arg4:number):Promise<acpclient.SessionListResult>;
 
 export function Log(arg1:string):Promise<void>;
 

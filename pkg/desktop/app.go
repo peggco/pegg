@@ -28,16 +28,18 @@ import (
 const appVersion = config.AppVersion
 
 type SessionInfo struct {
-	ACPID           string                   `json:"acpId"`
-	PeggID          string                   `json:"peggId"`
-	Cwd             string                   `json:"cwd"`
-	Title           string                   `json:"title"`
-	Mode            string                   `json:"mode"`
-	Provider        string                   `json:"provider"`
-	Model           string                   `json:"model"`
-	PermissionMode  string                   `json:"permissionMode"`
-	ReasoningEffort string                   `json:"reasoningEffort,omitempty"`
-	Commands        []acpclient.SlashCommand `json:"commands"`
+	ACPID            string                   `json:"acpId"`
+	PeggID           string                   `json:"peggId"`
+	Cwd              string                   `json:"cwd"`
+	Title            string                   `json:"title"`
+	Mode             string                   `json:"mode"`
+	Provider         string                   `json:"provider"`
+	Model            string                   `json:"model"`
+	PermissionMode   string                   `json:"permissionMode"`
+	ReasoningEffort  string                   `json:"reasoningEffort,omitempty"`
+	Commands         []acpclient.SlashCommand `json:"commands"`
+	HistoryOldestSeq int                      `json:"historyOldestSeq,omitempty"`
+	HistoryHasMore   bool                     `json:"historyHasMore,omitempty"`
 }
 
 type BootstrapInfo struct {

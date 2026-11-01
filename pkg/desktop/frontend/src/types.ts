@@ -65,6 +65,8 @@ export interface SessionUpdate {
   runId?: string;
   runState?: string;
   baseSeq?: number;
+  seq?: number;
+  historyPage?: boolean;
 }
 
 export interface SessionListItem {
@@ -95,6 +97,8 @@ export interface SessionInfo {
   reasoningEffort?: string;
   permissionMode?: string;
   commands?: SlashCommand[];
+  historyOldestSeq?: number;
+  historyHasMore?: boolean;
 }
 
 export interface ModelEntry {

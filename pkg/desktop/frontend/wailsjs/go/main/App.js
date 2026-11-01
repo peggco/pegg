@@ -90,8 +90,16 @@ export function ListSessions(arg1, arg2) {
   return window['go']['main']['App']['ListSessions'](arg1, arg2);
 }
 
+export function LoadHistory(arg1) {
+  return window['go']['main']['App']['LoadHistory'](arg1);
+}
+
 export function LoadSession(arg1) {
   return window['go']['main']['App']['LoadSession'](arg1);
+}
+
+export function LoadSessionsPage(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['LoadSessionsPage'](arg1, arg2, arg3, arg4);
 }
 
 export function Log(arg1) {

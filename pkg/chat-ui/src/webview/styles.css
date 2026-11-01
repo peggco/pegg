@@ -124,6 +124,17 @@ button {
   background: var(--vscode-toolbar-hoverBackground);
 }
 
+.history-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 11px;
+  color: var(--text-muted, #71717a);
+  flex: 0 0 auto;
+}
+
 .messages {
   flex: 1;
   min-height: 0;
@@ -136,6 +147,8 @@ button {
 
 .messages > * {
   flex: 0 0 auto;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
 }
 
 .messages-spacer {

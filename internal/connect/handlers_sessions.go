@@ -134,11 +134,22 @@ func (c *Connector) handleSessionGet(_ context.Context, req *Request) (any, erro
 	return toSessionDTO(s), nil
 }
 
+type sessionMessagesParams struct {
+	ID        string `json:"id"`
+	Limit     int    `json:"limit"`
+	BeforeSeq int    `json:"before_seq"`
+}
+
 func (c *Connector) handleSessionMessages(_ context.Context, req *Request) (any, error) {
 	if err := c.requireSessions(); err != nil {
 		return nil, err
 	}
-	id := c.sessionID(req)
+	var p sessionMessagesParams
+	_ = req.Decode(&p)
+	id := p.ID
+	if id == "" {
+		id = c.sessionID(req)
+	}
 	if id == "" {
 		return nil, &FrameError{Code: ErrCodeBadRequest, Message: "session id is required"}
 	}
@@ -146,11 +157,29 @@ func (c *Connector) handleSessionMessages(_ context.Context, req *Request) (any,
 	if err != nil {
 		return nil, &FrameError{Code: ErrCodeNotFound, Message: "session not found"}
 	}
+	if p.BeforeSeq > 0 {
+		filtered := make([]session.Message, 0, len(msgs))
+		for _, m := range msgs {
+			if m.Seq < p.BeforeSeq {
+				filtered = append(filtered, m)
+			}
+		}
+		msgs = filtered
+	}
+	oldest := 0
+	hasMore := false
+	if p.Limit > 0 && len(msgs) > p.Limit {
+		msgs = msgs[len(msgs)-p.Limit:]
+		hasMore = true
+	}
+	if len(msgs) > 0 {
+		oldest = msgs[0].Seq
+	}
 	out := make([]SessionMessage, len(msgs))
 	for i := range msgs {
 		out[i] = toSessionMessage(&msgs[i])
 	}
-	return map[string]any{"messages": out}, nil
+	return map[string]any{"messages": out, "oldest_seq": oldest, "has_more": hasMore}, nil
 }
 
 type sessionCreateParams struct {
