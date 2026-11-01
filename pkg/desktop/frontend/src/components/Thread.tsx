@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowLeft, ChevronRight, Copy, GitFork, Info, RotateCcw, TriangleAlert } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ChevronRight, Copy, GitFork, Info, RotateCcw, TriangleAlert } from 'lucide-react';
 import { renderMarkdown } from '../lib/markdown';
 import { closeSubagent, forkMessage, loadOlderMessages, openSubagent, revertMessage, setStickToBottom } from '../state/actions';
 import { store, useStore } from '../state/store';
@@ -27,6 +27,7 @@ export function Thread() {
   const stickRef = useRef(true);
   const pendingScrollRef = useRef<{ height: number; top: number } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [showJump, setShowJump] = useState(false);
   const t = useT();
 
   const virtualizer = useVirtualizer({
@@ -41,6 +42,7 @@ export function Thread() {
   useEffect(() => {
     stickRef.current = true;
     pendingScrollRef.current = null;
+    setShowJump(false);
     setStickToBottom(true);
     const frame = requestAnimationFrame(() => {
       const el = scrollerRef.current;
@@ -66,6 +68,27 @@ export function Thread() {
     el.scrollTop = el.scrollHeight - pending.height + pending.top;
     pendingScrollRef.current = null;
   }, [items, totalSize, historyLoading]);
+
+  const jumpToBottom = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    stickRef.current = true;
+    pendingScrollRef.current = null;
+    setStickToBottom(true);
+    setShowJump(false);
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  };
+
+  const jumpButton = showJump ? (
+    <button
+      className="scroll-bottom-btn"
+      title={t('thread.scrollToBottom')}
+      aria-label={t('thread.scrollToBottom')}
+      onClick={jumpToBottom}
+    >
+      <ArrowDown size={16} />
+    </button>
+  ) : null;
 
   const copy = async (text: string, key: string) => {
     try {
@@ -108,31 +131,36 @@ export function Thread() {
           <span className="subagent-view-title">{activeRun.agentName || 'Subagent'}</span>
           <span className="badge">{activeRun.status}</span>
         </div>
-        <div
-          className="thread-wrap"
-          ref={scrollerRef}
-          onScroll={(event) => {
-            const el = event.currentTarget;
-            stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
-          }}
-          onClick={onThreadClick}
-        >
-          <div className="thread">
-            {activeRun.task ? <div className="subagent-modal-task">{activeRun.task}</div> : null}
-            {items.map((entry) => (
-              <div className="thread-item" key={entry.id}>
-                <Item
-                  item={entry}
-                  streaming={false}
-                  copied={copied}
-                  onCopy={copy}
-                  onOpenSubagent={openSubagent}
-                  userMessageIndex={userIndices.get(entry.id)}
-                />
-              </div>
-            ))}
-            {!items.length ? <div className="empty-state">{t('subagent.empty')}</div> : null}
+        <div className="thread-area">
+          <div
+            className="thread-wrap"
+            ref={scrollerRef}
+            onScroll={(event) => {
+              const el = event.currentTarget;
+              const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+              stickRef.current = stick;
+              setShowJump(!stick);
+            }}
+            onClick={onThreadClick}
+          >
+            <div className="thread">
+              {activeRun.task ? <div className="subagent-modal-task">{activeRun.task}</div> : null}
+              {items.map((entry) => (
+                <div className="thread-item" key={entry.id}>
+                  <Item
+                    item={entry}
+                    streaming={false}
+                    copied={copied}
+                    onCopy={copy}
+                    onOpenSubagent={openSubagent}
+                    userMessageIndex={userIndices.get(entry.id)}
+                  />
+                </div>
+              ))}
+              {!items.length ? <div className="empty-state">{t('subagent.empty')}</div> : null}
+            </div>
           </div>
+          {jumpButton}
         </div>
       </div>
     );
@@ -150,71 +178,75 @@ export function Thread() {
         <span className="spinner" /> {t('thread.loadingHistory')}
       </div>
     ) : null}
-    <div
-      className="thread-wrap"
-      ref={scrollerRef}
-      onScroll={(event) => {
-        const el = event.currentTarget;
-        const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
-        stickRef.current = stick;
-        setStickToBottom(stick);
-        if (el.scrollTop < 80 && historyHasMore && !historyLoading && !pendingScrollRef.current) {
-          pendingScrollRef.current = { height: el.scrollHeight, top: el.scrollTop };
-          void loadOlderMessages();
-        }
-      }}
-      onClick={onThreadClick}
-    >
-      <div className="thread">
-        {items.length ? (
-          <div style={{ height: totalSize, position: 'relative', width: '100%' }}>
-            {virtualizer.getVirtualItems().map((virtualItem) => {
-              const item = items[virtualItem.index];
-              return (
-                <div
-                  className="thread-item"
-                  key={item.id}
-                  data-index={virtualItem.index}
-                  ref={virtualizer.measureElement}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    transform: `translateY(${virtualItem.start}px)`,
-                  }}
-                >
-                  <Item
-                    item={item}
-                    streaming={running && item.id === lastAssistantId}
-                    copied={copied}
-                    onCopy={copy}
-                    onOpenSubagent={openSubagent}
-                    userMessageIndex={userIndices.get(item.id)}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
+    <div className="thread-area">
+      <div
+        className="thread-wrap"
+        ref={scrollerRef}
+        onScroll={(event) => {
+          const el = event.currentTarget;
+          const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+          stickRef.current = stick;
+          setShowJump(!stick);
+          setStickToBottom(stick);
+          if (el.scrollTop < 80 && historyHasMore && !historyLoading && !pendingScrollRef.current) {
+            pendingScrollRef.current = { height: el.scrollHeight, top: el.scrollTop };
+            void loadOlderMessages();
+          }
+        }}
+        onClick={onThreadClick}
+      >
+        <div className="thread">
+          {items.length ? (
+            <div style={{ height: totalSize, position: 'relative', width: '100%' }}>
+              {virtualizer.getVirtualItems().map((virtualItem) => {
+                const item = items[virtualItem.index];
+                return (
+                  <div
+                    className="thread-item"
+                    key={item.id}
+                    data-index={virtualItem.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }}
+                  >
+                    <Item
+                      item={item}
+                      streaming={running && item.id === lastAssistantId}
+                      copied={copied}
+                      onCopy={copy}
+                      onOpenSubagent={openSubagent}
+                      userMessageIndex={userIndices.get(item.id)}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
 
-        {plan.length ? <PlanCard entries={plan} /> : null}
+          {plan.length ? <PlanCard entries={plan} /> : null}
 
-        {items.length === 0 && !loading ? (
-          <div className="notice" style={{ justifyContent: 'center', padding: '18px 14px' }}>
-            <Info size={14} />
-            {t('thread.empty')}
-          </div>
-        ) : null}
+          {items.length === 0 && !loading ? (
+            <div className="notice" style={{ justifyContent: 'center', padding: '18px 14px' }}>
+              <Info size={14} />
+              {t('thread.empty')}
+            </div>
+          ) : null}
 
-        {permissions.map((permission) => (
-          <PermissionCard key={permission.requestId} request={permission} />
-        ))}
+          {permissions.map((permission) => (
+            <PermissionCard key={permission.requestId} request={permission} />
+          ))}
 
-        {asks.map((ask) => (
-          <AskCard key={ask.requestId} request={ask} />
-        ))}
+          {asks.map((ask) => (
+            <AskCard key={ask.requestId} request={ask} />
+          ))}
+        </div>
       </div>
+      {jumpButton}
     </div>
     </>
   );

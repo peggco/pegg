@@ -154,6 +154,7 @@ const en: Record<string, string> = {
   'thread.loadingHistory': 'Loading older messages…',
   'thread.restoring': 'Restoring session…',
   'thread.empty': 'Send a message to start this session.',
+  'thread.scrollToBottom': 'Jump to latest',
 };
 
 const tr: Record<string, string> = {
@@ -303,6 +304,7 @@ const tr: Record<string, string> = {
   'thread.loadingHistory': 'Eski mesajlar yükleniyor…',
   'thread.restoring': 'Oturum geri yükleniyor…',
   'thread.empty': 'Bu oturumu başlatmak için bir mesaj gönderin.',
+  'thread.scrollToBottom': 'En alta git',
 };
 
 const catalogs: Record<Lang, Record<string, string>> = { en, tr };

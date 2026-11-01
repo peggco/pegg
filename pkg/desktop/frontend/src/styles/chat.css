@@ -1,8 +1,53 @@
+.thread-area {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
 .thread-wrap {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   position: relative;
+}
+
+.scroll-bottom-btn {
+  position: absolute;
+  right: 20px;
+  bottom: 16px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--pg-text-2);
+  background: color-mix(in srgb, var(--pg-surface) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--pg-border);
+  box-shadow: 0 4px 14px color-mix(in srgb, #000 22%, transparent);
+  animation: pg-jump-in 160ms var(--pg-ease) both;
+  transition: background var(--pg-fast), color var(--pg-fast), transform var(--pg-fast);
+}
+
+.scroll-bottom-btn:hover {
+  color: var(--pg-text);
+  background: var(--pg-surface-2);
+  transform: translateY(-1px);
+}
+
+@keyframes pg-jump-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .thread {
