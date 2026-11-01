@@ -251,6 +251,9 @@ class ChatWebView(
                 service.scope.launch { runCatching { controller.revertMessage(id) }.onFailure { showError(it) } }
             }
             "newSession" -> service.scope.launch { runCatching { controller.newSession() }.onFailure { showError(it) } }
+            "loadOlderMessages" -> service.scope.launch {
+                runCatching { controller.loadOlderMessages() }.onFailure { showError(it) }
+            }
             "setMode" -> {
                 val mode = obj["mode"]?.jsonPrimitive?.contentOrNull ?: return
                 service.scope.launch { runCatching { controller.setMode(mode) }.onFailure { showError(it) } }

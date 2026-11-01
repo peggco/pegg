@@ -28,6 +28,7 @@ export interface UIState {
   commandsCatalog: import('../types').SlashCommand[];
   sessions: SessionListItem[];
   sessionsLoading: boolean;
+  sessionsNextCursor?: string;
   models: ModelEntry[];
   modelsLoading: boolean;
   workspace: string;
@@ -72,6 +73,7 @@ export const initialState: UIState = {
   commandsCatalog: [],
   sessions: [],
   sessionsLoading: false,
+  sessionsNextCursor: undefined,
   models: [],
   modelsLoading: false,
   workspace: '',

@@ -317,3 +317,8 @@
   font-size: 10px;
   color: #8b949e;
 }
+
+.status-check {
+  color: var(--pg-success);
+  flex: none;
+}

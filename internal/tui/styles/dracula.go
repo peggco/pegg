@@ -21,7 +21,7 @@ func Dracula() Theme {
 		Warning:          c(0xFFB86C),
 		TextDim:          c(0x6272A4),
 		Muted:            c(0x6272A4),
-		Success:          c(0x8BE9FD),
+		Success:          c(0x50FA7B),
 		Error:            c(0xFF5555),
 		Running:          c(0x8BE9FD),
 		ThinkingDim:      c(0x6272A4),

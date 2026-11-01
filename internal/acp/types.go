@@ -63,6 +63,8 @@ type SessionUpdate struct {
 	RunID         string             `json:"runId,omitempty"`
 	RunState      string             `json:"runState,omitempty"`
 	BaseSeq       int                `json:"baseSeq,omitempty"`
+	Seq           int                `json:"seq,omitempty"`
+	HistoryPage   bool               `json:"historyPage,omitempty"`
 }
 
 type ToolCallContent struct {

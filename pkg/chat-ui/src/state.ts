@@ -21,7 +21,7 @@ export interface ToolState {
   agentName?: string;
 }
 
-export type ChatItem =
+export type ChatItem = (
   | { kind: 'user'; id: string; text: string; createdAt: number; messageId?: string; agentId?: string }
   | { kind: 'assistant'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
   | { kind: 'reasoning'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
@@ -38,7 +38,8 @@ export type ChatItem =
       createdAt: number;
     }
   | { kind: 'notice'; id: string; text: string; level: 'info' | 'warn' | 'error'; createdAt: number }
-  | { kind: 'error'; id: string; text: string; createdAt: number };
+  | { kind: 'error'; id: string; text: string; createdAt: number }
+) & { seq?: number };
 
 export interface ComposerAttachment {
   id: string;
@@ -92,6 +93,9 @@ export interface ChatState {
   error?: string;
   counter: number;
   historySupported?: boolean;
+  historyOldestSeq: number;
+  historyHasMore: boolean;
+  historyLoading: boolean;
 }
 
 export function initialState(): ChatState {
@@ -108,6 +112,9 @@ export function initialState(): ChatState {
     composerAttachments: [],
     counter: 0,
     historySupported: false,
+    historyOldestSeq: 0,
+    historyHasMore: false,
+    historyLoading: false,
   };
 }
 
@@ -131,6 +138,7 @@ function contentText(content: SessionUpdate['content']): string {
 export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState {
   const state = { ...input, items: [...input.items], plan: [...input.plan] };
   const now = Date.now();
+  const seq = update.seq && update.seq > 0 ? update.seq : undefined;
 
   switch (update.sessionUpdate) {
     case 'agent_message_chunk':
@@ -162,6 +170,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           agentId: update.agentId,
           agentName: update.agentName,
           createdAt: now,
+          seq,
           ...(kind === 'user' && storedId ? { messageId: storedId } : {}),
         } as ChatItem);
       }
@@ -188,6 +197,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           agentId: update.agentId,
           agentName: update.agentName,
           createdAt: now,
+          seq,
         });
       }
       return state;
@@ -216,6 +226,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           kind: 'tool',
           id,
           createdAt: now,
+          seq,
           tool: {
             id,
             name: update.toolName,
@@ -369,6 +380,16 @@ export function clearConversation(state: ChatState): ChatState {
     usage: { used: 0, size: 0 },
     error: undefined,
     counter: 0,
+  };
+}
+
+export function applyHistory(state: ChatState, updates: SessionUpdate[]): ChatState {
+  let history: ChatState = { ...state, items: [], plan: [], pending: [], composerAttachments: [] };
+  for (const update of updates) history = applyUpdate(history, update);
+  return {
+    ...state,
+    items: [...history.items, ...state.items],
+    counter: Math.max(state.counter, history.counter),
   };
 }
 

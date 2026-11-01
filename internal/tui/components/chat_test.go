@@ -455,3 +455,18 @@ func BenchmarkChatStreamingDraw(b *testing.B) {
 	b.Run("conversation=200items", func(b *testing.B) { run(b, 200) })
 	b.Run("conversation=1000items", func(b *testing.B) { run(b, 1000) })
 }
+
+func TestCompletedToolWithEmptyOutputIsNotLive(t *testing.T) {
+	c := NewChat()
+	done := &ChatItem{Kind: ItemTool, ToolName: "edit", ToolDone: true}
+	c.AppendItem(done)
+	if c.isLiveItem(done) {
+		t.Fatal("completed tool with empty output should not be live")
+	}
+
+	pending := &ChatItem{Kind: ItemTool, ToolName: "edit"}
+	c.AppendItem(pending)
+	if !c.isLiveItem(pending) {
+		t.Fatal("pending tool should be live")
+	}
+}

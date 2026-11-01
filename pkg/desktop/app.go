@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -27,16 +28,18 @@ import (
 const appVersion = config.AppVersion
 
 type SessionInfo struct {
-	ACPID           string                   `json:"acpId"`
-	PeggID          string                   `json:"peggId"`
-	Cwd             string                   `json:"cwd"`
-	Title           string                   `json:"title"`
-	Mode            string                   `json:"mode"`
-	Provider        string                   `json:"provider"`
-	Model           string                   `json:"model"`
-	PermissionMode  string                   `json:"permissionMode"`
-	ReasoningEffort string                   `json:"reasoningEffort,omitempty"`
-	Commands        []acpclient.SlashCommand `json:"commands"`
+	ACPID            string                   `json:"acpId"`
+	PeggID           string                   `json:"peggId"`
+	Cwd              string                   `json:"cwd"`
+	Title            string                   `json:"title"`
+	Mode             string                   `json:"mode"`
+	Provider         string                   `json:"provider"`
+	Model            string                   `json:"model"`
+	PermissionMode   string                   `json:"permissionMode"`
+	ReasoningEffort  string                   `json:"reasoningEffort,omitempty"`
+	Commands         []acpclient.SlashCommand `json:"commands"`
+	HistoryOldestSeq int                      `json:"historyOldestSeq,omitempty"`
+	HistoryHasMore   bool                     `json:"historyHasMore,omitempty"`
 }
 
 type BootstrapInfo struct {
@@ -88,6 +91,18 @@ type App struct {
 
 	logMu sync.Mutex
 	log   *os.File
+
+	connectMu       sync.Mutex
+	connectCmd      *exec.Cmd
+	connectDone     chan struct{}
+	connectState    ConnectStatus
+	connectStopping bool
+	connectDir      string
+
+	teamMu    sync.Mutex
+	teamCmd   *exec.Cmd
+	teamDone  chan struct{}
+	teamState TeamStatus
 }
 
 func NewApp() *App {
@@ -115,6 +130,7 @@ func (a *App) startup(ctx context.Context) {
 		a.binary = binary.Resolve(ctx, p.BinaryPath, p.Workspace)
 	}
 	a.logf("pegg desktop %s %s/%s", appVersion, goruntime.GOOS, goruntime.GOARCH)
+	go a.autoStartConnect()
 }
 
 func (a *App) beforeClose(ctx context.Context) bool {
@@ -130,6 +146,8 @@ func (a *App) shutdown(ctx context.Context) {
 	if c != nil {
 		c.Close()
 	}
+	_, _ = a.ConnectStop()
+	_, _ = a.TeamCancel()
 	a.logMu.Lock()
 	if a.log != nil {
 		_ = a.log.Close()
@@ -291,6 +309,7 @@ func (a *App) OpenWorkspace(path string) (string, error) {
 	if err := a.prefs.TouchWorkspace(abs, workspace.Name(abs)); err != nil {
 		return "", err
 	}
+	a.syncConnectWorkspace(abs)
 	return abs, nil
 }
 

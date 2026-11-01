@@ -27,10 +27,11 @@ func (s *Server) startSessionFollow(acpSess *ACPSession) {
 func (s *Server) consumeFollow(acpSess *ACPSession, snapshot []live.Event, sub *live.Subscription) {
 	defer sub.Close()
 	st := &promptState{
-		sessionID: acpSess.ID,
-		textIDs:   make(map[string]string),
-		thoughtID: make(map[string]string),
-		oldFiles:  make(map[string]string),
+		sessionID:   acpSess.ID,
+		textIDs:     make(map[string]string),
+		thoughtID:   make(map[string]string),
+		oldFiles:    make(map[string]string),
+		toolPending: make(map[string]map[string]bool),
 	}
 	for i := range snapshot {
 		s.handleFollowEvent(acpSess, st, snapshot[i])
@@ -46,6 +47,7 @@ func (s *Server) handleFollowEvent(acpSess *ACPSession, st *promptState, e live.
 		st.textIDs = make(map[string]string)
 		st.thoughtID = make(map[string]string)
 		st.oldFiles = make(map[string]string)
+		st.toolPending = make(map[string]map[string]bool)
 		s.notify(acpSess.ID, SessionUpdate{
 			SessionUpdate: "run_state_update",
 			RunID:         e.Run.ID,
@@ -55,12 +57,60 @@ func (s *Server) handleFollowEvent(acpSess *ACPSession, st *promptState, e live.
 	case live.EventRunEvent:
 		s.handleAttachedRunEvent(st, acpSess, &e.Run, e.Journal)
 	case live.EventRunFinished:
+		status := ToolCallCompleted
+		switch e.State {
+		case session.RunStateCanceled:
+			status = ToolCallCancelled
+		case session.RunStateError:
+			status = ToolCallFailed
+		}
+		s.settleAllTools(st, status)
 		s.notify(acpSess.ID, SessionUpdate{
 			SessionUpdate: "run_state_update",
 			RunID:         e.Run.ID,
 			RunState:      string(e.State),
 			Error:         e.Error,
 		})
+	}
+}
+
+func (s *Server) markToolPending(st *promptState, agentID, callID string) {
+	if callID == "" {
+		return
+	}
+	if st.toolPending == nil {
+		st.toolPending = make(map[string]map[string]bool)
+	}
+	if st.toolPending[agentID] == nil {
+		st.toolPending[agentID] = make(map[string]bool)
+	}
+	st.toolPending[agentID][callID] = true
+}
+
+func (s *Server) clearToolPending(st *promptState, agentID, callID string) {
+	if calls := st.toolPending[agentID]; calls != nil {
+		delete(calls, callID)
+	}
+}
+
+func (s *Server) settleAgentTools(st *promptState, agentID string, status ToolCallStatus) {
+	calls := st.toolPending[agentID]
+	if len(calls) == 0 {
+		return
+	}
+	for callID := range calls {
+		s.notify(st.sessionID, SessionUpdate{
+			SessionUpdate: "tool_call_update",
+			ToolCallID:    callID,
+			Status:        string(status),
+		})
+	}
+	delete(st.toolPending, agentID)
+}
+
+func (s *Server) settleAllTools(st *promptState, status ToolCallStatus) {
+	for agentID := range st.toolPending {
+		s.settleAgentTools(st, agentID, status)
 	}
 }
 
@@ -105,13 +155,18 @@ func (s *Server) handleAttachedRunEvent(st *promptState, acpSess *ACPSession, ru
 	case session.AgentEventMessage:
 		delete(st.textIDs, ev.AgentID)
 		delete(st.thoughtID, ev.AgentID)
+		if len(ev.Message.ToolCalls) == 0 {
+			s.settleAgentTools(st, ev.AgentID, ToolCallCompleted)
+		}
 	case session.AgentEventToolCall:
 		call := ev.ToolCall
+		s.markToolPending(st, ev.AgentID, call.ID)
 		s.handleStreamEvent(st, acpSess, agent.StreamEvent{
 			Type: agent.StreamToolCall, AgentID: ev.AgentID, AgentName: ev.AgentName, ToolCall: &call,
 		})
 	case session.AgentEventToolResult:
 		call := ev.ToolCall
+		s.clearToolPending(st, ev.AgentID, call.ID)
 		stream := agent.StreamEvent{
 			Type: agent.StreamToolResult, AgentID: ev.AgentID, AgentName: ev.AgentName,
 			ToolCall: &call, ToolOutput: ev.ToolOutput,

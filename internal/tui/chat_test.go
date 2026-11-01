@@ -476,3 +476,33 @@ func TestAppErrorMessageIgnoresOtherAgents(t *testing.T) {
 }
 
 var _ = tcell.NewEventKey
+
+func TestChatEmptyToolOutputMarksDone(t *testing.T) {
+	orch := agent.New("orch", agent.WithProvider(&chatEchoProvider{}), agent.WithModel(llm.Model{ID: "m"}))
+	app, bus := newChatApp(t, orch)
+
+	bus.Publish(agent.TopicAgentToolCall, agent.AgentToolCall{
+		AgentID:   orch.ID,
+		AgentName: "orch",
+		Call: llm.ToolCall{
+			ID:       "call-empty",
+			Function: llm.Function{Name: "write", Arguments: `{"filePath":"a.go","content":"x"}`},
+		},
+	})
+	bus.Publish(agent.TopicAgentToolResult, agent.AgentToolResult{
+		AgentID:  orch.ID,
+		CallID:   "call-empty",
+		ToolName: "write",
+		Output:   "",
+	})
+
+	app.chatMu.Lock()
+	defer app.chatMu.Unlock()
+	if app.main == nil || len(app.main.items) != 1 {
+		t.Fatalf("expected one tool item, got %d", len(app.main.items))
+	}
+	it := app.main.items[0]
+	if !it.ToolDone {
+		t.Fatal("tool with empty output should be marked done")
+	}
+}

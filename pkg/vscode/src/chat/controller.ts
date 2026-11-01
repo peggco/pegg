@@ -24,6 +24,7 @@ import { activeContext, attachmentToBlock } from './context';
 import {
   addNotice,
   appendUser,
+  applyHistory,
   applyUpdate,
   ChatState,
   clearAttachments,
@@ -63,6 +64,8 @@ export class ChatController extends EventEmitter {
   private forceFallback = false;
   private legacyStreaming = false;
   private loadingSession = false;
+  private loadingOlder = false;
+  private historyBuffer: SessionUpdate[] = [];
   private binaryFingerprint: string | undefined;
   private voiceStart: Promise<void> | undefined;
   private disposed = false;
@@ -169,7 +172,16 @@ export class ChatController extends EventEmitter {
     this.emitState();
     this.loadingSession = true;
     try {
-      await this.client!.request('session/load', { sessionId: peggSessionId, cwd: root }, 60000);
+      const history = await this.client!.request<{ oldestSeq?: number; hasMore?: boolean }>(
+        'session/load',
+        { sessionId: peggSessionId, cwd: root, historyLimit: 50 },
+        60000,
+      );
+      this.state = {
+        ...this.state,
+        historyOldestSeq: history?.oldestSeq ?? 0,
+        historyHasMore: Boolean(history?.hasMore),
+      };
     } finally {
       this.loadingSession = false;
     }
@@ -571,6 +583,10 @@ export class ChatController extends EventEmitter {
     const update = params?.update as SessionUpdate | undefined;
     if (!update) return;
     if (sessionId && this.state.acpSessionId && sessionId !== this.state.acpSessionId) return;
+    if (update.historyPage && this.loadingOlder) {
+      this.historyBuffer.push(update);
+      return;
+    }
 
     if (update.sessionUpdate === 'run_ask_resolved') {
       this.rejectPending('Answered in another client');
@@ -610,6 +626,46 @@ export class ChatController extends EventEmitter {
     this.state = applyUpdate(this.state, update);
     this.emit('update', update, this.state);
     this.emitState();
+  }
+
+  async loadOlderMessages(): Promise<void> {
+    await this.ensureStarted();
+    const sessionId = this.state.acpSessionId;
+    if (!sessionId || !this.state.historyHasMore || this.state.historyLoading) return;
+    this.loadingOlder = true;
+    this.historyBuffer = [];
+    this.state = { ...this.state, historyLoading: true };
+    this.emitState();
+    try {
+      const history = await this.client!.request<{ oldestSeq?: number; hasMore?: boolean }>(
+        'session/history',
+        {
+          sessionId,
+          cwd: workspaceRoot(),
+          limit: 50,
+          beforeSeq: this.state.historyOldestSeq,
+        },
+        60000,
+      );
+      const buffered = this.historyBuffer;
+      this.historyBuffer = [];
+      this.state = applyHistory(this.state, buffered);
+      this.state = {
+        ...this.state,
+        historyOldestSeq: history?.oldestSeq ?? this.state.historyOldestSeq,
+        historyHasMore: Boolean(history?.hasMore),
+        historyLoading: false,
+      };
+    } catch (err) {
+      this.state = addNotice(
+        { ...this.state, historyLoading: false },
+        err instanceof Error ? err.message : String(err),
+        'error',
+      );
+    } finally {
+      this.loadingOlder = false;
+      this.emitState();
+    }
   }
 
   private async onServerRequest(method: string, params: unknown): Promise<unknown> {

@@ -6,6 +6,7 @@ import { store, useStore } from '../state/store';
 import { useT } from '../lib/i18n';
 import type { CompactionSettings, PermissionsSettings, SettingsSnapshot } from '../types';
 import { Card, Empty, Field, PageHead, Range, SaveBar, Segmented, Switch } from './SettingsUI';
+import { MCPModal } from './MCPModal';
 
 export interface PanelProps {
   snap: SettingsSnapshot;
@@ -225,8 +226,6 @@ export function SessionPanel({ snap, refresh }: PanelProps) {
   );
 }
 
-/* ---------------- Permissions ---------------- */
-
 const AUTO_RULES: Record<string, string> = {
   read: 'allow', write: 'allow', edit: 'allow', delete: 'allow', list: 'allow',
   glob: 'allow', grep: 'allow', bash: 'allow', todo: 'allow', todoread: 'allow',
@@ -379,8 +378,6 @@ export function PermissionsPanel({ snap, refresh }: PanelProps) {
   );
 }
 
-/* ---------------- Memory ---------------- */
-
 export function MemoryPanel({ snap, refresh }: PanelProps) {
   const t = useT();
   const system = snap.system;
@@ -516,23 +513,35 @@ export function MemoryPanel({ snap, refresh }: PanelProps) {
   );
 }
 
-/* ---------------- MCP ---------------- */
-
-export function MCPPanel({ snap }: PanelProps) {
+export function MCPPanel({ snap, refresh }: PanelProps) {
   const t = useT();
   const system = snap.system;
+  const [addOpen, setAddOpen] = useState(false);
+
+  const remove = async (name: string) => {
+    try {
+      await api.RemoveMCPServer(name);
+      await refresh();
+      store.toast('success', t('mcp.removed', { name }));
+    } catch (err) {
+      store.toast('error', errorText(err));
+    }
+  };
+
   return (
     <>
-      <PageHead
-        title={t('settings.mcp')}
-        description="Model Context Protocol servers available to Pegg. Edit pegg.json to add or change servers."
-      />
+      <PageHead title={t('settings.mcp')} description={t('mcp.description')} />
       <Card
         title={`${snap.mcp.length} server${snap.mcp.length === 1 ? '' : 's'}`}
         actions={
-          <button className="btn small" onClick={() => void api.RevealPath(system.configPath)}>
-            Open config
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn small" onClick={() => setAddOpen(true)}>
+              {t('mcp.add')}
+            </button>
+            <button className="btn small" onClick={() => void api.RevealPath(system.configPath)}>
+              {t('mcp.openConfig')}
+            </button>
+          </div>
         }
       >
         {snap.mcp.length ? (
@@ -548,19 +557,28 @@ export function MCPPanel({ snap }: PanelProps) {
                 <div className="row-side">
                   <span className="badge">{server.type}</span>
                   {server.env ? <span className="badge">{server.env} env</span> : null}
+                  <button className="btn small" onClick={() => void remove(server.name)}>
+                    {t('common.remove')}
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <Empty>No MCP servers configured.</Empty>
+          <Empty>{t('mcp.empty')}</Empty>
         )}
       </Card>
+      {addOpen ? (
+        <MCPModal
+          onClose={() => setAddOpen(false)}
+          onAdded={async () => {
+            await refresh();
+          }}
+        />
+      ) : null}
     </>
   );
 }
-
-/* ---------------- Skills ---------------- */
 
 export function SkillsPanel({ snap }: PanelProps) {
   const t = useT();
@@ -603,8 +621,6 @@ export function SkillsPanel({ snap }: PanelProps) {
     </>
   );
 }
-
-/* ---------------- Rules ---------------- */
 
 export function RulesPanel({ snap }: PanelProps) {
   const t = useT();
@@ -654,8 +670,6 @@ export function RulesPanel({ snap }: PanelProps) {
     </>
   );
 }
-
-/* ---------------- Plugins ---------------- */
 
 export function PluginsPanel({ snap, refresh }: PanelProps) {
   const t = useT();

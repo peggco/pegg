@@ -65,6 +65,8 @@ export interface SessionUpdate {
   runId?: string;
   runState?: string;
   baseSeq?: number;
+  seq?: number;
+  historyPage?: boolean;
 }
 
 export interface SessionListItem {
@@ -95,6 +97,8 @@ export interface SessionInfo {
   reasoningEffort?: string;
   permissionMode?: string;
   commands?: SlashCommand[];
+  historyOldestSeq?: number;
+  historyHasMore?: boolean;
 }
 
 export interface ModelEntry {
@@ -401,4 +405,52 @@ export interface SettingsSnapshot {
   skills: SkillSetting[];
   rules: RuleSetting[];
   plugins: PluginSetting[];
+}
+
+export interface ConnectStatus {
+  state: string;
+  pid?: number;
+  startedAt?: string;
+  error?: string;
+  logs: string[];
+}
+
+export interface ConnectSettings {
+  enabled: boolean;
+  relayUrl: string;
+  token?: string;
+  clearToken?: boolean;
+  tokenMasked: string;
+  hasToken: boolean;
+  deviceName: string;
+  deviceId: string;
+  publicKey: string;
+  autoApprove: boolean;
+  maxConcurrency: number;
+  responseTimeout: number;
+  allowedMethods: string[];
+  status: ConnectStatus;
+}
+
+export interface TeamProvider {
+  name: string;
+  baseUrl: string;
+  apiKeyMasked: string;
+}
+
+export interface TeamStatus {
+  state: string;
+  url?: string;
+  error?: string;
+  logs: string[];
+  providers: TeamProvider[];
+}
+
+export interface MCPServerInput {
+  name: string;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  url: string;
+  headers: Record<string, string>;
 }

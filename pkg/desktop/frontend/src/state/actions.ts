@@ -17,9 +17,11 @@ import {
   appendUser,
   applyUpdates,
   emptyChat,
+  pruneChat,
   resolveAsk,
   resolvePermission,
   setAskAnswer,
+  settlePendingTools,
   type ChatItem,
   type ChatState,
 } from './chat';
@@ -78,12 +80,34 @@ export async function loadSessions(): Promise<void> {
   store.set({ sessionsLoading: true });
   void api.Log(`loadSessions workspace=${workspace}`).catch(() => undefined);
   try {
-    const res = await api.ListSessions(workspace, true);
-    store.set({ sessions: res.sessions ?? [], sessionsLoading: false });
+    const res = await api.LoadSessionsPage(workspace, true, 0, 30);
+    store.set({ sessions: res.sessions ?? [], sessionsLoading: false, sessionsNextCursor: res.nextCursor });
   } catch (err) {
     store.set({ sessionsLoading: false });
     const text = errorText(err);
     void api.Log(`loadSessions failed: ${text}`).catch(() => undefined);
+    if (!/not running|binary/i.test(text)) store.toast('warn', `Could not load sessions: ${text}`);
+  }
+}
+
+export async function loadMoreSessions(): Promise<void> {
+  const state = store.get();
+  if (state.sessionsLoading || !state.sessionsNextCursor) return;
+  store.set({ sessionsLoading: true });
+  try {
+    const res = await api.LoadSessionsPage(state.workspace, true, Number(state.sessionsNextCursor) || state.sessions.length, 30);
+    store.set((current) => {
+      const seen = new Set(current.sessions.map((item) => item.id));
+      const extra = (res.sessions ?? []).filter((item) => !seen.has(item.id));
+      return {
+        sessions: [...current.sessions, ...extra],
+        sessionsLoading: false,
+        sessionsNextCursor: res.nextCursor,
+      };
+    });
+  } catch (err) {
+    store.set({ sessionsLoading: false });
+    const text = errorText(err);
     if (!/not running|binary/i.test(text)) store.toast('warn', `Could not load sessions: ${text}`);
   }
 }
@@ -239,6 +263,9 @@ function sessionListToChat(item: SessionListItem): ChatState {
     provider: item.provider,
     model: item.model,
     loading: true,
+    historyOldestSeq: 0,
+    historyHasMore: false,
+    historyLoading: false,
     usage: {
       used: item.usage?.total_tokens ?? 0,
       size: 0,
@@ -270,6 +297,8 @@ export async function openSession(item: SessionListItem): Promise<void> {
             provider: info.provider || chat.provider,
             model: info.model || chat.model,
             loading: false,
+            historyOldestSeq: info.historyOldestSeq ?? chat.historyOldestSeq,
+            historyHasMore: info.historyHasMore ?? chat.historyHasMore,
           }
         : chat,
     );
@@ -433,7 +462,8 @@ export async function sendPrompt(input: SendInput): Promise<void> {
       text,
       attachments: input.attachments,
     });
-    store.setChat((c) => ({ ...c, running: false }));
+    const toolStatus = result?.stopReason === 'cancelled' ? 'cancelled' : 'completed';
+    store.setChat((c) => ({ ...settlePendingTools(c, toolStatus), running: false }));
     if (result?.stopReason !== 'cancelled' && !document.hasFocus()) {
       const lastAssistant = [...store.get().chat.items]
         .reverse()
@@ -454,7 +484,7 @@ export async function sendPrompt(input: SendInput): Promise<void> {
     void loadSessions();
   } catch (err) {
     const message = errorText(err);
-    store.setChat((c) => addNotice({ ...c, running: false }, message, 'error'));
+    store.setChat((c) => addNotice({ ...settlePendingTools(c, 'failed'), running: false }, message, 'error'));
     store.toast('error', message);
   }
 }
@@ -587,11 +617,51 @@ export function handleUpdates(sessionId: string, updates: SessionUpdate[]): void
   const chat = store.get().chat;
   if (!chat.acpId) return;
   if (sessionId !== chat.acpId && sessionId !== chat.peggId) return;
+  const history = updates.filter((u) => u.historyPage);
+  const live = updates.filter((u) => !u.historyPage);
   store.setChat((c) => {
-    let next = applyUpdates(c, updates);
+    let next = live.length ? applyUpdates(c, live) : c;
+    if (history.length) {
+      const temp = applyUpdates(
+        { ...c, items: [], plan: [], permissions: [], asks: [], subagents: {} },
+        history,
+      );
+      next = { ...next, items: [...temp.items, ...next.items], counter: Math.max(next.counter, temp.counter) };
+    }
+    if (!history.length && next.stickToBottom) next = pruneChat(next);
+    if (updates.some((u) => u.sessionUpdate === 'agent_message_chunk' || u.sessionUpdate === 'user_message_chunk')) {
+      next = settlePendingTools(next, 'completed');
+    }
     if (updates.some((u) => u.sessionUpdate === 'error')) next = { ...next, running: false };
     return next;
   });
+}
+
+export async function loadOlderMessages(): Promise<void> {
+  const chat = store.get().chat;
+  if (!chat.acpId || !chat.historyHasMore || chat.historyLoading) return;
+  store.setChat((c) => ({ ...c, historyLoading: true }));
+  try {
+    const res = await api.LoadHistory({
+      sessionId: chat.acpId,
+      cwd: chat.cwd,
+      beforeSeq: chat.historyOldestSeq,
+      limit: 50,
+    });
+    store.setChat((c) => ({
+      ...c,
+      historyOldestSeq: res.oldestSeq || c.historyOldestSeq,
+      historyHasMore: res.hasMore,
+      historyLoading: false,
+    }));
+  } catch (err) {
+    store.setChat((c) => ({ ...c, historyLoading: false }));
+    store.toast('error', errorText(err));
+  }
+}
+
+export function setStickToBottom(stick: boolean): void {
+  store.setChat((c) => (c.stickToBottom === stick ? c : { ...c, stickToBottom: stick }));
 }
 
 export function handlePermission(requestId: string, params: Parameters<typeof addPermission>[2]): void {

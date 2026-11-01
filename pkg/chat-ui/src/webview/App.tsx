@@ -97,6 +97,9 @@ const emptyState: ChatState = {
   pending: [],
   composerAttachments: [],
   counter: 0,
+  historyOldestSeq: 0,
+  historyHasMore: false,
+  historyLoading: false,
 };
 
 const startSuggestions = [
@@ -163,6 +166,8 @@ export function App() {
     );
   }, [state.items, agentView]);
 
+  const pendingScrollRef = useRef<{ height: number; top: number } | null>(null);
+
   const scrollToBottom = useCallback((smooth = false) => {
     const el = messages.current;
     if (!el) return;
@@ -170,6 +175,14 @@ export function App() {
     stick.current = true;
     setAtBottom(true);
   }, []);
+
+  useEffect(() => {
+    stick.current = true;
+    pendingScrollRef.current = null;
+    setAtBottom(true);
+    const frame = requestAnimationFrame(() => scrollToBottom(false));
+    return () => cancelAnimationFrame(frame);
+  }, [state.acpSessionId, state.peggSessionId, scrollToBottom]);
 
   const setCaret = useCallback((position: number) => {
     requestAnimationFrame(() => {
@@ -262,6 +275,18 @@ export function App() {
   }, [state, scrollToBottom]);
 
   useEffect(() => {
+    const pending = pendingScrollRef.current;
+    const el = messages.current;
+    if (!pending || !el) return;
+    if (el.scrollHeight <= pending.height) {
+      if (!state.historyLoading) pendingScrollRef.current = null;
+      return;
+    }
+    el.scrollTop = el.scrollHeight - pending.height + pending.top;
+    pendingScrollRef.current = null;
+  }, [state.items, state.historyLoading]);
+
+  useEffect(() => {
     if (!textarea.current) return;
     const el = textarea.current;
     el.style.height = 'auto';
@@ -282,6 +307,15 @@ export function App() {
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     stick.current = distance < 48;
     setAtBottom(distance < 48);
+    if (
+      el.scrollTop < 80 &&
+      state.historyHasMore &&
+      !state.historyLoading &&
+      !pendingScrollRef.current
+    ) {
+      pendingScrollRef.current = { height: el.scrollHeight, top: el.scrollTop };
+      host.postMessage({ type: 'loadOlderMessages' });
+    }
   }
 
   function send() {
@@ -453,6 +487,12 @@ export function App() {
         </div>
       )}
 
+      {state.historyLoading && (
+        <div className="history-loading">
+          <span className="spinner" />
+          <span>Loading older messages…</span>
+        </div>
+      )}
       <main className="messages" ref={messages} onScroll={onScroll}>
         {!agentView && state.items.length === 0 && !state.running && (
           <div className="empty">

@@ -54,6 +54,8 @@ export interface SessionUpdate {
   runId?: string;
   runState?: string;
   baseSeq?: number;
+  seq?: number;
+  historyPage?: boolean;
 }
 
 export interface PlanEntry {

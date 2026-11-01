@@ -313,3 +313,67 @@ func TestSummarizeRunFiltersOtherAgents(t *testing.T) {
 		t.Fatalf("tools = %+v, want only c1", summary.Tools)
 	}
 }
+
+func TestHubSubscribeBackfillsSnapshotGap(t *testing.T) {
+	_, coord, hub, bus, sess := newLiveTest(t)
+	first := hub.SubscribeSession(sess.ID, true, 0)
+	t.Cleanup(first.Close)
+
+	waitFor := func(kind EventType) {
+		t.Helper()
+		deadline := time.After(3 * time.Second)
+		for {
+			select {
+			case e := <-first.C:
+				if e.Type == kind {
+					return
+				}
+			case <-deadline:
+				t.Fatalf("timed out waiting for %s", kind)
+			}
+		}
+	}
+
+	run := func(token string) {
+		t.Helper()
+		lease, err := coord.Claim(context.Background(), runpkg.ClaimRequest{
+			SessionID: sess.ID, AgentID: "agent-1", AgentName: "orchestrator", Provider: "p", Model: "m",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		bus.Publish(agent.TopicAgentStarted, agent.AgentStarted{AgentID: "agent-1", AgentName: "orchestrator"})
+		bus.Publish(agent.TopicAgentToken, agent.AgentToken{AgentID: "agent-1", AgentName: "orchestrator", Content: token})
+		lease.Finish(session.RunStateDone, "")
+		waitFor(EventRunFinished)
+	}
+
+	run("first")
+	stale, err := coord.LastGlobalEventSeq()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stale == 0 {
+		t.Fatal("expected a non-zero sequence after the first run")
+	}
+
+	run("second")
+
+	second := hub.SubscribeSession(sess.ID, true, stale)
+	t.Cleanup(second.Close)
+
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case e := <-second.C:
+			if e.Type == EventRunEvent && e.Journal.Type == session.AgentEventToken {
+				return
+			}
+			if e.Type == EventRunFinished {
+				return
+			}
+		case <-deadline:
+			t.Fatal("second subscriber missed the gap events")
+		}
+	}
+}

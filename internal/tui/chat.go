@@ -367,6 +367,7 @@ func (a *App) onAgentToolResult(e agent.AgentToolResult) {
 	} else {
 		it.ToolOutput = e.Output
 	}
+	it.ToolDone = true
 	if a.viewID == t.id {
 		a.chat.InvalidateItemPtr(it)
 		a.requestRedraw()
@@ -1360,6 +1361,7 @@ func messagesToItems(msgs []session.Message) []*components.ChatItem {
 				} else {
 					it.ToolOutput = output
 				}
+				it.ToolDone = true
 				delete(pendingToolResults, tc.ID)
 			}
 			out = append(out, it)
@@ -1395,12 +1397,18 @@ func messagesToItems(msgs []session.Message) []*components.ChatItem {
 				} else {
 					it.ToolOutput = text
 				}
+				it.ToolDone = true
 			} else {
 				pendingToolResults[m.ToolCallID] = text
 			}
 		}
 	}
 	flushAssistant()
+	for _, it := range out {
+		if it.Kind == components.ItemTool {
+			it.ToolDone = true
+		}
+	}
 
 	return out
 }

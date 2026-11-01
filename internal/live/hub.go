@@ -361,6 +361,9 @@ func (h *Hub) subscribe(sessionID string, includeLocal bool, since int64) *Subsc
 	if len(h.subs) == 0 && since > h.last {
 		h.last = since
 	}
+	if since > 0 && since < h.last {
+		h.last = since
+	}
 	h.nextID++
 	id := h.nextID
 	s := &subscriber{

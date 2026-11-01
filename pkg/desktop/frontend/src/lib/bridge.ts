@@ -23,6 +23,10 @@ import type {
   PermissionsSettings,
   MemorySettings,
   Theme,
+  ConnectSettings,
+  ConnectStatus,
+  TeamStatus,
+  MCPServerInput,
 } from '../types';
 
 export interface NewSessionInput {
@@ -40,6 +44,18 @@ export interface LoadSessionInput {
   mode?: string;
   provider?: string;
   model?: string;
+}
+
+export interface LoadHistoryInput {
+  sessionId: string;
+  cwd?: string;
+  beforeSeq: number;
+  limit: number;
+}
+
+export interface HistoryPageResult {
+  oldestSeq: number;
+  hasMore: boolean;
 }
 
 export interface PromptInput {
@@ -78,6 +94,8 @@ const App = GoApp as unknown as {
   RemoveProvider(name: string): Promise<void>;
   AddSTTProvider(name: string, apiKey: string, baseURL: string): Promise<void>;
   RemoveSTTProvider(name: string): Promise<void>;
+  AddMCPServer(input: MCPServerInput): Promise<void>;
+  RemoveMCPServer(name: string): Promise<void>;
   SaveGeneralSettings(g: GeneralSettings): Promise<void>;
   SaveCompactionSettings(c: CompactionSettings): Promise<void>;
   SavePermissionSettings(p: PermissionsSettings): Promise<void>;
@@ -110,6 +128,8 @@ const App = GoApp as unknown as {
   ResetSession(): Promise<void>;
   LoadSession(input: LoadSessionInput): Promise<SessionInfo>;
   ListSessions(cwd: string, all: boolean): Promise<SessionListResult>;
+  LoadSessionsPage(cwd: string, all: boolean, offset: number, limit: number): Promise<SessionListResult>;
+  LoadHistory(input: LoadHistoryInput): Promise<HistoryPageResult>;
   SendPrompt(input: PromptInput): Promise<PromptResult>;
   Cancel(sessionId: string): Promise<void>;
   SetMode(sessionId: string, mode: string): Promise<SessionInfo>;
@@ -123,6 +143,17 @@ const App = GoApp as unknown as {
   RecordStop(): Promise<STTResult>;
   RespondPermission(requestId: string, optionId: string): Promise<void>;
   RespondAsk(requestId: string, answers: Record<string, string>): Promise<void>;
+  ConnectSettings(): Promise<ConnectSettings>;
+  SaveConnectSettings(settings: ConnectSettings): Promise<ConnectSettings>;
+  ConnectStart(): Promise<ConnectStatus>;
+  ConnectStop(): Promise<ConnectStatus>;
+  ConnectLogout(): Promise<ConnectSettings>;
+  ConnectResetDevice(): Promise<ConnectSettings>;
+  TeamStatus(): Promise<TeamStatus>;
+  TeamConnect(): Promise<TeamStatus>;
+  TeamCancel(): Promise<TeamStatus>;
+  TeamRefresh(provider: string): Promise<TeamStatus>;
+  TeamRemove(provider: string): Promise<TeamStatus>;
 };
 
 export const api = App;
@@ -176,6 +207,14 @@ export function onFileDrop(cb: (paths: string[]) => void): Unsubscribe {
   return EventsOn('wails:file-drop', (_x: number, _y: number, paths: string[]) => {
     if (Array.isArray(paths) && paths.length) cb(paths);
   });
+}
+
+export function onConnectStatus(cb: (status: ConnectStatus) => void): Unsubscribe {
+  return on<ConnectStatus>('connect:status', cb);
+}
+
+export function onTeamStatus(cb: (status: TeamStatus) => void): Unsubscribe {
+  return on<TeamStatus>('team:status', cb);
 }
 
 export function offAll(events: string[]): void {

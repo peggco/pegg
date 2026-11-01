@@ -29,7 +29,7 @@ export interface ToolState {
   agentName?: string;
 }
 
-export type ChatItem =
+export type ChatItem = (
   | { kind: 'user'; id: string; text: string; createdAt: number; messageId?: string; agentId?: string }
   | { kind: 'assistant'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
   | { kind: 'reasoning'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
@@ -46,7 +46,8 @@ export type ChatItem =
       createdAt: number;
     }
   | { kind: 'notice'; id: string; text: string; level: 'info' | 'warn' | 'error'; createdAt: number }
-  | { kind: 'error'; id: string; text: string; createdAt: number };
+  | { kind: 'error'; id: string; text: string; createdAt: number }
+) & { seq?: number };
 
 export interface SubagentRun {
   agentId: string;
@@ -91,6 +92,10 @@ export interface ChatState {
   subagents: Record<string, SubagentRun>;
   error?: string;
   counter: number;
+  historyOldestSeq: number;
+  historyHasMore: boolean;
+  historyLoading: boolean;
+  stickToBottom: boolean;
 }
 
 export function emptyChat(): ChatState {
@@ -107,6 +112,10 @@ export function emptyChat(): ChatState {
     asks: [],
     subagents: {},
     counter: 0,
+    historyOldestSeq: 0,
+    historyHasMore: false,
+    historyLoading: false,
+    stickToBottom: true,
   };
 }
 
@@ -147,8 +156,60 @@ function normalizeStatus(status: string | undefined): ToolState['status'] | unde
   }
 }
 
+function isTerminalStatus(status: ToolState['status']): boolean {
+  return status === 'completed' || status === 'failed' || status === 'cancelled';
+}
+
 function findIndex<T extends ChatItem['kind']>(items: ChatItem[], id: string, kind: T): number {
   return items.findIndex((item) => item.id === id && item.kind === kind);
+}
+
+function settleTools(items: ChatItem[], status: ToolState['status']): ChatItem[] {
+  let changed = false;
+  const next = items.map((item) => {
+    if (item.kind !== 'tool') return item;
+    if (item.tool.status !== 'pending' && item.tool.status !== 'in_progress') return item;
+    changed = true;
+    return { ...item, tool: { ...item.tool, status } };
+  });
+  return changed ? next : items;
+}
+
+export function settlePendingTools(state: ChatState, status: ToolState['status'] = 'completed'): ChatState {
+  const subagents: Record<string, SubagentRun> = {};
+  let subChanged = false;
+  for (const [id, run] of Object.entries(state.subagents)) {
+    const items = settleTools(run.items, status);
+    if (items !== run.items) subChanged = true;
+    subagents[id] = items === run.items ? run : { ...run, items };
+  }
+  return {
+    ...state,
+    items: settleTools(state.items, status),
+    ...(subChanged ? { subagents } : {}),
+  };
+}
+
+export const MAX_CHAT_ITEMS = 160;
+
+export function pruneChat(state: ChatState): ChatState {
+  if (state.items.length <= MAX_CHAT_ITEMS) return state;
+  let drop = state.items.length - MAX_CHAT_ITEMS;
+  let i = 0;
+  let droppedSeq = 0;
+  while (drop > 0 && i < state.items.length && state.items[i].seq !== undefined) {
+    droppedSeq = state.items[i].seq ?? droppedSeq;
+    i++;
+    drop--;
+  }
+  if (i === 0) return state;
+  const items = state.items.slice(i);
+  const firstSeq = items.find((item) => item.seq !== undefined)?.seq;
+  return {
+    ...state,
+    items,
+    historyOldestSeq: firstSeq ?? (droppedSeq > 0 ? droppedSeq + 1 : state.historyOldestSeq),
+  };
 }
 
 export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState {
@@ -157,6 +218,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
   }
   let state: ChatState = { ...input, items: input.items, plan: input.plan };
   const now = Date.now();
+  const seq = update.seq && update.seq > 0 ? update.seq : undefined;
 
   const replaceItem = (index: number, next: ChatItem) => {
     const items = state.items.slice();
@@ -187,6 +249,9 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       ) {
         replaceItem(state.items.length - 1, { ...last, text: last.text + text } as ChatItem);
       } else {
+        if (kind === 'assistant') {
+          state = { ...state, items: settleTools(state.items, 'completed') };
+        }
         pushItem({
           kind,
           id,
@@ -194,6 +259,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           agentId: update.agentId,
           agentName: update.agentName,
           createdAt: now,
+          seq,
           ...(kind === 'user' && update.messageId ? { messageId: update.messageId } : {}),
         } as ChatItem);
       }
@@ -218,6 +284,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           agentId: update.agentId,
           agentName: update.agentName,
           createdAt: now,
+          seq,
         });
       }
       return state;
@@ -229,11 +296,15 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       const status = normalizeStatus(update.status);
       if (idx >= 0) {
         const item = state.items[idx] as Extract<ChatItem, { kind: 'tool' }>;
+        let nextStatus = status || item.tool.status;
+        if (isTerminalStatus(item.tool.status) && (!status || !isTerminalStatus(status))) {
+          nextStatus = item.tool.status;
+        }
         const tool: ToolState = {
           ...item.tool,
           title: update.title || item.tool.title,
           kind: inferToolKind(update.kind, update.title || item.tool.title, item.tool.kind),
-          status: status || item.tool.status,
+          status: nextStatus,
         };
         if (update.rawInput !== undefined) tool.input = update.rawInput;
         if (update.rawOutput !== undefined) tool.output = update.rawOutput;
@@ -250,6 +321,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           kind: 'tool',
           id,
           createdAt: now,
+          seq,
           tool: {
             id,
             name: update.toolName,
@@ -274,6 +346,8 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       const status: 'running' | 'finished' | 'error' =
         update.status === 'finished' ? 'finished' : update.status === 'error' ? 'error' : 'running';
       const existingRun = state.subagents[agentId];
+      const settleStatus: ToolState['status'] | undefined =
+        status === 'finished' ? 'completed' : status === 'error' ? 'failed' : undefined;
       const run: SubagentRun = existingRun
         ? {
             ...existingRun,
@@ -282,6 +356,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
             task: update.title || existingRun.task,
             output: update.rawOutput !== undefined ? String(update.rawOutput ?? '') : existingRun.output,
             error: update.error || existingRun.error,
+            items: settleStatus ? settleTools(existingRun.items, settleStatus) : existingRun.items,
           }
         : {
             agentId,
@@ -349,7 +424,16 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
     case 'run_state_update':
       if (update.runState) {
         const running = /running|started|active/i.test(update.runState);
-        state = { ...state, running };
+        if (running) {
+          state = { ...state, running };
+        } else {
+          const status: ToolState['status'] = /cancel/i.test(update.runState)
+            ? 'cancelled'
+            : /error|fail/i.test(update.runState)
+              ? 'failed'
+              : 'completed';
+          state = { ...settlePendingTools(state, status), running };
+        }
       }
       return state;
     case 'error':

@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,6 +60,20 @@ type SessionLoadParams struct {
 	Cwd                   string      `json:"cwd"`
 	MCPServers            []MCPServer `json:"mcpServers,omitempty"`
 	AdditionalDirectories []string    `json:"additionalDirectories,omitempty"`
+	HistoryLimit          int         `json:"historyLimit,omitempty"`
+	HistoryBefore         int         `json:"historyBefore,omitempty"`
+}
+
+type SessionHistoryParams struct {
+	SessionId SessionId `json:"sessionId"`
+	Cwd       string    `json:"cwd,omitempty"`
+	Limit     int       `json:"limit,omitempty"`
+	BeforeSeq int       `json:"beforeSeq,omitempty"`
+}
+
+type SessionHistoryResult struct {
+	OldestSeq int  `json:"oldestSeq"`
+	HasMore   bool `json:"hasMore"`
 }
 
 type SessionResumeParams struct {
@@ -83,6 +98,7 @@ type SessionSetModeParams struct {
 
 type SessionListParams struct {
 	Cursor string `json:"cursor,omitempty"`
+	Offset int    `json:"offset,omitempty"`
 	Limit  int    `json:"limit,omitempty"`
 	Cwd    string `json:"cwd,omitempty"`
 	All    bool   `json:"all,omitempty"`
@@ -185,69 +201,12 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 	orch.SetMode(mode)
 	s.applyStoredModel(orch, vs)
 
-	var active *session.Run
-	if s.runs != nil {
-		active, _ = s.runs.Active(vs.ID)
+	result := SessionHistoryResult{}
+	if msgs, err := s.sessionHistory(vs.ID); err == nil {
+		page, oldest, hasMore := paginateHistory(msgs, req.HistoryBefore, req.HistoryLimit)
+		s.emitHistoryMessages(string(req.SessionId), req.Cwd, page, false)
+		result = SessionHistoryResult{OldestSeq: oldest, HasMore: hasMore}
 	}
-	msgs, err := s.sessions.Messages(vs.ID)
-	if err == nil {
-		if active != nil && active.BaseSeq > 0 {
-			filtered := make([]session.Message, 0, len(msgs))
-			for _, m := range msgs {
-				if m.Seq <= active.BaseSeq {
-					filtered = append(filtered, m)
-				}
-			}
-			msgs = filtered
-		}
-		for _, msg := range msgs {
-			updateType := "agent_message_chunk"
-			if msg.Role == llm.RoleUser {
-				updateType = "user_message_chunk"
-			}
-			if msg.Reasoning != nil && msg.Role == llm.RoleAssistant {
-				if text, ok := msg.Reasoning.(string); ok && text != "" {
-					s.notify(string(req.SessionId), SessionUpdate{
-						SessionUpdate: "agent_thought_chunk",
-						MessageID:     "thought-" + msg.ID,
-						Content:       &ContentBlock{Type: "text", Text: text},
-					})
-				}
-			}
-			if msg.Role == llm.RoleUser || msg.Role == llm.RoleAssistant {
-				content := extractContent(msg)
-				if content != nil {
-					s.notify(string(req.SessionId), SessionUpdate{
-						SessionUpdate: updateType,
-						MessageID:     msg.ID,
-						Content:       content,
-					})
-				}
-			}
-			for _, call := range msg.ToolCalls {
-				callArgs := parseArgs(call.Function.Arguments)
-				s.notify(string(req.SessionId), SessionUpdate{
-					SessionUpdate: "tool_call",
-					ToolCallID:    call.ID,
-					Title:         toolTitle(call.Function.Name, callArgs),
-					Kind:          string(toolKind(call.Function.Name)),
-					Status:        string(ToolCallCompleted),
-					RawInput:      callArgs,
-					Locations:     toolLocations(req.Cwd, callArgs),
-				})
-			}
-			if msg.Role == llm.RoleTool && msg.ToolCallID != "" {
-				out, _ := msg.Content.(string)
-				s.notify(string(req.SessionId), SessionUpdate{
-					SessionUpdate: "tool_call_update",
-					ToolCallID:    msg.ToolCallID,
-					Status:        string(ToolCallCompleted),
-					RawOutput:     truncate(out, 64*1024),
-				})
-			}
-		}
-	}
-
 	acpSess := &ACPSession{
 		ID:            string(req.SessionId),
 		Agent:         orch,
@@ -268,7 +227,123 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 	s.notifyCommands(string(req.SessionId))
 	s.startSessionFollow(acpSess)
 
-	return nil, nil
+	return result, nil
+}
+
+func (s *Server) sessionHistory(sessionID string) ([]session.Message, error) {
+	msgs, err := s.sessions.Messages(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if s.runs == nil {
+		return msgs, nil
+	}
+	active, _ := s.runs.Active(sessionID)
+	if active == nil || active.BaseSeq <= 0 {
+		return msgs, nil
+	}
+	filtered := make([]session.Message, 0, len(msgs))
+	for _, m := range msgs {
+		if m.Seq <= active.BaseSeq {
+			filtered = append(filtered, m)
+		}
+	}
+	return filtered, nil
+}
+
+func paginateHistory(msgs []session.Message, before, limit int) ([]session.Message, int, bool) {
+	filtered := msgs
+	if before > 0 {
+		filtered = make([]session.Message, 0, len(msgs))
+		for _, m := range msgs {
+			if m.Seq < before {
+				filtered = append(filtered, m)
+			}
+		}
+	}
+	if len(filtered) == 0 {
+		return nil, 0, false
+	}
+	if limit <= 0 || len(filtered) <= limit {
+		return filtered, filtered[0].Seq, false
+	}
+	start := len(filtered) - limit
+	return filtered[start:], filtered[start].Seq, true
+}
+
+func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Message, historyPage bool) {
+	for _, msg := range msgs {
+		updateType := "agent_message_chunk"
+		if msg.Role == llm.RoleUser {
+			updateType = "user_message_chunk"
+		}
+		if msg.Reasoning != nil && msg.Role == llm.RoleAssistant {
+			if text, ok := msg.Reasoning.(string); ok && text != "" {
+				s.notify(sessionID, SessionUpdate{
+					SessionUpdate: "agent_thought_chunk",
+					MessageID:     "thought-" + msg.ID,
+					Content:       &ContentBlock{Type: "text", Text: text},
+					Seq:           msg.Seq,
+					HistoryPage:   historyPage,
+				})
+			}
+		}
+		if msg.Role == llm.RoleUser || msg.Role == llm.RoleAssistant {
+			content := extractContent(msg)
+			if content != nil {
+				s.notify(sessionID, SessionUpdate{
+					SessionUpdate: updateType,
+					MessageID:     msg.ID,
+					Content:       content,
+					Seq:           msg.Seq,
+					HistoryPage:   historyPage,
+				})
+			}
+		}
+		for _, call := range msg.ToolCalls {
+			callArgs := parseArgs(call.Function.Arguments)
+			s.notify(sessionID, SessionUpdate{
+				SessionUpdate: "tool_call",
+				ToolCallID:    call.ID,
+				Title:         toolTitle(call.Function.Name, callArgs),
+				Kind:          string(toolKind(call.Function.Name)),
+				Status:        string(ToolCallCompleted),
+				RawInput:      callArgs,
+				Locations:     toolLocations(cwd, callArgs),
+				Seq:           msg.Seq,
+				HistoryPage:   historyPage,
+			})
+		}
+		if msg.Role == llm.RoleTool && msg.ToolCallID != "" {
+			out, _ := msg.Content.(string)
+			s.notify(sessionID, SessionUpdate{
+				SessionUpdate: "tool_call_update",
+				ToolCallID:    msg.ToolCallID,
+				Status:        string(ToolCallCompleted),
+				RawOutput:     truncate(out, 64*1024),
+				Seq:           msg.Seq,
+				HistoryPage:   historyPage,
+			})
+		}
+	}
+}
+
+func (s *Server) handleSessionHistory(ctx context.Context, params json.RawMessage) (any, error) {
+	var req SessionHistoryParams
+	if err := json.Unmarshal(params, &req); err != nil {
+		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid session/history params"}
+	}
+	vs, err := s.sessions.Get(string(req.SessionId))
+	if err != nil {
+		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "session not found"}
+	}
+	msgs, err := s.sessionHistory(vs.ID)
+	if err != nil {
+		return SessionHistoryResult{}, nil
+	}
+	page, oldest, hasMore := paginateHistory(msgs, req.BeforeSeq, req.Limit)
+	s.emitHistoryMessages(string(req.SessionId), req.Cwd, page, true)
+	return SessionHistoryResult{OldestSeq: oldest, HasMore: hasMore}, nil
 }
 
 func (s *Server) handleSessionResume(ctx context.Context, params json.RawMessage) (any, error) {
@@ -370,6 +445,13 @@ func (s *Server) handleSessionList(ctx context.Context, params json.RawMessage) 
 	if size <= 0 || size > 200 {
 		size = 50
 	}
+	offset := req.Offset
+	if offset <= 0 && req.Cursor != "" {
+		offset, _ = strconv.Atoi(req.Cursor)
+	}
+	if offset < 0 {
+		offset = 0
+	}
 	filters := []query.Filter{
 		session.MainSessionsFilter(),
 		{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""},
@@ -378,7 +460,7 @@ func (s *Server) handleSessionList(ctx context.Context, params json.RawMessage) 
 		filters = append(filters, query.Filter{Column: "project_dir", Operator: query.OpEqual, Value: req.Cwd})
 	}
 	q := query.Query{
-		Page:    query.Page{Number: 1, Size: size},
+		Page:    query.Page{Number: offset/size + 1, Size: size},
 		Sort:    []query.Sort{{Column: "updated_at", Dir: query.Desc}},
 		Filters: filters,
 	}
@@ -404,8 +486,8 @@ func (s *Server) handleSessionList(ctx context.Context, params json.RawMessage) 
 	}
 
 	next := ""
-	if len(items) < total {
-		next = "1"
+	if offset+len(items) < total {
+		next = strconv.Itoa(offset + len(items))
 	}
 	return SessionListResult{Sessions: items, NextCursor: next}, nil
 }

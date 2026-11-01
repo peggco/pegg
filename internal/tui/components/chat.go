@@ -42,6 +42,7 @@ type ChatItem struct {
 	ToolArgs     string
 	ToolOutput   string
 	ToolErr      string
+	ToolDone     bool
 	Diff         []DiffHunk
 	WriteContent string
 
@@ -757,7 +758,7 @@ func (c *Chat) rebuildFlat(width int) {
 func (c *Chat) isLiveItem(it *ChatItem) bool {
 	switch it.Kind {
 	case ItemTool:
-		return it.ToolErr == "" && it.ToolOutput == ""
+		return !it.ToolDone && it.ToolErr == "" && it.ToolOutput == ""
 	case ItemSubagent:
 		return it.SubagentStatus == "" || it.SubagentStatus == "running"
 	case ItemThinking:
@@ -978,7 +979,7 @@ func (c *Chat) toolLines(it *ChatItem, width int) []Line {
 	isList := strings.Contains(it.ToolName, "todoread") || strings.Contains(it.ToolName, "todowrite")
 	isBash := strings.HasPrefix(it.ToolName, "bash:") || it.ToolName == "bash"
 	isAsk := it.ToolName == "askuserquestion"
-	isRunning := it.ToolErr == "" && it.ToolOutput == ""
+	isRunning := !it.ToolDone && it.ToolErr == "" && it.ToolOutput == ""
 
 	if isRunning {
 		left := c.toolStatusLine(it, width, '◌', th.Running, " "+string(spinnerAt(c.now))+" "+i18n.T("chat.status.running"))

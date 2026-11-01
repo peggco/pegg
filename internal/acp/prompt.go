@@ -38,6 +38,8 @@ type promptState struct {
 	textIDs   map[string]string
 	thoughtID map[string]string
 	oldFiles  map[string]string
+
+	toolPending map[string]map[string]bool
 }
 
 func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage, id any) (any, error) {
@@ -122,7 +124,9 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 	}
 
 	eventCh := make(chan agent.StreamEvent, 256)
+	streamDone := make(chan struct{})
 	go func() {
+		defer close(streamDone)
 		for ev := range eventCh {
 			s.handleStreamEvent(state, acpSess, ev)
 		}
@@ -147,6 +151,7 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 	}
 
 	close(eventCh)
+	<-streamDone
 	if acpSess.Agent != nil {
 		acpSess.Agent.Attachments = nil
 	}
