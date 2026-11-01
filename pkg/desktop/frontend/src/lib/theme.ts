@@ -77,12 +77,13 @@ export function fallbackTheme(): Theme {
     label: 'Dark',
     dark: true,
     tokens: {
-      '--pg-bg': '#18181b',
-      '--pg-sidebar': '#202023',
-      '--pg-surface': '#27272a',
+      '--pg-bg': '#0d0d0d',
+      '--pg-sidebar': '#0d0d0d',
+      '--pg-surface': '#141414',
       '--pg-text': '#fafafa',
-      '--pg-accent': '#3b82f6',
-      '--pg-border': '#3f3f46',
+      '--pg-accent': '#fafafa',
+      '--pg-accent-fg': '#0a0a0a',
+      '--pg-border': '#262626',
     },
   };
 }

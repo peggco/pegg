@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import {
   Command,
   FolderOpen,
+  GitBranch,
   Moon,
   Pencil,
   Search,
@@ -247,17 +248,16 @@ export function Sidebar() {
           >
             {theme?.dark ? <Sun size={15} /> : <Moon size={15} />}
             {theme?.dark ? t('nav.lightAppearance') : t('nav.darkAppearance')}
+            <span className={`switch${theme && !theme.dark ? ' on' : ''}`} aria-hidden="true" />
           </button>
-          <div className="account">
-            <span className="avatar">P</span>
-            <div className="account-text">
-              <div className="account-name">{t('nav.localWorkspace')}</div>
-              <div className="account-sub">{workspace ? shortPath(workspace, 28) : t('nav.noProject')}</div>
-            </div>
-            <button className="icon-btn" title="Settings" onClick={() => toggleSettings(true)}>
-              <Settings2 size={14} />
-            </button>
-          </div>
+          <button className="account" onClick={() => void chooseWorkspace()}>
+            <span className="avatar">{workspace ? (baseName(workspace)[0] ?? 'P').toUpperCase() : 'P'}</span>
+            <span className="account-text">
+              <span className="account-name">{t('nav.localWorkspace')}</span>
+              <span className="account-sub">{workspace ? shortPath(workspace, 28) : t('nav.noProject')}</span>
+            </span>
+            <GitBranch size={14} />
+          </button>
         </div>
       </div>
     </aside>
