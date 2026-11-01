@@ -86,6 +86,10 @@ type SlashCommand struct {
 	Description string `json:"description,omitempty"`
 }
 
+type SkillsReloadResult struct {
+	Commands []SlashCommand `json:"commands"`
+}
+
 type SessionLoadParams struct {
 	SessionID     string `json:"sessionId"`
 	Cwd           string `json:"cwd"`

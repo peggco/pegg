@@ -6,6 +6,7 @@ import {
   Pencil,
   Search,
   Settings2,
+  Sparkles,
   SquarePen,
   Sun,
   Trash2,
@@ -24,6 +25,7 @@ import {
   startNewChat,
   togglePalette,
   toggleSettings,
+  toggleSkills,
 } from '../state/actions';
 import { store, useStore } from '../state/store';
 import type { SessionListItem } from '../types';
@@ -118,6 +120,10 @@ export function Sidebar() {
             <span className="shortcut" title={workspace}>
               {workspace ? baseName(workspace).slice(0, 12) : ''}
             </span>
+          </button>
+          <button className="nav-item" onClick={() => toggleSkills(true)}>
+            <Sparkles size={15} />
+            {t('nav.skills')}
           </button>
           <button className="nav-item" onClick={() => toggleSettings(true)}>
             <Settings2 size={15} />

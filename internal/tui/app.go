@@ -100,6 +100,10 @@ type App struct {
 	ctrlCHint bool
 	errorMsg  string
 
+	hubMu    sync.Mutex
+	hubSeq   int
+	hubQuery string
+
 	mouseX int
 	mouseY int
 
@@ -333,6 +337,8 @@ func (a *App) build() {
 		skillItems = append(skillItems, components.ListItem{Label: sk.Name, Detail: sk.Description})
 	}
 	page.SetSkills(skillItems)
+	page.SetOnHubSearch(a.searchHubSkills)
+	page.SetOnHubInstall(a.installHubSkill)
 
 	var mentionItems []components.ListItem
 	for _, name := range agents.List() {

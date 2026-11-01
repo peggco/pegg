@@ -82,6 +82,10 @@ export function InstallBinary() {
   return window['go']['main']['App']['InstallBinary']();
 }
 
+export function InstallHubSkill(arg1, arg2, arg3) {
+  return window['go']['main']['App']['InstallHubSkill'](arg1, arg2, arg3);
+}
+
 export function ListModels(arg1) {
   return window['go']['main']['App']['ListModels'](arg1);
 }
@@ -158,6 +162,10 @@ export function RecordStop() {
   return window['go']['main']['App']['RecordStop']();
 }
 
+export function ReloadSkills() {
+  return window['go']['main']['App']['ReloadSkills']();
+}
+
 export function RemoveMCPServer(arg1) {
   return window['go']['main']['App']['RemoveMCPServer'](arg1);
 }
@@ -226,6 +234,14 @@ export function SearchFiles(arg1, arg2) {
   return window['go']['main']['App']['SearchFiles'](arg1, arg2);
 }
 
+export function SearchHubSkills(arg1, arg2) {
+  return window['go']['main']['App']['SearchHubSkills'](arg1, arg2);
+}
+
+export function SearchHubSkillsFiltered(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SearchHubSkillsFiltered'](arg1, arg2, arg3, arg4);
+}
+
 export function SendPrompt(arg1) {
   return window['go']['main']['App']['SendPrompt'](arg1);
 }
@@ -252,6 +268,10 @@ export function SetTheme(arg1, arg2) {
 
 export function SettingsSnapshot() {
   return window['go']['main']['App']['SettingsSnapshot']();
+}
+
+export function SkillReadme(arg1) {
+  return window['go']['main']['App']['SkillReadme'](arg1);
 }
 
 export function SlashCommands() {

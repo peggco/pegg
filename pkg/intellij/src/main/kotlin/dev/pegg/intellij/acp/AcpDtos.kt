@@ -62,6 +62,27 @@ data class PlanEntry(
 data class SlashCommand(val name: String, val description: String? = null)
 
 @Serializable
+data class HubSkill(
+    val name: String,
+    val skillId: String,
+    val source: String,
+    val official: Boolean = false,
+)
+
+@Serializable
+data class HubSkillsResult(
+    val items: List<HubSkill> = emptyList(),
+    val nextCursor: Int? = null,
+)
+
+@Serializable
+data class SkillInstallResult(
+    val name: String? = null,
+    val path: String? = null,
+    val commands: List<SlashCommand> = emptyList(),
+)
+
+@Serializable
 data class Cost(val amount: Double, val currency: String? = null)
 
 @Serializable

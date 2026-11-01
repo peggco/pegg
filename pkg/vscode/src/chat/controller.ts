@@ -344,6 +344,35 @@ export class ChatController extends EventEmitter {
     return result.models ?? [];
   }
 
+  async searchHubSkills(
+    query: string,
+    limit = 8,
+  ): Promise<Array<{ name: string; skillId: string; source: string; official?: boolean }>> {
+    await this.ensureStarted();
+    const result = await this.client!.request<{
+      items?: Array<{ name: string; skillId: string; source: string; official?: boolean }>;
+    }>('pegg/skills/search', { query, limit }, 30000);
+    return result.items ?? [];
+  }
+
+  async installHubSkill(
+    source: string,
+    skillId: string,
+    scope = 'global',
+  ): Promise<{ name?: string; path?: string }> {
+    await this.ensureStarted();
+    const result = await this.client!.request<{
+      name?: string;
+      path?: string;
+      commands?: Array<{ name: string; description?: string }>;
+    }>('pegg/skills/install', { source, skillId, scope }, 120000);
+    if (result.commands?.length) {
+      this.state = { ...this.state, commands: result.commands };
+      this.emitState();
+    }
+    return result;
+  }
+
   async startVoice(): Promise<void> {
     if (this.voiceStart) throw new Error('A recording is already in progress.');
     this.voiceStart = (async () => {

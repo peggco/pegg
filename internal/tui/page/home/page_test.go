@@ -607,3 +607,39 @@ func TestDismissPickersKeepsPickerClosed(t *testing.T) {
 		t.Fatal("picker should stay closed for the same token")
 	}
 }
+
+func TestHomeHubPickerFallbackAndInstall(t *testing.T) {
+	p := New()
+	p.SetSkills([]components.ListItem{{Label: "review", Detail: "local"}})
+
+	var searched []string
+	p.SetOnHubSearch(func(query string) { searched = append(searched, query) })
+	var installed [][3]string
+	p.SetOnHubInstall(func(source, skillID, name string) {
+		installed = append(installed, [3]string{source, skillID, name})
+	})
+
+	for _, r := range "/grill" {
+		p.HandleKey(tcell.NewEventKey(tcell.KeyRune, r, 0))
+	}
+	if len(searched) == 0 || searched[len(searched)-1] != "grill" {
+		t.Fatalf("hub search queries = %v, want last 'grill'", searched)
+	}
+
+	p.SetHubItems([]components.ListItem{{
+		Label:  "grill-me",
+		Detail: "mattpocock/skills · hub",
+		Data:   "hub|mattpocock/skills|grill-me",
+	}})
+	if p.PickCount() == 0 {
+		t.Fatal("hub picker should show remote results")
+	}
+
+	p.HandleKey(tcell.NewEventKey(tcell.KeyEnter, 0, 0))
+	if len(installed) != 1 {
+		t.Fatalf("installed = %v, want one install request", installed)
+	}
+	if got := installed[0]; got[0] != "mattpocock/skills" || got[1] != "grill-me" || got[2] != "grill-me" {
+		t.Fatalf("install request = %v", got)
+	}
+}

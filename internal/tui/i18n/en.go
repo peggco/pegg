@@ -139,9 +139,11 @@ var en = map[string]string{
 	"home.hint.newline":  "press Ctrl+J to add a new line at the end",
 	"home.hint.clear":    "press Ctrl+C to clear the input (twice to quit)",
 
-	"home.picker.skills":   "Skills — type to filter",
-	"home.picker.mentions": "Mentions — type to filter",
-	"home.attachment":      "attachment",
+	"home.picker.skills":       "Skills — type to filter",
+	"home.picker.mentions":     "Mentions — type to filter",
+	"home.picker.hub":          "Hub skills — select to install",
+	"home.picker.hubSearching": "Searching the hub…",
+	"home.attachment":          "attachment",
 
 	"chat.activity.reading":   "Reading %s",
 	"chat.activity.writing":   "Writing %s",

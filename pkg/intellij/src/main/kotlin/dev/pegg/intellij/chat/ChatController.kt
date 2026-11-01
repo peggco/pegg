@@ -14,6 +14,8 @@ import dev.pegg.intellij.acp.AskParams
 import dev.pegg.intellij.acp.ChatItem
 import dev.pegg.intellij.acp.ChatState
 import dev.pegg.intellij.acp.ContentBlock
+import dev.pegg.intellij.acp.HubSkill
+import dev.pegg.intellij.acp.HubSkillsResult
 import dev.pegg.intellij.acp.InitializeResult
 import dev.pegg.intellij.acp.ModelListResult
 import dev.pegg.intellij.acp.PeggCapabilities
@@ -26,6 +28,7 @@ import dev.pegg.intellij.acp.SessionListItem
 import dev.pegg.intellij.acp.SessionListResult
 import dev.pegg.intellij.acp.SessionNewResult
 import dev.pegg.intellij.acp.SessionUpdate
+import dev.pegg.intellij.acp.SkillInstallResult
 import dev.pegg.intellij.acp.UsageState
 import dev.pegg.intellij.acp.VoiceResult
 import dev.pegg.intellij.acp.textOf
@@ -441,6 +444,33 @@ class ChatController(
             throw IllegalStateException("This Pegg binary does not support model listing. Update the Pegg binary first.")
         }
         return request<ModelListResult>("pegg/models", buildJsonObject { }, 60_000).models
+    }
+
+    suspend fun searchHubSkills(query: String, limit: Int = 8): List<HubSkill> {
+        ensureStarted()
+        val params = buildJsonObject {
+            put("query", query)
+            put("limit", limit)
+        }
+        return request<HubSkillsResult>("pegg/skills/search", params, 30_000).items
+    }
+
+    suspend fun installHubSkill(source: String, skillId: String, scope: String = "global"): SkillInstallResult {
+        ensureStarted()
+        val params = buildJsonObject {
+            put("source", source)
+            put("skillId", skillId)
+            put("scope", scope)
+        }
+        val result = request<SkillInstallResult>("pegg/skills/install", params, 120_000)
+        if (result.commands.isNotEmpty()) {
+            synchronized(stateLock) {
+                state.commands.clear()
+                state.commands.addAll(result.commands)
+            }
+            emitState()
+        }
+        return result
     }
 
     suspend fun startVoice() {

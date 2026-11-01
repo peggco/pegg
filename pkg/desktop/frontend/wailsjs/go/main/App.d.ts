@@ -47,6 +47,8 @@ export function ForkSession(arg1:string,arg2:string,arg3:number):Promise<acpclie
 
 export function InstallBinary():Promise<binary.Status>;
 
+export function InstallHubSkill(arg1:string,arg2:string,arg3:string):Promise<main.SkillMutationResult>;
+
 export function ListModels(arg1:string):Promise<acpclient.ModelListResult>;
 
 export function ListSessions(arg1:string,arg2:boolean):Promise<acpclient.SessionListResult>;
@@ -85,6 +87,8 @@ export function RecordStart():Promise<void>;
 
 export function RecordStop():Promise<acpclient.STTResult>;
 
+export function ReloadSkills():Promise<Array<acpclient.SlashCommand>>;
+
 export function RemoveMCPServer(arg1:string):Promise<void>;
 
 export function RemoveProvider(arg1:string):Promise<void>;
@@ -119,6 +123,10 @@ export function SavePrefsOnly(arg1:prefs.Prefs):Promise<prefs.Prefs>;
 
 export function SearchFiles(arg1:string,arg2:number):Promise<Array<string>>;
 
+export function SearchHubSkills(arg1:string,arg2:number):Promise<Array<main.HubSkill>>;
+
+export function SearchHubSkillsFiltered(arg1:string,arg2:number,arg3:string,arg4:number):Promise<main.HubSearchResult>;
+
 export function SendPrompt(arg1:main.PromptRequest):Promise<acpclient.SessionPromptResult>;
 
 export function SetBinaryPath(arg1:string):Promise<binary.Status>;
@@ -132,6 +140,8 @@ export function SetReasoningEffort(arg1:string,arg2:string,arg3:string,arg4:stri
 export function SetTheme(arg1:string,arg2:string):Promise<prefs.Prefs>;
 
 export function SettingsSnapshot():Promise<main.SettingsSnapshot>;
+
+export function SkillReadme(arg1:string):Promise<string>;
 
 export function SlashCommands():Promise<Array<acpclient.SlashCommand>>;
 

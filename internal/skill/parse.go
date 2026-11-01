@@ -24,6 +24,10 @@ type frontmatter struct {
 	Context       string            `yaml:"context"`
 }
 
+func ParseFile(path, source string) (*Skill, error) {
+	return parseSKILL(path, source)
+}
+
 func parseSKILL(path, source string) (*Skill, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

@@ -44,6 +44,7 @@ export interface UIState {
   subagentView: string | null;
   sidebarCollapsed: boolean;
   settingsOpen: boolean;
+  skillsOpen: boolean;
   paletteOpen: boolean;
   modelsOpen: boolean;
   themePickerOpen: boolean;
@@ -87,6 +88,7 @@ export const initialState: UIState = {
   subagentView: null,
   sidebarCollapsed: false,
   settingsOpen: false,
+  skillsOpen: false,
   paletteOpen: false,
   modelsOpen: false,
   themePickerOpen: false,

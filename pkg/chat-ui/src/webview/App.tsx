@@ -51,6 +51,30 @@ interface ModelsMessage {
   models: ModelEntry[];
 }
 
+interface HubSkillEntry {
+  name: string;
+  skillId: string;
+  source: string;
+  url?: string;
+  license?: string;
+  official?: boolean;
+}
+
+interface HubSkillsMessage {
+  type: 'hubSkills';
+  requestId: string;
+  items?: HubSkillEntry[];
+  error?: string;
+}
+
+interface HubSkillInstalledMessage {
+  type: 'hubSkillInstalled';
+  requestId: string;
+  ok: boolean;
+  name?: string;
+  error?: string;
+}
+
 type Incoming =
   | StateMessage
   | TranscriptMessage
@@ -58,7 +82,9 @@ type Incoming =
   | RecordingMessage
   | VoiceErrorMessage
   | ComposerTextMessage
-  | ModelsMessage;
+  | ModelsMessage
+  | HubSkillsMessage
+  | HubSkillInstalledMessage;
 
 interface PopupState {
   kind: 'mention' | 'command';
@@ -68,10 +94,13 @@ interface PopupState {
 }
 
 interface Suggestion {
-  kind: 'file' | 'command';
+  kind: 'file' | 'command' | 'hub';
   value: string;
   label: string;
   detail: string;
+  source?: string;
+  skillId?: string;
+  official?: boolean;
 }
 
 type ComposerPickerState =
@@ -128,6 +157,12 @@ export function App() {
   const [menu, setMenu] = useState<{ item: ChatItem; rect: DOMRect } | null>(null);
   const [agentView, setAgentView] = useState<{ id: string; name?: string } | null>(null);
   const [models, setModels] = useState<ModelEntry[]>([]);
+  const [hubSkills, setHubSkills] = useState<HubSkillEntry[]>([]);
+  const [hubLoading, setHubLoading] = useState(false);
+  const [hubInstalling, setHubInstalling] = useState<string | null>(null);
+  const hubRequest = useRef('');
+  const hubInstall = useRef<{ requestId: string; name: string; anchor: number } | null>(null);
+  const hubSeq = useRef(0);
   const [composerPicker, setComposerPicker] = useState<ComposerPickerState | null>(null);
   const inlinePickers = (window as unknown as { __peggInlinePickers?: boolean }).__peggInlinePickers === true;
 
@@ -235,12 +270,38 @@ export function App() {
       } else if (data.type === 'models') {
         setModels(data.models);
         setComposerPicker((current) => current?.kind === 'model' ? { ...current, loading: false } : current);
+      } else if (data.type === 'hubSkills') {
+        if (data.requestId !== hubRequest.current) return;
+        setHubSkills(data.items ?? []);
+        setHubLoading(false);
+      } else if (data.type === 'hubSkillInstalled') {
+        const pending = hubInstall.current;
+        if (!pending || pending.requestId !== data.requestId) return;
+        hubInstall.current = null;
+        setHubInstalling(null);
+        if (!data.ok) {
+          setLocalError(data.error ?? 'Could not install skill');
+          return;
+        }
+        const name = data.name ?? pending.name;
+        const current = textRef.current;
+        const el = textarea.current;
+        const caret = el?.selectionStart ?? current.length;
+        const start = Math.min(pending.anchor, current.length);
+        const end = Math.max(start + 1, caret);
+        const replacement = `/${name} `;
+        const next = `${current.slice(0, start)}${replacement}${current.slice(end)}`;
+        textRef.current = next;
+        setText(next);
+        setPopup(null);
+        setLocalError('');
+        setCaret(start + replacement.length);
       }
     };
     window.addEventListener('message', onMessage);
     host.postMessage({ type: 'ready' });
     return () => window.removeEventListener('message', onMessage);
-  }, [insertText]);
+  }, [insertText, setCaret]);
 
   useEffect(() => {
     if (!menu) return;
@@ -295,11 +356,45 @@ export function App() {
 
   const pendingIds = useMemo(() => new Set(state.pending.map((p) => p.id)), [state.pending]);
   const commandList = state.commands.length > 0 ? state.commands : fallbackCommands;
-  const activeSuggestions = useMemo(() => buildSuggestions(popup, files, commandList), [popup, files, commandList]);
+  const localSuggestions = useMemo(() => buildSuggestions(popup, files, commandList), [popup, files, commandList]);
+  const hubSuggestions = useMemo<Suggestion[]>(
+    () =>
+      hubSkills.map((skill) => ({
+        kind: 'hub' as const,
+        value: skill.name,
+        label: `/${skill.name}`,
+        detail: skill.source,
+        source: skill.source,
+        skillId: skill.skillId,
+        official: skill.official,
+      })),
+    [hubSkills],
+  );
+  const activeSuggestions = useMemo(
+    () => (localSuggestions.length > 0 ? localSuggestions : hubSuggestions),
+    [localSuggestions, hubSuggestions],
+  );
 
   useEffect(() => {
     selectedRow.current?.scrollIntoView({ block: 'nearest' });
   }, [popup?.selected, activeSuggestions.length]);
+
+  const hubQuery = popup?.kind === 'command' ? popup.query.trim() : '';
+
+  useEffect(() => {
+    if (!popup || popup.kind !== 'command' || localSuggestions.length > 0 || hubQuery.length < 2) {
+      setHubSkills([]);
+      setHubLoading(false);
+      return;
+    }
+    setHubLoading(true);
+    const timer = window.setTimeout(() => {
+      const requestId = `hub-${++hubSeq.current}`;
+      hubRequest.current = requestId;
+      host.postMessage({ type: 'searchHubSkills', requestId, query: hubQuery });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [popup?.kind, hubQuery, localSuggestions.length]);
 
   function onScroll() {
     const el = messages.current;
@@ -332,6 +427,20 @@ export function App() {
 
   function chooseSuggestion(item: Suggestion) {
     if (!popup) return;
+    if (item.kind === 'hub') {
+      if (!item.source || !item.skillId) return;
+      const requestId = `install-${++hubSeq.current}`;
+      hubInstall.current = { requestId, name: item.value, anchor: popup.anchor };
+      setHubInstalling(requestId);
+      setLocalError('');
+      host.postMessage({
+        type: 'installHubSkill',
+        requestId,
+        source: item.source,
+        skillId: item.skillId,
+      });
+      return;
+    }
     const el = textarea.current;
     const caret = el?.selectionStart ?? textRef.current.length;
     const current = textRef.current;
@@ -576,7 +685,7 @@ export function App() {
         </div>
 
         <div className="composer">
-        {popup && activeSuggestions.length > 0 && (
+        {popup && (activeSuggestions.length > 0 || hubLoading) && (
           <div className="suggestions-popup" role="listbox">
             {activeSuggestions.map((item, index) => (
               <button
@@ -589,10 +698,19 @@ export function App() {
                 onClick={() => chooseSuggestion(item)}
               >
                 {item.kind === 'file' ? <FileBadge path={item.value} /> : <CommandBadge />}
+                {item.kind === 'hub' ? <span className="hub-badge">Hub</span> : null}
                 <span className="suggestion-name">{item.label}</span>
-                <span className="suggestion-detail">{item.detail}</span>
+                <span className="suggestion-detail">
+                  {item.kind === 'hub' && hubInstalling ? 'Installing…' : item.detail}
+                </span>
               </button>
             ))}
+            {hubLoading && activeSuggestions.length === 0 ? (
+              <div className="suggestion-row hub-loading">
+                <span className="spinner" />
+                <span className="suggestion-detail">Searching the hub…</span>
+              </div>
+            ) : null}
           </div>
         )}
 

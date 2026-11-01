@@ -139,9 +139,11 @@ var tr = map[string]string{
 	"home.hint.newline":  "Sona yeni satır eklemek için Ctrl+J'ye basın",
 	"home.hint.clear":    "Input'u temizlemek için Ctrl+C'ye basın (çıkmak için iki kez)",
 
-	"home.picker.skills":   "Beceriler — filtrelemek için yazın",
-	"home.picker.mentions": "Etiketler — filtrelemek için yazın",
-	"home.attachment":      "ek",
+	"home.picker.skills":       "Beceriler — filtrelemek için yazın",
+	"home.picker.mentions":     "Etiketler — filtrelemek için yazın",
+	"home.picker.hub":          "Hub becerileri — kurmak için seçin",
+	"home.picker.hubSearching": "Hub üzerinde aranıyor…",
+	"home.attachment":          "ek",
 
 	"chat.activity.reading":   "%s okunuyor",
 	"chat.activity.writing":   "%s yazılıyor",

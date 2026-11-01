@@ -128,6 +128,7 @@ func (c *CLI) registerDefaultCommands() {
 			c.newProviderCommand(),
 			c.newTeamCommand(),
 			c.newModelsCommand(),
+			c.newSkillsCommand(),
 			c.newDoctorCommand(),
 			c.newConfigCommand(),
 			c.newSessionCommand(),
