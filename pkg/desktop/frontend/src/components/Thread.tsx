@@ -368,12 +368,6 @@ function AssistantMessage({
   const html = renderMarkdown(item.text);
   return (
     <div className="msg msg-assistant">
-      {item.agentName ? (
-        <div className="assistant-meta">
-          <span className="agent-dot" />
-          <span className="agent-tag">@{item.agentName}</span>
-        </div>
-      ) : null}
       <div
         className={`assistant-text md${streaming ? ' is-streaming' : ''}`}
         dangerouslySetInnerHTML={{ __html: html }}
