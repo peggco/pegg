@@ -416,6 +416,18 @@ func (c *Client) Request(ctx context.Context, method string, params any) (json.R
 	}
 }
 
+func (c *Client) ReloadSkills(ctx context.Context, workspace string) ([]SlashCommand, error) {
+	raw, err := c.Request(ctx, "pegg/skills/reload", map[string]string{"workspace": workspace})
+	if err != nil {
+		return nil, err
+	}
+	var res SkillsReloadResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, err
+	}
+	return res.Commands, nil
+}
+
 func (c *Client) Notify(method string, params any) error {
 	msg := map[string]any{"jsonrpc": "2.0", "method": method}
 	if params != nil {

@@ -21,7 +21,9 @@ import dev.pegg.intellij.PeggService
 import dev.pegg.intellij.acp.ACP_JSON
 import dev.pegg.intellij.acp.ChatSettings
 import dev.pegg.intellij.acp.ChatState
+import dev.pegg.intellij.acp.HubSkill
 import dev.pegg.intellij.acp.ModelEntry
+import dev.pegg.intellij.acp.SkillInstallResult
 import dev.pegg.intellij.chat.Attachments
 import dev.pegg.intellij.chat.ContextBuilder
 import dev.pegg.intellij.log.PeggLog
@@ -275,6 +277,25 @@ class ChatWebView(
                         .onFailure { showError(it) }
                 }
             }
+            "searchHubSkills" -> {
+                val requestId = obj["requestId"]?.jsonPrimitive?.contentOrNull ?: return
+                val query = obj["query"]?.jsonPrimitive?.contentOrNull ?: ""
+                service.scope.launch {
+                    runCatching { controller.searchHubSkills(query) }
+                        .onSuccess { postHubSkills(requestId, it) }
+                        .onFailure { postHubSkillsError(requestId, it) }
+                }
+            }
+            "installHubSkill" -> {
+                val requestId = obj["requestId"]?.jsonPrimitive?.contentOrNull ?: return
+                val source = obj["source"]?.jsonPrimitive?.contentOrNull ?: return
+                val skillId = obj["skillId"]?.jsonPrimitive?.contentOrNull ?: return
+                service.scope.launch {
+                    runCatching { controller.installHubSkill(source, skillId, "global") }
+                        .onSuccess { postHubSkillInstalled(requestId, it) }
+                        .onFailure { postHubSkillInstalledError(requestId, it) }
+                }
+            }
             "pickFiles" -> ApplicationManager.getApplication().invokeLater { chooseFiles() }
             "removeAttachment" -> {
                 val id = obj["id"]?.jsonPrimitive?.contentOrNull ?: return
@@ -405,6 +426,48 @@ class ChatWebView(
         postJson(buildJsonObject {
             put("type", "models")
             put("models", array)
+        }.toString())
+    }
+
+    private fun postHubSkills(requestId: String, skills: List<HubSkill>) {
+        val array = JsonArray(skills.map { skill ->
+            buildJsonObject {
+                put("name", skill.name)
+                put("skillId", skill.skillId)
+                put("source", skill.source)
+                put("official", skill.official)
+            }
+        })
+        postJson(buildJsonObject {
+            put("type", "hubSkills")
+            put("requestId", requestId)
+            put("items", array)
+        }.toString())
+    }
+
+    private fun postHubSkillsError(requestId: String, error: Throwable) {
+        postJson(buildJsonObject {
+            put("type", "hubSkills")
+            put("requestId", requestId)
+            put("error", error.message ?: error.javaClass.simpleName)
+        }.toString())
+    }
+
+    private fun postHubSkillInstalled(requestId: String, result: SkillInstallResult) {
+        postJson(buildJsonObject {
+            put("type", "hubSkillInstalled")
+            put("requestId", requestId)
+            put("ok", true)
+            result.name?.let { put("name", it) }
+        }.toString())
+    }
+
+    private fun postHubSkillInstalledError(requestId: String, error: Throwable) {
+        postJson(buildJsonObject {
+            put("type", "hubSkillInstalled")
+            put("requestId", requestId)
+            put("ok", false)
+            put("error", error.message ?: error.javaClass.simpleName)
         }.toString())
     }
 

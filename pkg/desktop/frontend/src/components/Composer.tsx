@@ -7,13 +7,15 @@ import {
   cancelPrompt,
   changeMode,
   changeModel,
+  errorText,
+  installHubSkill,
   loadModels,
   sendPrompt,
   toggleRecording,
 } from '../state/actions';
 import { store, useStore } from '../state/store';
 import { useT } from '../lib/i18n';
-import type { Attachment, PromptAttachment } from '../types';
+import type { Attachment, HubSkill, PromptAttachment } from '../types';
 
 type Menu = 'mode' | 'model' | null;
 
@@ -65,6 +67,8 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
   const [dragging, setDragging] = useState(false);
   const [menu, setMenu] = useState<Menu>(null);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [remoteSkills, setRemoteSkills] = useState<HubSkill[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const [mentionFiles, setMentionFiles] = useState<string[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -83,6 +87,39 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
     return merged.filter((c) => c.name.toLowerCase().includes(slashQuery));
   }, [commands, catalog, slashQuery]);
 
+  const slashCount = slashItems.length + remoteSkills.length;
+
+  const searchRemote =
+    slashQuery !== null && !mention && slashItems.length === 0 && slashQuery.trim().length >= 2;
+
+  useEffect(() => {
+    if (!searchRemote) {
+      setRemoteSkills([]);
+      setRemoteLoading(false);
+      return;
+    }
+    const query = slashQuery!.trim();
+    let alive = true;
+    setRemoteLoading(true);
+    const timer = window.setTimeout(() => {
+      api
+        .SearchHubSkills(query, 8)
+        .then((items) => {
+          if (alive) setRemoteSkills(items);
+        })
+        .catch(() => {
+          if (alive) setRemoteSkills([]);
+        })
+        .finally(() => {
+          if (alive) setRemoteLoading(false);
+        });
+    }, 300);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [searchRemote, slashQuery]);
+
   useEffect(() => {
     if (autoFocus && textareaRef.current) textareaRef.current.focus();
   }, [autoFocus]);
@@ -94,6 +131,10 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
   useEffect(() => {
     setSlashIndex(0);
   }, [slashQuery]);
+
+  useEffect(() => {
+    if (slashIndex >= slashCount && slashCount > 0) setSlashIndex(0);
+  }, [slashIndex, slashCount]);
 
   useEffect(() => {
     setMentionIndex(0);
@@ -127,7 +168,7 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
 
   useEffect(() => {
     slashRefs.current[slashIndex]?.scrollIntoView({ block: 'nearest' });
-  }, [slashIndex, slashItems.length]);
+  }, [slashIndex, slashCount]);
 
   const refreshMention = (value: string, caret: number) => {
     const before = value.slice(0, caret);
@@ -164,6 +205,29 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
         );
       })
       .catch(() => undefined);
+  };
+
+  const pickSlash = (index: number) => {
+    if (index < slashItems.length) {
+      const item = slashItems[index];
+      if (item) {
+        setText(`/${item.name} `);
+        textareaRef.current?.focus();
+      }
+      return;
+    }
+    const skill = remoteSkills[index - slashItems.length];
+    if (!skill) return;
+    void (async () => {
+      try {
+        await installHubSkill(skill.source, skill.skillId, 'global');
+        setText(`/${skill.name} `);
+        setRemoteSkills([]);
+        textareaRef.current?.focus();
+      } catch (err) {
+        store.toast('error', errorText(err));
+      }
+    })();
   };
 
   useEffect(() => {
@@ -256,21 +320,17 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
       pickMention(mentionFiles[mentionIndex]);
       return;
     }
-    if (slashItems.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    if (slashCount > 0 && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
       event.preventDefault();
       setSlashIndex((i) => {
         const next = event.key === 'ArrowDown' ? i + 1 : i - 1;
-        return (next + slashItems.length) % slashItems.length;
+        return (next + slashCount) % slashCount;
       });
       return;
     }
-    if (slashItems.length && event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+    if (slashCount > 0 && event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
       event.preventDefault();
-      const item = slashItems[slashIndex];
-      if (item) {
-        setText(`/${item.name} `);
-        textareaRef.current?.focus();
-      }
+      pickSlash(slashIndex);
       return;
     }
     const send = event.key === 'Enter' && !event.shiftKey && (event.metaKey || event.ctrlKey || sendOnEnter);
@@ -371,7 +431,7 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
         </div>
       ) : null}
 
-      {slashItems.length && !mention ? (
+      {(slashItems.length || remoteSkills.length || remoteLoading) && !mention ? (
         <div className="slash-menu" role="listbox" aria-label="Slash commands">
           {slashItems.map((item, index) => (
             <button
@@ -382,14 +442,41 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
               className={`slash-item command${index === slashIndex ? ' active' : ''}`}
               onMouseDown={(event) => {
                 event.preventDefault();
-                setText(`/${item.name} `);
-                textareaRef.current?.focus();
+                pickSlash(index);
               }}
             >
               <span className="cmd">/{item.name}</span>
               <span className="desc">{item.description}</span>
             </button>
           ))}
+          {!slashItems.length && remoteLoading && !remoteSkills.length ? (
+            <div className="slash-loading">
+              <span className="spinner" /> {t('common.loading')}
+            </div>
+          ) : null}
+          {remoteSkills.map((item, index) => {
+            const itemIndex = slashItems.length + index;
+            return (
+              <button
+                key={`${item.source}-${item.skillId}`}
+                ref={(el) => {
+                  slashRefs.current[itemIndex] = el;
+                }}
+                className={`slash-item command hub${itemIndex === slashIndex ? ' active' : ''}`}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  pickSlash(itemIndex);
+                }}
+              >
+                <span className="cmd">/{item.name}</span>
+                <span className="desc">
+                  {item.source}
+                  <span className="hub-badge">{t('skills.hub')}</span>
+                  <span className="hub-hint">{t('skills.fromHub')}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       ) : null}
 

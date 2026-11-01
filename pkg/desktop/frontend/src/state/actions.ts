@@ -4,9 +4,12 @@ import type {
   Attachment,
   BinaryProgress,
   ModelEntry,
+  HubSearchResult,
+  HubSkill,
   PromptAttachment,
   SessionListItem,
   SessionUpdate,
+  SlashCommand,
   Theme,
 } from '../types';
 import { resolveTheme, applyTheme } from '../lib/theme';
@@ -694,6 +697,39 @@ export function closeSubagent(): void {
 
 export function toggleSettings(open?: boolean): void {
   store.set((s) => ({ settingsOpen: open ?? !s.settingsOpen }));
+}
+
+export function toggleSkills(open?: boolean): void {
+  store.set((s) => ({ skillsOpen: open ?? !s.skillsOpen }));
+}
+
+export async function searchHubSkills(query: string, limit = 20): Promise<HubSkill[]> {
+  return api.SearchHubSkills(query, limit);
+}
+
+export async function searchHubSkillsFiltered(
+  query: string,
+  limit: number,
+  filter: string,
+  cursor = 0,
+): Promise<HubSearchResult> {
+  return api.SearchHubSkillsFiltered(query, limit, filter, cursor);
+}
+
+export async function fetchSkillReadme(source: string): Promise<string> {
+  return api.SkillReadme(source);
+}
+
+function applySkillCommands(commands?: SlashCommand[]): void {
+  if (!commands?.length) return;
+  store.setChat((chat) => ({ ...chat, commands }));
+}
+
+export async function installHubSkill(source: string, skillId: string, scope: string): Promise<string> {
+  const res = await api.InstallHubSkill(source, skillId, scope);
+  applySkillCommands(res.commands);
+  store.toast('success', `Installed ${skillId} (${scope})`);
+  return res.path ?? '';
 }
 
 export function togglePalette(open?: boolean): void {

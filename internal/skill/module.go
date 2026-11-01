@@ -15,6 +15,22 @@ import (
 const agentsSkillsDir = ".agents/skills"
 
 func SkillModule(log *logger.Logger) error {
+	if err := loadAll(log, ""); err != nil {
+		return err
+	}
+	agent.OnMessageInput(ExpandMessage)
+	return nil
+}
+
+func Reload() error {
+	return loadAll(nil, "")
+}
+
+func ReloadForProject(projectDir string) error {
+	return loadAll(nil, projectDir)
+}
+
+func loadAll(log *logger.Logger, projectDir string) error {
 	peggSkills, err := config.GetConfigPath("skills")
 	if err != nil {
 		return err
@@ -27,14 +43,24 @@ func SkillModule(log *logger.Logger) error {
 		return fmt.Errorf("skill: home dir: %w", err)
 	}
 	dirs := []string{filepath.Join(home, agentsSkillsDir), peggSkills}
-	dirs = append(dirs, config.ProjectReadPaths("skills")...)
+	if projectDir != "" {
+		dirs = append(dirs, filepath.Join(projectDir, ".pegg", "skills"))
+	} else {
+		dirs = append(dirs, config.ProjectReadPaths("skills")...)
+	}
+	resetRegistry()
 	for _, dir := range dirs {
 		if err := LoadDir(dir, dir); err != nil {
 			warn(log, "skill: skip %s: %v", dir, err)
 		}
 	}
-	agent.OnMessageInput(ExpandMessage)
 	return nil
+}
+
+func resetRegistry() {
+	reg.mu.Lock()
+	reg.skills = make(map[string]*Skill)
+	reg.mu.Unlock()
 }
 
 func warn(log *logger.Logger, format string, args ...any) {

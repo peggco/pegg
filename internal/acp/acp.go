@@ -264,6 +264,12 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleSessionList(ctx, params)
 	case "pegg/models":
 		result, handlerErr = s.handleListModels(ctx, params)
+	case "pegg/skills/reload":
+		result, handlerErr = s.handleSkillsReload(ctx, params)
+	case "pegg/skills/search":
+		result, handlerErr = s.handleSkillsSearch(ctx, params)
+	case "pegg/skills/install":
+		result, handlerErr = s.handleSkillsInstall(ctx, params)
 	case "stt/transcribe":
 		result, handlerErr = s.handleSTTTranscribe(ctx, params)
 	case "stt/record/start":

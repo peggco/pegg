@@ -2,6 +2,7 @@ package connect
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -9,10 +10,81 @@ import (
 
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/skill"
+	"github.com/peggco/pegg/internal/skillhub"
 )
 
 func (c *Connector) registerSkillMethods() {
 	c.dispatch.register("settings.skills.list", ScopeSettingsRead, c.handleSkillsList)
+	c.dispatch.register("settings.skills.search", ScopeSettingsRead, c.handleSkillsSearch)
+	c.dispatch.register("settings.skills.install", ScopeSettingsWrite, c.handleSkillsInstall)
+}
+
+type skillSearchParams struct {
+	Query  string `json:"query"`
+	Limit  int    `json:"limit"`
+	Filter string `json:"filter,omitempty"`
+	Cursor int    `json:"cursor,omitempty"`
+}
+
+func (c *Connector) handleSkillsSearch(ctx context.Context, req *Request) (any, error) {
+	var p skillSearchParams
+	_ = req.Decode(&p)
+	opts := skillhub.SearchOptions{Query: p.Query, Limit: p.Limit, Cursor: p.Cursor}
+	switch strings.ToLower(strings.TrimSpace(p.Filter)) {
+	case "official":
+		value := true
+		opts.Official = &value
+	case "community":
+		value := false
+		opts.Official = &value
+	}
+	res, err := skillhub.NewClient().SearchPage(ctx, opts)
+	if err != nil {
+		return nil, &FrameError{Code: ErrCodeInternal, Message: "search skills: " + err.Error()}
+	}
+	return map[string]any{"items": res.Items, "nextCursor": res.NextCursor}, nil
+}
+
+type skillInstallParams struct {
+	Source  string `json:"source"`
+	SkillID string `json:"skillId"`
+	Scope   string `json:"scope,omitempty"`
+}
+
+func (c *Connector) handleSkillsInstall(ctx context.Context, req *Request) (any, error) {
+	var p skillInstallParams
+	if err := req.Decode(&p); err != nil {
+		return nil, &FrameError{Code: ErrCodeBadRequest, Message: "invalid params: " + err.Error()}
+	}
+	spec := skillhub.Spec{Source: strings.TrimSpace(p.Source), SkillID: strings.TrimSpace(p.SkillID)}
+	if spec.Source == "" || spec.SkillID == "" {
+		return nil, &FrameError{Code: ErrCodeBadRequest, Message: "source and skillId are required"}
+	}
+	dir, err := c.skillInstallDir(p.Scope)
+	if err != nil {
+		return nil, err
+	}
+	installed, err := skillhub.Install(ctx, skillhub.NewClient(), spec, dir)
+	if err != nil {
+		return nil, &FrameError{Code: ErrCodeInternal, Message: "install skill: " + err.Error()}
+	}
+	_ = skill.Reload()
+	return map[string]any{"name": installed.Name, "path": installed.Path}, nil
+}
+
+func (c *Connector) skillInstallDir(scope string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case "", "global":
+		return config.GetConfigPath("skills")
+	case "project":
+		root := strings.TrimSpace(c.workspace())
+		if root == "" {
+			return "", errors.New("no workspace available")
+		}
+		return filepath.Join(root, ".pegg", "skills"), nil
+	default:
+		return "", errors.New("scope must be global or project")
+	}
 }
 
 func (c *Connector) handleSkillsList(_ context.Context, _ *Request) (any, error) {

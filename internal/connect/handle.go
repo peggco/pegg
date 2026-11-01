@@ -216,7 +216,7 @@ func normalizeScopes(scopes []string) []string {
 }
 
 func (c *Connector) capabilities() []string {
-	return []string{"chat", "sessions", "settings", "models", "streaming", "parallel-runs"}
+	return []string{"chat", "sessions", "settings", "skills", "models", "streaming", "parallel-runs"}
 }
 
 func (c *Connector) methodAllowed(method string) bool {

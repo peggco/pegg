@@ -454,3 +454,22 @@ export interface MCPServerInput {
   url: string;
   headers: Record<string, string>;
 }
+
+export interface HubSkill {
+  name: string;
+  skillId: string;
+  source: string;
+  url: string;
+  license?: string;
+  official: boolean;
+}
+
+export interface HubSearchResult {
+  items: HubSkill[];
+  nextCursor?: number | null;
+}
+
+export interface SkillMutationResult {
+  path?: string;
+  commands?: SlashCommand[];
+}

@@ -27,6 +27,9 @@ import type {
   ConnectStatus,
   TeamStatus,
   MCPServerInput,
+  HubSearchResult,
+  HubSkill,
+  SkillMutationResult,
 } from '../types';
 
 export interface NewSessionInput {
@@ -154,6 +157,11 @@ const App = GoApp as unknown as {
   TeamCancel(): Promise<TeamStatus>;
   TeamRefresh(provider: string): Promise<TeamStatus>;
   TeamRemove(provider: string): Promise<TeamStatus>;
+  SearchHubSkills(query: string, limit: number): Promise<HubSkill[]>;
+  SearchHubSkillsFiltered(query: string, limit: number, filter: string, cursor: number): Promise<HubSearchResult>;
+  SkillReadme(source: string): Promise<string>;
+  InstallHubSkill(source: string, skillId: string, scope: string): Promise<SkillMutationResult>;
+  ReloadSkills(): Promise<SlashCommand[]>;
 };
 
 export const api = App;

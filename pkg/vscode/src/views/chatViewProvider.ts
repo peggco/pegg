@@ -258,6 +258,45 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'copyText':
           await vscode.env.clipboard.writeText(String(message.text ?? ''));
           return;
+        case 'searchHubSkills': {
+          const requestId = String(message.requestId ?? '');
+          try {
+            const items = await this.controller.searchHubSkills(String(message.query ?? ''), 8);
+            await this.view?.webview.postMessage({ type: 'hubSkills', requestId, items });
+          } catch (err) {
+            await this.view?.webview.postMessage({
+              type: 'hubSkills',
+              requestId,
+              items: [],
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+          return;
+        }
+        case 'installHubSkill': {
+          const requestId = String(message.requestId ?? '');
+          try {
+            const result = await this.controller.installHubSkill(
+              String(message.source ?? ''),
+              String(message.skillId ?? ''),
+              'global',
+            );
+            await this.view?.webview.postMessage({
+              type: 'hubSkillInstalled',
+              requestId,
+              ok: true,
+              name: result.name,
+            });
+          } catch (err) {
+            await this.view?.webview.postMessage({
+              type: 'hubSkillInstalled',
+              requestId,
+              ok: false,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+          return;
+        }
         default:
           this.log.debug('Unknown webview message', message?.type);
       }

@@ -10,11 +10,14 @@ import (
 )
 
 type Picker struct {
-	title    string
-	all      []ListItem
-	filtered []ListItem
-	index    int
-	scroll   int
+	title     string
+	empty     string
+	all       []ListItem
+	filtered  []ListItem
+	index     int
+	scroll    int
+	lastQuery string
+	dirty     bool
 }
 
 func NewPicker(title string) *Picker {
@@ -23,8 +26,11 @@ func NewPicker(title string) *Picker {
 
 func (p *Picker) SetTitle(title string) { p.title = title }
 
+func (p *Picker) SetEmptyMessage(message string) { p.empty = message }
+
 func (p *Picker) SetAll(items []ListItem) {
 	p.all = items
+	p.dirty = true
 	p.Update("")
 }
 
@@ -33,6 +39,11 @@ func (p *Picker) All() []ListItem { return p.all }
 func (p *Picker) Count() int { return len(p.filtered) }
 
 func (p *Picker) Update(query string) {
+	if !p.dirty && query == p.lastQuery {
+		return
+	}
+	p.dirty = false
+	p.lastQuery = query
 	p.filtered = search.Filter(query, p.all, func(it ListItem) []string {
 		return []string{it.Label, it.Detail}
 	})
@@ -77,7 +88,11 @@ func (p *Picker) Draw(s tcell.Screen, bounds layout.Region) {
 
 	inner := DrawCenteredBox(s, bounds, bounds.Width, bounds.Height, p.title)
 	if len(p.filtered) == 0 {
-		DrawText(s, inner.Left+1, inner.Top+1, i18n.T("common.noMatching"), th.Base().Foreground(th.Placeholder).Background(th.InputBg))
+		message := p.empty
+		if message == "" {
+			message = i18n.T("common.noMatching")
+		}
+		DrawText(s, inner.Left+1, inner.Top+1, TruncateTo(message, inner.Width-2), th.Base().Foreground(th.Placeholder).Background(th.InputBg))
 		return
 	}
 

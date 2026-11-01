@@ -29,6 +29,7 @@ const (
 	pickNone pickKind = iota
 	pickSkills
 	pickMention
+	pickHub
 )
 
 type Page struct {
@@ -41,12 +42,18 @@ type Page struct {
 
 	skillPicker   *components.Picker
 	mentionPicker *components.Picker
+	hubPicker     *components.Picker
 	askPicker     *components.AskPicker
 	focus         focusTarget
 	pickKind      pickKind
 
 	pickDismissed bool
 	pickTokenAt   int
+
+	hubLoading   bool
+	hubQuery     string
+	onHubSearch  func(query string)
+	onHubInstall func(source, skillID, name string)
 
 	voiceMu       sync.RWMutex
 	voiceState    string
@@ -66,6 +73,7 @@ func New() *Page {
 		hint:          randomHint(),
 		skillPicker:   components.NewPicker(i18n.T("home.picker.skills")),
 		mentionPicker: components.NewPicker(i18n.T("home.picker.mentions")),
+		hubPicker:     components.NewPicker(i18n.T("home.picker.hub")),
 		askPicker:     components.NewAskPicker(),
 		focus:         focusInput,
 		pickTokenAt:   -1,
@@ -78,11 +86,33 @@ func (p *Page) RefreshTranslations() {
 	p.hint = randomHint()
 	p.skillPicker.SetTitle(i18n.T("home.picker.skills"))
 	p.mentionPicker.SetTitle(i18n.T("home.picker.mentions"))
+	p.hubPicker.SetTitle(i18n.T("home.picker.hub"))
 }
 
 func (p *Page) SetSkills(items []components.ListItem) {
 	p.skillPicker.SetAll(items)
 }
+
+func (p *Page) SetOnHubSearch(fn func(query string)) { p.onHubSearch = fn }
+
+func (p *Page) SetOnHubInstall(fn func(source, skillID, name string)) { p.onHubInstall = fn }
+
+func (p *Page) SetHubLoading(loading bool) {
+	p.hubLoading = loading
+	if loading {
+		p.hubPicker.SetEmptyMessage(i18n.T("home.picker.hubSearching"))
+	} else {
+		p.hubPicker.SetEmptyMessage("")
+	}
+}
+
+func (p *Page) SetHubItems(items []components.ListItem) {
+	p.hubLoading = false
+	p.hubPicker.SetEmptyMessage("")
+	p.hubPicker.SetAll(items)
+}
+
+func (p *Page) HubPicker() *components.Picker { return p.hubPicker }
 
 func (p *Page) SetMentionItems(items []components.ListItem) {
 	p.mentionPicker.SetAll(items)
@@ -125,6 +155,8 @@ func (p *Page) PickCount() int {
 		return p.skillPicker.Count()
 	case pickMention:
 		return p.mentionPicker.Count()
+	case pickHub:
+		return p.hubPicker.Count()
 	}
 	return 0
 }
@@ -382,39 +414,79 @@ func (p *Page) HandleKey(ev *tcell.EventKey) bool {
 	}
 
 	slashTokAt, _, slashActive := p.input.SlashToken()
-	if slashActive && len(p.skillPicker.All()) > 0 && !p.pickDismissed && p.pickKind != pickMention {
-		p.pickKind = pickSkills
-		switch ev.Key() {
-		case tcell.KeyUp, tcell.KeyDown:
-			return p.skillPicker.HandleKey(ev)
-		case tcell.KeyEnter, tcell.KeyTab:
-			if it, ok := p.skillPicker.Selected(); ok {
-				p.input.ReplaceSkill(it.Label)
+	if slashActive && !p.pickDismissed && p.pickKind != pickMention && (len(p.skillPicker.All()) > 0 || len(p.hubPicker.All()) > 0 || p.hubLoading) {
+		p.syncPickers()
+		switch p.pickKind {
+		case pickHub:
+			switch ev.Key() {
+			case tcell.KeyUp, tcell.KeyDown:
+				return p.hubPicker.HandleKey(ev)
+			case tcell.KeyEnter, tcell.KeyTab:
+				if it, ok := p.hubPicker.Selected(); ok {
+					source, skillID := splitHubItem(it)
+					if p.onHubInstall != nil {
+						p.onHubInstall(source, skillID, it.Label)
+					}
+					return true
+				}
+			case tcell.KeyEsc:
 				p.pickKind = pickNone
 				p.pickDismissed = true
 				p.pickTokenAt = slashTokAt
 				return true
+			case tcell.KeyRune:
+				if ev.Rune() == ' ' {
+					p.pickKind = pickNone
+					p.pickDismissed = true
+					p.pickTokenAt = slashTokAt
+				}
 			}
-			p.pickKind = pickNone
-			p.pickDismissed = true
-			p.pickTokenAt = slashTokAt
-			return true
-		case tcell.KeyEsc:
-			p.pickKind = pickNone
-			p.pickDismissed = true
-			p.pickTokenAt = slashTokAt
-			return true
-		case tcell.KeyRune:
-			if ev.Rune() == ' ' {
+			handled := p.input.HandleKey(ev)
+			_, q, _ := p.input.SlashToken()
+			p.skillPicker.Update(q)
+			if p.skillPicker.Count() > 0 {
+				p.pickKind = pickSkills
+			} else {
+				p.requestHub(q)
+			}
+			return handled
+		case pickSkills:
+			switch ev.Key() {
+			case tcell.KeyUp, tcell.KeyDown:
+				return p.skillPicker.HandleKey(ev)
+			case tcell.KeyEnter, tcell.KeyTab:
+				if it, ok := p.skillPicker.Selected(); ok {
+					p.input.ReplaceSkill(it.Label)
+					p.pickKind = pickNone
+					p.pickDismissed = true
+					p.pickTokenAt = slashTokAt
+					return true
+				}
 				p.pickKind = pickNone
 				p.pickDismissed = true
 				p.pickTokenAt = slashTokAt
+				return true
+			case tcell.KeyEsc:
+				p.pickKind = pickNone
+				p.pickDismissed = true
+				p.pickTokenAt = slashTokAt
+				return true
+			case tcell.KeyRune:
+				if ev.Rune() == ' ' {
+					p.pickKind = pickNone
+					p.pickDismissed = true
+					p.pickTokenAt = slashTokAt
+				}
 			}
+			handled := p.input.HandleKey(ev)
+			_, q, _ := p.input.SlashToken()
+			p.skillPicker.Update(q)
+			if p.skillPicker.Count() == 0 && len([]rune(strings.TrimSpace(q))) >= 2 {
+				p.pickKind = pickHub
+				p.requestHub(q)
+			}
+			return handled
 		}
-		handled := p.input.HandleKey(ev)
-		_, q, _ := p.input.SlashToken()
-		p.skillPicker.Update(q)
-		return handled
 	}
 	p.syncPickers()
 
@@ -441,6 +513,8 @@ func (p *Page) syncPickers() {
 		p.pickKind = pickNone
 		p.pickDismissed = false
 		p.pickTokenAt = -1
+		p.hubQuery = ""
+		p.hubLoading = false
 		return
 	}
 	var newKind pickKind
@@ -470,12 +544,39 @@ func (p *Page) syncPickers() {
 			p.mentionPicker.Update(q)
 		}
 	case pickSkills:
-		if len(p.skillPicker.All()) > 0 {
+		_, q, _ := p.input.SlashToken()
+		p.skillPicker.Update(q)
+		if p.skillPicker.Count() > 0 {
 			p.pickKind = pickSkills
-			_, q, _ := p.input.SlashToken()
-			p.skillPicker.Update(q)
+			return
+		}
+		if len([]rune(strings.TrimSpace(q))) >= 2 {
+			p.pickKind = pickHub
+			p.requestHub(q)
 		}
 	}
+}
+
+func (p *Page) requestHub(query string) {
+	query = strings.TrimSpace(query)
+	if query == "" || query == p.hubQuery {
+		return
+	}
+	p.hubQuery = query
+	p.hubLoading = true
+	p.hubPicker.SetEmptyMessage(i18n.T("home.picker.hubSearching"))
+	if p.onHubSearch != nil {
+		p.onHubSearch(query)
+	}
+}
+
+func splitHubItem(it components.ListItem) (string, string) {
+	data, _ := it.Data.(string)
+	parts := strings.SplitN(data, "|", 3)
+	if len(parts) != 3 || parts[0] != "hub" {
+		return "", ""
+	}
+	return parts[1], parts[2]
 }
 
 func (p *Page) DismissPickers() {
@@ -601,6 +702,8 @@ func (p *Page) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 			count = p.skillPicker.Count()
 		case pickMention:
 			count = p.mentionPicker.Count()
+		case pickHub:
+			count = p.hubPicker.Count()
 		}
 		pickH := count + 4
 		if pickH > 13 {
@@ -625,6 +728,8 @@ func (p *Page) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 				p.skillPicker.Draw(s, pickRegion)
 			case pickMention:
 				p.mentionPicker.Draw(s, pickRegion)
+			case pickHub:
+				p.hubPicker.Draw(s, pickRegion)
 			}
 		}
 	}

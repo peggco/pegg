@@ -1376,3 +1376,21 @@ button {
 .message.user.subagent-prompt .message-body {
   border-style: dashed;
 }
+
+.hub-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--vscode-focusBorder, #007fd4) 45%, transparent);
+  border-radius: 999px;
+  color: var(--vscode-focusBorder, #007fd4);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hub-loading {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+}

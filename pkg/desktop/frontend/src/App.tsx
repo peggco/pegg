@@ -32,6 +32,7 @@ import { Composer } from './components/Composer';
 import { Onboarding, StatusBanner, Toasts, Welcome } from './components/Welcome';
 import { Settings } from './components/Settings';
 import { Sidebar } from './components/Sidebar';
+import { SkillsModal } from './components/SkillsModal';
 import { Thread } from './components/Thread';
 import { TitleBar } from './components/TitleBar';
 
@@ -189,6 +190,7 @@ export function App() {
         </main>
       </div>
       <Settings />
+      <SkillsModal />
       <CommandPalette />
       <Toasts />
     </div>

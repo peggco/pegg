@@ -42,8 +42,8 @@ renderer.code = ({ text, lang }) => {
   }">${highlighted}</code></pre></div>`;
 };
 
-renderer.link = ({ href, title, tokens }) => {
-  const text = renderer.parser.parseInline(tokens);
+renderer.link = function (this: Renderer, { href, title, tokens }) {
+  const text = this.parser.parseInline(tokens);
   const safeHref = href ?? '#';
   const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
   return `<a href="${escapeHtml(safeHref)}"${titleAttr} target="_blank" rel="noreferrer noopener">${text}</a>`;
