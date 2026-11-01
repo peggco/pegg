@@ -42,7 +42,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error?: Error }
             fontFamily: 'monospace',
             fontSize: 12,
             color: '#fca5a5',
-            background: '#18181b',
+            background: '#0d0d0d',
           }}
         >
           {String(this.state.error.stack ?? this.state.error.message)}

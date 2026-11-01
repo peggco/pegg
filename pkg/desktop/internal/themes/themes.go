@@ -82,16 +82,80 @@ func fromTUI(name string, t styles.Theme) Theme {
 		"--pg-syn-constant":  hex(t.TokenConstant),
 		"--pg-syn-generic":   hex(t.TokenGeneric),
 	}
-	tokens["--pg-sidebar"] = mix(t.Background, t.Surface, 0.55)
+	tokens["--pg-sidebar"] = hex(t.Background)
 	tokens["--pg-shadow"] = "rgba(0,0,0,0.08)"
+	tokens["--pg-accent-fg"] = "#ffffff"
 	if isDark(t.Background) {
 		tokens["--pg-shadow"] = "rgba(0,0,0,0.42)"
+		tokens["--pg-accent-fg"] = "#0a0a0a"
 	}
+	applyDesktopPalette(name, tokens)
 	return Theme{
 		Name:   name,
 		Label:  label(name),
 		Dark:   isDark(t.Background),
 		Tokens: tokens,
+	}
+}
+
+func applyDesktopPalette(name string, tokens map[string]string) {
+	switch name {
+	case "dark":
+		for key, value := range map[string]string{
+			"--pg-bg":            "#0d0d0d",
+			"--pg-sidebar":       "#0d0d0d",
+			"--pg-surface":       "#141414",
+			"--pg-surface-2":     "#1a1a1a",
+			"--pg-text":          "#fafafa",
+			"--pg-text-2":        "#d4d4d4",
+			"--pg-muted":         "#a3a3a3",
+			"--pg-accent":        "#fafafa",
+			"--pg-accent-soft":   "#a3a3a3",
+			"--pg-accent-fg":     "#0a0a0a",
+			"--pg-border":        "#262626",
+			"--pg-border-strong": "#3f3f3f",
+			"--pg-hover":         "#1a1a1a",
+			"--pg-active":        "#222222",
+			"--pg-input-bg":      "#141414",
+			"--pg-input-text":    "#fafafa",
+			"--pg-placeholder":   "#a3a3a3",
+			"--pg-selection":     "#404040",
+			"--pg-code-bg":       "#141414",
+			"--pg-code-border":   "#262626",
+			"--pg-code-text":     "#e5e5e5",
+			"--pg-user-bg":       "#1a1a1a",
+			"--pg-shadow":        "rgba(0,0,0,0.42)",
+		} {
+			tokens[key] = value
+		}
+	case "light":
+		for key, value := range map[string]string{
+			"--pg-bg":            "#ffffff",
+			"--pg-sidebar":       "#ffffff",
+			"--pg-surface":       "#fafafa",
+			"--pg-surface-2":     "#f5f5f5",
+			"--pg-text":          "#0d0d0d",
+			"--pg-text-2":        "#404040",
+			"--pg-muted":         "#737373",
+			"--pg-accent":        "#171717",
+			"--pg-accent-soft":   "#404040",
+			"--pg-accent-fg":     "#ffffff",
+			"--pg-border":        "#e5e5e5",
+			"--pg-border-strong": "#d4d4d4",
+			"--pg-hover":         "#f5f5f5",
+			"--pg-active":        "#ededed",
+			"--pg-input-bg":      "#ffffff",
+			"--pg-input-text":    "#0d0d0d",
+			"--pg-placeholder":   "#737373",
+			"--pg-selection":     "#d4d4d4",
+			"--pg-code-bg":       "#fafafa",
+			"--pg-code-border":   "#e5e5e5",
+			"--pg-code-text":     "#0d0d0d",
+			"--pg-user-bg":       "#f5f5f5",
+			"--pg-shadow":        "rgba(0,0,0,0.08)",
+		} {
+			tokens[key] = value
+		}
 	}
 }
 

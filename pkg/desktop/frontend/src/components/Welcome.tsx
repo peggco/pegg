@@ -11,6 +11,7 @@ import {
 } from '../state/actions';
 import { store, useStore } from '../state/store';
 import { Composer } from './Composer';
+import { PeggForever } from './PeggForever';
 import { Starburst } from './icons';
 
 const SUGGESTIONS = [
@@ -43,9 +44,19 @@ export function Welcome() {
 
   return (
     <div className="welcome">
+      <PeggForever />
       <div className="welcome-inner">
         <div className="welcome-greeting">
-          <h1 className="welcome-title">{t(greetingKey())}</h1>
+          <h1 className="welcome-title">
+            {t(greetingKey())
+              .split(' ')
+              .filter(Boolean)
+              .map((word, index) => (
+                <span className="welcome-line" key={`${word}-${index}`}>
+                  {word}
+                </span>
+              ))}
+          </h1>
         </div>
         <p className="welcome-sub">
           {workspace ? t('welcome.working', { workspace: baseName(workspace) }) : t('welcome.choose')}

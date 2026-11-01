@@ -700,7 +700,7 @@
 }
 
 .hub-status.official {
-  color: #3fb950;
+  color: var(--pg-success);
 }
 
 .hub-dot {
@@ -711,7 +711,7 @@
 }
 
 .hub-status.official .hub-dot {
-  background: #3fb950;
+  background: var(--pg-success);
 }
 
 .hub-install {
@@ -734,8 +734,8 @@
 }
 
 .hub-install.done {
-  color: #3fb950;
-  border-color: color-mix(in srgb, #3fb950 40%, var(--pg-border));
+  color: var(--pg-success);
+  border-color: color-mix(in srgb, var(--pg-success) 40%, var(--pg-border));
 }
 
 .hub-install:disabled {

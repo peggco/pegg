@@ -170,7 +170,7 @@
   align-items: center;
   justify-content: center;
   background: var(--pg-accent);
-  color: #fff;
+  color: var(--pg-accent-fg, #fff);
   transition: transform var(--pg-fast), opacity var(--pg-fast), background var(--pg-fast);
   flex: none;
 }

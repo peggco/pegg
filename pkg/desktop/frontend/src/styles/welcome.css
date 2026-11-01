@@ -1,49 +1,52 @@
 .welcome {
+  position: relative;
   width: 100%;
-  max-width: 860px;
-  margin: 0 auto;
   min-height: 100%;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 48px 28px 96px;
+  padding: 56px 40px 110px;
+  overflow: hidden;
+  background-color: var(--pg-bg);
+  background-image:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--pg-text) 8%, transparent) 1px, transparent 0),
+    radial-gradient(ellipse 80% 55% at 50% -10%, color-mix(in srgb, var(--pg-text) 5%, transparent), transparent 70%);
+  background-size: 22px 22px, 100% 100%;
 }
 
 .welcome-inner {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  max-width: 780px;
+  max-width: 1120px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 26px;
+  gap: 22px;
   animation: pg-rise 520ms var(--pg-ease) both;
 }
 
 .welcome-greeting {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  flex-wrap: wrap;
   text-align: center;
 }
 
-.welcome-mark {
-  color: var(--pg-accent);
-  display: inline-flex;
-  flex: none;
-  animation: pg-bloom 900ms var(--pg-ease) both;
-}
-
 .welcome-title {
-  font-family: var(--pg-font-ui);
-  font-weight: 500;
-  font-size: clamp(30px, 3.6vw, 40px);
-  line-height: 1.1;
-  letter-spacing: -0.032em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   margin: 0;
   color: var(--pg-text);
+  font-family: var(--pg-font-display);
+  font-weight: 600;
+  font-size: clamp(52px, 7.4vw, 92px);
+  line-height: 0.94;
+  letter-spacing: -0.052em;
+}
+
+.welcome-line {
+  display: block;
 }
 
 .welcome-title em {
@@ -52,35 +55,37 @@
 }
 
 .welcome-sub {
-  margin: -12px 0 0;
+  margin: -2px 0 4px;
+  max-width: 560px;
   color: var(--pg-muted);
-  font-size: 13.5px;
+  font-size: 15.5px;
+  line-height: 1.6;
   text-align: center;
 }
 
 .welcome-composer {
   width: 100%;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .chips {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   animation: pg-fade 600ms 120ms var(--pg-ease) both;
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 12px;
+  gap: 8px;
+  padding: 9px 16px;
   border: 1px solid var(--pg-border);
   border-radius: 999px;
-  background: var(--pg-surface);
+  background: color-mix(in srgb, var(--pg-surface) 55%, transparent);
   color: var(--pg-text-2);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 450;
   transition: border-color var(--pg-fast), background var(--pg-fast), color var(--pg-fast), transform var(--pg-fast);
 }
@@ -97,16 +102,16 @@
 }
 
 .chip:hover svg {
-  color: var(--pg-accent);
+  color: var(--pg-text);
 }
 
 .welcome-hint {
-  margin-top: 6px;
+  margin-top: 14px;
   color: var(--pg-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 
 kbd {
@@ -122,6 +127,35 @@ kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.pegg-forever {
+  position: absolute;
+  top: -40px;
+  right: -240px;
+  z-index: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  width: min(560px, 44vw);
+  height: 560px;
+  overflow: hidden;
+  opacity: 0.18;
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(ellipse 62% 58% at 58% 46%, #000 22%, transparent 78%);
+  mask-image: radial-gradient(ellipse 62% 58% at 58% 46%, #000 22%, transparent 78%);
+}
+
+.pegg-forever pre {
+  margin: 0;
+  color: var(--pg-text);
+  font-family: var(--pg-font-mono);
+  font-size: clamp(7px, 0.82vw, 12px);
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: pre;
+  user-select: none;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--pg-text) 26%, transparent);
 }
 
 @keyframes pg-rise {
@@ -170,5 +204,40 @@ kbd {
   50% {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@media (max-width: 1100px) {
+  .pegg-forever {
+    right: -160px;
+    width: 64vw;
+    opacity: 0.14;
+  }
+}
+
+@media (max-width: 860px) {
+  .welcome {
+    padding: 36px 18px 84px;
+  }
+
+  .pegg-forever {
+    display: none;
+  }
+
+  .welcome-title {
+    font-size: clamp(44px, 12vw, 64px);
+  }
+
+  .welcome-sub {
+    font-size: 14.5px;
+  }
+
+  .chips {
+    gap: 8px;
+  }
+
+  .chip {
+    padding: 8px 13px;
+    font-size: 12.5px;
   }
 }

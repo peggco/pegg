@@ -279,7 +279,7 @@
 .btn.primary {
   background: var(--pg-accent);
   border-color: var(--pg-accent);
-  color: #fff;
+  color: var(--pg-accent-fg, #fff);
 }
 
 .btn.primary:hover {
