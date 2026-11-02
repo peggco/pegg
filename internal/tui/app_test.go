@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/page/home"
 	"github.com/peggco/pegg/internal/tui/page/settings"
 	"github.com/peggco/pegg/internal/tui/styles"
@@ -714,6 +716,98 @@ func TestAddAttachmentInsertsMentionAtCursor(t *testing.T) {
 	}
 	if a.home.AttachmentBar().Count() != 2 {
 		t.Fatalf("attachments = %d, want 2", a.home.AttachmentBar().Count())
+	}
+}
+
+func TestCtrlCCopiesInputSelection(t *testing.T) {
+	s := newTestScreen(t)
+	sim := s.(tcell.SimulationScreen)
+	p := home.New()
+	p.Input().InsertRune('h')
+	p.Input().InsertRune('i')
+	p.Input().SelectAll()
+	a := &App{home: p, screen: s}
+
+	if !a.handleKey(tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModCtrl)) {
+		t.Fatal("Ctrl+C with an input selection should be handled")
+	}
+	if got := string(sim.GetClipboardData()); got != "hi" {
+		t.Fatalf("clipboard = %q, want %q", got, "hi")
+	}
+	if p.Input().Empty() {
+		t.Fatal("Ctrl+C must not clear the composer when copying a selection")
+	}
+	if a.quit {
+		t.Fatal("Ctrl+C must not quit when copying a selection")
+	}
+}
+
+func TestCtrlCWithoutSelectionStillClearsInput(t *testing.T) {
+	p := home.New()
+	p.Input().InsertRune('x')
+	a := &App{home: p, screen: newTestScreen(t)}
+
+	if !a.handleKey(tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModCtrl)) {
+		t.Fatal("Ctrl+C without a selection should be handled")
+	}
+	if !p.Input().Empty() {
+		t.Fatal("Ctrl+C without a selection should clear the composer")
+	}
+	if a.quit {
+		t.Fatal("first Ctrl+C should not quit")
+	}
+}
+
+func TestCtrlShiftCCopiesWithoutClearingOrQuitting(t *testing.T) {
+	s := newTestScreen(t)
+	sim := s.(tcell.SimulationScreen)
+	p := home.New()
+	p.Input().InsertRune('h')
+	p.Input().InsertRune('i')
+	p.Input().SelectAll()
+	a := &App{home: p, screen: s}
+
+	if !a.handleKey(tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModCtrl|tcell.ModShift)) {
+		t.Fatal("Ctrl+Shift+C should be handled")
+	}
+	if got := string(sim.GetClipboardData()); got != "hi" {
+		t.Fatalf("clipboard = %q, want %q", got, "hi")
+	}
+	if p.Input().Empty() {
+		t.Fatal("Ctrl+Shift+C must not clear the composer")
+	}
+	if a.quit {
+		t.Fatal("Ctrl+Shift+C must not quit")
+	}
+}
+
+func TestCtrlCCopiesChatSelection(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+	s := newTestScreen(t)
+	sim := s.(tcell.SimulationScreen)
+	c := components.NewChat()
+	c.AppendItem(&components.ChatItem{Kind: components.ItemUser, Text: "hello world"})
+	c.Draw(s, layout.Region{Width: 40, Height: 20}, false)
+
+	c.HandleMouse(1, 0, 0, 0, tcell.ButtonPrimary)
+	for y := 0; y < 20; y++ {
+		c.HandleMouse(20, y, 0, 0, tcell.ButtonPrimary)
+	}
+	c.HandleMouse(20, 19, 0, 0, tcell.ButtonNone)
+	if !c.HasSelection() {
+		t.Fatal("expected a chat selection after drag")
+	}
+
+	a := &App{chat: c, screen: s}
+	if !a.handleKey(tcell.NewEventKey(tcell.KeyCtrlC, 0, tcell.ModCtrl)) {
+		t.Fatal("Ctrl+C with a chat selection should be handled")
+	}
+	if got := string(sim.GetClipboardData()); !strings.Contains(got, "hello") {
+		t.Fatalf("clipboard = %q, want it to contain %q", got, "hello")
+	}
+	if a.quit {
+		t.Fatal("Ctrl+C must not quit when copying a chat selection")
 	}
 }
 
