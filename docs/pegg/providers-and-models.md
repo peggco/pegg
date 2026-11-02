@@ -9,43 +9,10 @@ named, preconfigured endpoint; a **driver** is the wire protocol it speaks.
 
 ## Providers
 
-36 providers are registered out of the box. Every provider exposes a model list that
-Pegg fetches at startup and caches locally.
-
-| Provider | Driver | Default base URL |
-|---|---|---|
-| `ai21` | openai | `https://api.ai21.com/studio/v1` |
-| `anthropic` | claude | `https://api.anthropic.com` |
-| `anyscale` | openai | `https://api.endpoints.anyscale.com/v1` |
-| `baichuan` | openai | `https://api.baichuan-ai.com/v1` |
-| `cerebras` | openai | `https://api.cerebras.ai/v1` |
-| `cohere` | openai | `https://api.cohere.com/compatibility/v1` |
-| `deepinfra` | openai | `https://api.deepinfra.com/v1/openai` |
-| `deepseek` | openai | `https://api.deepseek.com/v1` |
-| `fireworks` | openai | `https://api.fireworks.ai/inference/v1` |
-| `google` | gemini | `https://generativelanguage.googleapis.com/v1beta` |
-| `groq` | openai | `https://api.groq.com/openai/v1` |
-| `lepton` | openai | `https://api.lepton.ai/v1` |
-| `minimax` | openai | `https://api.minimax.chat/v1` |
-| `mistral` | openai | `https://api.mistral.ai/v1` |
-| `moonshot` | openai | `https://api.moonshot.cn/v1` |
-| `novita` | openai | `https://api.novita.ai/v3/openai` |
-| `nvidia` | openai | `https://integrate.api.nvidia.com/v1` |
-| `openai` | openai | `https://api.openai.com/v1` |
-| `opencode-go` | openai | `https://opencode.ai/zen/go/v1` |
-| `opencode-zen` | openai | `https://opencode.ai/zen/v1` |
-| `openrouter` | openai | `https://openrouter.ai/api/v1` |
-| `perplexity` | openai | `https://api.perplexity.ai` |
-| `sambanova` | openai | `https://api.sambanova.ai/v1` |
-| `stepfun` | openai | `https://api.stepfun.com/v1` |
-| `tencent` | openai | `https://hunyuan.cloud.tencent.com/v1` |
-| `together` | openai | `https://api.together.xyz/v1` |
-| `upstage` | openai | `https://api.upstage.ai/v1/solar` |
-| `voyage` | openai | `https://api.voyageai.com/v1` |
-| `writer` | openai | `https://api.writer.com/v1` |
-| `xai` | openai | `https://api.x.ai/v1` |
-| `yi` | openai | `https://api.lingyiwanwu.com/v1` |
-| `zhipu` | openai | `https://open.bigmodel.cn/api/paas/v4` |
+236 providers are registered out of the box. Every provider exposes a model list
+that Pegg fetches at startup and caches locally. See the
+[Provider catalog](provider-catalog.md) for the full list of built-in providers,
+their drivers, and default base URLs.
 
 ### Team providers
 
