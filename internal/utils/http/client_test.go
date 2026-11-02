@@ -552,3 +552,51 @@ func TestDo_AuthHeaderAndRefreshRetry(t *testing.T) {
 		t.Fatalf("refreshed=%v calls=%d out=%v", refreshed, calls, out)
 	}
 }
+
+func TestContextHeadersAndTemplate(t *testing.T) {
+	var got http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL,
+		WithHeader("X-Static", "{{session_id}}"),
+		WithHeaderTemplate("{{session_id}}", func(context.Context) string { return "sess-1" }),
+		WithContextHeaders(func(context.Context) map[string]string {
+			return map[string]string{"X-Pegg-Session": "sess-1"}
+		}),
+	)
+	var out map[string]bool
+	if err := client.Do(context.Background(), "GET", "/x", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if got.Get("X-Static") != "sess-1" {
+		t.Errorf("X-Static = %q, want sess-1", got.Get("X-Static"))
+	}
+	if got.Get("X-Pegg-Session") != "sess-1" {
+		t.Errorf("X-Pegg-Session = %q, want sess-1", got.Get("X-Pegg-Session"))
+	}
+}
+
+func TestHeaderTemplateSkipsUnresolved(t *testing.T) {
+	var got http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL,
+		WithHeader("X-Static", "{{session_id}}"),
+		WithHeaderTemplate("{{session_id}}", func(context.Context) string { return "" }),
+	)
+	var out map[string]bool
+	if err := client.Do(context.Background(), "GET", "/x", nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if v := got.Get("X-Static"); v != "" {
+		t.Errorf("X-Static = %q, want header omitted when the template is unresolved", v)
+	}
+}

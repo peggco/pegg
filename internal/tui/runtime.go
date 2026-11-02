@@ -57,11 +57,17 @@ func (a *App) runtimeForLocked(sessionID string) *sessionRuntime {
 	a.ensureRuntimeMapsLocked()
 	if rt, ok := a.runtimes[sessionID]; ok && rt != nil && rt.agent != nil {
 		a.agentSessions[rt.agent.ID] = sessionID
+		if sessionID != "" {
+			rt.agent.SetSessionID(sessionID)
+		}
 		return rt
 	}
 	ag := a.newAgentLocked()
 	if ag == nil {
 		return nil
+	}
+	if sessionID != "" {
+		ag.SetSessionID(sessionID)
 	}
 	rt := &sessionRuntime{
 		id:              sessionID,

@@ -64,6 +64,9 @@ func (a *App) beginSessionFollow(info settings.SessionInfo) {
 	a.agentLease = nil
 	a.running = false
 	if rt != nil {
+		if info.ID != "" {
+			rt.agent.SetSessionID(info.ID)
+		}
 		rt.mode = a.mode
 		rt.reasoningEffort = a.reasoningEffort
 		rt.model = a.model

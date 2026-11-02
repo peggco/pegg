@@ -87,13 +87,13 @@ func newTitleGeneratorAgent(provider llm.Provider, model llm.Model) (*agent.Agen
 	return main, nil
 }
 
-func generateTitle(provider llm.Provider, model llm.Model, userMessage string) (string, error) {
+func generateTitle(ctx context.Context, provider llm.Provider, model llm.Model, userMessage string) (string, error) {
 	a, err := newTitleGeneratorAgent(provider, model)
 	if err != nil {
 		return "", err
 	}
 
-	resp, err := a.Run(context.Background(), userMessage)
+	resp, err := a.Run(ctx, userMessage)
 	if err != nil {
 		return "", err
 	}
@@ -101,6 +101,6 @@ func generateTitle(provider llm.Provider, model llm.Model, userMessage string) (
 	return strings.TrimSpace(resp.Output), nil
 }
 
-func GenerateSessionTitle(provider llm.Provider, model llm.Model, userMessage string) (string, error) {
-	return generateTitle(provider, model, userMessage)
+func GenerateSessionTitle(ctx context.Context, provider llm.Provider, model llm.Model, userMessage string) (string, error) {
+	return generateTitle(ctx, provider, model, userMessage)
 }

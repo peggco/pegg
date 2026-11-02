@@ -136,6 +136,7 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		}
 		req.SessionID = sess.ID
 	}
+	orch.SetSessionID(req.SessionID)
 	msgs, err := s.sessions.Messages(req.SessionID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "session not found")

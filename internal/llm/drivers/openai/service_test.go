@@ -1,6 +1,9 @@
 package openai
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	json "github.com/goccy/go-json"
@@ -355,5 +358,49 @@ func TestToChatMessageEchoesReasoningContent(t *testing.T) {
 	}
 	if len(cm.ReasoningContent) == 0 {
 		t.Error("reasoning_content must be echoed back (DeepSeek-style thinking mode)")
+	}
+}
+
+func TestChatSendsSessionHeaders(t *testing.T) {
+	var got http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"1","object":"chat.completion","model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{}}`))
+	}))
+	defer srv.Close()
+
+	svc := NewService("test", ServiceConfig{
+		BaseURL:        srv.URL,
+		APIKey:         "k",
+		SessionHeaders: []string{"session_id"},
+	})
+	ctx := llm.WithSessionID(context.Background(), "sess-42")
+	if _, err := svc.Chat(ctx, llm.NewRequest("m", []llm.Message{llm.UserMessage("hi")})); err != nil {
+		t.Fatal(err)
+	}
+	if got.Get(llm.SessionHeader) != "sess-42" {
+		t.Errorf("%s = %q, want sess-42", llm.SessionHeader, got.Get(llm.SessionHeader))
+	}
+	if got.Get("session_id") != "sess-42" {
+		t.Errorf("session_id = %q, want sess-42", got.Get("session_id"))
+	}
+}
+
+func TestChatOmitsSessionHeaderWithoutSession(t *testing.T) {
+	var got http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"1","object":"chat.completion","model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{}}`))
+	}))
+	defer srv.Close()
+
+	svc := NewService("test", ServiceConfig{BaseURL: srv.URL, APIKey: "k"})
+	if _, err := svc.Chat(context.Background(), llm.NewRequest("m", []llm.Message{llm.UserMessage("hi")})); err != nil {
+		t.Fatal(err)
+	}
+	if v := got.Get(llm.SessionHeader); v != "" {
+		t.Errorf("%s = %q, want header omitted without a session", llm.SessionHeader, v)
 	}
 }

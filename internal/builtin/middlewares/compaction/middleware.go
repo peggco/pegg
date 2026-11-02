@@ -172,7 +172,7 @@ func (m *Middleware) compactSummarization(ctx context.Context, req *llm.Request,
 		return nil
 	}
 
-	summary, err := m.summarizer.run(history)
+	summary, err := m.summarizer.run(ctx, history)
 	if err != nil {
 		return err
 	}

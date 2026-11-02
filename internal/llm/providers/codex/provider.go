@@ -3,6 +3,7 @@ package codex
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,12 +55,20 @@ func NewFromConfig(cfg config.LLMConfig) (llm.Provider, error) {
 	for k, v := range cfg.Headers {
 		headers[k] = v
 	}
+	sessionHeaders := []string{"session_id"}
+	for k := range cfg.Headers {
+		if strings.EqualFold(k, "session_id") {
+			sessionHeaders = nil
+			break
+		}
+	}
 
 	return codexdriver.NewService(ProviderName, codexdriver.ServiceConfig{
-		BaseURL:    baseURL,
-		Headers:    headers,
-		Timeout:    time.Duration(cfg.Timeout) * time.Second,
-		AuthHeader: "Authorization",
+		BaseURL:        baseURL,
+		Headers:        headers,
+		SessionHeaders: sessionHeaders,
+		Timeout:        time.Duration(cfg.Timeout) * time.Second,
+		AuthHeader:     "Authorization",
 		AuthToken: func(ctx context.Context) (string, error) {
 			token, err := cred.AccessToken(ctx)
 			if err != nil {

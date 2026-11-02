@@ -22,6 +22,7 @@ type ServiceConfig struct {
 	BaseURL            string
 	APIKey             string
 	Headers            map[string]string
+	SessionHeaders     []string
 	Timeout            time.Duration
 	ModifyRequest      func(body map[string]any)
 	ForceStream        bool
@@ -41,7 +42,11 @@ func NewService(name string, cfg ServiceConfig) *Service {
 		timeout = 120 * time.Second
 	}
 
-	opts := []http.Option{http.WithTimeout(timeout)}
+	opts := []http.Option{
+		http.WithTimeout(timeout),
+		http.WithHeaderTemplate(llm.SessionTemplate, llm.SessionIDFrom),
+		http.WithContextHeaders(llm.SessionHeaderFunc(cfg.SessionHeaders)),
+	}
 	switch {
 	case cfg.AuthToken != nil:
 		header := cfg.AuthHeader

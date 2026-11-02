@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -23,8 +24,15 @@ type sessionInfo struct {
 	provider        llm.Provider
 	model           llm.Model
 	subagent        bool
+	parentAgentID   string
 	parentSessionID string
 	displayName     string
+	agent           *agent.Agent
+}
+
+type compactedUpdate struct {
+	event SessionAttached
+	agent *agent.Agent
 }
 
 type Recorder struct {
@@ -196,11 +204,14 @@ func (r *Recorder) sessionID(agentID string) (string, bool) {
 	return info.sessionID, true
 }
 
-func (r *Recorder) getSessionInfo(agentID string) (*sessionInfo, bool) {
+func (r *Recorder) getSessionInfo(agentID string) (sessionInfo, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	info, ok := r.sessions[agentID]
-	return info, ok
+	if !ok {
+		return sessionInfo{}, false
+	}
+	return *info, true
 }
 
 func (r *Recorder) handleResume(e SessionResume) {
@@ -235,8 +246,17 @@ func (r *Recorder) handleStarted(e agent.AgentStarted) {
 	if info, ok := r.sessions[e.AgentID]; ok {
 		info.provider = e.Provider
 		info.model = e.Model
+		info.parentAgentID = e.ParentAgentID
+		info.agent = e.Agent
+		rootID := r.rootSessionIDLocked(e.AgentID)
 		sessID := info.sessionID
 		r.mu.Unlock()
+		if rootID == "" {
+			rootID = sessID
+		}
+		if e.Agent != nil {
+			e.Agent.SetSessionID(rootID)
+		}
 		r.persistModel(sessID, e.Provider, e.Model)
 		return
 	}
@@ -290,20 +310,31 @@ func (r *Recorder) handleStarted(e agent.AgentStarted) {
 		provider:        e.Provider,
 		model:           e.Model,
 		subagent:        subagent,
+		parentAgentID:   e.ParentAgentID,
 		parentSessionID: parentSessionID,
 		displayName:     displayName,
+		agent:           e.Agent,
 	}
 	r.mu.Lock()
 	r.sessions[e.AgentID] = info
+	rootID := r.rootSessionIDLocked(e.AgentID)
 	r.mu.Unlock()
+
+	if rootID == "" {
+		rootID = sessID
+	}
+	if e.Agent != nil {
+		e.Agent.SetSessionID(rootID)
+	}
 
 	if !created {
 		r.persistModel(sessID, e.Provider, e.Model)
 	}
 
 	r.mgr.publish(TopicSessionAttached, SessionAttached{
-		AgentID:   e.AgentID,
-		SessionID: sessID,
+		AgentID:       e.AgentID,
+		SessionID:     sessID,
+		RootSessionID: rootID,
 	})
 }
 
@@ -330,6 +361,52 @@ func (r *Recorder) sessionIDForAgent(agentID string) string {
 		return info.sessionID
 	}
 	return ""
+}
+
+func (r *Recorder) rootSessionIDLocked(agentID string) string {
+	seen := make(map[string]bool)
+	for agentID != "" && !seen[agentID] {
+		seen[agentID] = true
+		info, ok := r.sessions[agentID]
+		if !ok {
+			return ""
+		}
+		if !info.subagent {
+			return info.sessionID
+		}
+		if info.parentAgentID != "" {
+			agentID = info.parentAgentID
+			continue
+		}
+		return info.parentSessionID
+	}
+	return ""
+}
+
+func (r *Recorder) collectCompactedChildrenLocked(parentAgentID string, updates *[]compactedUpdate) {
+	parent, ok := r.sessions[parentAgentID]
+	if !ok {
+		return
+	}
+	for agentID, info := range r.sessions {
+		if info.parentAgentID != parentAgentID {
+			continue
+		}
+		info.parentSessionID = parent.sessionID
+		rootID := r.rootSessionIDLocked(agentID)
+		if rootID == "" {
+			rootID = info.sessionID
+		}
+		*updates = append(*updates, compactedUpdate{
+			event: SessionAttached{
+				AgentID:       agentID,
+				SessionID:     info.sessionID,
+				RootSessionID: rootID,
+			},
+			agent: info.agent,
+		})
+		r.collectCompactedChildrenLocked(agentID, updates)
+	}
 }
 
 func (r *Recorder) sessionTitle(sessionID string) string {
@@ -397,7 +474,7 @@ func (r *Recorder) isFirstMessage(sessionID string) bool {
 }
 
 func (r *Recorder) generateTitle(sessionID string, provider llm.Provider, model llm.Model, input string) {
-	title, err := GenerateSessionTitle(provider, model, input)
+	title, err := GenerateSessionTitle(llm.WithSessionID(context.Background(), sessionID), provider, model, input)
 	if err != nil {
 		r.log.Fdebug("session recorder: generate title: %v", err)
 		return
@@ -488,6 +565,7 @@ func (r *Recorder) handleError(e agent.AgentError) {
 	if id, ok := r.sessionID(e.AgentID); ok {
 		r.finalizePending(e.AgentID, id, nil)
 	}
+	r.clearAgent(e.AgentID)
 }
 
 func (r *Recorder) flushPending(agentID, sessID string) {
@@ -610,6 +688,7 @@ func (r *Recorder) handleFinished(e agent.AgentFinished) {
 			r.log.Fdebug("session recorder: accumulate usage: %v", err)
 		}
 	}
+	r.clearAgent(e.AgentID)
 }
 
 func (r *Recorder) handleCompaction(e compaction.Event) {
@@ -620,11 +699,12 @@ func (r *Recorder) handleCompaction(e compaction.Event) {
 	})
 	r.mu.Lock()
 	info, ok := r.sessions[e.AgentID]
-	r.mu.Unlock()
 	if !ok {
+		r.mu.Unlock()
 		return
 	}
 	oldID := info.sessionID
+	r.mu.Unlock()
 
 	newSess, err := r.mgr.CompactSession(oldID, e.CompactedMessages, e.Strategy)
 	if err != nil {
@@ -634,7 +714,27 @@ func (r *Recorder) handleCompaction(e compaction.Event) {
 
 	r.mu.Lock()
 	info.sessionID = newSess.ID
+	rootID := r.rootSessionIDLocked(e.AgentID)
+	if rootID == "" {
+		rootID = newSess.ID
+	}
+	updates := []compactedUpdate{{
+		event: SessionAttached{
+			AgentID:       e.AgentID,
+			SessionID:     newSess.ID,
+			RootSessionID: rootID,
+		},
+		agent: info.agent,
+	}}
+	r.collectCompactedChildrenLocked(e.AgentID, &updates)
 	r.mu.Unlock()
+
+	for _, u := range updates {
+		if u.agent != nil {
+			u.agent.SetSessionID(u.event.RootSessionID)
+		}
+		r.mgr.publish(TopicSessionAttached, u.event)
+	}
 
 	r.log.Fdebug("session recorder: compacted session %s -> %s (%s)", oldID, newSess.ID, e.Strategy)
 }
@@ -644,6 +744,14 @@ func providerName(p llm.Provider) string {
 		return ""
 	}
 	return p.Name()
+}
+
+func (r *Recorder) clearAgent(agentID string) {
+	r.mu.Lock()
+	if info, ok := r.sessions[agentID]; ok {
+		info.agent = nil
+	}
+	r.mu.Unlock()
 }
 
 func (r *Recorder) mapAgentRun(agentID, parentAgentID string) {

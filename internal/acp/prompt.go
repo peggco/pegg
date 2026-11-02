@@ -72,6 +72,9 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 
 	if acpSess.Agent != nil {
 		acpSess.Agent.Attachments = attachments
+		if acpSess.PeggSessionID != "" {
+			acpSess.Agent.SetSessionID(acpSess.PeggSessionID)
+		}
 	}
 
 	var (

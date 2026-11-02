@@ -1687,3 +1687,20 @@ func TestRunParallelToolStreamResultsInOriginalOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentWithSession(t *testing.T) {
+	a := New("test-agent", WithSessionID("sess-9"))
+	if got := llm.SessionIDFrom(a.withSession(context.Background())); got != "sess-9" {
+		t.Fatalf("session = %q, want sess-9", got)
+	}
+
+	a.SetSessionID("sess-10")
+	if got := llm.SessionIDFrom(a.withSession(context.Background())); got != "sess-10" {
+		t.Fatalf("session after SetSessionID = %q, want sess-10", got)
+	}
+
+	a.SetSessionID("")
+	if got := llm.SessionIDFrom(a.withSession(context.Background())); got != "" {
+		t.Fatalf("session after clearing = %q, want empty", got)
+	}
+}

@@ -45,6 +45,7 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 	if err := a.resolveMiddlewareNames(); err != nil {
 		return nil, a.fail(ctx, err)
 	}
+	ctx = a.withSession(ctx)
 	resolveModel(ctx, a, input)
 	if a.Provider == nil {
 		return nil, a.fail(ctx, ErrNoProvider)
@@ -76,6 +77,7 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 		Attachments: a.Attachments,
 	})
 
+	ctx = a.withSession(ctx)
 	prov := a.Provider
 	state.modelID = a.Model.ID
 	state.provider = prov.Name()
@@ -88,6 +90,7 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 		state.history = append(state.history, a.userMessage(messageText))
 	}
 	if len(mi.Calls) > 0 {
+		ctx = a.withSession(ctx)
 		a.resolveInputCalls(ctx, state, mi.Calls)
 	}
 
@@ -107,6 +110,7 @@ func (a *Agent) resume(ctx context.Context, input string, history []llm.Message,
 	if err := a.resolveMiddlewareNames(); err != nil {
 		return nil, a.fail(ctx, err)
 	}
+	ctx = a.withSession(ctx)
 	resolveModel(ctx, a, input)
 	if a.Provider == nil {
 		return nil, a.fail(ctx, ErrNoProvider)
@@ -138,6 +142,7 @@ func (a *Agent) resume(ctx context.Context, input string, history []llm.Message,
 		Attachments: a.Attachments,
 	})
 
+	ctx = a.withSession(ctx)
 	prov := a.Provider
 	state.modelID = a.Model.ID
 	state.provider = prov.Name()
@@ -148,6 +153,7 @@ func (a *Agent) resume(ctx context.Context, input string, history []llm.Message,
 		state.history = append(state.history, a.userMessage(messageText))
 	}
 	if len(mi.Calls) > 0 {
+		ctx = a.withSession(ctx)
 		a.resolveInputCalls(ctx, state, mi.Calls)
 	}
 
@@ -168,6 +174,7 @@ func appendSystemReminders(history []llm.Message, reminders []string) []llm.Mess
 func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*RunResult, error) {
 	finished := false
 	for a.MaxIterations <= 0 || state.iterations < a.MaxIterations {
+		ctx = a.withSession(ctx)
 		select {
 		case <-ctx.Done():
 			return a.partialResult(state), a.fail(ctx, ctx.Err())
@@ -191,6 +198,7 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 			})
 		}
 		if len(calls) > 0 {
+			ctx = a.withSession(ctx)
 			a.executeTools(ctx, state, calls)
 			a.attachToolAttachments(state)
 			state.emptyResponses = 0
@@ -279,6 +287,7 @@ func (a *Agent) resolveInputCalls(ctx context.Context, state *runState, calls []
 	msg := llm.AssistantMessage("")
 	msg.ToolCalls = calls
 	state.history = append(state.history, msg)
+	ctx = a.withSession(ctx)
 	a.executeTools(ctx, state, calls)
 	a.attachToolAttachments(state)
 }
@@ -361,6 +370,7 @@ func (a *Agent) iterate(ctx context.Context, state *runState, prov llm.Provider)
 	if err := a.chain.BeforeLLM(ctx, req); err != nil {
 		return llm.Message{}, nil, err
 	}
+	ctx = a.withSession(ctx)
 	if state.stream != nil {
 		return a.iterateStream(ctx, state, prov, req)
 	}

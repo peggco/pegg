@@ -20,8 +20,9 @@ type SessionResume struct {
 }
 
 type SessionAttached struct {
-	AgentID   string
-	SessionID string
+	AgentID       string
+	SessionID     string
+	RootSessionID string
 }
 
 type SessionCreated struct {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	json "github.com/goccy/go-json"
@@ -20,9 +21,17 @@ type Client struct {
 	timeout      time.Duration
 	maxBodyBytes int64
 
+	contextHeaders  []func(context.Context) map[string]string
+	headerTemplates []headerTemplate
+
 	authHeader string
 	authFn     func(context.Context) (string, error)
 	refreshFn  func(context.Context) error
+}
+
+type headerTemplate struct {
+	name    string
+	resolve func(context.Context) string
 }
 
 const defaultMaxBodyBytes int64 = 10 << 20
@@ -65,6 +74,23 @@ func WithHeader(key, value string) Option {
 	}
 }
 
+func WithContextHeaders(fn func(context.Context) map[string]string) Option {
+	return func(c *Client) {
+		if fn != nil {
+			c.contextHeaders = append(c.contextHeaders, fn)
+		}
+	}
+}
+
+func WithHeaderTemplate(name string, resolve func(context.Context) string) Option {
+	return func(c *Client) {
+		if name == "" || resolve == nil {
+			return
+		}
+		c.headerTemplates = append(c.headerTemplates, headerTemplate{name: name, resolve: resolve})
+	}
+}
+
 func WithAPIKey(apiKey string) Option {
 	return func(c *Client) {
 		c.headers["Authorization"] = "Bearer " + apiKey
@@ -104,7 +130,19 @@ func (c *Client) buildRequest(ctx context.Context, method, path string, body any
 	}
 
 	for key, value := range c.headers {
-		req.Header.Set(key, value)
+		expanded, ok := c.expandHeader(ctx, value)
+		if !ok {
+			continue
+		}
+		req.Header.Set(key, expanded)
+	}
+
+	for _, fn := range c.contextHeaders {
+		for key, value := range fn(ctx) {
+			if value != "" {
+				req.Header.Set(key, value)
+			}
+		}
 	}
 
 	if c.authFn != nil && c.authHeader != "" {
@@ -122,6 +160,20 @@ func (c *Client) buildRequest(ctx context.Context, method, path string, body any
 	}
 
 	return req, nil
+}
+
+func (c *Client) expandHeader(ctx context.Context, value string) (string, bool) {
+	for _, tmpl := range c.headerTemplates {
+		if !strings.Contains(value, tmpl.name) {
+			continue
+		}
+		resolved := tmpl.resolve(ctx)
+		if resolved == "" {
+			return "", false
+		}
+		value = strings.ReplaceAll(value, tmpl.name, resolved)
+	}
+	return value, true
 }
 
 func (c *Client) Do(ctx context.Context, method, path string, body any, result any) error {
