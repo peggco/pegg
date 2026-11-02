@@ -976,3 +976,24 @@ func TestConvertTokensLeavesUnknownTokens(t *testing.T) {
 		t.Fatal("unknown / token should remain as text")
 	}
 }
+
+func TestInsertTextCreatesLines(t *testing.T) {
+	in := NewInput()
+	in.InsertText("a\nb\nc")
+	if got := in.Value(); got != "a\nb\nc" {
+		t.Fatalf("Value = %q, want %q", got, "a\nb\nc")
+	}
+	if len(in.lines) != 3 {
+		t.Fatalf("lines = %d, want 3", len(in.lines))
+	}
+}
+
+func TestNewlineThenValue(t *testing.T) {
+	in := NewInput()
+	in.InsertRune('a')
+	in.Newline()
+	in.InsertRune('b')
+	if got := in.Value(); got != "a\nb" {
+		t.Fatalf("Value = %q, want %q", got, "a\nb")
+	}
+}

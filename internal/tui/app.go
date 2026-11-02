@@ -1128,6 +1128,8 @@ func (a *App) handleFilePaste(text string) {
 		return
 	}
 
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
 	text = strings.TrimSpace(text)
 	if text == "" {
 		a.attachClipboardImage()
@@ -1173,9 +1175,7 @@ func (a *App) pasteShortText(text string) {
 		return
 	}
 	input := a.home.Input()
-	for _, r := range text {
-		input.InsertRune(r)
-	}
+	input.InsertText(text)
 	a.requestRedraw()
 }
 

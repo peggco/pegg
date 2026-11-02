@@ -828,3 +828,12 @@ func TestAttachmentMentionNameCollapsesWhitespace(t *testing.T) {
 		}
 	}
 }
+
+func TestPasteShortTextKeepsNewlines(t *testing.T) {
+	p := home.New()
+	a := &App{home: p, screen: newTestScreen(t)}
+	a.pasteShortText("a\nb")
+	if got := p.Input().Value(); got != "a\nb" {
+		t.Fatalf("input value = %q, want %q", got, "a\nb")
+	}
+}

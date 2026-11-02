@@ -470,3 +470,20 @@ func TestCompletedToolWithEmptyOutputIsNotLive(t *testing.T) {
 		t.Fatal("pending tool should be live")
 	}
 }
+
+func TestUserCardRendersNewlines(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+	c := NewChat()
+	c.AppendItem(&ChatItem{Kind: ItemUser, Text: "alpha\nbeta"})
+	c.rebuildFlat(40)
+
+	la, _, _ := findText(c.flat, "alpha")
+	lb, _, _ := findText(c.flat, "beta")
+	if la < 0 || lb < 0 {
+		t.Fatalf("missing text in flat output: alpha=%d beta=%d", la, lb)
+	}
+	if la == lb {
+		t.Fatalf("alpha and beta rendered on the same line %d", la)
+	}
+}
