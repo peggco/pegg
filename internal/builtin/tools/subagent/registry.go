@@ -50,13 +50,16 @@ type SubAgent struct {
 }
 
 type sessionStore struct {
-	file   string
-	agents map[string]*SubAgent
-	loaded bool
+	file     string
+	agents   map[string]*SubAgent
+	loaded   bool
+	loadOnce sync.Once
+	loadErr  error
 }
 
 type registry struct {
 	mu            sync.Mutex
+	writeMu       sync.Mutex
 	agentSessions map[string]string
 	parents       map[string]*agent.Agent
 	sessions      map[string]*sessionStore
@@ -91,23 +94,29 @@ func (r *registry) storeFor(sessionID string) (*sessionStore, error) {
 		r.sessions[sessionID] = ss
 	}
 	r.mu.Unlock()
-	if ss.loaded {
-		return ss, nil
-	}
 
+	ss.loadOnce.Do(func() {
+		ss.loadErr = r.loadStore(ss, sessionID)
+	})
+	if ss.loadErr != nil {
+		return nil, ss.loadErr
+	}
+	return ss, nil
+}
+
+func (r *registry) loadStore(ss *sessionStore, sessionID string) error {
 	file, err := config.GetProjectConfigPath("subagents", sessionID+".json")
 	if err != nil {
-		return nil, fmt.Errorf("subagent: config path: %w", err)
+		return fmt.Errorf("subagent: config path: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
-		return nil, fmt.Errorf("subagent: ensure subagents dir: %w", err)
+		return fmt.Errorf("subagent: ensure subagents dir: %w", err)
 	}
-	ss.file = file
 
 	data, err := os.ReadFile(file)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("subagent: read file: %w", err)
+			return fmt.Errorf("subagent: read file: %w", err)
 		}
 	}
 	if len(data) == 0 && sessionID == defaultSessionID {
@@ -121,10 +130,12 @@ func (r *registry) storeFor(sessionID string) (*sessionStore, error) {
 	var list []*SubAgent
 	if len(data) > 0 {
 		if err := json.Unmarshal(data, &list); err != nil {
-			return nil, fmt.Errorf("subagent: parse: %w", err)
+			return fmt.Errorf("subagent: parse: %w", err)
 		}
 	}
 	changed := false
+	r.mu.Lock()
+	ss.file = file
 	for _, sa := range list {
 		if sa.Status == StatusPending || sa.Status == StatusRunning {
 			sa.Status = StatusInterrupted
@@ -140,26 +151,33 @@ func (r *registry) storeFor(sessionID string) (*sessionStore, error) {
 		sa.sessionID = sessionID
 		ss.agents[sa.Name] = sa
 	}
-	r.mu.Lock()
 	ss.loaded = true
 	r.mu.Unlock()
+
 	if changed {
 		_ = r.saveStore(ss)
 	}
-	return ss, nil
+	return nil
 }
 
 func (r *registry) saveStore(ss *sessionStore) error {
-	list := make([]*SubAgent, 0, len(ss.agents))
+	r.mu.Lock()
+	list := make([]SubAgent, 0, len(ss.agents))
 	for _, sa := range ss.agents {
-		list = append(list, sa)
+		list = append(list, copyOf(sa))
 	}
+	file := ss.file
+	r.mu.Unlock()
+
 	sort.Slice(list, func(i, j int) bool { return list[i].CreatedAt.Before(list[j].CreatedAt) })
 	data, err := json.MarshalIndent(list, "", "  ")
 	if err != nil {
 		return fmt.Errorf("subagent: marshal: %w", err)
 	}
-	if err := os.WriteFile(ss.file, data, 0o644); err != nil {
+
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
+	if err := os.WriteFile(file, data, 0o644); err != nil {
 		return fmt.Errorf("subagent: write: %w", err)
 	}
 	return nil
@@ -373,18 +391,21 @@ func (r *registry) resume(name string, parent *agent.Agent) (*SubAgent, error) {
 		return nil, err
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	sa, ok := ss.agents[name]
 	if !ok {
+		r.mu.Unlock()
 		return nil, fmt.Errorf("subagent: no subagent named %q", name)
 	}
 	if !sa.finished {
+		r.mu.Unlock()
 		return nil, fmt.Errorf("subagent: %q is still running", name)
 	}
 	sa.finished = false
 	sa.Status = StatusPending
 	sa.done = make(chan struct{})
 	sa.UpdatedAt = time.Now()
+	r.mu.Unlock()
+
 	if err := r.saveStore(ss); err != nil {
 		return nil, err
 	}

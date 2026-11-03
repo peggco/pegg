@@ -3,6 +3,7 @@ package opencodego
 import (
 	"fmt"
 	"maps"
+	"strings"
 	"time"
 
 	"github.com/peggco/pegg/internal/core/config"
@@ -29,10 +30,18 @@ func NewFromConfig(cfg config.LLMConfig) (llm.Provider, error) {
 		"x-opencode-session": fmt.Sprintf("ses_%s%s", random.GenerateHex(12), random.GenerateAlphanumeric(14)),
 	}
 	maps.Copy(defaultHeaders, cfg.Headers)
+	sessionHeaders := []string{"x-opencode-session"}
+	for k := range cfg.Headers {
+		if strings.EqualFold(k, "x-opencode-session") {
+			sessionHeaders = nil
+			break
+		}
+	}
 	return openaidriver.NewService(ProviderName, openaidriver.ServiceConfig{
-		BaseURL: DefaultBaseURL,
-		APIKey:  cfg.APIKey,
-		Headers: defaultHeaders,
-		Timeout: time.Duration(cfg.Timeout) * time.Second,
+		BaseURL:        DefaultBaseURL,
+		APIKey:         cfg.APIKey,
+		Headers:        defaultHeaders,
+		SessionHeaders: sessionHeaders,
+		Timeout:        time.Duration(cfg.Timeout) * time.Second,
 	}), nil
 }

@@ -38,6 +38,7 @@ type Manager struct {
 	turns    map[string]*turn
 	callArgs map[string]string
 	sessions map[string]string
+	roots    map[string]string
 
 	observerBusy atomic.Bool
 	started      atomic.Bool
@@ -71,6 +72,7 @@ func newManager(deps Deps, dir string) *Manager {
 		turns:    make(map[string]*turn),
 		callArgs: make(map[string]string),
 		sessions: make(map[string]string),
+		roots:    make(map[string]string),
 	}
 	return m
 }
@@ -166,12 +168,13 @@ func (m *Manager) handleStarted(e agent.AgentStarted) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.turns[e.AgentID] = &turn{
-		agentID:     e.AgentID,
-		agentName:   e.AgentName,
-		displayName: e.DisplayName,
-		parentID:    e.ParentAgentID,
-		startedAt:   timeNow(),
-		sessionID:   m.sessions[e.AgentID],
+		agentID:       e.AgentID,
+		agentName:     e.AgentName,
+		displayName:   e.DisplayName,
+		parentID:      e.ParentAgentID,
+		startedAt:     timeNow(),
+		sessionID:     m.sessions[e.AgentID],
+		rootSessionID: m.roots[e.AgentID],
 	}
 }
 
@@ -204,7 +207,7 @@ func (m *Manager) handleToolResult(e agent.AgentToolResult) {
 	m.mu.Lock()
 	t, ok := m.turns[e.AgentID]
 	if !ok {
-		m.turns[e.AgentID] = &turn{agentID: e.AgentID, agentName: e.AgentName, sessionID: m.sessions[e.AgentID], startedAt: timeNow()}
+		m.turns[e.AgentID] = &turn{agentID: e.AgentID, agentName: e.AgentName, sessionID: m.sessions[e.AgentID], rootSessionID: m.roots[e.AgentID], startedAt: timeNow()}
 		t = m.turns[e.AgentID]
 	}
 	args := m.callArgs[e.AgentID+"/"+e.CallID]
@@ -238,8 +241,16 @@ func (m *Manager) handleMessage(e agent.AgentMessage) {
 func (m *Manager) handleSessionAttached(e session.SessionAttached) {
 	m.mu.Lock()
 	m.sessions[e.AgentID] = e.SessionID
-	if t, ok := m.turns[e.AgentID]; ok && t.sessionID == "" {
-		t.sessionID = e.SessionID
+	if e.RootSessionID != "" {
+		m.roots[e.AgentID] = e.RootSessionID
+	}
+	if t, ok := m.turns[e.AgentID]; ok {
+		if t.sessionID == "" {
+			t.sessionID = e.SessionID
+		}
+		if t.rootSessionID == "" {
+			t.rootSessionID = e.RootSessionID
+		}
 	}
 	m.mu.Unlock()
 }
@@ -306,6 +317,11 @@ func (m *Manager) flush(t *turn, withSummary bool) {
 		return
 	}
 	ctx := context.Background()
+	if t.rootSessionID != "" {
+		ctx = llm.WithSessionID(ctx, t.rootSessionID)
+	} else if t.sessionID != "" {
+		ctx = llm.WithSessionID(ctx, t.sessionID)
+	}
 
 	var stored int
 	var newBlocks []string

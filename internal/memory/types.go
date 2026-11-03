@@ -60,6 +60,7 @@ type turn struct {
 	displayName   string
 	parentID      string
 	sessionID     string
+	rootSessionID string
 	prompt        string
 	lastAssistant string
 	toolUses      []ToolUse

@@ -1474,3 +1474,233 @@ func TestRunDoesNotContinueAfterUserCancel(t *testing.T) {
 		t.Fatalf("provider calls = %d, want 1", prov.calls)
 	}
 }
+
+func TestRunToolSemantics(t *testing.T) {
+	okTool := tool.NewSpec("ok", "", nil, func(context.Context, string) (string, error) {
+		return "fine", nil
+	})
+	failingTool := tool.NewSpec("failing", "", nil, func(context.Context, string) (string, error) {
+		return "", errors.New("boom")
+	})
+	a, _ := newTestAgent(t, WithTools(okTool, failingTool))
+
+	tests := []struct {
+		name       string
+		call       llm.ToolCall
+		wantOutput string
+		wantErrIs  error
+	}{
+		{"success", toolCall("c1", "ok", "{}"), "fine", nil},
+		{"tool error", toolCall("c2", "failing", "{}"), "Error: boom", ErrToolExecutionFailed},
+		{"missing tool", toolCall("c3", "nope", "{}"), `Error: tool "nope" is not registered`, tool.ErrNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := a.runTool(context.Background(), tt.call)
+			if res.call.ID != tt.call.ID {
+				t.Fatalf("call ID = %q, want %q", res.call.ID, tt.call.ID)
+			}
+			if res.output != tt.wantOutput {
+				t.Fatalf("output = %q, want %q", res.output, tt.wantOutput)
+			}
+			if tt.wantErrIs == nil {
+				if res.toolErr != nil {
+					t.Fatalf("toolErr = %v, want nil", res.toolErr)
+				}
+			} else if !errors.Is(res.toolErr, tt.wantErrIs) {
+				t.Fatalf("toolErr = %v, want errors.Is(%v)", res.toolErr, tt.wantErrIs)
+			}
+		})
+	}
+}
+
+func TestRunToolMiddlewareAbort(t *testing.T) {
+	blocked := tool.NewSpec("blocked", "", nil, func(context.Context, string) (string, error) {
+		t.Fatal("aborted tool must not execute")
+		return "", nil
+	})
+	a, _ := newTestAgent(t, WithTool(blocked), WithMiddleware(abortingMiddleware{}))
+
+	res := a.runTool(context.Background(), toolCall("c1", "blocked", "{}"))
+	if !strings.Contains(res.output, "aborted by middleware") {
+		t.Fatalf("output = %q, want middleware abort message", res.output)
+	}
+	if res.toolErr == nil {
+		t.Fatal("toolErr = nil, want the BeforeTool error")
+	}
+	if len(res.attachments) != 0 {
+		t.Fatalf("attachments = %d, want 0", len(res.attachments))
+	}
+}
+
+func TestRunParallelToolCallsOverlapAndPreserveOrder(t *testing.T) {
+	const n = 3
+	var wg sync.WaitGroup
+	wg.Add(n)
+
+	barrier := tool.NewSpec("barrier", "", nil, func(_ context.Context, args string) (string, error) {
+		wg.Done()
+		wg.Wait()
+		return "ok:" + args, nil
+	})
+
+	a, prov := newTestAgent(t, WithTool(barrier))
+	prov.responses = []mockResponse{
+		{calls: []llm.ToolCall{
+			toolCall("c1", "barrier", "1"),
+			toolCall("c2", "barrier", "2"),
+			toolCall("c3", "barrier", "3"),
+		}},
+		{content: "done"},
+	}
+
+	type runOut struct {
+		res *RunResult
+		err error
+	}
+	done := make(chan runOut, 1)
+	go func() {
+		res, err := a.Run(context.Background(), "go")
+		done <- runOut{res: res, err: err}
+	}()
+
+	var out runOut
+	select {
+	case out = <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("tool calls did not overlap: sequential execution deadlocked on the barrier")
+	}
+	if out.err != nil {
+		t.Fatal(out.err)
+	}
+
+	var ids []string
+	for _, m := range out.res.History {
+		if m.Role == llm.RoleTool {
+			ids = append(ids, m.ToolCallID)
+		}
+	}
+	want := []string{"c1", "c2", "c3"}
+	if len(ids) != len(want) {
+		t.Fatalf("tool message IDs = %v, want %v", ids, want)
+	}
+	for i := range want {
+		if ids[i] != want[i] {
+			t.Fatalf("tool message IDs = %v, want original order %v", ids, want)
+		}
+	}
+}
+
+func TestRunParallelToolCallsMixedResultsOrder(t *testing.T) {
+	okTool := tool.NewSpec("ok", "", nil, func(context.Context, string) (string, error) {
+		return "fine", nil
+	})
+	failingTool := tool.NewSpec("failing", "", nil, func(context.Context, string) (string, error) {
+		return "", errors.New("boom")
+	})
+	a, prov := newTestAgent(t, WithTools(okTool, failingTool))
+	prov.responses = []mockResponse{
+		{calls: []llm.ToolCall{
+			toolCall("c1", "ok", "{}"),
+			toolCall("c2", "missing", "{}"),
+			toolCall("c3", "failing", "{}"),
+			toolCall("c4", "ok", "{}"),
+		}},
+		{content: "done"},
+	}
+
+	res, err := a.Run(context.Background(), "go")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type wantTool struct {
+		id       string
+		contains string
+	}
+	want := []wantTool{
+		{"c1", "fine"},
+		{"c2", "not registered"},
+		{"c3", "boom"},
+		{"c4", "fine"},
+	}
+	var got []llm.Message
+	for _, m := range res.History {
+		if m.Role == llm.RoleTool {
+			got = append(got, m)
+		}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("tool messages = %d, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i].ToolCallID != want[i].id {
+			t.Fatalf("tool message[%d] ID = %q, want %q", i, got[i].ToolCallID, want[i].id)
+		}
+		if !strings.Contains(fmt.Sprint(got[i].Content), want[i].contains) {
+			t.Fatalf("tool message[%d] content = %q, want substring %q", i, fmt.Sprint(got[i].Content), want[i].contains)
+		}
+	}
+}
+
+func TestRunParallelToolStreamResultsInOriginalOrder(t *testing.T) {
+	a, prov := newTestAgent(t, WithTool(echoTool()))
+	prov.streams = [][]llm.StreamChunk{
+		{
+			{ToolCalls: []llm.ToolCall{{
+				Index: 0, ID: "c1", Type: "function",
+				Function: llm.Function{Name: "echo", Arguments: `{"n":1}`},
+			}}},
+			{ToolCalls: []llm.ToolCall{{
+				Index: 1, ID: "c2", Type: "function",
+				Function: llm.Function{Name: "echo", Arguments: `{"n":2}`},
+			}}},
+			{ToolCalls: []llm.ToolCall{{
+				Index: 2, ID: "c3", Type: "function",
+				Function: llm.Function{Name: "echo", Arguments: `{"n":3}`},
+			}}},
+			{FinishReason: llm.FinishReasonToolCalls, IsDone: true},
+		},
+		{
+			{Content: "done"},
+			{FinishReason: llm.FinishReasonStop, IsDone: true},
+		},
+	}
+
+	var ids []string
+	if _, err := a.RunStream(context.Background(), "go", func(e StreamEvent) error {
+		if e.Type == StreamToolResult && e.ToolCall != nil {
+			ids = append(ids, e.ToolCall.ID)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"c1", "c2", "c3"}
+	if len(ids) != len(want) {
+		t.Fatalf("stream tool result IDs = %v, want %v", ids, want)
+	}
+	for i := range want {
+		if ids[i] != want[i] {
+			t.Fatalf("stream tool result IDs = %v, want original order %v", ids, want)
+		}
+	}
+}
+
+func TestAgentWithSession(t *testing.T) {
+	a := New("test-agent", WithSessionID("sess-9"))
+	if got := llm.SessionIDFrom(a.withSession(context.Background())); got != "sess-9" {
+		t.Fatalf("session = %q, want sess-9", got)
+	}
+
+	a.SetSessionID("sess-10")
+	if got := llm.SessionIDFrom(a.withSession(context.Background())); got != "sess-10" {
+		t.Fatalf("session after SetSessionID = %q, want sess-10", got)
+	}
+
+	a.SetSessionID("")
+	if got := llm.SessionIDFrom(a.withSession(context.Background())); got != "" {
+		t.Fatalf("session after clearing = %q, want empty", got)
+	}
+}

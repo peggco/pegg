@@ -65,3 +65,16 @@ func TestWrapTextPreservesNewlines(t *testing.T) {
 		t.Fatalf("lines = %q, want [first second]", got)
 	}
 }
+
+func TestWrapTextPreservesBlankLines(t *testing.T) {
+	got := wrappedStrings("a\n\n\nb", 40)
+	want := []string{"a", "", "", "b"}
+	if len(got) != len(want) {
+		t.Fatalf("lines = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("lines = %q, want %q", got, want)
+		}
+	}
+}

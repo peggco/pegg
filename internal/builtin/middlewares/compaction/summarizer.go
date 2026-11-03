@@ -96,12 +96,12 @@ func (s *summarizer) get(cfg *config.CompactionConfig, llmMgr *llm.Manager, pare
 	return s.agent
 }
 
-func (s *summarizer) run(history []llm.Message) (string, error) {
+func (s *summarizer) run(ctx context.Context, history []llm.Message) (string, error) {
 	if s.agent == nil {
 		return "", fmt.Errorf("compaction: summarizer not initialized")
 	}
 	input := formatHistoryForSummary(history)
-	res, err := s.agent.Run(context.Background(), input)
+	res, err := s.agent.Run(ctx, input)
 	if err != nil {
 		return "", fmt.Errorf("compaction: summarizer run: %w", err)
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/decision"
+	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/utils/http"
 )
 
@@ -52,6 +53,10 @@ func NewFromConfig(cfg config.LLMConfig) (decision.Provider, error) {
 	for k, v := range cfg.Headers {
 		opts = append(opts, http.WithHeader(k, v))
 	}
+	opts = append(opts,
+		http.WithHeaderTemplate(llm.SessionTemplate, llm.SessionIDFrom),
+		http.WithContextHeaders(llm.SessionHeaderFunc(nil)),
+	)
 
 	return &Service{
 		httpClient: http.NewClient(baseURL, opts...),

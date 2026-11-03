@@ -573,6 +573,9 @@ func (a *App) onSessionAttached(e session.SessionAttached) {
 	if a.agent != nil && e.AgentID != a.agent.ID {
 		return
 	}
+	if a.agent != nil && e.AgentID == a.agent.ID && e.RootSessionID != "" {
+		a.agent.SetSessionID(e.RootSessionID)
+	}
 	if a.session == nil {
 		a.session = &activeSession{info: settings.SessionInfo{ID: e.SessionID, Mode: string(a.mode)}, viewID: e.SessionID}
 		a.refreshHomeLocked()
@@ -584,6 +587,7 @@ func (a *App) onSessionCompacted(e session.SessionCompacted) {
 	defer a.chatMu.Unlock()
 	if rt := a.runtimes[e.ParentSessionID]; rt != nil && rt.agent != nil {
 		a.remapRuntimeLocked(e.ParentSessionID, e.SessionID, rt.agent.ID)
+		rt.agent.SetSessionID(e.SessionID)
 	}
 	if a.session == nil || a.session.info.ID != e.ParentSessionID {
 		return
@@ -833,6 +837,9 @@ func (a *App) prepareRuntimeRun(ctx context.Context, cancel context.CancelFunc, 
 		}
 	}
 	rt.agent.ReasoningEffort = rt.reasoningEffort
+	if rt.id != "" {
+		rt.agent.SetSessionID(rt.id)
+	}
 	rt.agent.Attachments = attachments
 	rt.agent.SetMode(rt.mode)
 

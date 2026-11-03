@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/agent/reminder"
@@ -26,7 +27,10 @@ type runState struct {
 	emptyResponses     int
 }
 
-const maxEmptyResponseRetries = 3
+const (
+	maxEmptyResponseRetries = 3
+	maxParallelToolCalls    = 8
+)
 
 func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*RunResult, error) {
 	if strings.TrimSpace(input) == "" && len(a.Attachments) == 0 {
@@ -41,6 +45,7 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 	if err := a.resolveMiddlewareNames(); err != nil {
 		return nil, a.fail(ctx, err)
 	}
+	ctx = a.withSession(ctx)
 	resolveModel(ctx, a, input)
 	if a.Provider == nil {
 		return nil, a.fail(ctx, ErrNoProvider)
@@ -72,6 +77,7 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 		Attachments: a.Attachments,
 	})
 
+	ctx = a.withSession(ctx)
 	prov := a.Provider
 	state.modelID = a.Model.ID
 	state.provider = prov.Name()
@@ -84,9 +90,8 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 		state.history = append(state.history, a.userMessage(messageText))
 	}
 	if len(mi.Calls) > 0 {
-		if err := a.resolveInputCalls(ctx, state, mi.Calls); err != nil {
-			return nil, a.fail(ctx, err)
-		}
+		ctx = a.withSession(ctx)
+		a.resolveInputCalls(ctx, state, mi.Calls)
 	}
 
 	return a.loop(ctx, state, prov)
@@ -105,6 +110,7 @@ func (a *Agent) resume(ctx context.Context, input string, history []llm.Message,
 	if err := a.resolveMiddlewareNames(); err != nil {
 		return nil, a.fail(ctx, err)
 	}
+	ctx = a.withSession(ctx)
 	resolveModel(ctx, a, input)
 	if a.Provider == nil {
 		return nil, a.fail(ctx, ErrNoProvider)
@@ -136,6 +142,7 @@ func (a *Agent) resume(ctx context.Context, input string, history []llm.Message,
 		Attachments: a.Attachments,
 	})
 
+	ctx = a.withSession(ctx)
 	prov := a.Provider
 	state.modelID = a.Model.ID
 	state.provider = prov.Name()
@@ -146,9 +153,8 @@ func (a *Agent) resume(ctx context.Context, input string, history []llm.Message,
 		state.history = append(state.history, a.userMessage(messageText))
 	}
 	if len(mi.Calls) > 0 {
-		if err := a.resolveInputCalls(ctx, state, mi.Calls); err != nil {
-			return nil, a.fail(ctx, err)
-		}
+		ctx = a.withSession(ctx)
+		a.resolveInputCalls(ctx, state, mi.Calls)
 	}
 
 	return a.loop(ctx, state, prov)
@@ -168,6 +174,7 @@ func appendSystemReminders(history []llm.Message, reminders []string) []llm.Mess
 func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*RunResult, error) {
 	finished := false
 	for a.MaxIterations <= 0 || state.iterations < a.MaxIterations {
+		ctx = a.withSession(ctx)
 		select {
 		case <-ctx.Done():
 			return a.partialResult(state), a.fail(ctx, ctx.Err())
@@ -191,11 +198,8 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 			})
 		}
 		if len(calls) > 0 {
-			for _, call := range calls {
-				if err := a.executeTool(ctx, state, call); err != nil {
-					return a.partialResult(state), a.fail(ctx, err)
-				}
-			}
+			ctx = a.withSession(ctx)
+			a.executeTools(ctx, state, calls)
 			a.attachToolAttachments(state)
 			state.emptyResponses = 0
 			continue
@@ -279,17 +283,13 @@ func (a *Agent) userMessage(input string) llm.Message {
 	return llm.UserMessage(llm.ContentWithAttachments(input, atts))
 }
 
-func (a *Agent) resolveInputCalls(ctx context.Context, state *runState, calls []llm.ToolCall) error {
+func (a *Agent) resolveInputCalls(ctx context.Context, state *runState, calls []llm.ToolCall) {
 	msg := llm.AssistantMessage("")
 	msg.ToolCalls = calls
 	state.history = append(state.history, msg)
-	for _, call := range calls {
-		if err := a.executeTool(ctx, state, call); err != nil {
-			return err
-		}
-	}
+	ctx = a.withSession(ctx)
+	a.executeTools(ctx, state, calls)
 	a.attachToolAttachments(state)
-	return nil
 }
 
 func (a *Agent) attachToolAttachments(state *runState) {
@@ -370,6 +370,7 @@ func (a *Agent) iterate(ctx context.Context, state *runState, prov llm.Provider)
 	if err := a.chain.BeforeLLM(ctx, req); err != nil {
 		return llm.Message{}, nil, err
 	}
+	ctx = a.withSession(ctx)
 	if state.stream != nil {
 		return a.iterateStream(ctx, state, prov, req)
 	}
@@ -511,48 +512,86 @@ func (a *Agent) iterateStream(ctx context.Context, state *runState, prov llm.Pro
 	return msg, calls, nil
 }
 
-func (a *Agent) executeTool(ctx context.Context, state *runState, call llm.ToolCall) error {
-	a.debugf("agent %q tool call %q (%s)", a.Name, call.Function.Name, call.ID)
-	a.publish(TopicAgentToolCall, AgentToolCall{
-		AgentID:   a.ID,
-		AgentName: a.Name,
-		Model:     a.Model,
-		Call:      call,
-	})
+type toolExecResult struct {
+	call        llm.ToolCall
+	output      string
+	attachments []llm.Attachment
+	toolErr     error
+}
+
+func (a *Agent) runTool(ctx context.Context, call llm.ToolCall) toolExecResult {
+	res := toolExecResult{call: call}
 
 	if err := a.chain.BeforeTool(ctx, call); err != nil {
-		output := fmt.Sprintf("Error: tool call aborted by middleware: %v", err)
-		state.history = append(state.history, llm.ToolMessage(output, call.ID))
-		a.emitToolResult(state, call, output, nil, err)
-		return nil
+		res.output = fmt.Sprintf("Error: tool call aborted by middleware: %v", err)
+		res.toolErr = err
+		return res
 	}
 
 	t, ok := a.Tools.Get(call.Function.Name)
-	var output string
-	var toolErr error
-	var attachments []llm.Attachment
 	if !ok {
-		output = fmt.Sprintf("Error: tool %q is not registered", call.Function.Name)
-		toolErr = fmt.Errorf("%w: %s", tool.ErrNotFound, call.Function.Name)
-	} else {
-		sink := tool.NewAttachmentSink()
-		toolCtx := tool.WithAttachmentSink(ctx, sink)
-		output, toolErr = a.chain.InvokeTool(toolCtx, call, func(ctx context.Context, call llm.ToolCall) (string, error) {
-			return t.Execute(ctx, call.Function.Arguments)
-		})
-		if toolErr != nil {
-			output = fmt.Sprintf("Error: %v", toolErr)
-			toolErr = fmt.Errorf("%w: %s: %v", ErrToolExecutionFailed, t.Name(), toolErr)
-		} else {
-			attachments = sink.Attachments()
-			state.pendingAttachments = append(state.pendingAttachments, attachments...)
-		}
+		res.output = fmt.Sprintf("Error: tool %q is not registered", call.Function.Name)
+		res.toolErr = fmt.Errorf("%w: %s", tool.ErrNotFound, call.Function.Name)
+		_ = a.chain.AfterTool(ctx, call, res.output, res.toolErr)
+		return res
 	}
 
-	_ = a.chain.AfterTool(ctx, call, output, toolErr)
-	state.history = append(state.history, llm.ToolMessage(output, call.ID))
-	a.emitToolResult(state, call, output, attachments, toolErr)
-	return nil
+	sink := tool.NewAttachmentSink()
+	toolCtx := tool.WithAttachmentSink(ctx, sink)
+	output, toolErr := a.chain.InvokeTool(toolCtx, call, func(ctx context.Context, call llm.ToolCall) (string, error) {
+		return t.Execute(ctx, call.Function.Arguments)
+	})
+	if toolErr != nil {
+		res.output = fmt.Sprintf("Error: %v", toolErr)
+		res.toolErr = fmt.Errorf("%w: %s: %v", ErrToolExecutionFailed, t.Name(), toolErr)
+	} else {
+		res.output = output
+		res.attachments = sink.Attachments()
+	}
+
+	_ = a.chain.AfterTool(ctx, call, res.output, res.toolErr)
+	return res
+}
+
+func (a *Agent) executeTools(ctx context.Context, state *runState, calls []llm.ToolCall) {
+	if len(calls) == 0 {
+		return
+	}
+
+	for _, call := range calls {
+		a.debugf("agent %q tool call %q (%s)", a.Name, call.Function.Name, call.ID)
+		a.publish(TopicAgentToolCall, AgentToolCall{
+			AgentID:   a.ID,
+			AgentName: a.Name,
+			Model:     a.Model,
+			Call:      call,
+		})
+	}
+
+	results := make([]toolExecResult, len(calls))
+	if len(calls) == 1 {
+		results[0] = a.runTool(ctx, calls[0])
+	} else {
+		sem := make(chan struct{}, maxParallelToolCalls)
+		var wg sync.WaitGroup
+		for i, call := range calls {
+			i, call := i, call
+			wg.Add(1)
+			sem <- struct{}{}
+			go func() {
+				defer wg.Done()
+				defer func() { <-sem }()
+				results[i] = a.runTool(ctx, call)
+			}()
+		}
+		wg.Wait()
+	}
+
+	for _, res := range results {
+		state.history = append(state.history, llm.ToolMessage(res.output, res.call.ID))
+		state.pendingAttachments = append(state.pendingAttachments, res.attachments...)
+		a.emitToolResult(state, res.call, res.output, res.attachments, res.toolErr)
+	}
 }
 
 func (a *Agent) emitToolResult(state *runState, call llm.ToolCall, output string, attachments []llm.Attachment, toolErr error) {

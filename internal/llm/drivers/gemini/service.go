@@ -21,10 +21,11 @@ type Service struct {
 }
 
 type ServiceConfig struct {
-	BaseURL string
-	APIKey  string
-	Headers map[string]string
-	Timeout time.Duration
+	BaseURL        string
+	APIKey         string
+	Headers        map[string]string
+	SessionHeaders []string
+	Timeout        time.Duration
 }
 
 func NewService(name string, cfg ServiceConfig) *Service {
@@ -33,7 +34,11 @@ func NewService(name string, cfg ServiceConfig) *Service {
 		timeout = 120 * time.Second
 	}
 
-	opts := []http.Option{http.WithTimeout(timeout)}
+	opts := []http.Option{
+		http.WithTimeout(timeout),
+		http.WithHeaderTemplate(llm.SessionTemplate, llm.SessionIDFrom),
+		http.WithContextHeaders(llm.SessionHeaderFunc(cfg.SessionHeaders)),
+	}
 	opts = append(opts, http.WithHeader("HTTP-Referer", config.AppUrl))
 	opts = append(opts, http.WithHeader("X-Title", config.AppName))
 	for k, v := range cfg.Headers {

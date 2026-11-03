@@ -204,6 +204,7 @@ func (c *CLI) runRun(out io.Writer, in io.Reader, message string, opts runOption
 	}
 	if resume != nil {
 		renderer.renderSessionHistory(resumeMsgs)
+		orch.SetSessionID(resume.ID)
 	}
 
 	history := make([]llm.Message, 0, len(resumeMsgs)+1)
@@ -224,6 +225,7 @@ func (c *CLI) runRun(out io.Writer, in io.Reader, message string, opts runOption
 			return cerr
 		}
 		resume = sess
+		orch.SetSessionID(sess.ID)
 		c.bus.Publish(session.TopicSessionResume, session.SessionResume{
 			AgentID:   orch.ID,
 			SessionID: sess.ID,
@@ -392,6 +394,9 @@ func (c *CLI) selectSession() (string, error) {
 }
 
 func (c *CLI) runChatLoop(ctx context.Context, orch *agent.Agent, renderer *runRenderer, history []llm.Message, in io.Reader, sess *session.Session) error {
+	if sess != nil {
+		orch.SetSessionID(sess.ID)
+	}
 	renderer.chatMode = true
 	renderer.write("\n%s\n", renderer.dim("chat mode: type a message, exit/quit to end"))
 
@@ -484,6 +489,9 @@ func (c *CLI) runChatLoop(ctx context.Context, orch *agent.Agent, renderer *runR
 }
 
 func (c *CLI) runChatAgent(ctx context.Context, orch *agent.Agent, line string, history []llm.Message, sess *session.Session) ([]llm.Message, error) {
+	if sess != nil {
+		orch.SetSessionID(sess.ID)
+	}
 	lease, err := c.claimRun(ctx, sess, orch, orch.Provider, orch.Model)
 	if err != nil {
 		return history, err

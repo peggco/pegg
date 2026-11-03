@@ -43,6 +43,9 @@ type Agent struct {
 	ToolNames       []string
 	ReasoningEffort string
 
+	sessionMu sync.RWMutex
+	sessionID string
+
 	structuredName   string
 	structuredSchema any
 
@@ -128,6 +131,29 @@ func WithSystemPrompt(prompt string) Option {
 
 func WithSystemPromptFn(fn func(providerID, modelID string) string) Option {
 	return func(a *Agent) { a.SystemPromptFn = fn }
+}
+
+func WithSessionID(id string) Option {
+	return func(a *Agent) { a.sessionID = id }
+}
+
+func (a *Agent) SetSessionID(id string) {
+	a.sessionMu.Lock()
+	a.sessionID = id
+	a.sessionMu.Unlock()
+}
+
+func (a *Agent) SessionID() string {
+	a.sessionMu.RLock()
+	defer a.sessionMu.RUnlock()
+	return a.sessionID
+}
+
+func (a *Agent) withSession(ctx context.Context) context.Context {
+	if id := a.SessionID(); id != "" {
+		return llm.WithSessionID(ctx, id)
+	}
+	return ctx
 }
 
 func (a *Agent) SetModelProvider(model llm.Model, provider llm.Provider) {
@@ -324,6 +350,7 @@ func (a *Agent) Continue(ctx context.Context, history []llm.Message) (*RunResult
 	if !a.HasPendingNotifications() {
 		return nil, nil
 	}
+	ctx = a.withSession(ctx)
 	if a.Provider == nil {
 		return nil, a.fail(ctx, ErrNoProvider)
 	}

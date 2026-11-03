@@ -629,6 +629,9 @@ func (c *CLI) runScheduled(out io.Writer, id, runID, sessionID string) error {
 		}
 		return claimErr
 	}
+	if sess != nil {
+		orch.SetSessionID(sess.ID)
+	}
 	var (
 		result *agent.RunResult
 		runErr error

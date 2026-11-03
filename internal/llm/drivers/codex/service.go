@@ -20,10 +20,11 @@ type Service struct {
 }
 
 type ServiceConfig struct {
-	BaseURL string
-	Path    string
-	Headers map[string]string
-	Timeout time.Duration
+	BaseURL        string
+	Path           string
+	Headers        map[string]string
+	SessionHeaders []string
+	Timeout        time.Duration
 
 	AuthHeader string
 	AuthToken  func(ctx context.Context) (string, error)
@@ -38,7 +39,11 @@ func NewService(name string, cfg ServiceConfig) *Service {
 		timeout = 120 * time.Second
 	}
 
-	opts := []http.Option{http.WithTimeout(timeout)}
+	opts := []http.Option{
+		http.WithTimeout(timeout),
+		http.WithHeaderTemplate(llm.SessionTemplate, llm.SessionIDFrom),
+		http.WithContextHeaders(llm.SessionHeaderFunc(cfg.SessionHeaders)),
+	}
 	if cfg.AuthToken != nil {
 		header := cfg.AuthHeader
 		if header == "" {

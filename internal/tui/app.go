@@ -595,6 +595,13 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 	}
 
 	if kev.Key() == tcell.KeyCtrlC {
+		if kev.Modifiers()&tcell.ModShift != 0 {
+			a.copySelection()
+			return true
+		}
+		if a.copySelection() {
+			return true
+		}
 		if a.handleCtrlC() {
 			return true
 		}
@@ -653,20 +660,26 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 	return false
 }
 
-func (a *App) copySelection() {
+func (a *App) copySelection() bool {
 	a.chatMu.Lock()
 	var text string
+	selected := false
 	if a.home != nil && a.home.Input().HasSelection() {
+		selected = true
 		text = a.home.Input().SelectedText()
 	}
 	if text == "" && a.chat != nil && a.chat.HasSelection() {
+		selected = true
 		text = a.chat.SelectedText()
 	}
 	a.chatMu.Unlock()
-	if text == "" {
-		return
+	if !selected {
+		return false
 	}
-	a.screen.SetClipboard([]byte(text))
+	if text != "" && a.screen != nil {
+		a.screen.SetClipboard([]byte(text))
+	}
+	return true
 }
 
 func (a *App) openSettings() {
@@ -1115,6 +1128,8 @@ func (a *App) handleFilePaste(text string) {
 		return
 	}
 
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
 	text = strings.TrimSpace(text)
 	if text == "" {
 		a.attachClipboardImage()
@@ -1160,9 +1175,7 @@ func (a *App) pasteShortText(text string) {
 		return
 	}
 	input := a.home.Input()
-	for _, r := range text {
-		input.InsertRune(r)
-	}
+	input.InsertText(text)
 	a.requestRedraw()
 }
 

@@ -150,7 +150,9 @@ func WrapSegments(segs []Segment, width int) []Line {
 	for _, s := range segs {
 		for _, g := range graphemes(s.Text) {
 			if g.text == "\n" {
-				flush()
+				lines = append(lines, cur)
+				cur = nil
+				curW = 0
 				pendingSpace, pendingW = nil, 0
 				wordStart, wordStartW = -1, 0
 				continue

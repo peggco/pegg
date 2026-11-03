@@ -2050,7 +2050,7 @@ func (c *Chat) subagentLines(it *ChatItem, width int) []Line {
 	}
 	taskLine := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
 	if DisplayWidth(task) > width-6 {
-		task = task[:width-6] + "…"
+		task = truncateToDisplayWidth(task, width-7) + "…"
 	}
 	for _, r := range task {
 		taskLine = append(taskLine, Cell{R: r, S: th.Base().Foreground(th.Foreground).Background(th.Background)})
@@ -2075,7 +2075,7 @@ func (c *Chat) subagentLines(it *ChatItem, width int) []Line {
 		activityLine = append(activityLine, Cell{R: ' ', S: th.Base()})
 		activity := it.SubagentActivity
 		if DisplayWidth(activity) > width-7 {
-			activity = activity[:width-7] + "…"
+			activity = truncateToDisplayWidth(activity, width-8) + "…"
 		}
 		for _, r := range activity {
 			activityLine = append(activityLine, Cell{R: r, S: dim})
@@ -2097,7 +2097,7 @@ func (c *Chat) subagentLines(it *ChatItem, width int) []Line {
 		for _, ln := range shown {
 			row := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
 			if DisplayWidth(ln) > width-4 {
-				ln = ln[:width-4] + "…"
+				ln = truncateToDisplayWidth(ln, width-5) + "…"
 			}
 			for _, r := range ln {
 				row = append(row, Cell{R: r, S: dim})

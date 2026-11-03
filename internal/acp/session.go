@@ -160,6 +160,7 @@ func (s *Server) handleSessionNew(ctx context.Context, params json.RawMessage) (
 		s.log.Fdebug("acp: create pegg session: %v", err)
 	} else {
 		acpSess.PeggSessionID = vs.ID
+		orch.SetSessionID(vs.ID)
 		s.bus.Publish(session.TopicSessionResume, session.SessionResume{
 			AgentID:   orch.ID,
 			SessionID: vs.ID,
@@ -199,6 +200,7 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 
 	mode := agent.NormalizeMode(agent.Mode(vs.Mode))
 	orch.SetMode(mode)
+	orch.SetSessionID(vs.ID)
 	s.applyStoredModel(orch, vs)
 
 	result := SessionHistoryResult{}
@@ -364,6 +366,7 @@ func (s *Server) handleSessionResume(ctx context.Context, params json.RawMessage
 
 	mode := agent.NormalizeMode(agent.Mode(vs.Mode))
 	orch.SetMode(mode)
+	orch.SetSessionID(vs.ID)
 	s.applyStoredModel(orch, vs)
 
 	acpSess := &ACPSession{
