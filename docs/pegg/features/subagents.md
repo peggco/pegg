@@ -12,7 +12,7 @@ prompt, and middleware, and runs **concurrently** with its siblings.
 
 | Agent | Role | Write access | Tools |
 |---|---|---|---|
-| `orchestrator` | Top-level coordinator | Full workspace | All file tools, `askuserquestion`, `bash`, `task`, `taskstatus`, `todoread`, `todowrite`, `webfetch`, `websearch`, `loadskill`, `enterplanmode`, `exitplanmode` |
+| `orchestrator` | Top-level coordinator | Full workspace | All file tools, `askuserquestion`, `bash`, `task`, `taskstatus`, `todoread`, `todowrite`, `webfetch`, `websearch`, `searchskill`, `loadskill`, `enterplanmode`, `exitplanmode` |
 | `planner` | Architecture and planning | `.pegg/plans/` only | File tools write-scoped to plans, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite` |
 | `developer` | Implementation | Full workspace except `.pegg/` config (`.pegg/plans/` and `.pegg/rules/` remain writable) | All file tools, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite` |
 | `explorer` | Read-only research | None | `glob`, `grep`, `list`, `read`, `bash`, `webfetch`, `websearch` |

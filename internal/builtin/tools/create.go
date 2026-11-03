@@ -5,6 +5,7 @@ import (
 	"github.com/peggco/pegg/internal/builtin/tools/file"
 	"github.com/peggco/pegg/internal/builtin/tools/loadskill"
 	"github.com/peggco/pegg/internal/builtin/tools/plan"
+	"github.com/peggco/pegg/internal/builtin/tools/searchskill"
 	"github.com/peggco/pegg/internal/builtin/tools/shell"
 	"github.com/peggco/pegg/internal/builtin/tools/subagent"
 	"github.com/peggco/pegg/internal/builtin/tools/todo"
@@ -21,5 +22,6 @@ func Create(fs *vfs.VFS, sess *session.Manager) {
 	subagent.SubAgentTools(sess)
 	ask.AskTool()
 	loadskill.LoadSkillTool(sess)
+	searchskill.SearchSkillTool()
 	plan.PlanTools(fs)
 }

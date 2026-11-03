@@ -193,7 +193,7 @@ var permissionToolGroups = []struct {
 	{"read", "Files"}, {"list", "Files"}, {"glob", "Files"}, {"grep", "Files"},
 	{"write", "Files"}, {"edit", "Files"}, {"delete", "Files"},
 	{"bash", "Execution"},
-	{"webfetch", "Web"}, {"websearch", "Web"},
+	{"webfetch", "Web"}, {"websearch", "Web"}, {"searchskill", "Web"},
 	{"task", "Agent"}, {"taskstatus", "Agent"}, {"todowrite", "Agent"}, {"todoread", "Agent"},
 	{"askuserquestion", "Agent"}, {"enterplanmode", "Agent"}, {"exitplanmode", "Agent"}, {"schedule", "Agent"},
 }

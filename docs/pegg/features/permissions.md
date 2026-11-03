@@ -29,7 +29,7 @@ to `ask`.
 | `read`, `write`, `edit`, `delete`, `list`, `glob`, `grep` | `semi-ask` |
 | `bash` | `semi-judge` |
 | `todoread`, `todowrite`, `task`, `taskstatus` | `allow` |
-| `webfetch`, `websearch`, `loadskill` | `allow` |
+| `webfetch`, `websearch`, `searchskill`, `loadskill` | `allow` |
 | `enterplanmode`, `exitplanmode` | `ask` |
 | `askuserquestion` | `allow` (never gated) |
 

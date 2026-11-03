@@ -33,6 +33,15 @@ func loadSkillDir(dir, source string) {
 	registerOrReplace(s)
 }
 
+func LoadSkillDir(dir, source string) error {
+	s, err := parseSKILL(filepath.Join(dir, SkillFileName), source)
+	if err != nil {
+		return err
+	}
+	registerOrReplace(s)
+	return nil
+}
+
 func LoadDirs(dirs ...string) error {
 	for _, dir := range dirs {
 		if err := LoadDir(dir, dir); err != nil {

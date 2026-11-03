@@ -4,7 +4,7 @@ icon: lucide/wrench
 
 # Tools
 
-Tools are the functions the model can call. Pegg ships with 20 built-in tools and
+Tools are the functions the model can call. Pegg ships with 21 built-in tools and
 registers additional tools from connected [MCP servers](mcp.md). Custom tools can be
 added with the [SDK](../../sdk/extending.md).
 
@@ -201,16 +201,33 @@ Leave plan mode: removes the standing plan-mode reminder. Requires user approval
 
 ## Skills
 
+### `searchskill`
+
+Search the Pegg skill hub for skills that can handle a task. Returns XML results
+with each skill's name, id, source, reference, URL, license, and official status.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `query` | string | yes | Capability to search for, e.g. `docx word document` |
+| `maxResults` | integer | no | 1–20; defaults to 10 |
+
+Use `searchskill` when a task needs a specialized workflow that is not already
+loaded, then pass the result's `skill_id` (or `ref`) to `loadskill`. See
+[Skills](skills.md#discovering-skills-from-the-hub).
+
 ### `loadskill`
 
 Load a skill by name. Returns the skill's `<skill:...>` block as a tool result, or —
 for skills with `context: fork` — spawns a background subagent from a forked session
-and returns a confirmation. See [Skills](skills.md). The same effect is triggered
-automatically when a message contains `/skill-name`.
+and returns a confirmation. If the skill is not loaded locally, `loadskill` searches
+the hub, installs the best exact match into `~/.pegg/skills/`, and loads it. See
+[Skills](skills.md). The same effect is triggered automatically when a message
+contains `/skill-name`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | yes | Skill name |
+| `name` | string | yes | Skill name or hub reference (`owner/repo/skill`) |
+| `source` | string | no | Hub source (`owner/repo`) to disambiguate same-named skills |
 | `arguments` | object | no | Values substituted into `$arg_name` placeholders |
 
 ## Subagents
@@ -257,7 +274,7 @@ IDs appear in `mem-search` results, in the memory panel, and in the memory index
 
 | Agent | Tools |
 |---|---|
-| `orchestrator` | All file tools, `askuserquestion`, `bash`, `task`, `taskstatus`, `todoread`, `todowrite`, `webfetch`, `websearch`, `loadskill`, `enterplanmode`, `exitplanmode`, `mem-search`, `mem-read` |
+| `orchestrator` | All file tools, `askuserquestion`, `bash`, `task`, `taskstatus`, `todoread`, `todowrite`, `webfetch`, `websearch`, `searchskill`, `loadskill`, `enterplanmode`, `exitplanmode`, `mem-search`, `mem-read` |
 | `planner` | File tools write-scoped to `.pegg/plans`, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite`, `mem-search`, `mem-read` |
 | `developer` | All file tools, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite`, `mem-search`, `mem-read` |
 | `explorer` | `glob`, `grep`, `list`, `read`, `bash`, `webfetch`, `websearch` |
@@ -273,7 +290,7 @@ built-in defaults:
 | `bash` | `semi-judge` (whitelisted bare commands run directly) |
 | `todoread`, `todowrite` | `allow` |
 | `task`, `taskstatus` | `allow` |
-| `webfetch`, `websearch`, `loadskill` | `allow` |
+| `webfetch`, `websearch`, `searchskill`, `loadskill` | `allow` |
 | `mem-search`, `mem-read` | `semi-ask` (falls back to `permission.default`) |
 | `enterplanmode`, `exitplanmode` | `ask` |
 | `askuserquestion` | `allow` (never gated) |

@@ -48,6 +48,7 @@ var alwaysSkipTools = map[string]bool{
 	"mem-search":      true,
 	"mem-read":        true,
 	"askuserquestion": true,
+	"searchskill":     true,
 	"loadskill":       true,
 }
 

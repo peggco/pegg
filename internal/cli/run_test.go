@@ -17,6 +17,7 @@ import (
 	"github.com/peggco/pegg/internal/builtin/tools/ask"
 	"github.com/peggco/pegg/internal/builtin/tools/loadskill"
 	"github.com/peggco/pegg/internal/builtin/tools/plan"
+	"github.com/peggco/pegg/internal/builtin/tools/searchskill"
 	"github.com/peggco/pegg/internal/builtin/tools/shell"
 	"github.com/peggco/pegg/internal/builtin/tools/subagent"
 	"github.com/peggco/pegg/internal/builtin/tools/todo"
@@ -299,6 +300,7 @@ func newRunTestCLI(t *testing.T) (*CLI, *config.Config, *llm.Manager) {
 	subagent.SubAgentTools(sess)
 	ask.AskTool()
 	web.WebTools(fs)
+	searchskill.SearchSkillTool()
 	loadskill.LoadSkillTool(sess)
 	plan.PlanTools(fs)
 	schedule.ScheduleTools(nil)

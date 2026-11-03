@@ -97,11 +97,43 @@ Notes:
 - The match ignores URLs (`https://...`) and file paths (`a/b/c`).
 - Unknown skill names are left untouched in the message.
 - Skills can also be loaded by the agent itself with the `loadskill` tool
-  (`name`, optional `arguments` substituted into `$arg_name` placeholders).
+  (`name`, optional `source`, optional `arguments` substituted into `$arg_name`
+  placeholders).
 
 In the TUI, type `/` to open the skill picker and select a skill by name. The agent's
 system prompt lists every available skill with its description, so it can also use
 skills mentioned in a task.
+
+## Discovering skills from the hub
+
+When a task needs a capability that is not already loaded, the agent can search the
+[Pegg hub](https://hub-api.pegg.dev/v1) with the `searchskill` tool and then load the
+best match with `loadskill`:
+
+1. Check the available skills list.
+2. If nothing matches, call `searchskill` with a capability-focused query.
+3. Call `loadskill` with the result's `skill_id`, or pass its full `ref`
+   (`owner/repo/skill`) as `name`.
+
+`loadskill` also performs this fallback automatically: if the requested name is not
+loaded locally, it searches the hub, installs the best exact match into
+`~/.pegg/skills/`, and loads it for the current conversation. Installed skills remain
+available in future sessions.
+
+Typical cases:
+
+- The user uploads a `.docx` file or asks to create or edit a Word document, and no
+  document skill is loaded — search `docx word document` and load the matching skill
+  before touching the file.
+- The user asks for an `.xlsx` spreadsheet or `.pptx` slide deck — search `xlsx
+  spreadsheet` or `pptx slides`, then load.
+- The user uploads a PDF or asks to fill or extract a PDF form — search `pdf forms`.
+- The user asks for a polished frontend page and no design skill is loaded — search
+  `frontend design`.
+
+If several hub skills share the same name, pass the result's `source` (`owner/repo`)
+or its full `ref` to `loadskill` to disambiguate. Searches that return no exact match
+report candidate references so the agent can retry without guessing.
 
 ## Built-in skills
 

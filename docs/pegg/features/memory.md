@@ -55,8 +55,8 @@ full, events are dropped with a log line rather than stalling the run.
 | `agent.message` | Last assistant message (clamped to 3000 chars) |
 | `agent.finished` / `agent.error` | Flushes the turn through the pipeline |
 
-The observer skips its own tools (`mem-search`, `mem-read`), `askuserquestion`, and
-`loadskill`, plus any tool listed in `skip_tools`.
+The observer skips its own tools (`mem-search`, `mem-read`), `askuserquestion`,
+`searchskill`, and `loadskill`, plus any tool listed in `skip_tools`.
 
 ### Dedup and ids
 

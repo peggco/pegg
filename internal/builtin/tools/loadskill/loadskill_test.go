@@ -2,8 +2,12 @@ package loadskill
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +19,7 @@ import (
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/skill"
+	"github.com/peggco/pegg/internal/skillhub"
 	"github.com/peggco/pegg/internal/utils/query"
 )
 
@@ -141,7 +146,7 @@ func TestLoadSkillMissingName(t *testing.T) {
 }
 
 func TestLoadSkillNotFound(t *testing.T) {
-	tt, _ := tools.Get("loadskill")
+	tt := loadSkillTool(testMgr, newStubHubClient(t))
 	if _, err := tt.Execute(context.Background(), `{"name": "nonexistent"}`); err == nil {
 		t.Error("expected error for missing skill")
 	}
@@ -287,6 +292,113 @@ Do the forked work.
 	if !contains(t, out, "background") {
 		t.Errorf("expected background subagent confirmation, got:\n%s", out)
 	}
+}
+
+func TestLoadSkillFromHub(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	items := `[{"name":"hub-docx","skillId":"hub-docx","source":"acme/skills","url":"https://github.com/acme/skills","isOfficial":true}]`
+	server := newHubTestServer(t, items, "hub-docx", "hub-docx", "# Word Documents\nUse the docx skill.")
+	tt := loadSkillTool(testMgr, testHubClient(server))
+
+	out, err := tt.Execute(context.Background(), `{"name":"hub-docx"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "<skill:hub-docx>") {
+		t.Errorf("expected loaded skill tag, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Use the docx skill.") {
+		t.Errorf("expected hub skill content, got:\n%s", out)
+	}
+	path := filepath.Join(home, ".pegg", "skills", "hub-docx", skill.SkillFileName)
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("expected installed skill at %s: %v", path, err)
+	}
+}
+
+func TestLoadSkillFromHubSourceDisambiguates(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	items := `[{"name":"dup-skill","skillId":"dup-skill","source":"acme/skills"},{"name":"dup-skill","skillId":"dup-skill","source":"other/skills"}]`
+	server := newHubTestServer(t, items, "dup-skill", "dup-skill", "# Dup\nFrom acme.")
+	tt := loadSkillTool(testMgr, testHubClient(server))
+
+	_, err := tt.Execute(context.Background(), `{"name":"dup-skill"}`)
+	if err == nil || !strings.Contains(err.Error(), "multiple hub skills") {
+		t.Fatalf("expected ambiguity error, got %v", err)
+	}
+
+	out, err := tt.Execute(context.Background(), `{"name":"dup-skill","source":"acme/skills"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "From acme.") {
+		t.Errorf("expected disambiguated skill content, got:\n%s", out)
+	}
+}
+
+func TestLoadSkillFromHubRef(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	server := newHubTestServer(t, `[]`, "ref-docx", "ref-docx", "# Ref\nLoaded by reference.")
+	tt := loadSkillTool(testMgr, testHubClient(server))
+
+	out, err := tt.Execute(context.Background(), `{"name":"acme/skills/ref-docx"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Loaded by reference.") {
+		t.Errorf("expected ref-loaded skill content, got:\n%s", out)
+	}
+}
+
+func TestLoadSkillFromHubNoExactMatch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	items := `[{"name":"something-else","skillId":"something-else","source":"acme/skills"}]`
+	server := newHubTestServer(t, items, "something-else", "something-else", "# Other\nNot a match.")
+	tt := loadSkillTool(testMgr, testHubClient(server))
+
+	_, err := tt.Execute(context.Background(), `{"name":"docx"}`)
+	if err == nil || !strings.Contains(err.Error(), "candidates") {
+		t.Fatalf("expected candidates error, got %v", err)
+	}
+}
+
+func newStubHubClient(t *testing.T) *skillhub.Client {
+	t.Helper()
+	server := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(server.Close)
+	return testHubClient(server)
+}
+
+func testHubClient(server *httptest.Server) *skillhub.Client {
+	c := skillhub.NewClient()
+	c.BaseURL = server.URL
+	c.GitHubAPI = server.URL
+	c.RawBase = server.URL
+	return c
+}
+
+func newHubTestServer(t *testing.T, items, skillID, name, body string) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/skills", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":` + items + `}`))
+	})
+	mux.HandleFunc("/repos/acme/skills/git/trees/HEAD", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"tree":[{"path":"skills/%s/SKILL.md","type":"blob"}]}`, skillID)
+	})
+	mux.HandleFunc("/acme/skills/HEAD/skills/"+skillID+"/SKILL.md", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(w, "---\nname: %s\ndescription: Hub skill\n---\n\n%s\n", name, body)
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	return server
 }
 
 func contains(t *testing.T, s, substr string) bool {

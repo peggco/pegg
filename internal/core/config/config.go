@@ -366,6 +366,8 @@ func DefaultConfig() *Config {
 				"todowrite":       "allow",
 				"webfetch":        "allow",
 				"websearch":       "allow",
+				"searchskill":     "allow",
+				"loadskill":       "allow",
 				"task":            "allow",
 				"taskstatus":      "allow",
 				"askuserquestion": "allow",

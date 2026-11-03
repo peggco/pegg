@@ -543,7 +543,7 @@ func toolKind(name string) ToolKind {
 		return ToolKindRead
 	case "write", "edit":
 		return ToolKindEdit
-	case "glob", "grep":
+	case "glob", "grep", "searchskill":
 		return ToolKindSearch
 	case "bash":
 		return ToolKindExecute
@@ -568,7 +568,7 @@ func toolTitle(name string, args map[string]any) string {
 		if p := stringArg(args, "filePath", "file_path", "path"); p != "" {
 			return name + ": " + p
 		}
-	case "grep", "glob":
+	case "grep", "glob", "searchskill":
 		if p := stringArg(args, "pattern", "query"); p != "" {
 			return name + ": " + p
 		}
