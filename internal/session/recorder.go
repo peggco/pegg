@@ -676,10 +676,11 @@ func (r *Recorder) handleToolResult(e agent.AgentToolResult) {
 		errMsg = e.Err.Error()
 	}
 	r.recordRunEvent(e.AgentID, AgentEventToolResult, map[string]any{
-		"call_id":   e.CallID,
-		"tool_name": e.ToolName,
-		"output":    e.Output,
-		"error":     errMsg,
+		"call_id":     e.CallID,
+		"tool_name":   e.ToolName,
+		"output":      e.Output,
+		"error":       errMsg,
+		"attachments": e.Attachments,
 	})
 	if id, ok := r.sessionID(e.AgentID); ok {
 		msg := llm.ToolMessage(e.Output, e.CallID)

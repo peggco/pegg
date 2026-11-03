@@ -794,6 +794,57 @@ func TestRecorderPersistsToolAttachments(t *testing.T) {
 	}
 }
 
+func TestRecorderPersistsDeliveredFiles(t *testing.T) {
+	mgr, _, bus := newTestRecorder(t)
+	publishStarted(bus, "a1", "agent-one", "groq", "llama-3.3")
+	bus.Publish(agent.TopicAgentInput, agent.AgentInput{AgentID: "a1", Input: "send it"})
+	file := llm.Attachment{
+		Type:      llm.AttachmentTypeFile,
+		FileName:  "build.zip",
+		MediaType: "application/zip",
+		Path:      "/tmp/build.zip",
+		Size:      2048,
+	}
+	bus.Publish(agent.TopicAgentToolResult, agent.AgentToolResult{
+		AgentID: "a1", AgentName: "agent-one", CallID: "c1", ToolName: "sendfile",
+		Output: "Sent 1 file(s) to the user", Attachments: []llm.Attachment{file},
+	})
+
+	sessions, _, err := mgr.List(query.Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := mgr.Messages(sessions[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var toolMsg *Message
+	for i := range msgs {
+		if msgs[i].Role == llm.RoleTool {
+			toolMsg = &msgs[i]
+		}
+	}
+	if toolMsg == nil {
+		t.Fatal("tool message not persisted")
+	}
+	atts := AttachmentsOf(*toolMsg)
+	if len(atts) != 1 {
+		t.Fatalf("attachments = %d, want 1", len(atts))
+	}
+	if atts[0].Type != llm.AttachmentTypeFile || atts[0].FileName != "build.zip" ||
+		atts[0].Path != "/tmp/build.zip" || atts[0].Size != 2048 {
+		t.Fatalf("attachment = %+v", atts[0])
+	}
+
+	converted := MessagesToLLM([]Message{*toolMsg})
+	if len(converted) != 1 {
+		t.Fatalf("converted messages = %d, want 1", len(converted))
+	}
+	if _, ok := converted[0].Content.(string); !ok {
+		t.Fatalf("tool content must stay a string, got %T", converted[0].Content)
+	}
+}
+
 func TestRecorderPersistsPartialStreamingMessage(t *testing.T) {
 	mgr, _, bus := newTestRecorder(t)
 	publishStarted(bus, "a1", "agent-one", "groq", "llama-3.3")

@@ -28,6 +28,7 @@ to `ask`.
 |---|---|
 | `read`, `write`, `edit`, `delete`, `list`, `glob`, `grep` | `semi-ask` |
 | `bash` | `semi-judge` |
+| `sendfile` | `semi-ask`/`semi-judge` (always gated before sharing files) |
 | `todoread`, `todowrite`, `task`, `taskstatus` | `allow` |
 | `webfetch`, `websearch`, `searchskill`, `loadskill` | `allow` |
 | `enterplanmode`, `exitplanmode` | `ask` |

@@ -19,6 +19,7 @@ export interface ToolState {
   error?: string;
   locations?: { path: string; line?: number }[];
   diff?: { path: string; oldText?: string; newText: string };
+  files?: AttachmentInfo[];
   agentId?: string;
   agentName?: string;
 }
@@ -244,6 +245,9 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
         if (update.toolName) existing.tool.name = update.toolName;
         if (update.agentId) existing.tool.agentId = update.agentId;
         if (update.agentName) existing.tool.agentName = update.agentName;
+        if (update.attachments?.length) {
+          existing.tool.files = mergeFiles(existing.tool.files, update.attachments);
+        }
         const diff = update.contents?.find((c) => c.type === 'diff' && c.diff)?.diff;
         if (diff) existing.tool.diff = diff;
       } else {
@@ -264,6 +268,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
             error: update.error,
             locations: update.locations,
             diff,
+            files: update.attachments?.length ? update.attachments : undefined,
             agentId: update.agentId,
             agentName: update.agentName,
           },
@@ -371,6 +376,17 @@ function mergeAttachments(item: ChatItem, attachments: AttachmentInfo[]): Attach
   for (const att of attachments) {
     if (seen.has(`${att.name}|${att.path ?? ''}`)) continue;
     merged.push(att);
+  }
+  return merged;
+}
+
+function mergeFiles(existing: AttachmentInfo[] | undefined, incoming: AttachmentInfo[]): AttachmentInfo[] {
+  if (!existing?.length) return incoming;
+  const seen = new Set(existing.map((file) => `${file.name}|${file.path ?? ''}`));
+  const merged = [...existing];
+  for (const file of incoming) {
+    if (seen.has(`${file.name}|${file.path ?? ''}`)) continue;
+    merged.push(file);
   }
   return merged;
 }

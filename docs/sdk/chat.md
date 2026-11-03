@@ -69,7 +69,8 @@ _, err := eng.ChatStream(ctx, req, func(ev sdk.ChatEvent) error {
 	//   sdk.EventToken       -> ev.Content
 	//   sdk.EventReasoning   -> ev.Reasoning
 	//   sdk.EventToolCall    -> ev.ToolCall
-	//   sdk.EventToolResult  -> ev.ToolOutput or ev.ToolErr
+	//   sdk.EventToolResult  -> ev.ToolOutput, ev.ToolErr, ev.ToolAttachments
+	//                          (files delivered by the sendfile tool)
 	//   sdk.EventCompaction  -> ev.Strategy, ev.Messages, ev.Tokens
 	//   sdk.EventDone        -> ev.Content + ev.Usage
 	return nil

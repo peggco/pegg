@@ -572,6 +572,7 @@ func (c *CLI) runScheduled(out io.Writer, id, runID, sessionID string) error {
 	}
 	orch.Bus = c.bus
 	orch.ToolNames = dropToolName(orch.ToolNames, "askuserquestion")
+	orch.ToolNames = dropToolName(orch.ToolNames, "sendfile")
 
 	prov, mdl, err := c.selectModel(sess.Provider, sess.Model, false)
 	if err != nil {

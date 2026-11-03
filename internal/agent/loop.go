@@ -608,12 +608,13 @@ func (a *Agent) emitToolResult(state *runState, call llm.ToolCall, output string
 	if state.stream != nil {
 		callCopy := call
 		_ = state.stream(StreamEvent{
-			Type:       StreamToolResult,
-			AgentID:    a.ID,
-			AgentName:  a.Name,
-			ToolCall:   &callCopy,
-			ToolOutput: output,
-			ToolErr:    toolErr,
+			Type:            StreamToolResult,
+			AgentID:         a.ID,
+			AgentName:       a.Name,
+			ToolCall:        &callCopy,
+			ToolOutput:      output,
+			ToolErr:         toolErr,
+			ToolAttachments: attachments,
 		})
 	}
 }

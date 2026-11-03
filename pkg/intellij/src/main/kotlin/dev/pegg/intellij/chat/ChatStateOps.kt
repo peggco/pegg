@@ -153,6 +153,21 @@ object ChatStateOps {
         return merged
     }
 
+    private fun mergeFiles(
+        existing: List<AttachmentInfo>?,
+        incoming: List<AttachmentInfo>?,
+    ): List<AttachmentInfo>? {
+        if (incoming.isNullOrEmpty()) return existing
+        if (existing.isNullOrEmpty()) return incoming
+        val seen = existing.map { "${it.name}|${it.path ?: ""}" }.toMutableSet()
+        val merged = existing.toMutableList()
+        for (file in incoming) {
+            if (!seen.add("${file.name}|${file.path ?: ""}")) continue
+            merged.add(file)
+        }
+        return merged
+    }
+
     private fun applyThought(state: ChatState, update: SessionUpdate, now: Long) {
         val text = textOf(update.content)
         if (text.isEmpty()) return
@@ -195,6 +210,7 @@ object ChatStateOps {
                 error = update.error ?: old.error,
                 locations = update.locations ?: old.locations,
                 diff = diff ?: old.diff,
+                files = mergeFiles(old.files, update.attachments),
                 agentId = update.agentId ?: old.agentId,
                 agentName = update.agentName ?: old.agentName,
             )
@@ -217,6 +233,7 @@ object ChatStateOps {
                     error = update.error,
                     locations = update.locations,
                     diff = diff,
+                    files = update.attachments?.takeIf { it.isNotEmpty() },
                     agentId = update.agentId,
                     agentName = update.agentName,
                 ),

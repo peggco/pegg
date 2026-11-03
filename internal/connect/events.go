@@ -26,10 +26,11 @@ type runToolCallPayload struct {
 }
 
 type runToolResultPayload struct {
-	CallID   string `json:"call_id,omitempty"`
-	ToolName string `json:"tool_name"`
-	Output   string `json:"output,omitempty"`
-	Error    string `json:"error,omitempty"`
+	CallID      string           `json:"call_id,omitempty"`
+	ToolName    string           `json:"tool_name"`
+	Output      string           `json:"output,omitempty"`
+	Error       string           `json:"error,omitempty"`
+	Attachments []llm.Attachment `json:"attachments,omitempty"`
 }
 
 type runAskPayload struct {

@@ -26,8 +26,23 @@ export interface ToolState {
   error?: string;
   locations?: { path: string; line?: number }[];
   diff?: { path: string; oldText?: string; newText: string };
+  files?: AttachmentInfo[];
   agentId?: string;
   agentName?: string;
+}
+
+function mergeFiles(
+  existing: AttachmentInfo[] | undefined,
+  incoming: AttachmentInfo[],
+): AttachmentInfo[] {
+  if (!existing?.length) return incoming;
+  const seen = new Set(existing.map((file) => `${file.name}|${file.path ?? ''}`));
+  const merged = [...existing];
+  for (const file of incoming) {
+    if (seen.has(`${file.name}|${file.path ?? ''}`)) continue;
+    merged.push(file);
+  }
+  return merged;
 }
 
 export type ChatItem = (
@@ -332,6 +347,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
         if (update.toolName) tool.name = update.toolName;
         if (update.agentId) tool.agentId = update.agentId;
         if (update.agentName) tool.agentName = update.agentName;
+        if (update.attachments?.length) tool.files = mergeFiles(tool.files, update.attachments);
         const diff = update.contents?.find((c) => c.type === 'diff' && c.diff)?.diff;
         if (diff) tool.diff = diff;
         replaceItem(idx, { ...item, tool });
@@ -352,6 +368,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
             error: update.error,
             locations: update.locations,
             diff: update.contents?.find((c) => c.type === 'diff' && c.diff)?.diff,
+            files: update.attachments?.length ? update.attachments : undefined,
             agentId: update.agentId,
             agentName: update.agentName,
           },

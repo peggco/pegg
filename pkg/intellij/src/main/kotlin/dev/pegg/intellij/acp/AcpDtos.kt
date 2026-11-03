@@ -36,7 +36,7 @@ data class AttachmentInfo(
     val name: String = "",
     val mediaType: String? = null,
     val type: String? = null,
-    val size: Int? = null,
+    val size: Long? = null,
     val path: String? = null,
 )
 
@@ -307,6 +307,7 @@ data class ToolState(
     val error: String? = null,
     val locations: List<ToolCallLocation>? = null,
     val diff: Diff? = null,
+    val files: List<AttachmentInfo>? = null,
     val agentId: String? = null,
     val agentName: String? = null,
 )

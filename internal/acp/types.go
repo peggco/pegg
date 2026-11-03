@@ -17,7 +17,7 @@ type AttachmentInfo struct {
 	Name      string `json:"name,omitempty"`
 	MediaType string `json:"mediaType,omitempty"`
 	Type      string `json:"type,omitempty"`
-	Size      int    `json:"size,omitempty"`
+	Size      int64  `json:"size,omitempty"`
 	Path      string `json:"path,omitempty"`
 }
 

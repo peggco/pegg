@@ -152,12 +152,13 @@ type RunInfo struct {
 }
 
 type RunToolInfo struct {
-	CallID   string `json:"call_id,omitempty"`
-	ToolName string `json:"tool_name"`
-	Args     string `json:"args,omitempty"`
-	Output   string `json:"output,omitempty"`
-	Error    string `json:"error,omitempty"`
-	Done     bool   `json:"done"`
+	CallID      string           `json:"call_id,omitempty"`
+	ToolName    string           `json:"tool_name"`
+	Args        string           `json:"args,omitempty"`
+	Output      string           `json:"output,omitempty"`
+	Error       string           `json:"error,omitempty"`
+	Done        bool             `json:"done"`
+	Attachments []llm.Attachment `json:"attachments,omitempty"`
 }
 
 type SessionMessage struct {

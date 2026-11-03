@@ -34,15 +34,32 @@ func attachmentInfos(atts []llm.Attachment) []AttachmentInfo {
 		if kind == "" {
 			kind = string(attach.Kind(mediaType))
 		}
+		size := a.Size
+		if size <= 0 {
+			size = int64(attach.Size(a))
+		}
 		out = append(out, AttachmentInfo{
 			Name:      name,
 			MediaType: mediaType,
 			Type:      kind,
-			Size:      attach.Size(a),
+			Size:      size,
 			Path:      a.Path,
 		})
 	}
 	return out
+}
+
+func fileAttachments(atts []llm.Attachment) []AttachmentInfo {
+	if len(atts) == 0 {
+		return nil
+	}
+	out := make([]llm.Attachment, 0, len(atts))
+	for _, a := range atts {
+		if a.Type == llm.AttachmentTypeFile {
+			out = append(out, a)
+		}
+	}
+	return attachmentInfos(out)
 }
 
 func (s *Server) startSessionFollow(acpSess *ACPSession) {
@@ -207,7 +224,7 @@ func (s *Server) handleAttachedRunEvent(st *promptState, acpSess *ACPSession, ru
 		s.clearToolPending(st, ev.AgentID, call.ID)
 		stream := agent.StreamEvent{
 			Type: agent.StreamToolResult, AgentID: ev.AgentID, AgentName: ev.AgentName,
-			ToolCall: &call, ToolOutput: ev.ToolOutput,
+			ToolCall: &call, ToolOutput: ev.ToolOutput, ToolAttachments: ev.ToolAttachments,
 		}
 		if ev.ToolError != "" {
 			stream.ToolErr = stringError(ev.ToolError)

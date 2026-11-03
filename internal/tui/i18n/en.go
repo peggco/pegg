@@ -13,12 +13,13 @@ var en = map[string]string{
 	"common.back":                 "← back to main chat (Esc)",
 	"common.navigate":             "↑/↓ navigate  Enter select  Esc back",
 
-	"app.escInterrupt":  "Press Esc to interrupt",
-	"app.ctrlCQuit":     "Press Ctrl+C again to quit",
-	"app.error.attach":  "Could not attach file: %s",
-	"app.error.noImage": "Model does not support image attachments",
-	"app.error.noAudio": "Model does not support audio attachments",
-	"app.error.mode":    "Could not save mode: %s",
+	"app.escInterrupt":   "Press Esc to interrupt",
+	"app.ctrlCQuit":      "Press Ctrl+C again to quit",
+	"app.error.attach":   "Could not attach file: %s",
+	"app.error.noImage":  "Model does not support image attachments",
+	"app.error.noAudio":  "Model does not support audio attachments",
+	"app.error.mode":     "Could not save mode: %s",
+	"app.error.openFile": "Could not open file: %s",
 
 	"mode.build": "build",
 	"mode.plan":  "plan",
@@ -186,6 +187,8 @@ var en = map[string]string{
 	"chat.card.diff":            " DIFF ",
 	"chat.card.write":           " WRITE ",
 	"chat.card.ask":             " ASK ",
+	"chat.files.sent":           "Sent %d file(s)",
+	"chat.files.copyHint":       "click: open · Enter: copy path",
 	"chat.moreDown":             " ↓ %d ",
 
 	"ask.placeholder":        "Type your answer…",

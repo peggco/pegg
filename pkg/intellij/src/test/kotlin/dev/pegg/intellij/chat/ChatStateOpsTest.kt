@@ -65,6 +65,36 @@ class ChatStateOpsTest {
     }
 
     @Test
+    fun `collects delivered files from tool attachments`() {
+        var state = ChatStateOps.initialState()
+        state = ChatStateOps.applyUpdate(state, update("tool_call") {
+            copy(toolCallId = "t1", toolName = "sendfile", title = "sendfile:1 file", status = "pending")
+        })
+        state = ChatStateOps.applyUpdate(state, update("tool_call_update") {
+            copy(
+                toolCallId = "t1",
+                toolName = "sendfile",
+                status = "completed",
+                attachments = listOf(
+                    AttachmentInfo(
+                        name = "report.pdf",
+                        mediaType = "application/pdf",
+                        type = "file",
+                        size = 1536,
+                        path = "/tmp/report.pdf",
+                    ),
+                ),
+            )
+        })
+        val item = state.items.last() as ChatItem.Tool
+        val files = assertNotNull(item.tool.files)
+        assertEquals(1, files.size)
+        assertEquals("report.pdf", files[0].name)
+        assertEquals(1536L, files[0].size)
+        assertEquals("/tmp/report.pdf", files[0].path)
+    }
+
+    @Test
     fun `keeps text before and after a tool call in separate segments`() {
         var state = ChatStateOps.initialState()
         state = ChatStateOps.applyUpdate(state, update("agent_message_chunk") {

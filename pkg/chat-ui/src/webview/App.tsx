@@ -1331,6 +1331,40 @@ function ToolCard({ tool }: { tool: ToolState }) {
         <div className="tool-head static">{head}</div>
       )}
 
+      {tool.files?.length ? (
+        <div className="tool-files">
+          {tool.files.map((file, index) => (
+            <div className="tool-file" key={`${file.path ?? file.name}-${index}`}>
+              <span className="tool-file-icon" aria-hidden="true">
+                {attachmentIcon(file)}
+              </span>
+              <span className="tool-file-name" title={file.path ?? file.name}>
+                {file.name}
+              </span>
+              {file.size ? <span className="tool-file-size">{formatSize(file.size)}</span> : null}
+              <span className="tool-file-actions">
+                {file.path ? (
+                  <button
+                    className="mini-button"
+                    onClick={() => host.postMessage({ type: 'openFile', path: file.path })}
+                  >
+                    Open
+                  </button>
+                ) : null}
+                {file.path ? (
+                  <button
+                    className="mini-button"
+                    onClick={() => host.postMessage({ type: 'saveFile', path: file.path, name: file.name })}
+                  >
+                    Save a copy
+                  </button>
+                ) : null}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {failed && open && <div className="tool-error">{stripAnsi(tool.error ?? '')}</div>}
       {failed && !open && (
         <div className="tool-error-preview">{stripAnsi(tool.error ?? '').split('\n')[0]}</div>
@@ -1634,6 +1668,19 @@ function formatNumber(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return String(value);
+}
+
+function formatSize(size: number): string {
+  if (!Number.isFinite(size) || size <= 0) return '';
+  const unit = 1024;
+  if (size < unit) return `${size} B`;
+  let value = size;
+  let exp = 0;
+  while (value >= unit && exp < 4) {
+    value /= unit;
+    exp += 1;
+  }
+  return `${value.toFixed(1)} ${'KMGTP'[exp - 1]}B`;
 }
 
 function attachmentIcon(attachment: AttachmentInfo): string {

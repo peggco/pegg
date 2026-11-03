@@ -18,6 +18,7 @@ type Attachment struct {
 	URL       string         `json:"url,omitempty"`
 	FileName  string         `json:"file_name,omitempty"`
 	Path      string         `json:"path,omitempty"`
+	Size      int64          `json:"size,omitempty"`
 }
 
 func NewAttachmentFromBase64(attType AttachmentType, mediaType, data string) Attachment {

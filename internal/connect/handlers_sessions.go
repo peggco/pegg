@@ -39,12 +39,16 @@ func toSessionDTO(s *session.Session) sessionDTO {
 }
 
 func toSessionMessage(m *session.Message) SessionMessage {
+	content := attach.StripMessageContent(m.Role, m.Content)
+	if m.Role == llm.RoleTool {
+		content = sanitizeMessageContent(content)
+	}
 	return SessionMessage{
 		ID:         m.ID,
 		SessionID:  m.SessionID,
 		Seq:        m.Seq,
 		Role:       string(m.Role),
-		Content:    attach.StripMessageContent(m.Role, m.Content),
+		Content:    content,
 		Reasoning:  m.Reasoning,
 		Name:       m.Name,
 		ToolCallID: m.ToolCallID,

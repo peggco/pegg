@@ -13,12 +13,13 @@ var tr = map[string]string{
 	"common.back":                 "← ana sohbete dön (Esc)",
 	"common.navigate":             "↑/↓ yön  Enter seç  Esc geri",
 
-	"app.escInterrupt":  "İşlemi iptal etmek için Esc'ye basın",
-	"app.ctrlCQuit":     "Çıkmak için Ctrl+C'ye tekrar basın",
-	"app.error.attach":  "Dosya eklenemedi: %s",
-	"app.error.noImage": "Model görsel ekleri desteklemiyor",
-	"app.error.noAudio": "Model ses eklerini desteklemiyor",
-	"app.error.mode":    "Mod kaydedilemedi: %s",
+	"app.escInterrupt":   "İşlemi iptal etmek için Esc'ye basın",
+	"app.ctrlCQuit":      "Çıkmak için Ctrl+C'ye tekrar basın",
+	"app.error.attach":   "Dosya eklenemedi: %s",
+	"app.error.noImage":  "Model görsel ekleri desteklemiyor",
+	"app.error.noAudio":  "Model ses eklerini desteklemiyor",
+	"app.error.mode":     "Mod kaydedilemedi: %s",
+	"app.error.openFile": "Dosya açılamadı: %s",
 
 	"mode.build": "build",
 	"mode.plan":  "plan",
@@ -186,6 +187,8 @@ var tr = map[string]string{
 	"chat.card.diff":            " FARK ",
 	"chat.card.write":           " YAZ ",
 	"chat.card.ask":             " SORU ",
+	"chat.files.sent":           "%d dosya gönderildi",
+	"chat.files.copyHint":       "tıkla: aç · Enter: yolu kopyala",
 	"chat.moreDown":             " ↓ %d ",
 
 	"ask.placeholder":        "Yanıtınızı yazın…",

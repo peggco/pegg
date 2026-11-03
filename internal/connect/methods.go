@@ -3,6 +3,7 @@ package connect
 func (c *Connector) registerAllMethods() {
 	c.registerMetaMethods()
 	c.registerChatMethods()
+	c.registerFileMethods()
 	c.registerSTTMethods()
 	c.registerSTTStreamMethods()
 	c.registerSessionMethods()

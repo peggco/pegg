@@ -50,7 +50,8 @@ var presetModes = map[permPreset]map[string]string{
 	presetAuto: {
 		"read": "allow", "write": "allow", "edit": "allow", "delete": "allow",
 		"list": "allow", "glob": "allow", "grep": "allow", "bash": "allow",
-		"todo": "allow", "todoread": "allow", "todowrite": "allow",
+		"sendfile": "allow",
+		"todo":     "allow", "todoread": "allow", "todowrite": "allow",
 		"webfetch": "allow", "websearch": "allow", "searchskill": "allow", "loadskill": "allow",
 		"task": "allow", "taskstatus": "allow",
 		"askuserquestion": "allow", "enterplanmode": "allow", "exitplanmode": "allow",
@@ -58,7 +59,8 @@ var presetModes = map[permPreset]map[string]string{
 	presetManual: {
 		"read": "semi-ask", "write": "semi-ask", "edit": "semi-ask", "delete": "semi-ask",
 		"list": "semi-ask", "glob": "semi-ask", "grep": "semi-ask", "bash": "semi-ask",
-		"todo": "semi-ask", "todoread": "semi-ask", "todowrite": "semi-ask",
+		"sendfile": "semi-ask",
+		"todo":     "semi-ask", "todoread": "semi-ask", "todowrite": "semi-ask",
 		"webfetch": "semi-ask", "websearch": "semi-ask", "searchskill": "semi-ask", "loadskill": "semi-ask",
 		"task": "semi-ask", "taskstatus": "semi-ask",
 		"askuserquestion": "semi-ask", "enterplanmode": "semi-ask", "exitplanmode": "semi-ask",
@@ -66,7 +68,8 @@ var presetModes = map[permPreset]map[string]string{
 	presetJudge: {
 		"read": "semi-judge", "write": "semi-judge", "edit": "semi-judge", "delete": "semi-judge",
 		"list": "semi-judge", "glob": "semi-judge", "grep": "semi-judge", "bash": "semi-judge",
-		"todo": "semi-judge", "todoread": "semi-judge", "todowrite": "semi-judge",
+		"sendfile": "semi-judge",
+		"todo":     "semi-judge", "todoread": "semi-judge", "todowrite": "semi-judge",
 		"webfetch": "semi-judge", "websearch": "semi-judge", "searchskill": "semi-judge", "loadskill": "semi-judge",
 		"task": "semi-judge", "taskstatus": "semi-judge",
 		"askuserquestion": "semi-judge", "enterplanmode": "semi-judge", "exitplanmode": "semi-judge",

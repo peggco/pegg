@@ -278,6 +278,9 @@ func StripMessageContent(role llm.Role, content any) any {
 }
 
 func Size(a llm.Attachment) int {
+	if a.Size > 0 {
+		return int(a.Size)
+	}
 	if a.Data == "" {
 		return 0
 	}

@@ -4,7 +4,7 @@ icon: lucide/wrench
 
 # Tools
 
-Tools are the functions the model can call. Pegg ships with 21 built-in tools and
+Tools are the functions the model can call. Pegg ships with 22 built-in tools and
 registers additional tools from connected [MCP servers](mcp.md). Custom tools can be
 added with the [SDK](../../sdk/extending.md).
 
@@ -150,6 +150,30 @@ Ask the user one or more questions and block until answers are submitted.
 Returns `{"answers": {"id": "answer", ...}}`. In the TUI, questions open a modal
 that supports free text and option lists (with a *Custom answer* entry).
 
+## Delivery
+
+### `sendfile`
+
+Send one or more workspace files to the user. Every surface renders a download card:
+the TUI draws one clickable box per file (click opens it with the OS default handler,
+Enter copies the absolute paths), VS Code, IntelliJ, and the desktop app offer
+**Open** and **Save a copy**, and the connect web client downloads the bytes over the
+relay.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `files` | string[] | yes | Paths to deliver. Relative paths resolve against the workspace root |
+| `message` | string | no | Short note shown to the user with the files |
+
+Limits: 20 files per call, 200 MB per file, 500 MB in total. Directories and empty
+files are rejected; archive a directory first. Paths outside the workspace go through
+the permission middleware.
+
+The tool only records file metadata (`name`, `media_type`, `path`, `size`). Bytes are
+never inlined into the conversation or the session database: local clients open the
+file from disk, and remote connect clients stream it on demand through the
+`file.download` method, which only serves files delivered in that session.
+
 ## Todos
 
 Todos persist in `.pegg/todos.json` in the project directory. Statuses are
@@ -274,9 +298,9 @@ IDs appear in `mem-search` results, in the memory panel, and in the memory index
 
 | Agent | Tools |
 |---|---|
-| `orchestrator` | All file tools, `askuserquestion`, `bash`, `task`, `taskstatus`, `todoread`, `todowrite`, `webfetch`, `websearch`, `searchskill`, `loadskill`, `enterplanmode`, `exitplanmode`, `mem-search`, `mem-read` |
+| `orchestrator` | All file tools, `sendfile`, `askuserquestion`, `bash`, `task`, `taskstatus`, `todoread`, `todowrite`, `webfetch`, `websearch`, `searchskill`, `loadskill`, `enterplanmode`, `exitplanmode`, `mem-search`, `mem-read` |
 | `planner` | File tools write-scoped to `.pegg/plans`, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite`, `mem-search`, `mem-read` |
-| `developer` | All file tools, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite`, `mem-search`, `mem-read` |
+| `developer` | All file tools, `sendfile`, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite`, `mem-search`, `mem-read` |
 | `explorer` | `glob`, `grep`, `list`, `read`, `bash`, `webfetch`, `websearch` |
 
 ## Permissions
@@ -288,6 +312,7 @@ built-in defaults:
 |---|---|
 | `read`, `write`, `edit`, `delete`, `list`, `glob`, `grep` | `semi-ask` |
 | `bash` | `semi-judge` (whitelisted bare commands run directly) |
+| `sendfile` | `semi-ask`/`semi-judge` (always gated before the files are shared) |
 | `todoread`, `todowrite` | `allow` |
 | `task`, `taskstatus` | `allow` |
 | `webfetch`, `websearch`, `searchskill`, `loadskill` | `allow` |

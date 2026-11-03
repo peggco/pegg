@@ -580,7 +580,7 @@ class ChatController(
                     it.mediaType.startsWith("video/") -> "video"
                     else -> "file"
                 },
-                size = it.size?.toInt(),
+                size = it.size?.toLong(),
                 path = it.path,
             )
         }

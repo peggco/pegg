@@ -367,6 +367,9 @@ func (a *App) onAgentToolResult(e agent.AgentToolResult) {
 	} else {
 		it.ToolOutput = e.Output
 	}
+	if files := fileAttachmentsOf(e.Attachments); len(files) > 0 {
+		it.Attachments = files
+	}
 	it.ToolDone = true
 	if a.viewID == t.id {
 		a.chat.InvalidateItemPtr(it)
@@ -693,6 +696,17 @@ func (a *App) addToolItem(t *agentTranscript, call llm.ToolCall, agentID string)
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.Path != "" {
 			it.ToolName = "list:" + p.Path
+		}
+	case "sendfile":
+		var p struct {
+			Files []string `json:"files"`
+		}
+		if err := json.Unmarshal([]byte(args), &p); err == nil && len(p.Files) > 0 {
+			if len(p.Files) == 1 {
+				it.ToolName = "sendfile:" + p.Files[0]
+			} else {
+				it.ToolName = fmt.Sprintf("sendfile:%d files", len(p.Files))
+			}
 		}
 	}
 
@@ -1029,6 +1043,11 @@ func (a *App) activateItem(it *components.ChatItem) {
 	a.chatMu.Lock()
 	switch it.Kind {
 	case components.ItemThinking, components.ItemTool:
+		if paths := fileItemPaths(it); len(paths) > 0 {
+			a.chatMu.Unlock()
+			a.copyText(strings.Join(paths, "\n"))
+			return
+		}
 		it.Expanded = !it.Expanded
 		a.chat.InvalidateItemPtr(it)
 		a.chatMu.Unlock()
@@ -1340,6 +1359,7 @@ func messagesToItems(msgs []session.Message) []*components.ChatItem {
 	var out []*components.ChatItem
 	toolByID := make(map[string]*components.ChatItem)
 	pendingToolResults := make(map[string]string)
+	pendingToolFiles := make(map[string][]llm.Attachment)
 
 	isErrorOutput := func(s string) bool {
 		return strings.HasPrefix(s, "Error: ")
@@ -1371,6 +1391,10 @@ func messagesToItems(msgs []session.Message) []*components.ChatItem {
 				it.ToolDone = true
 				delete(pendingToolResults, tc.ID)
 			}
+			if files := pendingToolFiles[tc.ID]; len(files) > 0 {
+				it.Attachments = files
+				delete(pendingToolFiles, tc.ID)
+			}
 			out = append(out, it)
 		}
 		if pendingText != "" {
@@ -1398,15 +1422,22 @@ func messagesToItems(msgs []session.Message) []*components.ChatItem {
 			if text == "" {
 				text = fmt.Sprint(m.Content)
 			}
+			files := fileAttachmentsOf(session.AttachmentsOf(m))
 			if it, ok := toolByID[m.ToolCallID]; ok {
 				if isErrorOutput(text) {
 					it.ToolErr = text
 				} else {
 					it.ToolOutput = text
 				}
+				if len(files) > 0 {
+					it.Attachments = files
+				}
 				it.ToolDone = true
 			} else {
 				pendingToolResults[m.ToolCallID] = text
+				if len(files) > 0 {
+					pendingToolFiles[m.ToolCallID] = files
+				}
 			}
 		}
 	}
@@ -1418,6 +1449,35 @@ func messagesToItems(msgs []session.Message) []*components.ChatItem {
 	}
 
 	return out
+}
+
+func fileAttachmentsOf(atts []llm.Attachment) []llm.Attachment {
+	if len(atts) == 0 {
+		return nil
+	}
+	out := make([]llm.Attachment, 0, len(atts))
+	for _, a := range atts {
+		if a.Type == llm.AttachmentTypeFile {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+func fileItemPaths(it *components.ChatItem) []string {
+	if it == nil || it.Kind != components.ItemTool {
+		return nil
+	}
+	if it.ToolName != "sendfile" && !strings.HasPrefix(it.ToolName, "sendfile:") {
+		return nil
+	}
+	paths := make([]string, 0, len(it.Attachments))
+	for _, a := range it.Attachments {
+		if a.Path != "" {
+			paths = append(paths, a.Path)
+		}
+	}
+	return paths
 }
 
 func messageReasoning(m session.Message) string {
@@ -1498,6 +1558,17 @@ func enrichToolItem(it *components.ChatItem) {
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.Path != "" {
 			it.ToolName = "list:" + p.Path
+		}
+	case "sendfile":
+		var p struct {
+			Files []string `json:"files"`
+		}
+		if err := json.Unmarshal([]byte(args), &p); err == nil && len(p.Files) > 0 {
+			if len(p.Files) == 1 {
+				it.ToolName = "sendfile:" + p.Files[0]
+			} else {
+				it.ToolName = fmt.Sprintf("sendfile:%d files", len(p.Files))
+			}
 		}
 	}
 }

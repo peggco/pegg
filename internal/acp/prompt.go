@@ -444,6 +444,7 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 			Status:        string(status),
 			RawOutput:     truncate(ev.ToolOutput, 128*1024),
 			Error:         errText,
+			Attachments:   fileAttachments(ev.ToolAttachments),
 			AgentID:       agentID,
 			AgentName:     agentName,
 		}
