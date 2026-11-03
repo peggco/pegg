@@ -153,6 +153,8 @@ func (m *runManager) handleStream(r *run, ev agent.StreamEvent) {
 		if ev.ToolErr != nil {
 			out.Error = ev.ToolErr.Error()
 		}
+		out.Attachments = trimAttachments(ev.ToolAttachments)
+		m.c.rememberDelivered(r.sessionID, ev.ToolAttachments)
 		m.c.emit(eventRunToolResult, r.sessionID, r.id, out)
 	case agent.StreamCompaction:
 		m.c.emit(eventRunCompaction, r.sessionID, r.id, runCompactionPayload{

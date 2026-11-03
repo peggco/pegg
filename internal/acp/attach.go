@@ -2,14 +2,65 @@ package acp
 
 import (
 	"context"
+	"path/filepath"
 
 	"github.com/google/uuid"
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/live"
+	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
 )
+
+func attachmentInfos(atts []llm.Attachment) []AttachmentInfo {
+	if len(atts) == 0 {
+		return nil
+	}
+	out := make([]AttachmentInfo, 0, len(atts))
+	for _, a := range atts {
+		name := a.FileName
+		if name == "" && a.Path != "" {
+			name = filepath.Base(a.Path)
+		}
+		if name == "" {
+			name = attach.NameForMediaType(a.MediaType)
+		}
+		mediaType := a.MediaType
+		if mediaType == "" {
+			mediaType = "application/octet-stream"
+		}
+		kind := string(a.Type)
+		if kind == "" {
+			kind = string(attach.Kind(mediaType))
+		}
+		size := a.Size
+		if size <= 0 {
+			size = int64(attach.Size(a))
+		}
+		out = append(out, AttachmentInfo{
+			Name:      name,
+			MediaType: mediaType,
+			Type:      kind,
+			Size:      size,
+			Path:      a.Path,
+		})
+	}
+	return out
+}
+
+func fileAttachments(atts []llm.Attachment) []AttachmentInfo {
+	if len(atts) == 0 {
+		return nil
+	}
+	out := make([]llm.Attachment, 0, len(atts))
+	for _, a := range atts {
+		if a.Type == llm.AttachmentTypeFile {
+			out = append(out, a)
+		}
+	}
+	return attachmentInfos(out)
+}
 
 func (s *Server) startSessionFollow(acpSess *ACPSession) {
 	if s.live == nil || acpSess == nil || acpSess.PeggSessionID == "" {
@@ -125,13 +176,17 @@ func (s *Server) handleAttachedRunEvent(st *promptState, acpSess *ACPSession, ru
 	}
 	switch ev.Type {
 	case session.AgentEventInput:
-		if text := attach.StripBlock(ev.Input); text != "" {
-			s.notify(st.sessionID, SessionUpdate{
-				SessionUpdate: "user_message_chunk",
-				MessageID:     uuid.NewString(),
-				Content:       &ContentBlock{Type: "text", Text: text},
-			})
+		text := attach.StripBlock(ev.Input)
+		atts := attachmentInfos(ev.Attachments)
+		if text == "" && len(atts) == 0 {
+			return
 		}
+		s.notify(st.sessionID, SessionUpdate{
+			SessionUpdate: "user_message_chunk",
+			MessageID:     uuid.NewString(),
+			Content:       &ContentBlock{Type: "text", Text: text},
+			Attachments:   atts,
+		})
 	case session.AgentEventStarted:
 		if ev.ParentAgentID != "" {
 			s.notify(st.sessionID, SessionUpdate{
@@ -169,7 +224,7 @@ func (s *Server) handleAttachedRunEvent(st *promptState, acpSess *ACPSession, ru
 		s.clearToolPending(st, ev.AgentID, call.ID)
 		stream := agent.StreamEvent{
 			Type: agent.StreamToolResult, AgentID: ev.AgentID, AgentName: ev.AgentName,
-			ToolCall: &call, ToolOutput: ev.ToolOutput,
+			ToolCall: &call, ToolOutput: ev.ToolOutput, ToolAttachments: ev.ToolAttachments,
 		}
 		if ev.ToolError != "" {
 			stream.ToolErr = stringError(ev.ToolError)

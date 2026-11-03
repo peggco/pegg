@@ -27,10 +27,19 @@ export interface ToolCallContent {
   content?: ContentBlock;
 }
 
+export interface AttachmentInfo {
+  name: string;
+  mediaType?: string;
+  type?: string;
+  size?: number;
+  path?: string;
+}
+
 export interface SessionUpdate {
   sessionUpdate: string;
   messageId?: string;
   content?: ContentBlock | string;
+  attachments?: AttachmentInfo[];
   toolCallId?: string;
   toolName?: string;
   title?: string;

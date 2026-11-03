@@ -32,6 +32,10 @@ func reveal(path string) error {
 	return exec.Command("explorer", "/select,", path).Start()
 }
 
+func openWith(path string) error {
+	return exec.Command("rundll32", "url.dll,FileProtocolHandler", path).Start()
+}
+
 func envBool(key string) bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
 	case "1", "true", "yes", "on":

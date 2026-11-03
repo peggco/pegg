@@ -71,6 +71,9 @@ type Connector struct {
 	mirrorMu sync.Mutex
 	liveSub  *live.Subscription
 
+	deliveredMu sync.Mutex
+	delivered   map[string]map[string]llm.Attachment
+
 	mu       sync.Mutex
 	scopes   []string
 	sessID   string
@@ -107,6 +110,7 @@ func New(deps Deps, cfg *config.ConnectConfig) (*Connector, error) {
 		log:        deps.Log,
 		dispatch:   newDispatcher(),
 		sttStreams: make(map[string]*sttStreamSession),
+		delivered:  make(map[string]map[string]llm.Attachment),
 		startedAt:  time.Now(),
 		stopped:    make(chan struct{}),
 	}

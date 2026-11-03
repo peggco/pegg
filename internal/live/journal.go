@@ -28,6 +28,8 @@ type AgentEvent struct {
 	ToolOutput string
 	ToolError  string
 
+	ToolAttachments []llm.Attachment
+
 	Usage llm.Usage
 
 	Questions []agent.AskQuestion
@@ -131,10 +133,11 @@ func DecodeAgentEvent(e session.RunEvent) (AgentEvent, bool) {
 		ev.ToolName = ev.ToolCall.Function.Name
 	case session.AgentEventToolResult:
 		var d struct {
-			CallID   string `json:"call_id"`
-			ToolName string `json:"tool_name"`
-			Output   string `json:"output"`
-			Error    string `json:"error"`
+			CallID      string           `json:"call_id"`
+			ToolName    string           `json:"tool_name"`
+			Output      string           `json:"output"`
+			Error       string           `json:"error"`
+			Attachments []llm.Attachment `json:"attachments"`
 		}
 		if json.Unmarshal(e.Data, &d) != nil {
 			return ev, false
@@ -143,6 +146,7 @@ func DecodeAgentEvent(e session.RunEvent) (AgentEvent, bool) {
 		ev.ToolName = d.ToolName
 		ev.ToolOutput = d.Output
 		ev.ToolError = d.Error
+		ev.ToolAttachments = d.Attachments
 		ev.ToolCall = llm.ToolCall{ID: d.CallID}
 		ev.ToolCall.Function.Name = d.ToolName
 	case session.AgentEventUsage:

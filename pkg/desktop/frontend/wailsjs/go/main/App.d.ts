@@ -69,6 +69,8 @@ export function Notify(arg1:string,arg2:string):Promise<void>;
 
 export function OpenExternal(arg1:string):Promise<void>;
 
+export function OpenPath(arg1:string):Promise<void>;
+
 export function OpenWorkspace(arg1:string):Promise<string>;
 
 export function PickBinary():Promise<string>;
@@ -110,6 +112,8 @@ export function RevertSession(arg1:string,arg2:string,arg3:number):Promise<acpcl
 export function SaveCompactionSettings(arg1:main.CompactionSettings):Promise<void>;
 
 export function SaveConnectSettings(arg1:main.ConnectSettings):Promise<main.ConnectSettings>;
+
+export function SaveCopy(arg1:string,arg2:string):Promise<string>;
 
 export function SaveGeneralSettings(arg1:main.GeneralSettings):Promise<void>;
 

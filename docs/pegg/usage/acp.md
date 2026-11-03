@@ -170,11 +170,15 @@ session (titled `ACP Session`) in its session store and links the two.
 ### `session/prompt`
 
 The first `text` content block is used as the agent input. If the prompt contains
-no text but includes an `audio` content block, Pegg transcribes that audio with
-the configured STT provider and uses the transcript. `image` blocks become image
-attachments; `resource` text blocks are inlined as file context; resource blobs
-become file attachments. While the agent runs, the server pushes
-`session/update` notifications (see below). The result's `stopReason` is one of:
+no text but includes attachments, the agent receives the attachments alone. If
+`audio` blocks arrive without data, Pegg transcribes them with the configured STT
+provider and uses the transcript. Every attachment — `image`, `audio`, `video`,
+`resource` (text or blob), and `resource_link` targets that exist on disk — is
+copied into the attachment store (`os.TempDir()/pegg`) exactly like a file dropped
+in the TUI, and referenced by path in an `<attachments>` block appended to the
+message. Only media the active model accepts is also sent inline. While the agent
+runs, the server pushes `session/update` notifications (see below). The result's
+`stopReason` is one of:
 
 | Stop reason | Meaning |
 |---|---|
@@ -244,7 +248,7 @@ The server pushes `session/update` notifications:
 
 | `sessionUpdate` | Emitted when |
 |---|---|
-| `user_message_chunk` | Replaying a stored user message (`session/load`) |
+| `user_message_chunk` | Replaying a stored user message (`session/load`, `session/history`) or mirroring a run started elsewhere (`text`, plus `attachments`) |
 | `agent_message_chunk` | Streaming assistant text |
 | `agent_thought_chunk` | Streaming model reasoning |
 | `tool_call` | A tool call starts (`toolCallId`, `title`, `kind`, `status`, `rawInput`, `locations`) |
@@ -256,6 +260,11 @@ The server pushes `session/update` notifications:
 | `current_model_update` | Model changed (`provider`, `model`) |
 | `available_commands_update` | Skills/commands available for the session |
 | `error` | The run failed (`error`) |
+
+`user_message_chunk` updates also carry `attachments`: an array of
+`{ name, mediaType, type, size, path }` descriptors (no payload) for the files the
+user attached to that message, so clients can render chips in the history. A
+message that contains only attachments is still emitted, with empty text.
 
 ### Forking and reverting
 

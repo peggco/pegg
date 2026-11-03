@@ -126,6 +126,10 @@ export function OpenExternal(arg1) {
   return window['go']['main']['App']['OpenExternal'](arg1);
 }
 
+export function OpenPath(arg1) {
+  return window['go']['main']['App']['OpenPath'](arg1);
+}
+
 export function OpenWorkspace(arg1) {
   return window['go']['main']['App']['OpenWorkspace'](arg1);
 }
@@ -208,6 +212,10 @@ export function SaveCompactionSettings(arg1) {
 
 export function SaveConnectSettings(arg1) {
   return window['go']['main']['App']['SaveConnectSettings'](arg1);
+}
+
+export function SaveCopy(arg1, arg2) {
+  return window['go']['main']['App']['SaveCopy'](arg1, arg2);
 }
 
 export function SaveGeneralSettings(arg1) {

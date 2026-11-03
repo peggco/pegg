@@ -228,7 +228,7 @@ export function SessionPanel({ snap, refresh }: PanelProps) {
 
 const AUTO_RULES: Record<string, string> = {
   read: 'allow', write: 'allow', edit: 'allow', delete: 'allow', list: 'allow',
-  glob: 'allow', grep: 'allow', bash: 'allow', todo: 'allow', todoread: 'allow',
+  glob: 'allow', grep: 'allow', bash: 'allow', sendfile: 'allow', todo: 'allow', todoread: 'allow',
   todowrite: 'allow', webfetch: 'allow', websearch: 'allow', task: 'allow',
   taskstatus: 'allow', askuserquestion: 'allow', enterplanmode: 'allow', exitplanmode: 'allow',
 };

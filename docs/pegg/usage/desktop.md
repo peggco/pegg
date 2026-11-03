@@ -69,7 +69,11 @@ If nothing is found, Settings → Agent and the first-run screen offer **Downloa
 
 - **`@` file mentions** — type `@` and a filename to search the workspace. Selecting a file inserts its path and attaches it to the message so the agent receives the content.
 - **`/` commands** — type `/` to open the command menu. Server-provided commands are merged with built-in commands (`init`, `review`, `test`, `explain`, `fix`, `plan`, `commit`).
-- **Attachments** — use the `+`/paperclip buttons or drag files onto the window.
+- **Attachments** — use the `+`/paperclip buttons or drag files onto the window. Files of
+  any type are accepted: they are copied into Pegg's attachment store and the agent
+  opens them by path. Images, audio, and video are also sent inline when the active
+  model supports them. Attachments show as chips under your message and reappear when
+  you reopen a session.
 - **Voice** — the mic button uses the ACP STT configuration from the Pegg settings.
 - **Modes** — Auto, Plan, Build.
 - **Models** — the model menu is populated from `pegg/models`.

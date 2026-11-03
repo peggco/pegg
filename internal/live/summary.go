@@ -2,6 +2,7 @@ package live
 
 import (
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
 )
 
@@ -12,6 +13,7 @@ type ToolSummary struct {
 	Output   string
 	Error    string
 	Done     bool
+	Files    []llm.Attachment
 }
 
 type Summary struct {
@@ -66,6 +68,7 @@ func (h *Hub) SummarizeRun(runID, agentID string) (Summary, error) {
 				t.ToolName = ev.ToolName
 				t.Output = ev.ToolOutput
 				t.Error = ev.ToolError
+				t.Files = ev.ToolAttachments
 				t.Done = true
 			case session.AgentEventAsk:
 				out.Questions = ev.Questions

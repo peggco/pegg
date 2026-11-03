@@ -81,16 +81,22 @@ func ReadAttachment(path string) (Attachment, error) {
 	if info.IsDir() {
 		return Attachment{}, errors.New("path is a directory")
 	}
+	mediaType := byExtension(path)
+	if mediaType == "" {
+		mediaType = "application/octet-stream"
+	}
 	if info.Size() > MaxAttachment {
-		return Attachment{}, errors.New("file exceeds 8 MiB")
+		return Attachment{
+			ID:        fmt.Sprintf("file-%d", info.Size()),
+			Name:      filepath.Base(path),
+			MediaType: mediaType,
+			Size:      int(info.Size()),
+			Path:      path,
+		}, nil
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return Attachment{}, err
-	}
-	mediaType := byExtension(path)
-	if mediaType == "" {
-		mediaType = "application/octet-stream"
 	}
 	att := Attachment{
 		ID:        fmt.Sprintf("file-%d", len(raw)),

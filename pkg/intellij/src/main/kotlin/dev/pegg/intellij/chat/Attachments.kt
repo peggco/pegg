@@ -85,18 +85,27 @@ object Attachments {
         if (!data.isNullOrEmpty()) {
             return when {
                 attachment.mediaType.startsWith("image/") ->
-                    ContentBlock("image", data = data, mimeType = attachment.mediaType)
+                    ContentBlock("image", data = data, mimeType = attachment.mediaType, name = attachment.name)
                 attachment.mediaType.startsWith("audio/") ->
-                    ContentBlock("audio", data = data, mimeType = attachment.mediaType)
+                    ContentBlock("audio", data = data, mimeType = attachment.mediaType, name = attachment.name)
                 attachment.mediaType.startsWith("video/") ->
-                    ContentBlock("video", data = data, mimeType = attachment.mediaType)
-                else -> ContentBlock("text", text = String(Base64.getDecoder().decode(data), Charsets.UTF_8))
+                    ContentBlock("video", data = data, mimeType = attachment.mediaType, name = attachment.name)
+                else -> ContentBlock(
+                    type = "resource",
+                    name = attachment.name,
+                    resource = EmbeddedResource(
+                        uri = attachment.path ?: "untitled:${attachment.name}",
+                        mimeType = attachment.mediaType.ifBlank { "text/plain" },
+                        text = String(Base64.getDecoder().decode(data), Charsets.UTF_8),
+                    ),
+                )
             }
         }
         val text = attachment.text
         if (text != null) {
             return ContentBlock(
                 type = "resource",
+                name = attachment.name,
                 resource = EmbeddedResource(
                     uri = attachment.path ?: "untitled:${attachment.name}",
                     mimeType = attachment.mediaType.ifBlank { "text/plain" },
@@ -116,19 +125,22 @@ object Attachments {
         }
         if (bytes.size > limit) {
             return ContentBlock(
-                type = "text",
-                text = "[Attached file is too large to inline: $path (${bytes.size} bytes)]",
+                type = "resource_link",
+                name = attachment.name,
+                uri = File(path).toURI().toString(),
+                mimeType = attachment.mediaType.ifBlank { "application/octet-stream" },
             )
         }
         return when {
             attachment.mediaType.startsWith("image/") ->
-                ContentBlock("image", data = base64(bytes), mimeType = attachment.mediaType)
+                ContentBlock("image", data = base64(bytes), mimeType = attachment.mediaType, name = attachment.name)
             attachment.mediaType.startsWith("audio/") ->
-                ContentBlock("audio", data = base64(bytes), mimeType = attachment.mediaType)
+                ContentBlock("audio", data = base64(bytes), mimeType = attachment.mediaType, name = attachment.name)
             attachment.mediaType.startsWith("video/") ->
-                ContentBlock("video", data = base64(bytes), mimeType = attachment.mediaType)
+                ContentBlock("video", data = base64(bytes), mimeType = attachment.mediaType, name = attachment.name)
             isBinary(bytes) -> ContentBlock(
                 type = "resource",
+                name = attachment.name,
                 resource = EmbeddedResource(
                     uri = File(path).toURI().toString(),
                     mimeType = attachment.mediaType.ifBlank { "application/octet-stream" },
@@ -137,6 +149,7 @@ object Attachments {
             )
             else -> ContentBlock(
                 type = "resource",
+                name = attachment.name,
                 resource = EmbeddedResource(
                     uri = File(path).toURI().toString(),
                     mimeType = attachment.mediaType.ifBlank { "text/plain" },

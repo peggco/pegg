@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename } from 'node:path';
 import { ChatController } from '../chat/controller';
 import { makeAttachment } from '../chat/context';
@@ -238,6 +239,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case 'openFile':
           await openFile(String(message.path), Number(message.line ?? 0));
           return;
+        case 'saveFile':
+          await saveFile(String(message.path), String(message.name ?? ''));
+          return;
         case 'openDiff':
           await openDiff(String(message.path), String(message.oldText ?? ''), String(message.newText ?? ''));
           return;
@@ -342,12 +346,38 @@ async function openFile(path: string, line: number): Promise<void> {
     void vscode.window.showWarningMessage(`File not found: ${path}`);
     return;
   }
-  const document = await vscode.workspace.openTextDocument(uri);
-  const position = new vscode.Position(Math.max(0, line - 1), 0);
-  await vscode.window.showTextDocument(document, {
-    preview: true,
-    selection: new vscode.Range(position, position),
+  try {
+    const document = await vscode.workspace.openTextDocument(uri);
+    const position = new vscode.Position(Math.max(0, line - 1), 0);
+    await vscode.window.showTextDocument(document, {
+      preview: true,
+      selection: new vscode.Range(position, position),
+    });
+  } catch {
+    await vscode.commands.executeCommand('vscode.open', uri);
+  }
+}
+
+async function saveFile(sourcePath: string, name: string): Promise<void> {
+  if (!sourcePath) return;
+  if (!existsSync(sourcePath)) {
+    void vscode.window.showWarningMessage(`File not found: ${sourcePath}`);
+    return;
+  }
+  const suggested = name || basename(sourcePath);
+  const base = vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(homedir());
+  const target = await vscode.window.showSaveDialog({
+    title: 'Save a copy',
+    saveLabel: 'Save',
+    defaultUri: vscode.Uri.joinPath(base, suggested),
   });
+  if (!target) return;
+  try {
+    await vscode.workspace.fs.copy(vscode.Uri.file(sourcePath), target, { overwrite: true });
+    void vscode.window.showInformationMessage(`Saved ${basename(target.fsPath)}`);
+  } catch (err) {
+    void vscode.window.showErrorMessage(`Could not save ${suggested}: ${String(err)}`);
+  }
 }
 
 async function openDiff(path: string, oldText: string, newText: string): Promise<void> {

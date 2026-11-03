@@ -19,7 +19,8 @@ Hosts only need to provide:
 1. A `ChatHost` that delivers outgoing webview messages.
 2. A backend that produces `ChatState` JSON and handles the existing message
    protocol (`send`, `stop`, `setMode`, `setModel`, `pickModel`, permissions,
-   questions, attachments, voice, open file/diff, and so on).
+   questions, attachments, voice, open file/diff, save a copy of delivered files,
+   and so on).
 3. Theme CSS variables and any optional feature flags:
    `window.__peggHideReady` and `window.__peggInlinePickers`.
 

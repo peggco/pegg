@@ -125,6 +125,7 @@ func (s *Server) handleSubagentToolResult(ev agent.AgentToolResult) {
 		Status:        string(status),
 		RawOutput:     truncate(ev.Output, 128*1024),
 		Error:         errText,
+		Attachments:   fileAttachments(ev.Attachments),
 		AgentID:       ev.AgentID,
 		AgentName:     ev.AgentName,
 	}

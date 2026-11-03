@@ -77,19 +77,65 @@
   padding: 16px 18px 6px;
   min-height: 58px;
   max-height: 220px;
-  resize: none;
   border: 0;
   outline: none;
   background: transparent;
   color: var(--pg-text);
   font-size: 14.5px;
   line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   overflow-x: hidden;
   overflow-y: auto;
+  cursor: text;
 }
 
-.composer-input::placeholder {
+.composer-input[data-empty='true']::before {
+  content: attr(data-placeholder);
   color: var(--pg-placeholder);
+  pointer-events: none;
+}
+
+.composer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0 1px;
+  padding: 1px 3px 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--pg-accent) 42%, var(--pg-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pg-accent) 12%, transparent);
+  color: var(--pg-accent);
+  font-family: var(--pg-font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  vertical-align: baseline;
+  user-select: none;
+}
+
+.composer-chip::before {
+  content: '✦';
+  font-size: 9.5px;
+  opacity: 0.85;
+}
+
+.composer-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.composer-chip-x:hover {
+  background: color-mix(in srgb, var(--pg-accent) 22%, transparent);
+  opacity: 1;
 }
 
 .composer-bar {

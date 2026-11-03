@@ -292,11 +292,19 @@ func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Messa
 		}
 		if msg.Role == llm.RoleUser || msg.Role == llm.RoleAssistant {
 			content := extractContent(msg)
-			if content != nil {
+			var atts []AttachmentInfo
+			if msg.Role == llm.RoleUser {
+				atts = attachmentInfos(session.AttachmentsOf(msg))
+			}
+			if content != nil || len(atts) > 0 {
+				if content == nil {
+					content = &ContentBlock{Type: "text"}
+				}
 				s.notify(sessionID, SessionUpdate{
 					SessionUpdate: updateType,
 					MessageID:     msg.ID,
 					Content:       content,
+					Attachments:   atts,
 					Seq:           msg.Seq,
 					HistoryPage:   historyPage,
 				})
@@ -317,12 +325,16 @@ func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Messa
 			})
 		}
 		if msg.Role == llm.RoleTool && msg.ToolCallID != "" {
-			out, _ := msg.Content.(string)
+			out := ""
+			if block := rawContent(msg); block != nil {
+				out = block.Text
+			}
 			s.notify(sessionID, SessionUpdate{
 				SessionUpdate: "tool_call_update",
 				ToolCallID:    msg.ToolCallID,
 				Status:        string(ToolCallCompleted),
 				RawOutput:     truncate(out, 64*1024),
+				Attachments:   fileAttachments(session.AttachmentsOf(msg)),
 				Seq:           msg.Seq,
 				HistoryPage:   historyPage,
 			})
@@ -592,6 +604,10 @@ func rawContent(msg session.Message) *ContentBlock {
 	case llm.Content:
 		if c.Text != "" {
 			return &ContentBlock{Type: "text", Text: c.Text}
+		}
+	case map[string]any:
+		if text, _ := c["text"].(string); text != "" {
+			return &ContentBlock{Type: "text", Text: text}
 		}
 	case []any:
 		var parts []string

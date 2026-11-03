@@ -45,19 +45,20 @@ type ChatResponse struct {
 }
 
 type ChatEvent struct {
-	Type       ChatEventType
-	AgentID    string
-	AgentName  string
-	Model      Model
-	Content    string
-	Reasoning  string
-	ToolCall   *ToolCall
-	ToolOutput string
-	ToolErr    error
-	Usage      *Usage
-	Strategy   string
-	Messages   int
-	Tokens     int
+	Type            ChatEventType
+	AgentID         string
+	AgentName       string
+	Model           Model
+	Content         string
+	Reasoning       string
+	ToolCall        *ToolCall
+	ToolOutput      string
+	ToolErr         error
+	ToolAttachments []Attachment
+	Usage           *Usage
+	Strategy        string
+	Messages        int
+	Tokens          int
 }
 
 type ChatEventType string
@@ -244,18 +245,19 @@ func (e *Engine) chat(ctx context.Context, req ChatRequest, handler func(ChatEve
 
 func mapStreamEvent(ev agent.StreamEvent) ChatEvent {
 	out := ChatEvent{
-		Type:       ChatEventType(ev.Type),
-		AgentID:    ev.AgentID,
-		AgentName:  ev.AgentName,
-		Model:      ev.Model,
-		Content:    ev.Content,
-		Reasoning:  ev.Reasoning,
-		ToolOutput: ev.ToolOutput,
-		ToolErr:    ev.ToolErr,
-		Usage:      ev.Usage,
-		Strategy:   ev.Strategy,
-		Messages:   ev.Messages,
-		Tokens:     ev.Tokens,
+		Type:            ChatEventType(ev.Type),
+		AgentID:         ev.AgentID,
+		AgentName:       ev.AgentName,
+		Model:           ev.Model,
+		Content:         ev.Content,
+		Reasoning:       ev.Reasoning,
+		ToolOutput:      ev.ToolOutput,
+		ToolErr:         ev.ToolErr,
+		ToolAttachments: ev.ToolAttachments,
+		Usage:           ev.Usage,
+		Strategy:        ev.Strategy,
+		Messages:        ev.Messages,
+		Tokens:          ev.Tokens,
 	}
 	if ev.ToolCall != nil {
 		tc := *ev.ToolCall

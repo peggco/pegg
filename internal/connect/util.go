@@ -43,6 +43,20 @@ func responseTimeout(cfg *config.ConnectConfig) time.Duration {
 	return time.Duration(cfg.ResponseTimeoutSecs) * time.Second
 }
 
+func trimAttachments(atts []llm.Attachment) []llm.Attachment {
+	if len(atts) == 0 {
+		return nil
+	}
+	out := make([]llm.Attachment, 0, len(atts))
+	for _, a := range atts {
+		if a.Data != "" {
+			a.Data = ""
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
 func availableProviders() []string { return llm.ListProviders() }
 
 func queryFilterProject(workspace string) query.Filter {

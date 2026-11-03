@@ -9,6 +9,7 @@ import type {
   PromptAttachment,
   SessionListItem,
   SessionUpdate,
+  SkillMutationResult,
   SlashCommand,
   Theme,
 } from '../types';
@@ -19,6 +20,7 @@ import {
   addPermission,
   appendUser,
   applyUpdates,
+  attachmentType,
   emptyChat,
   pruneChat,
   resolveAsk,
@@ -455,7 +457,14 @@ export async function sendPrompt(input: SendInput): Promise<void> {
     chat.title === 'New session' || !chat.title
       ? input.text.trim().slice(0, 64) || input.attachments?.[0]?.name || 'New session'
       : chat.title;
-  chat = appendUser(chat, input.text, input.displayText ?? input.text);
+  const attachmentInfos = input.attachments?.map((att) => ({
+    name: att.name,
+    mediaType: att.mediaType,
+    type: attachmentType(att.mediaType),
+    size: att.size,
+    path: att.path,
+  }));
+  chat = appendUser(chat, input.text, input.displayText ?? input.text, attachmentInfos);
   chat = { ...chat, title: shownTitle };
   store.setChat(() => chat);
 
@@ -725,11 +734,15 @@ function applySkillCommands(commands?: SlashCommand[]): void {
   store.setChat((chat) => ({ ...chat, commands }));
 }
 
-export async function installHubSkill(source: string, skillId: string, scope: string): Promise<string> {
+export async function installHubSkill(
+  source: string,
+  skillId: string,
+  scope: string,
+): Promise<SkillMutationResult> {
   const res = await api.InstallHubSkill(source, skillId, scope);
   applySkillCommands(res.commands);
   store.toast('success', `Installed ${skillId} (${scope})`);
-  return res.path ?? '';
+  return res;
 }
 
 export function togglePalette(open?: boolean): void {

@@ -138,6 +138,9 @@ func (m *Middleware) InvokeTool(ctx context.Context, call llm.ToolCall, next age
 			}
 			return m.gate(ctx, call, next, mode, nil)
 		}
+		if name == "sendfile" {
+			return m.gate(ctx, call, next, mode, nil)
+		}
 		output, err := next(ctx, call)
 		if err == nil {
 			return output, nil

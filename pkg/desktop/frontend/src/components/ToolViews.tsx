@@ -3,17 +3,22 @@ import {
   Brain,
   Check,
   ChevronRight,
+  FileAudio,
+  FileImage,
   FileText,
+  FileVideo,
   Globe,
   Pencil,
   Search,
   Terminal,
   Wrench,
 } from 'lucide-react';
-import { shortPath, toolKindLabel } from '../lib/format';
+import { api } from '../lib/bridge';
+import { humanSize, shortPath, toolKindLabel } from '../lib/format';
 import { highlightCode, languageForPath, stripAnsi } from '../lib/markdown';
 import { useT } from '../lib/i18n';
 import type { ToolState } from '../state/chat';
+import type { AttachmentInfo } from '../types';
 
 function StatusMark({ status }: { status: string }) {
   if (status === 'completed') {
@@ -79,7 +84,8 @@ function bashCommand(tool: ToolState): string {
   return title || tool.name || 'bash';
 }
 
-function classify(tool: ToolState): 'bash' | 'write' | 'edit' | 'compact' {
+function classify(tool: ToolState): 'bash' | 'write' | 'edit' | 'files' | 'compact' {
+  if (tool.files?.length) return 'files';
   const haystack = `${tool.name ?? ''} ${tool.title ?? ''}`.toLowerCase();
   if (tool.kind === 'execute' || /\bbash\b/.test(haystack)) return 'bash';
   if (/\bwrite\b/.test(haystack)) return 'write';
@@ -96,9 +102,70 @@ export function ToolCard({ tool }: { tool: ToolState }) {
       return <WriteTool tool={tool} />;
     case 'edit':
       return <EditTool tool={tool} />;
+    case 'files':
+      return <FilesTool tool={tool} />;
     default:
       return <CompactTool tool={tool} />;
   }
+}
+
+function FileKindIcon({ file }: { file: AttachmentInfo }) {
+  const mediaType = file.mediaType ?? '';
+  if (mediaType.startsWith('image/')) return <FileImage size={13} />;
+  if (mediaType.startsWith('audio/')) return <FileAudio size={13} />;
+  if (mediaType.startsWith('video/')) return <FileVideo size={13} />;
+  return <FileText size={13} />;
+}
+
+function FilesTool({ tool }: { tool: ToolState }) {
+  const files = tool.files ?? [];
+  return (
+    <div className="files-card">
+      <div className={`tool-mini${tool.error ? ' has-error' : ''}`}>
+        <span className="tool-mini-icon">
+          <FileText size={13} />
+        </span>
+        <span className="tool-mini-title" title={tool.title}>
+          {tool.title}
+        </span>
+        {tool.error ? <span className="files-error">{tool.error}</span> : null}
+        <StatusMark status={tool.status} />
+      </div>
+      <div className="files-list">
+        {files.map((file, index) => (
+          <div className="files-row" key={`${file.path ?? file.name}-${index}`}>
+            <span className="files-row-icon">
+              <FileKindIcon file={file} />
+            </span>
+            <span className="files-row-name" title={file.path ?? file.name}>
+              {file.name}
+            </span>
+            {file.size ? <span className="files-row-size">{humanSize(file.size)}</span> : null}
+            <span className="files-row-actions">
+              {file.path ? (
+                <button
+                  type="button"
+                  className="files-action"
+                  onClick={() => void api.OpenPath(file.path as string)}
+                >
+                  Open
+                </button>
+              ) : null}
+              {file.path ? (
+                <button
+                  type="button"
+                  className="files-action"
+                  onClick={() => void api.SaveCopy(file.path as string, file.name)}
+                >
+                  Save a copy
+                </button>
+              ) : null}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function CompactTool({ tool }: { tool: ToolState }) {

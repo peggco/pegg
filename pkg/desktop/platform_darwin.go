@@ -36,6 +36,10 @@ func reveal(path string) error {
 	return exec.Command("open", "-R", path).Start()
 }
 
+func openWith(path string) error {
+	return exec.Command("open", path).Start()
+}
+
 func envBool(key string) bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
 	case "1", "true", "yes", "on":

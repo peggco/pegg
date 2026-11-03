@@ -330,7 +330,23 @@ function UserMessage({
       : null;
   return (
     <div className="msg msg-user">
-      <div className="user-bubble">{item.text}</div>
+      {item.text || !item.attachments?.length ? <div className="user-bubble">{item.text}</div> : null}
+      {item.attachments?.length ? (
+        <div className="user-attachments">
+          {item.attachments.map((attachment, index) => (
+            <span
+              className="user-attachment"
+              key={`${attachment.name}-${index}`}
+              title={attachment.path ?? attachment.name}
+            >
+              <span className="user-attachment-icon" aria-hidden="true">
+                {attachmentIcon(attachment.mediaType, attachment.type)}
+              </span>
+              <span className="user-attachment-name">{attachment.name}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="msg-actions">
         <button className="msg-action" onClick={onCopy} title="Copy message">
           <Copy size={12} />
@@ -380,6 +396,13 @@ function AssistantMessage({
       </div>
     </div>
   );
+}
+
+function attachmentIcon(mediaType?: string, type?: string): string {
+  const mt = (mediaType ?? '').toLowerCase();
+  if (type === 'image' || mt.startsWith('image/')) return '🖼';
+  if (type === 'audio' || mt.startsWith('audio/')) return '🎵';
+  return '📎';
 }
 
 function Reasoning({ item }: { item: Extract<ChatItem, { kind: 'reasoning' }> }) {

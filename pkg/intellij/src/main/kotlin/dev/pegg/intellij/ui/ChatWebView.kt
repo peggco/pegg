@@ -5,9 +5,12 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.fileChooser.FileChooserFactory
+import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.jcef.JBCefApp
@@ -45,6 +48,9 @@ import org.cef.handler.CefDisplayHandlerAdapter
 import org.cef.handler.CefLoadHandler
 import org.cef.handler.CefLoadHandlerAdapter
 import java.awt.BorderLayout
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.atomic.AtomicLong
 import javax.swing.JComponent
 import javax.swing.JLabel
@@ -369,6 +375,11 @@ class ChatWebView(
                     IdeActions.openDiff(project, path, oldText, newText)
                 }
             }
+            "saveFile" -> {
+                val path = obj["path"]?.jsonPrimitive?.contentOrNull ?: return
+                val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: ""
+                ApplicationManager.getApplication().invokeLater { saveFileCopy(path, name) }
+            }
             "openExternal" -> {
                 val url = obj["url"]?.jsonPrimitive?.contentOrNull ?: return
                 ApplicationManager.getApplication().invokeLater { IdeActions.openExternal(url) }
@@ -385,6 +396,23 @@ class ChatWebView(
                 ApplicationManager.getApplication().invokeLater { IdeActions.copy(text) }
             }
             else -> PeggLog.debug("Unknown webview message: $type")
+        }
+    }
+
+    private fun saveFileCopy(sourcePath: String, name: String) {
+        val source = File(sourcePath)
+        if (!source.isFile) {
+            Messages.showWarningDialog(project, "File not found: $sourcePath", "Pegg")
+            return
+        }
+        val suggested = name.ifBlank { source.name }
+        val descriptor = FileSaverDescriptor("Save a copy", "Save a copy of the file")
+        val dialog = FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
+        val target = dialog.save(null as VirtualFile?, suggested) ?: return
+        runCatching {
+            Files.copy(source.toPath(), target.file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }.onFailure {
+            Messages.showErrorDialog(project, "Could not save $suggested: ${it.message}", "Pegg")
         }
     }
 

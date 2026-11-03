@@ -1,4 +1,6 @@
-import { ContentBlock, PlanEntry, SessionMode, SessionUpdate, SlashCommand } from './types';
+import { AttachmentInfo, ContentBlock, PlanEntry, SessionMode, SessionUpdate, SlashCommand } from './types';
+
+export type { AttachmentInfo } from './types';
 
 export interface UsageState {
   used: number;
@@ -17,12 +19,21 @@ export interface ToolState {
   error?: string;
   locations?: { path: string; line?: number }[];
   diff?: { path: string; oldText?: string; newText: string };
+  files?: AttachmentInfo[];
   agentId?: string;
   agentName?: string;
 }
 
 export type ChatItem = (
-  | { kind: 'user'; id: string; text: string; createdAt: number; messageId?: string; agentId?: string }
+  | {
+      kind: 'user';
+      id: string;
+      text: string;
+      createdAt: number;
+      messageId?: string;
+      agentId?: string;
+      attachments?: AttachmentInfo[];
+    }
   | { kind: 'assistant'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
   | { kind: 'reasoning'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
   | { kind: 'tool'; id: string; tool: ToolState; createdAt: number }
@@ -144,7 +155,8 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
     case 'agent_message_chunk':
     case 'user_message_chunk': {
       const text = contentText(update.content);
-      if (!text) return state;
+      const attachments = update.attachments?.length ? update.attachments : undefined;
+      if (!text && !attachments) return state;
       const id = update.messageId || nextId(state, 'message');
       const kind = update.sessionUpdate === 'user_message_chunk' ? 'user' : 'assistant';
       const storedId = update.messageId;
@@ -153,14 +165,28 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       ) as Extract<ChatItem, { kind: 'assistant' | 'user' }> | undefined;
       const last = state.items[state.items.length - 1];
       if (existing) {
-        existing.text += text;
+        state.items = state.items.map((item) =>
+          item.id === existing.id && (item.kind === 'assistant' || item.kind === 'user')
+            ? {
+                ...item,
+                text: item.text + text,
+                ...(attachments ? { attachments: mergeAttachments(item, attachments) } : {}),
+              }
+            : item,
+        );
       } else if (
         (last?.kind === 'user' && kind === 'user') ||
         (last?.kind === 'assistant' && kind === 'assistant' && (last.agentName ?? '') === (update.agentName ?? ''))
       ) {
         state.items = [
           ...state.items.slice(0, -1),
-          { ...(last as Extract<ChatItem, { kind: 'user' | 'assistant' }>), text: last.text + text },
+          {
+            ...(last as Extract<ChatItem, { kind: 'user' | 'assistant' }>),
+            text: last.text + text,
+            ...(attachments && kind === 'user'
+              ? { attachments: mergeAttachments(last as ChatItem, attachments) }
+              : {}),
+          },
         ];
       } else {
         state.items.push({
@@ -171,6 +197,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           agentName: update.agentName,
           createdAt: now,
           seq,
+          ...(kind === 'user' && attachments ? { attachments } : {}),
           ...(kind === 'user' && storedId ? { messageId: storedId } : {}),
         } as ChatItem);
       }
@@ -218,6 +245,9 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
         if (update.toolName) existing.tool.name = update.toolName;
         if (update.agentId) existing.tool.agentId = update.agentId;
         if (update.agentName) existing.tool.agentName = update.agentName;
+        if (update.attachments?.length) {
+          existing.tool.files = mergeFiles(existing.tool.files, update.attachments);
+        }
         const diff = update.contents?.find((c) => c.type === 'diff' && c.diff)?.diff;
         if (diff) existing.tool.diff = diff;
       } else {
@@ -238,6 +268,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
             error: update.error,
             locations: update.locations,
             diff,
+            files: update.attachments?.length ? update.attachments : undefined,
             agentId: update.agentId,
             agentName: update.agentName,
           },
@@ -337,13 +368,42 @@ function normalizeStatus(status: string | undefined): ToolState['status'] | unde
   }
 }
 
-export function appendUser(state: ChatState, text: string): ChatState {
+function mergeAttachments(item: ChatItem, attachments: AttachmentInfo[]): AttachmentInfo[] {
+  const existing = item.kind === 'user' && item.attachments ? item.attachments : [];
+  if (!existing.length) return attachments;
+  const seen = new Set(existing.map((att) => `${att.name}|${att.path ?? ''}`));
+  const merged = [...existing];
+  for (const att of attachments) {
+    if (seen.has(`${att.name}|${att.path ?? ''}`)) continue;
+    merged.push(att);
+  }
+  return merged;
+}
+
+function mergeFiles(existing: AttachmentInfo[] | undefined, incoming: AttachmentInfo[]): AttachmentInfo[] {
+  if (!existing?.length) return incoming;
+  const seen = new Set(existing.map((file) => `${file.name}|${file.path ?? ''}`));
+  const merged = [...existing];
+  for (const file of incoming) {
+    if (seen.has(`${file.name}|${file.path ?? ''}`)) continue;
+    merged.push(file);
+  }
+  return merged;
+}
+
+export function appendUser(
+  state: ChatState,
+  text: string,
+  displayText?: string,
+  attachments?: AttachmentInfo[],
+): ChatState {
   const next = { ...state, items: [...state.items], counter: state.counter + 1 };
   next.items.push({
     kind: 'user',
     id: `user-${next.counter}`,
-    text,
+    text: displayText ?? text,
     createdAt: Date.now(),
+    ...(attachments?.length ? { attachments } : {}),
   });
   return next;
 }
@@ -358,6 +418,14 @@ export function addNotice(state: ChatState, text: string, level: 'info' | 'warn'
     createdAt: Date.now(),
   });
   return next;
+}
+
+export function attachmentType(mediaType?: string): 'image' | 'audio' | 'video' | 'file' {
+  const mt = (mediaType ?? '').toLowerCase();
+  if (mt.startsWith('image/')) return 'image';
+  if (mt.startsWith('audio/')) return 'audio';
+  if (mt.startsWith('video/')) return 'video';
+  return 'file';
 }
 
 export function addAttachment(state: ChatState, attachment: ComposerAttachment): ChatState {

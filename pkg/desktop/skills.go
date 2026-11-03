@@ -26,6 +26,7 @@ type HubSkill struct {
 }
 
 type SkillMutationResult struct {
+	Name     string                   `json:"name,omitempty"`
 	Path     string                   `json:"path,omitempty"`
 	Commands []acpclient.SlashCommand `json:"commands,omitempty"`
 }
@@ -83,7 +84,7 @@ func (a *App) InstallHubSkill(source, skillID, scope string) (SkillMutationResul
 	if err != nil {
 		return SkillMutationResult{}, err
 	}
-	return SkillMutationResult{Path: installed.Path, Commands: a.reloadSkills()}, nil
+	return SkillMutationResult{Name: installed.Name, Path: installed.Path, Commands: a.reloadSkills()}, nil
 }
 
 func (a *App) ReloadSkills() []acpclient.SlashCommand {

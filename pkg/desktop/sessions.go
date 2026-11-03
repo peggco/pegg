@@ -577,6 +577,7 @@ func promptBlocks(text string, atts []PromptAttachment) []acpclient.ContentBlock
 		case att.Text != "":
 			blocks = append(blocks, acpclient.ContentBlock{
 				Type: "resource",
+				Name: att.Name,
 				Resource: &acpclient.EmbeddedResource{
 					URI:      fileURI(att.Path, att.Name),
 					MimeType: att.MediaType,
@@ -584,17 +585,27 @@ func promptBlocks(text string, atts []PromptAttachment) []acpclient.ContentBlock
 				},
 			})
 		case strings.HasPrefix(att.MediaType, "image/") && att.Data != "":
-			blocks = append(blocks, acpclient.ContentBlock{Type: "image", Data: att.Data, MimeType: att.MediaType})
+			blocks = append(blocks, acpclient.ContentBlock{Type: "image", Name: att.Name, Data: att.Data, MimeType: att.MediaType})
 		case strings.HasPrefix(att.MediaType, "audio/") && att.Data != "":
-			blocks = append(blocks, acpclient.ContentBlock{Type: "audio", Data: att.Data, MimeType: att.MediaType})
+			blocks = append(blocks, acpclient.ContentBlock{Type: "audio", Name: att.Name, Data: att.Data, MimeType: att.MediaType})
+		case strings.HasPrefix(att.MediaType, "video/") && att.Data != "":
+			blocks = append(blocks, acpclient.ContentBlock{Type: "video", Name: att.Name, Data: att.Data, MimeType: att.MediaType})
 		case att.Data != "":
 			blocks = append(blocks, acpclient.ContentBlock{
 				Type: "resource",
+				Name: att.Name,
 				Resource: &acpclient.EmbeddedResource{
 					URI:      fileURI(att.Path, att.Name),
 					MimeType: att.MediaType,
 					Blob:     att.Data,
 				},
+			})
+		case att.Path != "":
+			blocks = append(blocks, acpclient.ContentBlock{
+				Type:     "resource_link",
+				Name:     att.Name,
+				URI:      fileURI(att.Path, att.Name),
+				MimeType: att.MediaType,
 			})
 		}
 	}

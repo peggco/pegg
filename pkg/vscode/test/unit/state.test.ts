@@ -141,6 +141,42 @@ describe('chat state', () => {
     expect(state.items.map((item) => item.kind)).toEqual(['reasoning', 'error', 'notice']);
   });
 
+  it('attaches files to user messages and history chunks', () => {
+    let state = appendUser(initialState(), 'look', undefined, [
+      { name: 'shot.png', mediaType: 'image/png', type: 'image', path: '/tmp/pegg/shot.png' },
+    ]);
+    expect(state.items[0]).toMatchObject({
+      kind: 'user',
+      text: 'look',
+      attachments: [{ name: 'shot.png', type: 'image' }],
+    });
+
+    state = applyUpdate(initialState(), {
+      sessionUpdate: 'user_message_chunk',
+      messageId: 'm1',
+      content: { type: 'text', text: '' },
+      attachments: [{ name: 'report.pdf', mediaType: 'application/pdf', type: 'file' }],
+    });
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0]).toMatchObject({
+      kind: 'user',
+      text: '',
+      attachments: [{ name: 'report.pdf', type: 'file' }],
+    });
+
+    state = applyUpdate(state, {
+      sessionUpdate: 'user_message_chunk',
+      messageId: 'm1',
+      content: { type: 'text', text: 'see?' },
+    });
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0]).toMatchObject({
+      kind: 'user',
+      text: 'see?',
+      attachments: [{ name: 'report.pdf', type: 'file' }],
+    });
+  });
+
   it('manages user messages, attachments and clearing', () => {
     let state = appendUser(initialState(), 'hi');
     state = addAttachment(state, { id: 'a1', name: 'a.txt', mediaType: 'text/plain', text: 'x' });

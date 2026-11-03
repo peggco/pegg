@@ -125,6 +125,8 @@ const App = GoApp as unknown as {
   WindowMaximised(): Promise<boolean>;
   OpenExternal(url: string): Promise<void>;
   RevealPath(path: string): Promise<void>;
+  OpenPath(path: string): Promise<void>;
+  SaveCopy(path: string, name: string): Promise<string>;
   ReadAttachment(path: string): Promise<Attachment>;
   AttachFiles(): Promise<Attachment[]>;
   NewSession(input: NewSessionInput): Promise<SessionInfo>;

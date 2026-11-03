@@ -2,6 +2,9 @@ package acp
 
 import (
 	"context"
+	"encoding/base64"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -9,7 +12,10 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/llm"
+	"github.com/peggco/pegg/internal/session"
 )
 
 func testSession(t *testing.T, srv *Server, id string) *ACPSession {
@@ -151,19 +157,142 @@ func TestAgentAskCustomQuestions(t *testing.T) {
 func TestPreparePromptAttachments(t *testing.T) {
 	srv := newTestServer(t)
 	sess := &ACPSession{ID: "s", Cwd: t.TempDir()}
+
+	linkPath := filepath.Join(t.TempDir(), "notes.md")
+	if err := os.WriteFile(linkPath, []byte("# notes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	input, atts, err := srv.preparePrompt(context.Background(), sess, []ContentBlock{
 		{Type: "text", Text: "look"},
-		{Type: "image", MimeType: "image/png", Data: "aGVsbG8="},
-		{Type: "resource", Resource: &EmbeddedResource{URI: "file:///tmp/a.txt", Text: "contents"}},
+		{Type: "image", MimeType: "image/png", Name: "shot.png", Data: base64.StdEncoding.EncodeToString([]byte("png-bytes"))},
+		{Type: "resource", Resource: &EmbeddedResource{URI: "file:///tmp/a.txt", MimeType: "text/plain", Text: "contents"}},
+		{Type: "resource", Resource: &EmbeddedResource{
+			URI:      "file:///tmp/report.pdf",
+			MimeType: "application/pdf",
+			Blob:     base64.StdEncoding.EncodeToString([]byte("%PDF-1.7")),
+		}},
+		{Type: "resource_link", URI: "file://" + linkPath},
 	})
 	if err != nil {
 		t.Fatalf("preparePrompt: %v", err)
 	}
-	if !strings.Contains(input, "look") || !strings.Contains(input, "contents") {
-		t.Fatalf("unexpected input: %q", input)
+	if input != "look" {
+		t.Fatalf("input = %q, want just the prompt text", input)
 	}
-	if len(atts) != 1 || atts[0].Type != "image" {
-		t.Fatalf("unexpected attachments: %+v", atts)
+	if len(atts) != 4 {
+		t.Fatalf("attachments = %+v, want 4", atts)
+	}
+
+	wantTypes := []llm.AttachmentType{
+		llm.AttachmentTypeImage,
+		llm.AttachmentTypeFile,
+		llm.AttachmentTypeFile,
+		llm.AttachmentTypeFile,
+	}
+	wantNames := []string{"shot.png", "a.txt", "report.pdf", "notes.md"}
+	for i, att := range atts {
+		if att.Type != wantTypes[i] {
+			t.Fatalf("attachment %d type = %q, want %q", i, att.Type, wantTypes[i])
+		}
+		if att.FileName != wantNames[i] {
+			t.Fatalf("attachment %d name = %q, want %q", i, att.FileName, wantNames[i])
+		}
+		if att.Path == "" || !attach.IsStorePath(att.Path) {
+			t.Fatalf("attachment %d not stored: %+v", i, att)
+		}
+		if att.Data == "" {
+			t.Fatalf("attachment %d has no payload: %+v", i, att)
+		}
+	}
+	if atts[1].MediaType != "text/plain" {
+		t.Fatalf("text media type = %q", atts[1].MediaType)
+	}
+	if atts[2].MediaType != "application/pdf" {
+		t.Fatalf("pdf media type = %q", atts[2].MediaType)
+	}
+	stored, err := os.ReadFile(atts[1].Path)
+	if err != nil || string(stored) != "contents" {
+		t.Fatalf("stored text = %q, err %v", stored, err)
+	}
+	if got := attach.Block(atts); !strings.Contains(got, atts[0].Path) || !strings.Contains(got, "shot.png") {
+		t.Fatalf("block = %q, want stored paths and names", got)
+	}
+}
+
+func TestPreparePromptImageWithoutName(t *testing.T) {
+	srv := newTestServer(t)
+	sess := &ACPSession{ID: "s", Cwd: t.TempDir()}
+	_, atts, err := srv.preparePrompt(context.Background(), sess, []ContentBlock{
+		{Type: "image", MimeType: "image/jpeg", Data: base64.StdEncoding.EncodeToString([]byte("jpeg"))},
+	})
+	if err != nil {
+		t.Fatalf("preparePrompt: %v", err)
+	}
+	if len(atts) != 1 {
+		t.Fatalf("attachments = %+v", atts)
+	}
+	if atts[0].FileName != "file.jpg" || atts[0].Type != llm.AttachmentTypeImage {
+		t.Fatalf("attachment = %+v, want synthesized image name", atts[0])
+	}
+}
+
+func TestHistoryEmitsAttachmentChips(t *testing.T) {
+	srv := newTestServer(t)
+	bt := newBufferTransport()
+	srv.transport = bt
+
+	msg := session.Message{
+		ID:   "m1",
+		Seq:  1,
+		Role: llm.RoleUser,
+		Content: llm.Content{
+			Text: "<attachments>\n<attachment name=\"r.pdf\" path=\"/tmp/pegg/r.pdf\"/>\n</attachments>",
+			Attachments: []llm.Attachment{{
+				Type:      llm.AttachmentTypeFile,
+				MediaType: "application/pdf",
+				FileName:  "r.pdf",
+				Path:      "/tmp/pegg/r.pdf",
+			}},
+		},
+	}
+	srv.emitHistoryMessages("s1", "/tmp", []session.Message{msg}, true)
+
+	raw := bt.last()
+	if raw == "" {
+		t.Fatal("no history update emitted")
+	}
+	var notification struct {
+		Params struct {
+			Update SessionUpdate `json:"update"`
+		} `json:"params"`
+	}
+	if err := json.Unmarshal([]byte(raw), &notification); err != nil {
+		t.Fatalf("unmarshal update: %v", err)
+	}
+	update := notification.Params.Update
+	if update.SessionUpdate != "user_message_chunk" {
+		t.Fatalf("sessionUpdate = %q", update.SessionUpdate)
+	}
+	if len(update.Attachments) != 1 || update.Attachments[0].Name != "r.pdf" || update.Attachments[0].Type != "file" {
+		t.Fatalf("attachments = %+v", update.Attachments)
+	}
+}
+
+func TestAttachmentInfos(t *testing.T) {
+	atts := []llm.Attachment{
+		{Type: llm.AttachmentTypeImage, MediaType: "image/png", FileName: "shot.png", Path: "/tmp/pegg/shot.png", Data: "aGVsbG8="},
+		{Type: llm.AttachmentTypeFile, MediaType: "application/pdf", Path: "/tmp/pegg/report.pdf"},
+	}
+	infos := attachmentInfos(atts)
+	if len(infos) != 2 {
+		t.Fatalf("infos = %+v", infos)
+	}
+	if infos[0].Name != "shot.png" || infos[0].Type != "image" || infos[0].Size != 5 {
+		t.Fatalf("first info = %+v", infos[0])
+	}
+	if infos[1].Name != "report.pdf" || infos[1].Type != "file" {
+		t.Fatalf("second info = %+v", infos[1])
 	}
 }
 

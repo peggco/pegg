@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"mime"
 	"os"
@@ -328,6 +327,7 @@ func (a *App) build() {
 	}
 
 	a.chat.SetOnActivate(a.activateItem)
+	a.chat.SetOnOpenFile(a.openChatFile)
 	a.chat.SetOnBack(a.backFromSubagent)
 	a.chat.SetOnLoadMore(a.loadMore)
 	a.chat.SetOnSubagentHistory(a.openSubagentHistory)
@@ -1062,27 +1062,7 @@ func messageRawText(m session.Message) string {
 }
 
 func messageAttachments(m session.Message) []llm.Attachment {
-	var raw any
-	switch c := m.Content.(type) {
-	case llm.Content:
-		return c.Attachments
-	case map[string]any:
-		raw = c["attachments"]
-	default:
-		return nil
-	}
-	if raw == nil {
-		return nil
-	}
-	data, err := json.Marshal(raw)
-	if err != nil {
-		return nil
-	}
-	var atts []llm.Attachment
-	if err := json.Unmarshal(data, &atts); err != nil {
-		return nil
-	}
-	return atts
+	return session.AttachmentsOf(m)
 }
 
 func (a *App) draw() {

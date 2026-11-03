@@ -101,6 +101,7 @@ func (c *Connector) enrichRun(info *RunInfo) {
 		info.Tools[i] = RunToolInfo{
 			CallID: t.CallID, ToolName: t.ToolName, Args: t.Args,
 			Output: t.Output, Error: t.Error, Done: t.Done,
+			Attachments: trimAttachments(t.Files),
 		}
 	}
 }
@@ -138,8 +139,10 @@ func (c *Connector) handleMainLiveEvent(r session.Run, ev live.AgentEvent) {
 			CallID: ev.CallID, ToolName: ev.ToolName, Args: ev.ToolCall.Function.Arguments,
 		})
 	case session.AgentEventToolResult:
+		c.rememberDelivered(r.SessionID, ev.ToolAttachments)
 		c.emit(eventRunToolResult, r.SessionID, r.ID, runToolResultPayload{
 			CallID: ev.CallID, ToolName: ev.ToolName, Output: ev.ToolOutput, Error: ev.ToolError,
+			Attachments: trimAttachments(ev.ToolAttachments),
 		})
 	case session.AgentEventUsage:
 		c.emit(eventRunUsage, r.SessionID, r.ID, runUsagePayload{Usage: ev.Usage})
@@ -193,7 +196,12 @@ func (c *Connector) handleSubagentLiveEvent(r session.Run, e session.RunEvent, e
 		if content == "" {
 			content = ev.ToolError
 		}
-		c.emitSubagentMessage(r, e, agentID, llm.ToolMessage(content, ev.CallID))
+		c.rememberDelivered(r.SessionID, ev.ToolAttachments)
+		msg := llm.ToolMessage(content, ev.CallID)
+		if len(ev.ToolAttachments) > 0 {
+			msg.Content = llm.ContentWithAttachments(content, trimAttachments(ev.ToolAttachments))
+		}
+		c.emitSubagentMessage(r, e, agentID, msg)
 	case session.AgentEventUsage:
 		c.emit(eventRunSubagentUsage, r.SessionID, r.ID, runSubagentUsagePayload{
 			AgentID: agentID,

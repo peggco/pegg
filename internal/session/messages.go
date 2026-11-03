@@ -37,7 +37,7 @@ func MessagesToLLM(msgs []Message) []llm.Message {
 			ToolCalls:  m.ToolCalls,
 		}
 		if msg.Role == llm.RoleTool {
-			if content, ok := msg.Content.(llm.Content); ok && len(content.Attachments) > 0 {
+			if content, ok := msg.Content.(llm.Content); ok {
 				atts := mediaOnly(content.Attachments)
 				msg.Content = content.Text
 				pending = append(pending, atts...)
@@ -66,6 +66,16 @@ func normalizeContent(content any) any {
 	default:
 		return content
 	}
+}
+
+func AttachmentsOf(m Message) []llm.Attachment {
+	switch c := m.Content.(type) {
+	case llm.Content:
+		return c.Attachments
+	case map[string]any:
+		return decodeAttachments(c["attachments"])
+	}
+	return nil
 }
 
 func mediaOnly(atts []llm.Attachment) []llm.Attachment {

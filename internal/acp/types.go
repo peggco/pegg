@@ -7,9 +7,18 @@ type ContentBlock struct {
 	Text        string            `json:"text,omitempty"`
 	Data        string            `json:"data,omitempty"`
 	MimeType    string            `json:"mimeType,omitempty"`
+	Name        string            `json:"name,omitempty"`
 	URI         string            `json:"uri,omitempty"`
 	Resource    *EmbeddedResource `json:"resource,omitempty"`
 	Annotations *Annotations      `json:"annotations,omitempty"`
+}
+
+type AttachmentInfo struct {
+	Name      string `json:"name,omitempty"`
+	MediaType string `json:"mediaType,omitempty"`
+	Type      string `json:"type,omitempty"`
+	Size      int64  `json:"size,omitempty"`
+	Path      string `json:"path,omitempty"`
 }
 
 type EmbeddedResource struct {
@@ -60,6 +69,7 @@ type SessionUpdate struct {
 	AgentName     string             `json:"agentName,omitempty"`
 	Error         string             `json:"error,omitempty"`
 	Contents      []ToolCallContent  `json:"contents,omitempty"`
+	Attachments   []AttachmentInfo   `json:"attachments,omitempty"`
 	RunID         string             `json:"runId,omitempty"`
 	RunState      string             `json:"runState,omitempty"`
 	BaseSeq       int                `json:"baseSeq,omitempty"`

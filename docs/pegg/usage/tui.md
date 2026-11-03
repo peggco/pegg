@@ -210,6 +210,9 @@ text.
 - **WRITE** — syntax-highlighted file content for `write` calls.
 - **TODO** — parsed todo list with status icons and an `N / M completed` footer.
 - **ASK** — question/answer pairs collected from the user.
+- **FILES** — one box per file delivered by `sendfile`, with name, size and path.
+  Click a box to open the file with the OS default handler; ++enter++ on the item
+  copies the absolute paths.
 
 Fenced code in assistant messages is syntax-highlighted for Go, TypeScript,
 JavaScript, Python, Rust, Bash, C/C++, Ruby, PHP, Swift, Kotlin, Scala, Elixir,

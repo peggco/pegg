@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	json "github.com/goccy/go-json"
 
 	"github.com/google/uuid"
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/llm"
 	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
@@ -58,9 +61,6 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 	}
 	if input == "" && len(attachments) == 0 {
 		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "prompt contains no text, audio, or attachments"}
-	}
-	if input == "" {
-		input = "Please analyze the attached content."
 	}
 
 	promptCtx, cancel := context.WithCancel(ctx)
@@ -203,18 +203,33 @@ func (s *Server) preparePrompt(ctx context.Context, acpSess *ACPSession, blocks 
 				parts = append(parts, b.Text)
 			}
 		case "image":
-			if b.Data == "" {
+			if strings.TrimSpace(b.Data) == "" {
 				continue
 			}
-			attachments = append(attachments, llm.NewImageAttachmentFromBase64(defaultMime(b.MimeType, "image/png"), b.Data))
+			mediaType := defaultMime(b.MimeType, "image/png")
+			att, err := attach.FromBase64Media(blockFileName(b, attach.NameForMediaType(mediaType)), mediaType, b.Data)
+			if err != nil {
+				return "", nil, err
+			}
+			attachments = append(attachments, att)
 		case "video":
-			if b.Data == "" {
+			if strings.TrimSpace(b.Data) == "" {
 				continue
 			}
-			attachments = append(attachments, llm.NewVideoAttachmentFromBase64(defaultMime(b.MimeType, "video/mp4"), b.Data))
+			mediaType := defaultMime(b.MimeType, "video/mp4")
+			att, err := attach.FromBase64Media(blockFileName(b, attach.NameForMediaType(mediaType)), mediaType, b.Data)
+			if err != nil {
+				return "", nil, err
+			}
+			attachments = append(attachments, att)
 		case "audio":
 			if b.Data != "" {
-				attachments = append(attachments, llm.NewAudioAttachmentFromBase64(defaultMime(b.MimeType, "audio/webm"), b.Data))
+				mediaType := defaultMime(b.MimeType, "audio/webm")
+				att, err := attach.FromBase64Media(blockFileName(b, attach.NameForMediaType(mediaType)), mediaType, b.Data)
+				if err != nil {
+					return "", nil, err
+				}
+				attachments = append(attachments, att)
 				continue
 			}
 			text, err := s.transcribeAudioBlocks(ctx, []ContentBlock{b})
@@ -229,18 +244,27 @@ func (s *Server) preparePrompt(ctx context.Context, acpSess *ACPSession, blocks 
 				continue
 			}
 			r := b.Resource
-			if r.Text != "" {
-				name := r.URI
-				if name == "" {
-					name = "embedded resource"
+			name := blockFileName(b, resourceName(r.URI))
+			mediaType := defaultMime(r.MimeType, b.MimeType)
+			switch {
+			case r.Blob != "":
+				att, err := attach.FromBase64Media(name, mediaType, r.Blob)
+				if err != nil {
+					return "", nil, err
 				}
-				parts = append(parts, fmt.Sprintf("<file path=%q>\n%s\n</file>", name, r.Text))
-				continue
-			}
-			if r.Blob != "" {
-				attachments = append(attachments, llm.NewFileAttachmentFromBase64(defaultMime(r.MimeType, "application/octet-stream"), r.Blob, resourceName(r.URI)))
+				attachments = append(attachments, att)
+			case r.Text != "":
+				att, err := attach.FromBytesMedia(name, mediaType, []byte(r.Text))
+				if err != nil {
+					return "", nil, err
+				}
+				attachments = append(attachments, att)
 			}
 		case "resource_link":
+			if att, ok := attachmentFromLink(b); ok {
+				attachments = append(attachments, att)
+				continue
+			}
 			if b.URI != "" {
 				parts = append(parts, fmt.Sprintf("Referenced file: %s", b.URI))
 			}
@@ -248,6 +272,64 @@ func (s *Server) preparePrompt(ctx context.Context, acpSess *ACPSession, blocks 
 	}
 
 	return strings.Join(parts, "\n\n"), attachments, nil
+}
+
+func blockFileName(b ContentBlock, fallback string) string {
+	if name := strings.TrimSpace(b.Name); name != "" {
+		return filepath.Base(name)
+	}
+	return fallback
+}
+
+func attachmentFromLink(b ContentBlock) (llm.Attachment, bool) {
+	path := localPath(b.URI)
+	if path == "" {
+		return llm.Attachment{}, false
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return llm.Attachment{}, false
+	}
+	att, err := attach.FromPath(path)
+	if err != nil {
+		return llm.Attachment{}, false
+	}
+	if name := strings.TrimSpace(b.Name); name != "" {
+		att.FileName = filepath.Base(name)
+	}
+	if mt := strings.TrimSpace(b.MimeType); mt != "" {
+		att.MediaType = mt
+		att.Type = attach.Kind(mt)
+	}
+	return att, true
+}
+
+func localPath(uri string) string {
+	uri = strings.TrimSpace(uri)
+	if uri == "" {
+		return ""
+	}
+	if strings.HasPrefix(uri, "file://") {
+		parsed, err := url.Parse(uri)
+		if err != nil {
+			return ""
+		}
+		path := parsed.Path
+		if path == "" {
+			path = parsed.Opaque
+		}
+		if runtime.GOOS == "windows" && len(path) > 2 && path[0] == '/' && path[2] == ':' {
+			path = path[1:]
+		}
+		return path
+	}
+	if strings.Contains(uri, "://") {
+		return ""
+	}
+	if filepath.IsAbs(uri) {
+		return uri
+	}
+	return ""
 }
 
 func defaultMime(got, fallback string) string {
@@ -362,6 +444,7 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 			Status:        string(status),
 			RawOutput:     truncate(ev.ToolOutput, 128*1024),
 			Error:         errText,
+			Attachments:   fileAttachments(ev.ToolAttachments),
 			AgentID:       agentID,
 			AgentName:     agentName,
 		}
@@ -461,7 +544,7 @@ func toolKind(name string) ToolKind {
 		return ToolKindRead
 	case "write", "edit":
 		return ToolKindEdit
-	case "glob", "grep":
+	case "glob", "grep", "searchskill":
 		return ToolKindSearch
 	case "bash":
 		return ToolKindExecute
@@ -486,7 +569,7 @@ func toolTitle(name string, args map[string]any) string {
 		if p := stringArg(args, "filePath", "file_path", "path"); p != "" {
 			return name + ": " + p
 		}
-	case "grep", "glob":
+	case "grep", "glob", "searchskill":
 		if p := stringArg(args, "pattern", "query"); p != "" {
 			return name + ": " + p
 		}

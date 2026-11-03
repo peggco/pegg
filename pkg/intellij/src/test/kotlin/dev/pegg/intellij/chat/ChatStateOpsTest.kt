@@ -1,5 +1,6 @@
 package dev.pegg.intellij.chat
 
+import dev.pegg.intellij.acp.AttachmentInfo
 import dev.pegg.intellij.acp.ChatItem
 import dev.pegg.intellij.acp.ComposerAttachment
 import dev.pegg.intellij.acp.SessionUpdate
@@ -61,6 +62,36 @@ class ChatStateOpsTest {
         val item = state.items[0] as ChatItem.Tool
         assertEquals("completed", item.tool.status)
         assertEquals("b", item.tool.diff?.newText)
+    }
+
+    @Test
+    fun `collects delivered files from tool attachments`() {
+        var state = ChatStateOps.initialState()
+        state = ChatStateOps.applyUpdate(state, update("tool_call") {
+            copy(toolCallId = "t1", toolName = "sendfile", title = "sendfile:1 file", status = "pending")
+        })
+        state = ChatStateOps.applyUpdate(state, update("tool_call_update") {
+            copy(
+                toolCallId = "t1",
+                toolName = "sendfile",
+                status = "completed",
+                attachments = listOf(
+                    AttachmentInfo(
+                        name = "report.pdf",
+                        mediaType = "application/pdf",
+                        type = "file",
+                        size = 1536,
+                        path = "/tmp/report.pdf",
+                    ),
+                ),
+            )
+        })
+        val item = state.items.last() as ChatItem.Tool
+        val files = assertNotNull(item.tool.files)
+        assertEquals(1, files.size)
+        assertEquals("report.pdf", files[0].name)
+        assertEquals(1536L, files[0].size)
+        assertEquals("/tmp/report.pdf", files[0].path)
     }
 
     @Test
@@ -230,6 +261,34 @@ class ChatStateOpsTest {
         assertEquals("stored-1", item.messageId)
         assertNotNull(item.text)
         assertTrue(item.text.isNotEmpty())
+    }
+
+    @Test
+    fun `renders attachment-only user messages and merges their text`() {
+        val attachment = AttachmentInfo(name = "report.pdf", mediaType = "application/pdf", type = "file")
+        var state = ChatStateOps.applyUpdate(ChatStateOps.initialState(), update("user_message_chunk") {
+            copy(messageId = "m1", content = text(""), attachments = listOf(attachment))
+        })
+        var item = state.items.single() as ChatItem.User
+        assertEquals("", item.text)
+        assertEquals(1, item.attachments.size)
+        assertEquals("report.pdf", item.attachments.single().name)
+
+        state = ChatStateOps.applyUpdate(state, update("user_message_chunk") {
+            copy(messageId = "m1", content = text("see?"))
+        })
+        item = state.items.single() as ChatItem.User
+        assertEquals("see?", item.text)
+        assertEquals(1, item.attachments.size)
+    }
+
+    @Test
+    fun `appended user messages carry their attachments`() {
+        val attachment = AttachmentInfo(name = "shot.png", mediaType = "image/png", type = "image")
+        val state = ChatStateOps.appendUser(ChatStateOps.initialState(), "look", listOf(attachment))
+        val item = state.items.single() as ChatItem.User
+        assertEquals("look", item.text)
+        assertEquals("shot.png", item.attachments.single().name)
     }
 
     private fun ChatItem.kindName(): String = when (this) {

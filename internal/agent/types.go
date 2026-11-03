@@ -19,19 +19,20 @@ const (
 )
 
 type StreamEvent struct {
-	Type       StreamEventType
-	AgentID    string
-	AgentName  string
-	Model      llm.Model
-	Content    string
-	Reasoning  string
-	ToolCall   *llm.ToolCall
-	ToolOutput string
-	ToolErr    error
-	Usage      *llm.Usage
-	Strategy   string
-	Messages   int
-	Tokens     int
+	Type            StreamEventType
+	AgentID         string
+	AgentName       string
+	Model           llm.Model
+	Content         string
+	Reasoning       string
+	ToolCall        *llm.ToolCall
+	ToolOutput      string
+	ToolErr         error
+	ToolAttachments []llm.Attachment
+	Usage           *llm.Usage
+	Strategy        string
+	Messages        int
+	Tokens          int
 }
 
 type StreamHandler func(StreamEvent) error

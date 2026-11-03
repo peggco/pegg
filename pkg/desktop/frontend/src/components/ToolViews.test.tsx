@@ -87,4 +87,25 @@ describe('ToolCard', () => {
     expect(container.textContent).toContain('Show error');
     expect(container.textContent).not.toContain('permission denied');
   });
+
+  it('renders delivered files with open and save actions', () => {
+    const { container } = render(
+      <ToolCard
+        tool={tool({
+          name: 'sendfile',
+          title: 'sendfile:2 files',
+          files: [
+            { name: 'report.pdf', mediaType: 'application/pdf', size: 1536, path: '/tmp/report.pdf' },
+            { name: 'app.zip', mediaType: 'application/zip', size: 5 << 20, path: '/tmp/app.zip' },
+          ],
+        })}
+      />,
+    );
+    expect(container.querySelector('.files-card')).not.toBeNull();
+    expect(container.querySelectorAll('.files-row')).toHaveLength(2);
+    expect(container.textContent).toContain('report.pdf');
+    expect(container.textContent).toContain('1.5 KB');
+    expect(container.textContent).toContain('5.0 MB');
+    expect(container.textContent).toContain('Save a copy');
+  });
 });

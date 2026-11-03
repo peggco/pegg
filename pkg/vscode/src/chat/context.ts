@@ -34,17 +34,18 @@ export function activeContext(input: ContextInput = {}): string {
 
 export async function attachmentToBlock(attachment: ComposerAttachment): Promise<ContentBlock | undefined> {
   if (attachment.data && attachment.mediaType.startsWith('image/')) {
-    return { type: 'image', data: attachment.data, mimeType: attachment.mediaType };
+    return { type: 'image', name: attachment.name, data: attachment.data, mimeType: attachment.mediaType };
   }
   if (attachment.data && attachment.mediaType.startsWith('audio/')) {
-    return { type: 'audio', data: attachment.data, mimeType: attachment.mediaType };
+    return { type: 'audio', name: attachment.name, data: attachment.data, mimeType: attachment.mediaType };
   }
   if (attachment.data && attachment.mediaType.startsWith('video/')) {
-    return { type: 'video', data: attachment.data, mimeType: attachment.mediaType };
+    return { type: 'video', name: attachment.name, data: attachment.data, mimeType: attachment.mediaType };
   }
   if (attachment.text !== undefined) {
     return {
       type: 'resource',
+      name: attachment.name,
       resource: {
         uri: attachment.path ?? `untitled:${attachment.name}`,
         mimeType: attachment.mediaType || 'text/plain',
@@ -58,13 +59,16 @@ export async function attachmentToBlock(attachment: ComposerAttachment): Promise
     const limit = bytes.byteLength > 20 * 1024 * 1024 ? 20 * 1024 * 1024 : cfg.maxFileBytes;
     if (bytes.byteLength > limit) {
       return {
-        type: 'text',
-        text: `[Attached file is too large to inline: ${attachment.path} (${bytes.byteLength} bytes)]`,
+        type: 'resource_link',
+        name: attachment.name,
+        uri: vscode.Uri.file(attachment.path).toString(),
+        mimeType: attachment.mediaType || 'application/octet-stream',
       };
     }
     if (attachment.mediaType.startsWith('image/')) {
       return {
         type: 'image',
+        name: attachment.name,
         data: Buffer.from(bytes).toString('base64'),
         mimeType: attachment.mediaType,
       };
@@ -72,6 +76,7 @@ export async function attachmentToBlock(attachment: ComposerAttachment): Promise
     if (attachment.mediaType.startsWith('audio/')) {
       return {
         type: 'audio',
+        name: attachment.name,
         data: Buffer.from(bytes).toString('base64'),
         mimeType: attachment.mediaType,
       };
@@ -79,6 +84,7 @@ export async function attachmentToBlock(attachment: ComposerAttachment): Promise
     if (attachment.mediaType.startsWith('video/')) {
       return {
         type: 'video',
+        name: attachment.name,
         data: Buffer.from(bytes).toString('base64'),
         mimeType: attachment.mediaType,
       };
@@ -86,6 +92,7 @@ export async function attachmentToBlock(attachment: ComposerAttachment): Promise
     if (isBinary(bytes)) {
       return {
         type: 'resource',
+        name: attachment.name,
         resource: {
           uri: vscode.Uri.file(attachment.path).toString(),
           mimeType: attachment.mediaType || 'application/octet-stream',
@@ -95,6 +102,7 @@ export async function attachmentToBlock(attachment: ComposerAttachment): Promise
     }
     return {
       type: 'resource',
+      name: attachment.name,
       resource: {
         uri: vscode.Uri.file(attachment.path).toString(),
         mimeType: attachment.mediaType || 'text/plain',

@@ -459,10 +459,27 @@ func (r *Recorder) handleInput(e agent.AgentInput) {
 			r.titleWg.Add(1)
 			go func() {
 				defer r.titleWg.Done()
-				r.generateTitle(id, info.provider, info.model, attach.StripBlock(e.Input))
+				r.generateTitle(id, info.provider, info.model, titleSeed(e.Input, e.Attachments))
 			}()
 		}
 	}
+}
+
+func titleSeed(input string, attachments []llm.Attachment) string {
+	text := attach.StripBlock(input)
+	if strings.TrimSpace(text) != "" || len(attachments) == 0 {
+		return text
+	}
+	names := make([]string, 0, len(attachments))
+	for _, att := range attachments {
+		if att.FileName != "" {
+			names = append(names, att.FileName)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return "Attached file: " + strings.Join(names, ", ")
 }
 
 func (r *Recorder) isFirstMessage(sessionID string) bool {
@@ -659,10 +676,11 @@ func (r *Recorder) handleToolResult(e agent.AgentToolResult) {
 		errMsg = e.Err.Error()
 	}
 	r.recordRunEvent(e.AgentID, AgentEventToolResult, map[string]any{
-		"call_id":   e.CallID,
-		"tool_name": e.ToolName,
-		"output":    e.Output,
-		"error":     errMsg,
+		"call_id":     e.CallID,
+		"tool_name":   e.ToolName,
+		"output":      e.Output,
+		"error":       errMsg,
+		"attachments": e.Attachments,
 	})
 	if id, ok := r.sessionID(e.AgentID); ok {
 		msg := llm.ToolMessage(e.Output, e.CallID)

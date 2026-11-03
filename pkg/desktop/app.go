@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -383,6 +384,69 @@ func (a *App) RevealPath(path string) error {
 		return err
 	}
 	return reveal(abs)
+}
+
+func (a *App) OpenPath(path string) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return fmt.Errorf("%s is a directory", abs)
+	}
+	return openWith(abs)
+}
+
+func (a *App) SaveCopy(path, name string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", fmt.Errorf("path is required")
+	}
+	src, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(src)
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("%s is a directory", src)
+	}
+	suggested := filepath.Base(src)
+	if trimmed := strings.TrimSpace(name); trimmed != "" {
+		suggested = filepath.Base(trimmed)
+	}
+	target, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Save a copy",
+		DefaultFilename: suggested,
+	})
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(target) == "" {
+		return "", nil
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return "", err
+	}
+	defer in.Close()
+	out, err := os.Create(target)
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return "", err
+	}
+	if err := out.Close(); err != nil {
+		return "", err
+	}
+	return target, nil
 }
 
 func (a *App) ReadAttachment(path string) (workspace.Attachment, error) {
