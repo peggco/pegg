@@ -487,3 +487,36 @@ func TestUserCardRendersNewlines(t *testing.T) {
 		t.Fatalf("alpha and beta rendered on the same line %d", la)
 	}
 }
+
+func TestSubagentCardsFullWidthAfterHistory(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+	c := NewChat()
+	c.SetItems([]*ChatItem{
+		{Kind: ItemUser, Text: "hello"},
+		{Kind: ItemAssistant, Text: "hi"},
+	})
+	c.rebuildFlat(80)
+
+	c.AppendItem(&ChatItem{Kind: ItemSubagent, ID: "a1", AgentID: "a1", SubagentName: "explorer", SubagentStatus: "running", SubagentTask: "do a"})
+	c.AppendItem(&ChatItem{Kind: ItemSubagent, ID: "a2", AgentID: "a2", SubagentName: "developer", SubagentStatus: "running", SubagentTask: "do b"})
+	c.rebuildFlat(80)
+
+	for _, it := range c.items {
+		if it.Kind != ItemSubagent {
+			continue
+		}
+		lines := c.itemLines(it, 80)
+		if len(lines) == 0 {
+			t.Fatalf("subagent %s rendered no lines", it.AgentID)
+		}
+		for i, ln := range lines {
+			if ln.Width() > 80 {
+				t.Fatalf("subagent %s line %d width = %d, want <= 80", it.AgentID, i, ln.Width())
+			}
+		}
+		if lines[0][0].R != '╭' {
+			t.Fatalf("subagent %s first line starts with %q, want ╭", it.AgentID, lines[0][0].R)
+		}
+	}
+}

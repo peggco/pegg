@@ -769,3 +769,40 @@ func mustJSON(t *testing.T, v any) string {
 	}
 	return string(b)
 }
+
+func TestRegistry_ConcurrentSpawnAndFinish(t *testing.T) {
+	r := newRegistry()
+	parent := agent.New("conc-parent")
+	r.mu.Lock()
+	r.agentSessions[parent.ID] = "conc-session-" + parent.ID
+	r.mu.Unlock()
+
+	const n = 16
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		name := fmt.Sprintf("conc-spawn-%d", i)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sa, err := r.spawn(name, "sub-agent", nil, false, parent)
+			if err != nil {
+				t.Errorf("spawn %s: %v", name, err)
+				return
+			}
+			r.start(sa)
+			r.finish(sa, "out-"+name, nil)
+		}()
+	}
+	wg.Wait()
+
+	for i := 0; i < n; i++ {
+		name := fmt.Sprintf("conc-spawn-%d", i)
+		got, ok := r.get(name, parent)
+		if !ok {
+			t.Fatalf("subagent %s missing", name)
+		}
+		if got.Status != StatusCompleted {
+			t.Fatalf("subagent %s status = %q, want completed", name, got.Status)
+		}
+	}
+}

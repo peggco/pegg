@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,7 +18,10 @@ import (
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/skill"
 	"github.com/peggco/pegg/internal/tui/components"
+	"github.com/peggco/pegg/internal/tui/layout"
+	"github.com/peggco/pegg/internal/tui/page/home"
 	"github.com/peggco/pegg/internal/tui/page/settings"
+	"github.com/peggco/pegg/internal/tui/styles"
 )
 
 type chatEchoProvider struct {
@@ -504,5 +508,77 @@ func TestChatEmptyToolOutputMarksDone(t *testing.T) {
 	it := app.main.items[0]
 	if !it.ToolDone {
 		t.Fatal("tool with empty output should be marked done")
+	}
+}
+
+func TestMultiSubagentAppState(t *testing.T) {
+	orch := agent.New("orchestrator")
+	a := &App{
+		agent: orch, chat: components.NewChat(), ctx: context.Background(),
+		subs: map[string]*agentTranscript{}, subItemByID: map[string]*components.ChatItem{},
+		mode: agent.ModeAuto, viewID: orch.ID,
+	}
+	a.main = newTranscript(orch.ID, "orchestrator")
+	a.chat.SetItems(a.main.items)
+
+	a.onAgentStarted(agent.AgentStarted{AgentID: orch.ID, AgentName: "orchestrator"})
+	a.onAgentStarted(agent.AgentStarted{AgentID: "sub-1", AgentName: "explorer", ParentAgentID: orch.ID})
+	a.onAgentStarted(agent.AgentStarted{AgentID: "sub-2", AgentName: "developer", ParentAgentID: orch.ID})
+
+	items := a.chat.Items()
+	subs := 0
+	for _, it := range items {
+		if it.Kind == components.ItemSubagent {
+			subs++
+		}
+	}
+	if subs != 2 {
+		t.Fatalf("chat has %d subagent items, want 2 (items=%d)", subs, len(items))
+	}
+}
+
+func TestMultiSubagentConcurrentEvents(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+	s := newTestScreen(t)
+	orch := agent.New("orchestrator")
+	a := &App{
+		screen: s, agent: orch, chat: components.NewChat(), ctx: context.Background(),
+		subs: map[string]*agentTranscript{}, subItemByID: map[string]*components.ChatItem{},
+		mode: agent.ModeAuto, viewID: orch.ID,
+	}
+	a.home = home.New()
+	a.chat = a.home.Chat()
+	a.main = newTranscript(orch.ID, "orchestrator")
+	a.chat.SetItems(a.main.items)
+
+	a.onAgentStarted(agent.AgentStarted{AgentID: orch.ID, AgentName: "orchestrator"})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		id := "sub-" + string(rune('a'+i))
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			a.onAgentStarted(agent.AgentStarted{AgentID: id, AgentName: "explorer", ParentAgentID: orch.ID})
+			a.onAgentInput(agent.AgentInput{AgentID: id, AgentName: "explorer", Input: "do " + id})
+			a.onAgentToolCall(agent.AgentToolCall{AgentID: id, AgentName: "explorer", Call: llm.ToolCall{ID: id + "-t", Function: llm.Function{Name: "read", Arguments: `{"filePath":"/tmp/x"}`}}})
+			a.onAgentToolResult(agent.AgentToolResult{AgentID: id, AgentName: "explorer", CallID: id + "-t", ToolName: "read", Output: "ok"})
+			a.onAgentFinished(agent.AgentFinished{AgentID: id, AgentName: "explorer", Output: "done"})
+		}()
+	}
+	wg.Wait()
+
+	bounds := layout.Region{Left: 0, Top: 0, Width: 80, Height: 24}
+	a.home.Draw(s, bounds, true)
+
+	subs := 0
+	for _, it := range a.chat.Items() {
+		if it.Kind == components.ItemSubagent {
+			subs++
+		}
+	}
+	if subs != 2 {
+		t.Fatalf("subagent items = %d, want 2", subs)
 	}
 }
