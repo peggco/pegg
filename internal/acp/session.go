@@ -292,11 +292,19 @@ func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Messa
 		}
 		if msg.Role == llm.RoleUser || msg.Role == llm.RoleAssistant {
 			content := extractContent(msg)
-			if content != nil {
+			var atts []AttachmentInfo
+			if msg.Role == llm.RoleUser {
+				atts = attachmentInfos(session.AttachmentsOf(msg))
+			}
+			if content != nil || len(atts) > 0 {
+				if content == nil {
+					content = &ContentBlock{Type: "text"}
+				}
 				s.notify(sessionID, SessionUpdate{
 					SessionUpdate: updateType,
 					MessageID:     msg.ID,
 					Content:       content,
+					Attachments:   atts,
 					Seq:           msg.Seq,
 					HistoryPage:   historyPage,
 				})

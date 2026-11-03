@@ -1,5 +1,6 @@
 package dev.pegg.intellij.chat
 
+import dev.pegg.intellij.acp.AttachmentInfo
 import dev.pegg.intellij.acp.ChatItem
 import dev.pegg.intellij.acp.ChatState
 import dev.pegg.intellij.acp.ComposerAttachment
@@ -85,7 +86,8 @@ object ChatStateOps {
 
     private fun applyMessage(state: ChatState, update: SessionUpdate, now: Long) {
         val text = textOf(update.content)
-        if (text.isEmpty()) return
+        val attachments = update.attachments.orEmpty()
+        if (text.isEmpty() && attachments.isEmpty()) return
         val isUser = update.sessionUpdate == "user_message_chunk"
         val id = update.messageId ?: nextId(state, "message")
         val index = state.items.indexOfFirst {
@@ -94,14 +96,20 @@ object ChatStateOps {
         if (index >= 0) {
             when (val item = state.items[index]) {
                 is ChatItem.Assistant -> state.items[index] = item.copy(text = item.text + text)
-                is ChatItem.User -> state.items[index] = item.copy(text = item.text + text)
+                is ChatItem.User -> state.items[index] = item.copy(
+                    text = item.text + text,
+                    attachments = mergeAttachments(item.attachments, if (isUser) attachments else null),
+                )
                 else -> Unit
             }
             return
         }
         val last = state.items.lastOrNull()
         if (isUser && last is ChatItem.User) {
-            state.items[state.items.lastIndex] = last.copy(text = last.text + text)
+            state.items[state.items.lastIndex] = last.copy(
+                text = last.text + text,
+                attachments = mergeAttachments(last.attachments, attachments),
+            )
             return
         }
         if (!isUser && last is ChatItem.Assistant && last.agentName == update.agentName) {
@@ -116,6 +124,7 @@ object ChatStateOps {
                     createdAt = now,
                     messageId = update.messageId,
                     agentId = update.agentId,
+                    attachments = attachments,
                 )
             } else {
                 ChatItem.Assistant(
@@ -127,6 +136,21 @@ object ChatStateOps {
                 )
             },
         )
+    }
+
+    private fun mergeAttachments(
+        existing: List<AttachmentInfo>?,
+        incoming: List<AttachmentInfo>?,
+    ): List<AttachmentInfo> {
+        if (incoming.isNullOrEmpty()) return existing.orEmpty()
+        if (existing.isNullOrEmpty()) return incoming
+        val seen = existing.map { "${it.name}|${it.path ?: ""}" }.toMutableSet()
+        val merged = existing.toMutableList()
+        for (attachment in incoming) {
+            if (!seen.add("${attachment.name}|${attachment.path ?: ""}")) continue
+            merged.add(attachment)
+        }
+        return merged
     }
 
     private fun applyThought(state: ChatState, update: SessionUpdate, now: Long) {
@@ -240,9 +264,20 @@ object ChatStateOps {
         state.items.add(ChatItem.User(id, text, now, agentId = agentId))
     }
 
-    fun appendUser(state: ChatState, text: String): ChatState {
+    fun appendUser(
+        state: ChatState,
+        text: String,
+        attachments: List<AttachmentInfo> = emptyList(),
+    ): ChatState {
         state.counter += 1
-        state.items.add(ChatItem.User("user-${state.counter}", text, System.currentTimeMillis()))
+        state.items.add(
+            ChatItem.User(
+                id = "user-${state.counter}",
+                text = text,
+                createdAt = System.currentTimeMillis(),
+                attachments = attachments,
+            ),
+        )
         return state
     }
 

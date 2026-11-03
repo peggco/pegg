@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addAsk,
   addPermission,
+  appendUser,
   applyUpdate,
   emptyChat,
   pruneChat,
@@ -192,6 +193,47 @@ describe('tool status precedence', () => {
     const tool = state.items[0];
     expect(tool.kind).toBe('tool');
     if (tool.kind === 'tool') expect(tool.tool.status).toBe('completed');
+  });
+});
+
+describe('user attachments', () => {
+  it('keeps attachments on locally appended user messages', () => {
+    const state = appendUser(emptyChat(), 'look', undefined, [
+      { name: 'shot.png', mediaType: 'image/png', type: 'image', path: '/tmp/pegg/shot.png' },
+    ]);
+    expect(state.items[0]).toMatchObject({
+      kind: 'user',
+      text: 'look',
+      attachments: [{ name: 'shot.png', type: 'image' }],
+    });
+  });
+
+  it('renders attachment-only history messages and merges later text', () => {
+    let state = emptyChat();
+    state = applyUpdate(state, {
+      sessionUpdate: 'user_message_chunk',
+      messageId: 'm1',
+      content: { type: 'text', text: '' },
+      attachments: [{ name: 'report.pdf', mediaType: 'application/pdf', type: 'file' }],
+    });
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0]).toMatchObject({
+      kind: 'user',
+      text: '',
+      attachments: [{ name: 'report.pdf' }],
+    });
+
+    state = applyUpdate(state, {
+      sessionUpdate: 'user_message_chunk',
+      messageId: 'm1',
+      content: { type: 'text', text: 'see?' },
+    });
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0]).toMatchObject({
+      kind: 'user',
+      text: 'see?',
+      attachments: [{ name: 'report.pdf' }],
+    });
   });
 });
 

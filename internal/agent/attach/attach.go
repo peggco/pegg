@@ -102,6 +102,77 @@ func FromBase64(fileName, payload string) (llm.Attachment, error) {
 	return FromBytes(fileName, data)
 }
 
+func FromBytesMedia(fileName, mediaType string, data []byte) (llm.Attachment, error) {
+	att, err := FromBytes(fileName, data)
+	if err != nil {
+		return llm.Attachment{}, err
+	}
+	overrideMediaType(&att, mediaType)
+	return att, nil
+}
+
+func FromBase64Media(fileName, mediaType, payload string) (llm.Attachment, error) {
+	att, err := FromBase64(fileName, payload)
+	if err != nil {
+		return llm.Attachment{}, err
+	}
+	overrideMediaType(&att, mediaType)
+	return att, nil
+}
+
+func overrideMediaType(att *llm.Attachment, mediaType string) {
+	mt := strings.ToLower(strings.TrimSpace(mediaType))
+	if mt == "" {
+		return
+	}
+	if idx := strings.IndexByte(mt, ';'); idx >= 0 {
+		mt = strings.TrimSpace(mt[:idx])
+	}
+	if mt == "" {
+		return
+	}
+	att.MediaType = mt
+	att.Type = Kind(mt)
+}
+
+func NameForMediaType(mediaType string) string {
+	mt := strings.ToLower(strings.TrimSpace(mediaType))
+	if idx := strings.IndexByte(mt, ';'); idx >= 0 {
+		mt = strings.TrimSpace(mt[:idx])
+	}
+	if ext, ok := knownExtensions[mt]; ok {
+		return "file" + ext
+	}
+	if exts, err := mime.ExtensionsByType(mt); err == nil && len(exts) > 0 {
+		if ext := strings.ToLower(exts[0]); ext != "" && ext != "." {
+			return "file" + ext
+		}
+	}
+	return "file"
+}
+
+var knownExtensions = map[string]string{
+	"image/png":        ".png",
+	"image/jpeg":       ".jpg",
+	"image/gif":        ".gif",
+	"image/webp":       ".webp",
+	"image/bmp":        ".bmp",
+	"image/svg+xml":    ".svg",
+	"audio/mpeg":       ".mp3",
+	"audio/wav":        ".wav",
+	"audio/ogg":        ".ogg",
+	"audio/mp4":        ".m4a",
+	"audio/webm":       ".webm",
+	"video/mp4":        ".mp4",
+	"video/webm":       ".webm",
+	"video/quicktime":  ".mov",
+	"application/pdf":  ".pdf",
+	"application/json": ".json",
+	"application/zip":  ".zip",
+	"text/plain":       ".txt",
+	"text/markdown":    ".md",
+}
+
 func FromPath(src string) (llm.Attachment, error) {
 	data, err := os.ReadFile(src)
 	if err != nil {
@@ -145,7 +216,7 @@ func Block(atts []llm.Attachment) string {
 		}
 		lines = append(lines, fmt.Sprintf(
 			`<attachment name="%s" media_type="%s" size="%d" path="%s"/>`,
-			xmlAttr(a.FileName), xmlAttr(a.MediaType), attachmentSize(a), xmlAttr(a.Path),
+			xmlAttr(a.FileName), xmlAttr(a.MediaType), Size(a), xmlAttr(a.Path),
 		))
 	}
 	if len(lines) == 0 {
@@ -206,7 +277,7 @@ func StripMessageContent(role llm.Role, content any) any {
 	return content
 }
 
-func attachmentSize(a llm.Attachment) int {
+func Size(a llm.Attachment) int {
 	if a.Data == "" {
 		return 0
 	}

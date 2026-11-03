@@ -60,6 +60,44 @@ func TestNormalizeContentPlain(t *testing.T) {
 	}
 }
 
+func TestAttachmentsOfRestoresAllTypes(t *testing.T) {
+	msg := Message{
+		Role: llm.RoleUser,
+		Content: map[string]any{
+			"text": "<attachments/>",
+			"attachments": []any{
+				map[string]any{"type": "image", "media_type": "image/png", "data": "AAAA", "file_name": "x.png", "path": "/tmp/pegg/x.png"},
+				map[string]any{"type": "file", "media_type": "application/pdf", "file_name": "r.pdf", "path": "/tmp/pegg/r.pdf"},
+			},
+		},
+	}
+	got := AttachmentsOf(msg)
+	if len(got) != 2 {
+		t.Fatalf("attachments = %+v", got)
+	}
+	if got[0].Type != llm.AttachmentTypeImage || got[0].FileName != "x.png" {
+		t.Fatalf("image = %+v", got[0])
+	}
+	if got[1].Type != llm.AttachmentTypeFile || got[1].Path != "/tmp/pegg/r.pdf" {
+		t.Fatalf("file = %+v", got[1])
+	}
+
+	if got := AttachmentsOf(Message{Content: "plain"}); got != nil {
+		t.Fatalf("plain content = %+v", got)
+	}
+}
+
+func TestTitleSeedUsesAttachmentNames(t *testing.T) {
+	if got := titleSeed("debug 500s", nil); got != "debug 500s" {
+		t.Fatalf("plain seed = %q", got)
+	}
+	block := "<attachments>\n<attachment name=\"a.pdf\" path=\"/tmp/pegg/a.pdf\"/>\n</attachments>"
+	got := titleSeed(block, []llm.Attachment{{FileName: "a.pdf"}, {FileName: "b.png"}})
+	if got != "Attached file: a.pdf, b.png" {
+		t.Fatalf("attachment seed = %q", got)
+	}
+}
+
 func TestMessagesToLLMAddsToolImagesAfterToolBatch(t *testing.T) {
 	img := llm.NewImageAttachmentFromBase64("image/png", "AAAA")
 	img.FileName = "pixel.png"

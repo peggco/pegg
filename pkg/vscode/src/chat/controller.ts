@@ -26,12 +26,14 @@ import {
   appendUser,
   applyHistory,
   applyUpdate,
+  attachmentType,
   ChatState,
   clearAttachments,
   ComposerAttachment,
   initialState,
   truncateFrom,
   userMessageOrdinal,
+  type AttachmentInfo,
   PendingInteraction,
   PendingPermission,
   PendingQuestion,
@@ -252,11 +254,12 @@ export class ChatController extends EventEmitter {
   async sendPrompt(text: string, options: PromptOptions = {}): Promise<void> {
     await this.ensureSession();
     if (this.state.running) throw new Error('Pegg is already working.');
-    if (!text.trim() && !(options.attachments?.length ?? 0)) return;
+    const attachments = options.attachments ?? this.state.composerAttachments;
+    if (!text.trim() && !attachments.length) return;
 
     const cfg = getConfig();
-    const display = text.trim() || '(attachments)';
-    this.state = appendUser(this.state, display);
+    const display = text.trim();
+    this.state = appendUser(this.state, display, undefined, this.attachmentInfos(attachments));
     this.state = { ...this.state, running: true, error: undefined };
     this.emitState();
 
@@ -267,7 +270,7 @@ export class ChatController extends EventEmitter {
     if (context) promptParts.push(context);
     if (promptParts.length > 0) blocks.push(contentText(promptParts.join('\n\n')));
 
-    for (const attachment of options.attachments ?? this.state.composerAttachments) {
+    for (const attachment of attachments) {
       try {
         const block = await attachmentToBlock(attachment);
         if (block) blocks.push(block);
@@ -483,6 +486,17 @@ export class ChatController extends EventEmitter {
       composerAttachments: [...this.state.composerAttachments, attachment],
     };
     this.emitState();
+  }
+
+  private attachmentInfos(attachments: ComposerAttachment[]): AttachmentInfo[] | undefined {
+    if (!attachments.length) return undefined;
+    return attachments.map((attachment) => ({
+      name: attachment.name,
+      mediaType: attachment.mediaType,
+      type: attachmentType(attachment.mediaType),
+      size: attachment.size,
+      path: attachment.path,
+    }));
   }
 
   removeComposerAttachment(id: string): void {

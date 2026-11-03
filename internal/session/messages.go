@@ -68,6 +68,16 @@ func normalizeContent(content any) any {
 	}
 }
 
+func AttachmentsOf(m Message) []llm.Attachment {
+	switch c := m.Content.(type) {
+	case llm.Content:
+		return c.Attachments
+	case map[string]any:
+		return decodeAttachments(c["attachments"])
+	}
+	return nil
+}
+
 func mediaOnly(atts []llm.Attachment) []llm.Attachment {
 	if len(atts) == 0 {
 		return nil

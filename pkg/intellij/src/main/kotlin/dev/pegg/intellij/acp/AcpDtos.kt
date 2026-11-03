@@ -26,8 +26,18 @@ data class ContentBlock(
     val text: String? = null,
     val data: String? = null,
     val mimeType: String? = null,
+    val name: String? = null,
     val uri: String? = null,
     val resource: EmbeddedResource? = null,
+)
+
+@Serializable
+data class AttachmentInfo(
+    val name: String = "",
+    val mediaType: String? = null,
+    val type: String? = null,
+    val size: Int? = null,
+    val path: String? = null,
 )
 
 @Serializable
@@ -110,6 +120,7 @@ data class SessionUpdate(
     val agentName: String? = null,
     val error: String? = null,
     val contents: List<ToolCallContent>? = null,
+    val attachments: List<AttachmentInfo>? = null,
     val runId: String? = null,
     val runState: String? = null,
     val baseSeq: Int? = null,
@@ -313,6 +324,7 @@ sealed class ChatItem {
         override val createdAt: Long,
         val messageId: String? = null,
         val agentId: String? = null,
+        val attachments: List<AttachmentInfo> = emptyList(),
     ) : ChatItem()
 
     @Serializable

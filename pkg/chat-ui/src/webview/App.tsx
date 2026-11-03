@@ -7,6 +7,7 @@ import {
   type PendingQuestion,
   type ToolState,
 } from '../state';
+import type { AttachmentInfo } from '../types';
 import { renderMarkdown } from './markdown';
 import { host } from './host';
 
@@ -1177,6 +1178,7 @@ function ItemView({
 }) {
   if (item.kind === 'user') {
     const owned = Boolean(item.agentId);
+    const attachments = item.attachments ?? [];
     const open = (element: HTMLElement) => {
       if (owned) return;
       const selection = window.getSelection();
@@ -1186,24 +1188,56 @@ function ItemView({
     return (
       <article className={`message user${owned ? ' subagent-prompt' : ''}`}>
         <div className="message-role">{owned ? 'Task' : 'You'}</div>
-        <div
-          className={`message-body plain${owned ? '' : ' clickable'}`}
-          role="button"
-          tabIndex={0}
-          aria-haspopup={owned ? undefined : 'menu'}
-          title={owned ? undefined : 'Message actions'}
-          onClick={(event) => open(event.currentTarget)}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            open(event.currentTarget);
-          }}
-        >
-          {item.text}
-          <span className="message-menu-hint" aria-hidden="true">
-            ⋯
-          </span>
-        </div>
+        {item.text || !attachments.length ? (
+          <div
+            className={`message-body plain${owned ? '' : ' clickable'}`}
+            role="button"
+            tabIndex={0}
+            aria-haspopup={owned ? undefined : 'menu'}
+            title={owned ? undefined : 'Message actions'}
+            onClick={(event) => open(event.currentTarget)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              open(event.currentTarget);
+            }}
+          >
+            {item.text}
+            <span className="message-menu-hint" aria-hidden="true">
+              ⋯
+            </span>
+          </div>
+        ) : null}
+        {attachments.length ? (
+          <div
+            className={`message-attachments${!item.text && !owned ? ' clickable' : ''}`}
+            role={!item.text && !owned ? 'button' : undefined}
+            tabIndex={!item.text && !owned ? 0 : undefined}
+            onClick={!item.text && !owned ? (event) => open(event.currentTarget) : undefined}
+            onKeyDown={
+              !item.text && !owned
+                ? (event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    open(event.currentTarget);
+                  }
+                : undefined
+            }
+          >
+            {attachments.map((attachment, index) => (
+              <span
+                className="message-attachment"
+                key={`${attachment.name}-${index}`}
+                title={attachment.path ?? attachment.name}
+              >
+                <span className="message-attachment-icon" aria-hidden="true">
+                  {attachmentIcon(attachment)}
+                </span>
+                <span className="message-attachment-name">{attachment.name}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
       </article>
     );
   }
@@ -1600,6 +1634,14 @@ function formatNumber(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return String(value);
+}
+
+function attachmentIcon(attachment: AttachmentInfo): string {
+  const mediaType = attachment.mediaType ?? '';
+  const kind = attachment.type ?? '';
+  if (kind === 'image' || mediaType.startsWith('image/')) return '🖼';
+  if (kind === 'audio' || mediaType.startsWith('audio/')) return '🎵';
+  return '📎';
 }
 
 function blobToBase64(blob: Blob): Promise<string> {

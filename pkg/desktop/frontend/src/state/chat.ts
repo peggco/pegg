@@ -1,5 +1,6 @@
 import type {
   AskParams,
+  AttachmentInfo,
   ContentBlock,
   PermissionParams,
   PlanEntry,
@@ -30,7 +31,15 @@ export interface ToolState {
 }
 
 export type ChatItem = (
-  | { kind: 'user'; id: string; text: string; createdAt: number; messageId?: string; agentId?: string }
+  | {
+      kind: 'user';
+      id: string;
+      text: string;
+      createdAt: number;
+      messageId?: string;
+      agentId?: string;
+      attachments?: AttachmentInfo[];
+    }
   | { kind: 'assistant'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
   | { kind: 'reasoning'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
   | { kind: 'tool'; id: string; tool: ToolState; createdAt: number }
@@ -233,21 +242,30 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
     case 'agent_message_chunk':
     case 'user_message_chunk': {
       const text = contentText(update.content);
-      if (!text) return state;
+      const attachments = update.attachments?.length ? update.attachments : undefined;
+      if (!text && !attachments) return state;
       const kind = update.sessionUpdate === 'user_message_chunk' ? 'user' : 'assistant';
       const id = update.messageId || nextId(state, 'message');
       const idx = findIndex(state.items, id, kind);
       const last = state.items[state.items.length - 1];
       if (idx >= 0) {
         const item = state.items[idx] as Extract<ChatItem, { kind: 'user' | 'assistant' }>;
-        replaceItem(idx, { ...item, text: item.text + text });
+        replaceItem(idx, {
+          ...item,
+          text: item.text + text,
+          ...(attachments ? { attachments: mergeAttachments(item, attachments) } : {}),
+        } as ChatItem);
       } else if (
         (last?.kind === 'user' && kind === 'user') ||
         (last?.kind === 'assistant' &&
           kind === 'assistant' &&
           (last.agentName ?? '') === (update.agentName ?? ''))
       ) {
-        replaceItem(state.items.length - 1, { ...last, text: last.text + text } as ChatItem);
+        replaceItem(state.items.length - 1, {
+          ...last,
+          text: last.text + text,
+          ...(attachments && kind === 'user' ? { attachments: mergeAttachments(last, attachments) } : {}),
+        } as ChatItem);
       } else {
         if (kind === 'assistant') {
           state = { ...state, items: settleTools(state.items, 'completed') };
@@ -260,6 +278,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           agentName: update.agentName,
           createdAt: now,
           seq,
+          ...(kind === 'user' && attachments ? { attachments } : {}),
           ...(kind === 'user' && update.messageId ? { messageId: update.messageId } : {}),
         } as ChatItem);
       }
@@ -491,14 +510,45 @@ export function applyUpdates(state: ChatState, updates: SessionUpdate[]): ChatSt
   return next;
 }
 
-export function appendUser(state: ChatState, text: string, displayText?: string): ChatState {
+export function attachmentType(mediaType?: string): 'image' | 'audio' | 'video' | 'file' {
+  const mt = (mediaType ?? '').toLowerCase();
+  if (mt.startsWith('image/')) return 'image';
+  if (mt.startsWith('audio/')) return 'audio';
+  if (mt.startsWith('video/')) return 'video';
+  return 'file';
+}
+
+function mergeAttachments(item: ChatItem, attachments: AttachmentInfo[]): AttachmentInfo[] {
+  const existing = item.kind === 'user' && item.attachments ? item.attachments : [];
+  if (!existing.length) return attachments;
+  const seen = new Set(existing.map((att) => `${att.name}|${att.path ?? ''}`));
+  const merged = [...existing];
+  for (const att of attachments) {
+    if (seen.has(`${att.name}|${att.path ?? ''}`)) continue;
+    merged.push(att);
+  }
+  return merged;
+}
+
+export function appendUser(
+  state: ChatState,
+  text: string,
+  displayText?: string,
+  attachments?: AttachmentInfo[],
+): ChatState {
   const counter = state.counter + 1;
   return {
     ...state,
     counter,
     items: [
       ...state.items,
-      { kind: 'user', id: `user-${counter}`, text: displayText ?? text, createdAt: Date.now() },
+      {
+        kind: 'user',
+        id: `user-${counter}`,
+        text: displayText ?? text,
+        createdAt: Date.now(),
+        ...(attachments?.length ? { attachments } : {}),
+      },
     ],
   };
 }

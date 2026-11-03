@@ -32,6 +32,12 @@ attachments, `@` mentions, project instructions, rules, and skills.
   Generate Tests include the selection automatically.
 - Voice input is recorded by the Pegg engine and inserted at the cursor.
 
+### In JetBrains IDEs and Pegg Desktop
+
+- Use the `+` button, drop files onto the chat, or paste an image into the composer.
+- The chat history shows an attachment chip on every user message, so files you
+  attached earlier stay visible when you reopen a session.
+
 See the [VS Code guide](../usage/vscode.md#chat).
 
 ### In the CLI
@@ -54,7 +60,9 @@ pegg run --file screenshot.png --file notes.md "What's wrong with my UI?"
 Every attachment is copied into the attachment store at `os.TempDir()/pegg`
 (`/tmp/pegg` on Linux). The agent is told each file's name, media type, size, and
 path in an `<attachments>` block appended to your message, so it can open the file
-with its tools (for example `read`).
+with its tools (for example `read`). This applies everywhere: the TUI, the CLI, the
+SDK, and every ACP client (VS Code, JetBrains IDEs, Pegg Desktop). Chat history
+shows a chip for each attachment, including when you resume a session.
 
 Only **media** the active model accepts (image/audio/video) is also sent to the
 model inline. Everything else — PDFs, text, JSON, CSV, archives, and so on — is

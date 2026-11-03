@@ -33,6 +33,14 @@ export interface PlanEntry {
   status?: string;
 }
 
+export interface AttachmentInfo {
+  name: string;
+  mediaType?: string;
+  type?: string;
+  size?: number;
+  path?: string;
+}
+
 export interface SlashCommand {
   name: string;
   description?: string;
@@ -42,6 +50,7 @@ export interface SessionUpdate {
   sessionUpdate: string;
   messageId?: string;
   content?: ContentBlock | string;
+  attachments?: AttachmentInfo[];
   toolCallId?: string;
   toolName?: string;
   title?: string;

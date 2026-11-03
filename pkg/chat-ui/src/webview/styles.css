@@ -242,6 +242,47 @@ button {
   white-space: pre-wrap;
 }
 
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.message-attachments.clickable {
+  cursor: pointer;
+  border-radius: 4px;
+  outline: none;
+}
+
+.message-attachments.clickable:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+.message-attachment {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-sideBar-background, transparent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  max-width: 220px;
+}
+
+.message-attachment-icon {
+  flex: 0 0 auto;
+  line-height: 1;
+}
+
+.message-attachment-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .markdown > :first-child {
   margin-top: 0;
 }

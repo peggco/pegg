@@ -11,6 +11,7 @@ import com.intellij.openapi.wm.ToolWindowManager
 import dev.pegg.intellij.acp.ACP_JSON
 import dev.pegg.intellij.acp.AcpClient
 import dev.pegg.intellij.acp.AskParams
+import dev.pegg.intellij.acp.AttachmentInfo
 import dev.pegg.intellij.acp.ChatItem
 import dev.pegg.intellij.acp.ChatState
 import dev.pegg.intellij.acp.ContentBlock
@@ -337,10 +338,10 @@ class ChatController(
         val selected = attachments ?: state.composerAttachments
         if (text.isBlank() && selected.isEmpty()) return
         val settings = PeggSettings.getInstance().state
-        val display = text.trim().ifEmpty { "(attachments)" }
+        val display = text.trim()
         synchronized(stateLock) {
             if (state.running) throw IllegalStateException("Pegg is already working.")
-            ChatStateOps.appendUser(state, display)
+            ChatStateOps.appendUser(state, display, attachmentInfos(selected))
             state.running = true
             state.error = null
         }
@@ -567,6 +568,22 @@ class ChatController(
         synchronized(stateLock) { ChatStateOps.addAttachment(state, attachment) }
         emitState()
     }
+
+    private fun attachmentInfos(attachments: List<dev.pegg.intellij.acp.ComposerAttachment>): List<AttachmentInfo> =
+        attachments.map {
+            AttachmentInfo(
+                name = it.name,
+                mediaType = it.mediaType,
+                type = when {
+                    it.mediaType.startsWith("image/") -> "image"
+                    it.mediaType.startsWith("audio/") -> "audio"
+                    it.mediaType.startsWith("video/") -> "video"
+                    else -> "file"
+                },
+                size = it.size?.toInt(),
+                path = it.path,
+            )
+        }
 
     fun removeComposerAttachment(id: String) {
         synchronized(stateLock) { ChatStateOps.removeAttachment(state, id) }
