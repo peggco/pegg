@@ -1262,6 +1262,7 @@ export namespace main {
 		}
 	}
 	export class SkillMutationResult {
+	    name?: string;
 	    path?: string;
 	    commands?: acpclient.SlashCommand[];
 	
@@ -1271,6 +1272,7 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
 	        this.path = source["path"];
 	        this.commands = this.convertValues(source["commands"], acpclient.SlashCommand);
 	    }

@@ -1,7 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, ChevronDown, FileCode2, Image as ImageIcon, Mic, Paperclip, X } from 'lucide-react';
 import { api } from '../lib/bridge';
+import {
+  adjacentChip,
+  caretOffset,
+  editorText,
+  endRange,
+  flatten,
+  focusRange,
+  insertChip,
+  insertPlainText,
+  isChipNode,
+  promptText,
+  rangeForOffsets,
+  removeChip,
+  setEditorText,
+  syncChipName,
+} from '../lib/editor';
 import { compactNumber } from '../lib/format';
+import { slashToken } from '../lib/slash';
 import {
   attachFiles,
   cancelPrompt,
@@ -18,6 +35,15 @@ import { useT } from '../lib/i18n';
 import type { Attachment, HubSkill, PromptAttachment } from '../types';
 
 type Menu = 'mode' | 'model' | null;
+
+const MAX_EDITOR_HEIGHT = 220;
+
+function resizeEditor(el: HTMLElement) {
+  el.style.height = 'auto';
+  const height = el.scrollHeight;
+  if (height > 0) el.style.height = `${Math.min(height, MAX_EDITOR_HEIGHT)}px`;
+}
+
 
 const DEFAULT_COMMANDS = [
   { name: 'init', description: 'Explore this project and write a starting brief' },
@@ -62,22 +88,61 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
 
   const t = useT();
   const [text, setText] = useState('');
+  const [caret, setCaret] = useState(0);
+  const [chipCount, setChipCount] = useState(0);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [focused, setFocused] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [menu, setMenu] = useState<Menu>(null);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [dismissed, setDismissed] = useState<{ start: number; query: string } | null>(null);
   const [remoteSkills, setRemoteSkills] = useState<HubSkill[]>([]);
   const [remoteLoading, setRemoteLoading] = useState(false);
+  const [hubBusy, setHubBusy] = useState(false);
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const [mentionFiles, setMentionFiles] = useState<string[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const composingRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const mentionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const slashRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-  const slashQuery = text.startsWith('/') && !text.includes('\n') ? text.slice(1).toLowerCase() : null;
+  /**
+   * Re-reads the contenteditable buffer. Chips serialize to a space here (the
+   * prompt form is only produced in `submit`), so a caret sitting after a chip
+   * can never look like an open `/query` token and the hub search stays closed.
+   */
+  const sync = () => {
+    const el = editorRef.current;
+    if (!el) {
+      setText('');
+      setCaret(0);
+      setChipCount(0);
+      return;
+    }
+    const value = editorText(el);
+    const caretAt = caretOffset(el) ?? value.length;
+    const chips = el.querySelectorAll('[data-chip]').length;
+    setText(value);
+    setCaret(caretAt);
+    setChipCount(chips);
+    el.dataset.empty = value.trim() === '' && chips === 0 ? 'true' : 'false';
+    resizeEditor(el);
+    const match = value.slice(0, caretAt).match(/(^|[\s(])@([^\s@]*)$/);
+    if (match) {
+      const next = { start: caretAt - match[2].length - 1, query: match[2] };
+      setMention((prev) => (prev && prev.start === next.start && prev.query === next.query ? prev : next));
+    } else {
+      setMention(null);
+    }
+  };
+
+  const token = useMemo(() => (caret < text.length ? null : slashToken(text)), [text, caret]);
+  const tokenVisible =
+    token !== null && !(dismissed && dismissed.start === token.start && dismissed.query === token.query);
+  const slashQuery = tokenVisible && token ? token.query.toLowerCase() : null;
+
   const slashItems = useMemo(() => {
     if (slashQuery === null) return [];
     const merged = [...commands];
@@ -87,7 +152,7 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
     return merged.filter((c) => c.name.toLowerCase().includes(slashQuery));
   }, [commands, catalog, slashQuery]);
 
-  const slashCount = slashItems.length + remoteSkills.length;
+  const slashCount = slashQuery === null ? 0 : slashItems.length + remoteSkills.length;
 
   const searchRemote =
     slashQuery !== null && !mention && slashItems.length === 0 && slashQuery.trim().length >= 2;
@@ -121,12 +186,19 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
   }, [searchRemote, slashQuery]);
 
   useEffect(() => {
-    if (autoFocus && textareaRef.current) textareaRef.current.focus();
+    if (autoFocus && editorRef.current) editorRef.current.focus();
   }, [autoFocus]);
 
   useEffect(() => {
-    if (focusKey > 0 && textareaRef.current) textareaRef.current.focus();
+    if (focusKey > 0 && editorRef.current) editorRef.current.focus();
   }, [focusKey]);
+
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    el.dataset.empty = editorText(el).trim() === '' ? 'true' : 'false';
+    resizeEditor(el);
+  }, []);
 
   useEffect(() => {
     setSlashIndex(0);
@@ -170,32 +242,55 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
     slashRefs.current[slashIndex]?.scrollIntoView({ block: 'nearest' });
   }, [slashIndex, slashCount]);
 
-  const refreshMention = (value: string, caret: number) => {
-    const before = value.slice(0, caret);
-    const match = before.match(/(^|[\s(])@([^\s@]*)$/);
-    if (!match) {
-      setMention(null);
+  const commitChip = (name: string) => {
+    const el = editorRef.current;
+    if (!el || !token) return null;
+    const start = token.start;
+    const end = Math.min(text.length, start + 1 + token.query.length);
+    const chip = insertChip(el, rangeForOffsets(el, start, end), name, t('composer.removeSkill'));
+    setRemoteSkills([]);
+    el.focus();
+    sync();
+    return chip;
+  };
+
+  const pickSlash = (index: number) => {
+    if (index < slashItems.length) {
+      const item = slashItems[index];
+      if (item) commitChip(item.name);
       return;
     }
-    const next = { start: caret - match[2].length - 1, query: match[2] };
-    setMention((prev) => (prev && prev.start === next.start && prev.query === next.query ? prev : next));
+    const skill = remoteSkills[index - slashItems.length];
+    if (!skill || hubBusy) return;
+    const chip = commitChip(skill.name);
+    if (!chip) return;
+    setHubBusy(true);
+    void (async () => {
+      try {
+        const res = await installHubSkill(skill.source, skill.skillId, 'global');
+        const installed = (res.name ?? '').trim();
+        if (installed && installed !== skill.name) syncChipName(chip, installed, t('composer.removeSkill'));
+        sync();
+      } catch (err) {
+        chip.remove();
+        editorRef.current?.focus();
+        sync();
+        store.toast('error', errorText(err));
+      } finally {
+        setHubBusy(false);
+      }
+    })();
   };
 
   const pickMention = (path: string) => {
-    if (!mention) return;
-    const before = text.slice(0, mention.start);
-    const after = text.slice(mention.start + 1 + mention.query.length);
-    const inserted = `@${path} `;
-    const next = before + inserted + after;
-    setText(next);
+    const el = editorRef.current;
+    if (!el || !mention) return;
+    const start = mention.start;
+    const end = Math.min(text.length, start + 1 + mention.query.length);
+    insertPlainText(el, `@${path} `, rangeForOffsets(el, start, end) ?? endRange(el));
     setMention(null);
-    const caret = before.length + inserted.length;
-    window.requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(caret, caret);
-    });
+    el.focus();
+    sync();
     const full = workspace ? `${workspace.replace(/[\\/]+$/, '')}/${path}` : path;
     void api
       .ReadAttachment(full)
@@ -207,34 +302,15 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
       .catch(() => undefined);
   };
 
-  const pickSlash = (index: number) => {
-    if (index < slashItems.length) {
-      const item = slashItems[index];
-      if (item) {
-        setText(`/${item.name} `);
-        textareaRef.current?.focus();
-      }
-      return;
-    }
-    const skill = remoteSkills[index - slashItems.length];
-    if (!skill) return;
-    void (async () => {
-      try {
-        await installHubSkill(skill.source, skill.skillId, 'global');
-        setText(`/${skill.name} `);
-        setRemoteSkills([]);
-        textareaRef.current?.focus();
-      } catch (err) {
-        store.toast('error', errorText(err));
-      }
-    })();
-  };
-
   useEffect(() => {
     const onTranscript = (event: Event) => {
       const value = (event as CustomEvent<string>).detail ?? '';
-      setText((prev) => (prev ? `${prev} ${value}` : value));
-      textareaRef.current?.focus();
+      const el = editorRef.current;
+      if (!el) return;
+      const current = editorText(el);
+      insertPlainText(el, current.trim() ? ` ${value}` : value, endRange(el));
+      el.focus();
+      sync();
     };
     const onAttachments = (event: Event) => {
       const items = (event as CustomEvent<Attachment[]>).detail ?? [];
@@ -242,13 +318,12 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
     };
     const onComposerText = (event: Event) => {
       const value = (event as CustomEvent<string>).detail ?? '';
-      setText(value);
-      window.requestAnimationFrame(() => {
-        const el = textareaRef.current;
-        if (!el) return;
-        el.focus();
-        el.setSelectionRange(value.length, value.length);
-      });
+      const el = editorRef.current;
+      if (!el) return;
+      setEditorText(el, value);
+      el.focus();
+      focusRange(endRange(el));
+      sync();
     };
     window.addEventListener('pegg:transcript', onTranscript);
     window.addEventListener('pegg:attachments', onAttachments);
@@ -261,13 +336,6 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
   }, []);
 
   useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
-  }, [text]);
-
-  useEffect(() => {
     if (!menu) return;
     const close = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setMenu(null);
@@ -276,23 +344,27 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
     return () => window.removeEventListener('mousedown', close);
   }, [menu]);
 
-  const canSend = Boolean(text.trim() || attachments.length);
+  const canSend = Boolean(text.trim() || chipCount > 0 || attachments.length);
 
   const submit = () => {
     if (running) {
       void cancelPrompt();
       return;
     }
-    if (!canSend) return;
+    const el = editorRef.current;
+    if (!el || hubBusy) return;
+    const value = promptText(el).trim();
+    if (!value && !attachments.length) return;
     if (!workspace) {
       store.toast('warn', 'Choose a project folder first');
       return;
     }
     const payload = attachments.map(toPromptAttachment);
-    const value = text;
-    setText('');
+    setEditorText(el, '');
     setAttachments([]);
+    setMention(null);
     setMenu(null);
+    sync();
     void sendPrompt({ text: value, attachments: payload });
   };
 
@@ -301,10 +373,14 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
     if (files.length) setAttachments((prev) => [...prev, ...files].slice(0, 8));
   };
 
-  const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const native = event.nativeEvent as KeyboardEvent;
+    if (native.isComposing || native.keyCode === 229) return;
     if (event.key === 'Escape') {
       setMenu(null);
       setMention(null);
+      setRemoteSkills([]);
+      if (token) setDismissed(token);
       return;
     }
     if (mention && mentionFiles.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
@@ -328,15 +404,79 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
       });
       return;
     }
+    if (
+      event.key === 'Enter' &&
+      !event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      slashQuery !== null &&
+      remoteLoading &&
+      slashCount === 0
+    ) {
+      event.preventDefault();
+      return;
+    }
     if (slashCount > 0 && event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
       event.preventDefault();
       pickSlash(slashIndex);
       return;
     }
+    if (event.key === 'Enter' && event.shiftKey) {
+      event.preventDefault();
+      const el = editorRef.current;
+      if (el) insertPlainText(el, '\n');
+      sync();
+      return;
+    }
+    if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey) {
+      const el = editorRef.current;
+      const chip = el ? adjacentChip(el, event.key === 'Backspace' ? 'before' : 'after') : null;
+      if (el && chip) {
+        event.preventDefault();
+        removeChip(chip);
+        sync();
+        return;
+      }
+    }
     const send = event.key === 'Enter' && !event.shiftKey && (event.metaKey || event.ctrlKey || sendOnEnter);
     if (send) {
       event.preventDefault();
       submit();
+    }
+  };
+
+  const onEditorInput = () => {
+    const el = editorRef.current;
+    if (el && !composingRef.current) flatten(el);
+    setDismissed(null);
+    sync();
+  };
+
+  const onEditorPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const el = editorRef.current;
+    if (!el) return;
+    const value = event.clipboardData.getData('text/plain');
+    insertPlainText(el, value.replace(/\r\n?/g, '\n'));
+    sync();
+  };
+
+  const onEditorMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    const remove = target?.closest('[data-chip-remove]');
+    if (!remove) return;
+    const chip = remove.closest('[data-chip]');
+    if (!isChipNode(chip)) return;
+    event.preventDefault();
+    removeChip(chip);
+    editorRef.current?.focus();
+    sync();
+  };
+
+  const onEditorBeforeInput = (event: React.FormEvent<HTMLDivElement>) => {
+    const type = (event.nativeEvent as InputEvent).inputType;
+    if (type === 'formatBold' || type === 'formatItalic' || type === 'formatUnderline' || type === 'insertFromDrop') {
+      event.preventDefault();
     }
   };
 
@@ -380,26 +520,39 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
         </div>
       ) : null}
 
-      <textarea
-        ref={textareaRef}
+      <div
+        ref={editorRef}
         className="composer-input"
-        placeholder={compact ? t('composer.reply') : t('composer.placeholder')}
-        value={text}
-        rows={1}
+        role="textbox"
+        aria-multiline="true"
+        aria-label={compact ? t('composer.reply') : t('composer.placeholder')}
+        contentEditable
+        suppressContentEditableWarning
         spellCheck
-        onChange={(event) => {
-          const value = event.target.value;
-          setText(value);
-          refreshMention(value, event.target.selectionStart ?? value.length);
-        }}
-        onClick={(event) => refreshMention(text, event.currentTarget.selectionStart ?? text.length)}
+        data-placeholder={compact ? t('composer.reply') : t('composer.placeholder')}
+        data-empty="true"
+        onInput={onEditorInput}
+        onBeforeInput={onEditorBeforeInput}
+        onKeyDown={onKeyDown}
         onKeyUp={(event) => {
           if (['ArrowDown', 'ArrowUp', 'Escape', 'Tab'].includes(event.key)) return;
-          refreshMention(text, event.currentTarget.selectionStart ?? text.length);
+          sync();
         }}
+        onPaste={onEditorPaste}
+        onClick={() => sync()}
+        onMouseDown={onEditorMouseDown}
+        onMouseUp={() => sync()}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        onKeyDown={onKeyDown}
+        onCompositionStart={() => {
+          composingRef.current = true;
+        }}
+        onCompositionEnd={() => {
+          composingRef.current = false;
+          const el = editorRef.current;
+          if (el) flatten(el);
+          sync();
+        }}
       />
 
       {mention && mentionFiles.length ? (
@@ -431,7 +584,7 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
         </div>
       ) : null}
 
-      {(slashItems.length || remoteSkills.length || remoteLoading) && !mention ? (
+      {slashQuery !== null && (slashItems.length > 0 || remoteSkills.length > 0 || remoteLoading) && !mention ? (
         <div className="slash-menu" role="listbox" aria-label="Slash commands">
           {slashItems.map((item, index) => (
             <button

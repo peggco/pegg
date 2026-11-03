@@ -9,6 +9,7 @@ import type {
   PromptAttachment,
   SessionListItem,
   SessionUpdate,
+  SkillMutationResult,
   SlashCommand,
   Theme,
 } from '../types';
@@ -733,11 +734,15 @@ function applySkillCommands(commands?: SlashCommand[]): void {
   store.setChat((chat) => ({ ...chat, commands }));
 }
 
-export async function installHubSkill(source: string, skillId: string, scope: string): Promise<string> {
+export async function installHubSkill(
+  source: string,
+  skillId: string,
+  scope: string,
+): Promise<SkillMutationResult> {
   const res = await api.InstallHubSkill(source, skillId, scope);
   applySkillCommands(res.commands);
   store.toast('success', `Installed ${skillId} (${scope})`);
-  return res.path ?? '';
+  return res;
 }
 
 export function togglePalette(open?: boolean): void {

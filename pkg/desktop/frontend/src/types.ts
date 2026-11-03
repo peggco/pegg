@@ -479,6 +479,7 @@ export interface HubSearchResult {
 }
 
 export interface SkillMutationResult {
+  name?: string;
   path?: string;
   commands?: SlashCommand[];
 }
