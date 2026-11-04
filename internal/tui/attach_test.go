@@ -281,6 +281,84 @@ func TestFollowStreamsRunStartedAfterSessionOpen(t *testing.T) {
 	}
 }
 
+func TestFollowDoesNotDuplicateFirstUserMessage(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	store, err := session.NewSQLiteStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	bus := event.New()
+	mgr := session.NewManager(store, bus, logger.New(logger.LevelError))
+	coord := runpkg.New(mgr, bus, logger.New(logger.LevelError))
+	t.Cleanup(coord.Stop)
+	hub := live.New(coord, mgr, bus, logger.New(logger.LevelError))
+	t.Cleanup(hub.Close)
+
+	sess, err := mgr.Create(session.CreateOptions{Provider: "p", Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mgr.AppendMessage(sess.ID, llm.UserMessage("hello")); err != nil {
+		t.Fatal(err)
+	}
+
+	rs, err := mgr.Runs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	run := session.Run{
+		ID: "first-run", SessionID: sess.ID, State: session.RunStateRunning,
+		OwnerInstance: "other", AgentID: "remote-agent", BaseSeq: 0,
+		StartedAt: now, UpdatedAt: now,
+	}
+	if err := rs.CreateRun(run); err != nil {
+		t.Fatal(err)
+	}
+	if err := rs.AppendRunEvents([]session.RunEvent{
+		{RunID: run.ID, SessionID: sess.ID, Type: session.AgentEventInput, AgentID: run.AgentID,
+			Data: []byte(`{"input":"hello"}`)},
+		{RunID: run.ID, SessionID: sess.ID, Type: session.AgentEventToken, AgentID: run.AgentID,
+			Data: []byte(`{"content":"world"}`)},
+		{RunID: run.ID, SessionID: sess.ID, Type: session.AgentEventMessage, AgentID: run.AgentID,
+			Data: []byte(`{"message":{"role":"assistant","content":"world"}}`)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	orch := agent.New("orchestrator")
+	app := &App{
+		bus: bus, deps: settings.Deps{Sessions: mgr, Runs: coord, Live: hub, Agent: orch, Bus: bus},
+		agent: orch, chat: components.NewChat(), ctx: context.Background(),
+		subs: map[string]*agentTranscript{}, subItemByID: map[string]*components.ChatItem{}, mode: agent.ModeAuto,
+	}
+	t.Cleanup(app.stopAttach)
+	msgs, _ := mgr.Messages(sess.ID)
+	app.activateSession(settings.SessionInfo{ID: sess.ID, Title: "s", Provider: "p", Model: "m", Messages: msgs})
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		text, items := transcriptText(app)
+		if strings.Contains(text, "world") {
+			users := 0
+			for _, it := range items {
+				if it.Kind == components.ItemUser && it.Text == "hello" {
+					users++
+				}
+			}
+			if users != 1 {
+				t.Fatalf("first user message rendered %d times, want 1", users)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("run was not streamed: %q", text)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 func TestFollowDoesNotDuplicateWhenNextRunStartsImmediately(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	store, err := session.NewSQLiteStore()
