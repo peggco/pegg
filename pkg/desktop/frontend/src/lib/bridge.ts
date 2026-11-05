@@ -208,6 +208,10 @@ export function onPendingClear(cb: () => void): Unsubscribe {
   return on('acp:pending-clear', cb);
 }
 
+export function onSessionsChanged(cb: () => void): Unsubscribe {
+  return on('sessions:changed', cb);
+}
+
 export function onBinaryProgress(cb: (progress: BinaryProgress) => void): Unsubscribe {
   return on<BinaryProgress>('binary:progress', cb);
 }

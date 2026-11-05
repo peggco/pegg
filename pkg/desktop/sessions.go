@@ -53,6 +53,7 @@ func (a *App) ensureClient() (*acpclient.Client, error) {
 		Version: appVersion,
 		Callbacks: acpclient.Callbacks{
 			OnUpdate:        a.enqueueUpdate,
+			OnNotification:  a.handleNotification,
 			OnServerRequest: a.handleServerRequest,
 			OnStatus: func(s acpclient.Status) {
 				a.logf("acp status: %s %s", s.State, s.Message)
@@ -161,6 +162,13 @@ func (a *App) flushUpdates() {
 			continue
 		}
 		a.emit("acp:update", string(raw))
+	}
+}
+
+func (a *App) handleNotification(method string, params json.RawMessage) {
+	switch method {
+	case "pegg/sessions_changed":
+		a.emit("sessions:changed", nil)
 	}
 }
 

@@ -7,6 +7,7 @@ import {
   onLoading,
   onPendingClear,
   onPermission,
+  onSessionsChanged,
   onStatus,
   onUpdate,
 } from './lib/bridge';
@@ -16,6 +17,7 @@ import {
   handleAsk,
   handleLoading,
   handlePermission,
+  handleSessionsChanged,
   handleUpdates,
   readDropped,
   respondPermission,
@@ -70,6 +72,7 @@ export function App() {
       onStatus(setServerStatus),
       onLoading(handleLoading),
       onPendingClear(clearPending),
+      onSessionsChanged(handleSessionsChanged),
       onBinaryProgress(setBinaryProgress),
       onFileDrop((paths) => {
         void readDropped(paths).then((attachments) => {

@@ -696,6 +696,16 @@ export function handleLoading(payload: { sessionId: string; loading: boolean }):
   else store.set({ loadingSession: undefined });
 }
 
+let sessionsRefreshTimer: number | undefined;
+
+export function handleSessionsChanged(): void {
+  if (sessionsRefreshTimer !== undefined) window.clearTimeout(sessionsRefreshTimer);
+  sessionsRefreshTimer = window.setTimeout(() => {
+    sessionsRefreshTimer = undefined;
+    void loadSessions();
+  }, 400);
+}
+
 export function openSubagent(agentId: string): void {
   store.set({ subagentView: agentId });
 }

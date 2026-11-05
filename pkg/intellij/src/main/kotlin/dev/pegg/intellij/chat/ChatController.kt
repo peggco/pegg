@@ -679,6 +679,10 @@ class ChatController(
     }
 
     private fun onNotification(method: String, params: JsonElement?) {
+        if (method == "pegg/sessions_changed") {
+            emitSessions()
+            return
+        }
         if (method != "session/update") {
             PeggLog.debug("ACP notification: $method")
             return

@@ -618,6 +618,10 @@ export class ChatController extends EventEmitter {
   }
 
   private onNotification(method: string, params: any): void {
+    if (method === 'pegg/sessions_changed') {
+      this.emit('sessions');
+      return;
+    }
     if (method !== 'session/update') {
       this.log.debug('ACP notification', method);
       return;
