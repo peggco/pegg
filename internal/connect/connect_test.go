@@ -2,10 +2,30 @@ package connect
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/peggco/pegg/internal/core/config"
 )
+
+func TestAcquireLockIsExclusive(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	release, err := acquireLock()
+	if err != nil {
+		t.Fatalf("first acquire: %v", err)
+	}
+	if _, err := acquireLock(); !errors.Is(err, ErrAlreadyRunning) {
+		t.Fatalf("second acquire = %v, want ErrAlreadyRunning", err)
+	}
+	release()
+
+	release2, err := acquireLock()
+	if err != nil {
+		t.Fatalf("acquire after release: %v", err)
+	}
+	release2()
+}
 
 func TestIdentitySignVerify(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())

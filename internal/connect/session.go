@@ -27,6 +27,7 @@ func (c *Connector) serve(ctx context.Context, conn *websocket.Conn) error {
 		cancel()
 		c.stopLiveMirror()
 		close(cs.done)
+		_ = conn.CloseNow()
 		Audit("disconnected", map[string]any{"relay": c.cfg.RelayURL})
 	}()
 

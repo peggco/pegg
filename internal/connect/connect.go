@@ -170,6 +170,12 @@ func (c *Connector) Run(ctx context.Context) error {
 		return err
 	}
 
+	release, err := acquireLock()
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	backoff := time.Second
 	for {
 		if ctx.Err() != nil {
