@@ -27,6 +27,7 @@ const (
 	ItemError
 	ItemCompaction
 	ItemCompactionDivider
+	ItemNotice
 )
 
 type ChatItem struct {
@@ -824,6 +825,11 @@ func (c *Chat) itemLines(it *ChatItem, width int) []Line {
 		lines = []Line{LineFromSegments([]Segment{
 			{Text: "─ " + it.Text + " ─", Style: th.Base().Foreground(th.Muted).Background(th.Background)},
 		}, width)}
+	case ItemNotice:
+		th := styles.Current()
+		lines = WrapSegments([]Segment{
+			{Text: "  " + it.Text, Style: th.Base().Foreground(th.Warning).Background(th.Background)},
+		}, width)
 	}
 	return clipLinesToWidth(lines, width)
 }

@@ -179,6 +179,8 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 				Error:         runErr.Error(),
 			})
 		}
+	} else if result != nil && result.FinishReason == llm.FinishReasonLength {
+		stopReason = StopReasonMaxTokens
 	}
 
 	out := SessionPromptResult{StopReason: stopReason}

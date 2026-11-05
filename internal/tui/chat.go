@@ -387,6 +387,9 @@ func (a *App) onAgentFinished(e agent.AgentFinished) {
 	t.done = true
 	t.thinking = nil
 	t.assistant = nil
+	if e.FinishReason == llm.FinishReasonLength {
+		a.appendItem(t, &components.ChatItem{Kind: components.ItemNotice, Text: i18n.T("chat.truncated")})
+	}
 	if e.AgentID == a.agent.ID {
 		a.running = false
 		a.clearEscHint()

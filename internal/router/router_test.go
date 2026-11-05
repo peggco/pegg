@@ -483,7 +483,7 @@ func TestRouterResolveHookRoutesMarkerAgent(t *testing.T) {
 	agent.ModelResolveHook.Reset()
 	ModelOptionsHook.Reset()
 	providers := map[string][]llm.Model{"prov-a": {plainModel("a-1")}}
-	mgr, _ := newRouterLLM(t, providers)
+	mgr, _ := newRouterLLMOut(t, providers, "ok")
 	dec := &mockDecisionProvider{name: "dec", choice: "prov-a/a-1", conf: 0.9}
 	cfg := routerCfg(providers, nil)
 	New(Deps{Config: cfg, LLM: mgr, Decision: newRouterDecision(t, "dec", dec)}, nil)
@@ -508,7 +508,7 @@ func TestRouterResolveHookRoutesSubagent(t *testing.T) {
 	agent.ModelResolveHook.Reset()
 	ModelOptionsHook.Reset()
 	providers := map[string][]llm.Model{"prov-a": {plainModel("a-1")}}
-	mgr, _ := newRouterLLM(t, providers)
+	mgr, _ := newRouterLLMOut(t, providers, "ok")
 	dec := &mockDecisionProvider{name: "dec", choice: "prov-a/a-1", conf: 0.9}
 	cfg := routerCfg(providers, nil)
 	New(Deps{Config: cfg, LLM: mgr, Decision: newRouterDecision(t, "dec", dec)}, nil)
@@ -537,7 +537,7 @@ func TestRouterResolveHookSkipsUnmanagedSubagent(t *testing.T) {
 	a := agent.New("developer", agent.WithMaxIterations(1))
 	a.ParentAgentID = "parent-1"
 	a.Model = llm.Model{ID: "inherited"}
-	a.Provider = &mockLLMProvider{name: "prov-a", models: providers["prov-a"]}
+	a.Provider = &mockLLMProvider{name: "prov-a", models: providers["prov-a"], output: "ok"}
 	if _, err := a.Run(context.Background(), "write tests"); err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +560,7 @@ func TestRouterResolveHookSkipsPlainAgent(t *testing.T) {
 
 	a := agent.New("orchestrator", agent.WithMaxIterations(1))
 	a.Model = llm.Model{ID: "gpt-4o"}
-	a.Provider = &mockLLMProvider{name: "prov-a", models: providers["prov-a"]}
+	a.Provider = &mockLLMProvider{name: "prov-a", models: providers["prov-a"], output: "ok"}
 	if _, err := a.Run(context.Background(), "hi"); err != nil {
 		t.Fatal(err)
 	}

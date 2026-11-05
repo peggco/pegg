@@ -160,6 +160,7 @@ var tr = map[string]string{
 	"chat.menu.fork":          "Mesajı dallandır (fork)",
 	"chat.compaction":         "↻ Bağlam sıkıştırıldı (%s) — %d mesaj, %d token",
 	"chat.compactedDivider":   "bağlam sıkıştırıldı",
+	"chat.truncated":          "Yanıt çıktı token sınırına ulaştı — cevap eksik olabilir",
 	"chat.error.revert":       "geri alma başarısız: %s",
 	"chat.error.fork":         "dallandırma (fork) başarısız: %s",
 	"chat.error.loadSession":  "oturum yüklenemedi: %s",

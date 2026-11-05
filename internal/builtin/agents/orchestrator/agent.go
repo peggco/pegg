@@ -18,7 +18,7 @@ func Register(fs *vfs.VFS) error {
 const (
 	agentTemperature   = 0.2
 	agentTopP          = 0.9
-	agentMaxTokens     = 4096
+	agentMaxTokens     = 0
 	agentMaxIterations = agent.UnlimitedIterations
 )
 

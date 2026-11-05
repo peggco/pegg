@@ -25,10 +25,11 @@ func (discardHandler) Write(logger.Record) error { return nil }
 func (discardHandler) Close() error              { return nil }
 
 type mockResponse struct {
-	content   string
-	reasoning string
-	calls     []llm.ToolCall
-	usage     llm.Usage
+	content      string
+	reasoning    string
+	calls        []llm.ToolCall
+	usage        llm.Usage
+	finishReason llm.FinishReason
 }
 
 type scriptedProvider struct {
@@ -85,6 +86,9 @@ func responseOf(m mockResponse) *llm.Response {
 	fr := llm.FinishReasonStop
 	if len(m.calls) > 0 {
 		fr = llm.FinishReasonToolCalls
+	}
+	if m.finishReason != "" {
+		fr = m.finishReason
 	}
 	return &llm.Response{
 		Model:   "mock-model",
@@ -1437,6 +1441,135 @@ func TestRunEmptyResponseLimit(t *testing.T) {
 	_, err := a.Run(context.Background(), "hi")
 	if !errors.Is(err, ErrEmptyResponse) {
 		t.Fatalf("err = %v, want ErrEmptyResponse", err)
+	}
+}
+
+func TestRunEmptyResponseAtMaxIterationsErrors(t *testing.T) {
+	a, prov := newTestAgent(t, WithMaxIterations(1))
+	prov.responses = []mockResponse{{}}
+
+	_, err := a.Run(context.Background(), "hi")
+	if !errors.Is(err, ErrEmptyResponse) {
+		t.Fatalf("err = %v, want ErrEmptyResponse instead of a silent stop", err)
+	}
+}
+
+func TestRunTruncatedResponseContinues(t *testing.T) {
+	a, prov := newTestAgent(t)
+	prov.responses = []mockResponse{
+		{content: "part one ", finishReason: llm.FinishReasonLength},
+		{content: "part two", finishReason: llm.FinishReasonLength},
+		{content: "part three"},
+	}
+
+	res, err := a.Run(context.Background(), "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Output != "part one part two"+"part three" {
+		t.Fatalf("output = %q, want stitched continuation", res.Output)
+	}
+	if res.Iterations != 3 {
+		t.Fatalf("iterations = %d, want 3", res.Iterations)
+	}
+}
+
+func TestRunTruncatedResponseStopsAfterRecoveryLimit(t *testing.T) {
+	a, prov := newTestAgent(t)
+	prov.responses = []mockResponse{
+		{content: "a", finishReason: llm.FinishReasonLength},
+		{content: "b", finishReason: llm.FinishReasonLength},
+		{content: "c", finishReason: llm.FinishReasonLength},
+		{content: "d", finishReason: llm.FinishReasonLength},
+		{content: "e"},
+	}
+
+	res, err := a.Run(context.Background(), "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Iterations != maxTruncationRecoveries+1 {
+		t.Fatalf("iterations = %d, want %d", res.Iterations, maxTruncationRecoveries+1)
+	}
+	if res.Output != "abcd" {
+		t.Fatalf("output = %q, want partial output preserved", res.Output)
+	}
+	if res.FinishReason != llm.FinishReasonLength {
+		t.Fatalf("finish reason = %q, want length", res.FinishReason)
+	}
+}
+
+func TestRunThinkingOnlyTruncationEscalatesBudget(t *testing.T) {
+	a, prov := newTestAgent(t, WithMaxTokens(4096))
+	prov.responses = []mockResponse{
+		{reasoning: "thinking without content", finishReason: llm.FinishReasonLength},
+		{content: "answer"},
+	}
+
+	res, err := a.Run(context.Background(), "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Output != "answer" {
+		t.Fatalf("output = %q, want answer", res.Output)
+	}
+	if prov.lastReq == nil || prov.lastReq.MaxTokens <= 4096 {
+		t.Fatalf("max tokens = %d, want escalated budget", prov.lastReq.MaxTokens)
+	}
+}
+
+func TestRunThinkingOnlyTruncationFailsAtModelLimit(t *testing.T) {
+	model := llm.Model{ID: "mock-model", Config: &llm.ModelConfig{MaxOutputTokens: 4096}}
+	a, prov := newTestAgent(t, WithModel(model), WithMaxTokens(4096))
+	prov.responses = []mockResponse{{reasoning: "thinking", finishReason: llm.FinishReasonLength}}
+
+	_, err := a.Run(context.Background(), "hi")
+	if !errors.Is(err, ErrResponseTruncated) {
+		t.Fatalf("err = %v, want ErrResponseTruncated", err)
+	}
+	if len(prov.responses) != 0 {
+		t.Fatalf("expected a single request at the model limit, %d responses left", len(prov.responses))
+	}
+	if !strings.Contains(err.Error(), "output_limit=4096") {
+		t.Fatalf("error lacks diagnostics: %v", err)
+	}
+}
+
+func TestRunUsesModelOutputLimit(t *testing.T) {
+	model := llm.Model{ID: "mock-model", Config: &llm.ModelConfig{MaxOutputTokens: 64000}}
+	a, prov := newTestAgent(t, WithModel(model))
+	prov.responses = []mockResponse{{content: "ok"}}
+
+	if _, err := a.Run(context.Background(), "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if prov.lastReq.MaxTokens != 64000 {
+		t.Fatalf("max tokens = %d, want 64000", prov.lastReq.MaxTokens)
+	}
+}
+
+func TestRunClampsMaxTokensToModelLimit(t *testing.T) {
+	model := llm.Model{ID: "mock-model", Config: &llm.ModelConfig{MaxOutputTokens: 2048}}
+	a, prov := newTestAgent(t, WithModel(model), WithMaxTokens(4096))
+	prov.responses = []mockResponse{{content: "ok"}}
+
+	if _, err := a.Run(context.Background(), "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if prov.lastReq.MaxTokens != 2048 {
+		t.Fatalf("max tokens = %d, want 2048", prov.lastReq.MaxTokens)
+	}
+}
+
+func TestRunOmitsMaxTokensWhenUnknown(t *testing.T) {
+	a, prov := newTestAgent(t)
+	prov.responses = []mockResponse{{content: "ok"}}
+
+	if _, err := a.Run(context.Background(), "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if prov.lastReq.MaxTokens != 0 {
+		t.Fatalf("max tokens = %d, want 0 (provider default)", prov.lastReq.MaxTokens)
 	}
 }
 
