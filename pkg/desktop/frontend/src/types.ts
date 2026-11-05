@@ -426,7 +426,6 @@ export interface ConnectStatus {
 
 export interface ConnectSettings {
   enabled: boolean;
-  relayUrl: string;
   token?: string;
   clearToken?: boolean;
   tokenMasked: string;

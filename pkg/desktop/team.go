@@ -33,7 +33,6 @@ type ConnectStatus struct {
 
 type ConnectSettings struct {
 	Enabled         bool          `json:"enabled"`
-	RelayURL        string        `json:"relayUrl"`
 	Token           string        `json:"token,omitempty"`
 	ClearToken      bool          `json:"clearToken,omitempty"`
 	TokenMasked     string        `json:"tokenMasked"`
@@ -122,9 +121,6 @@ func (a *App) connectConfig() (*config.ConnectConfig, error) {
 	if cc == nil {
 		cc = config.DefaultConfig().Connect
 	}
-	if strings.TrimSpace(cc.RelayURL) == "" {
-		cc.RelayURL = config.DefaultConnectRelayURL
-	}
 	return cc, nil
 }
 
@@ -162,7 +158,6 @@ func (a *App) ConnectSettings() (ConnectSettings, error) {
 
 	out := ConnectSettings{
 		Enabled:         cc.Enabled,
-		RelayURL:        cc.RelayURL,
 		TokenMasked:     connect.MaskToken(cc.Token),
 		HasToken:        strings.TrimSpace(cc.Token) != "",
 		DeviceName:      cc.DeviceName,
@@ -198,9 +193,6 @@ func (a *App) SaveConnectSettings(in ConnectSettings) (ConnectSettings, error) {
 		cc = config.DefaultConfig().Connect
 	}
 	cc.Enabled = in.Enabled
-	if v := strings.TrimSpace(in.RelayURL); v != "" {
-		cc.RelayURL = v
-	}
 	if in.ClearToken {
 		cc.Token = ""
 	} else if v := strings.TrimSpace(in.Token); v != "" {
@@ -219,9 +211,6 @@ func (a *App) SaveConnectSettings(in ConnectSettings) (ConnectSettings, error) {
 		}
 	}
 	cc.AllowedMethods = methods
-	if strings.TrimSpace(cc.RelayURL) == "" {
-		cc.RelayURL = config.DefaultConnectRelayURL
-	}
 	if err := config.UpsertConnect(cc); err != nil {
 		return ConnectSettings{}, err
 	}
@@ -342,10 +331,9 @@ func (a *App) appendConnectLine(line string) {
 		a.connectState.Error = ""
 	case strings.Contains(lower, "relay connection ended"):
 		a.connectState.State = "reconnecting"
-	case strings.Contains(lower, "refusing insecure"),
-		strings.Contains(lower, "relay rejected"),
+	case strings.Contains(lower, "relay rejected"),
 		strings.Contains(lower, "no pairing token"),
-		strings.Contains(lower, "relay_url is not configured"):
+		strings.Contains(lower, "already running"):
 		a.connectState.State = "error"
 		a.connectState.Error = line
 	}

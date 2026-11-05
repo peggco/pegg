@@ -78,44 +78,23 @@ func TestResolveConnectTokenFailsWithoutInput(t *testing.T) {
 	}
 }
 
-func TestConnectConfigRelayAndToken(t *testing.T) {
+func TestConnectConfigToken(t *testing.T) {
 	c := &CLI{}
-	def := c.connectConfig("", false, false, 0, nil, "", 0)
-	if def.RelayURL != config.DefaultConnectRelayURL {
-		t.Fatalf("RelayURL = %q, want the built-in relay", def.RelayURL)
-	}
+	def := c.connectConfig("", false, 0, nil, "", 0)
 	if def.Token != "" {
 		t.Fatalf("Token = %q, want empty", def.Token)
 	}
 
-	if got := c.connectConfig("tok_123", false, false, 0, nil, "", 0).Token; got != "tok_123" {
+	if got := c.connectConfig("tok_123", false, 0, nil, "", 0).Token; got != "tok_123" {
 		t.Fatalf("Token = %q, want tok_123", got)
 	}
 
-	saved := &CLI{cfg: &config.Config{Connect: &config.ConnectConfig{
-		RelayURL: "wss://relay.example.com/agent?token=embedded",
-	}}}
-	cc := saved.connectConfig("", false, false, 0, nil, "", 0)
-	if cc.RelayURL != "wss://relay.example.com/agent" || cc.Token != "embedded" {
-		t.Fatalf("unexpected config: relay=%q token=%q", cc.RelayURL, cc.Token)
+	saved := &CLI{cfg: &config.Config{Connect: &config.ConnectConfig{Token: "tok_saved"}}}
+	if got := saved.connectConfig("", false, 0, nil, "", 0).Token; got != "tok_saved" {
+		t.Fatalf("Token = %q, want tok_saved", got)
 	}
 
-	if got := saved.connectConfig("explicit", false, false, 0, nil, "", 0); got.Token != "explicit" {
-		t.Fatalf("Token = %q, want explicit", got.Token)
-	}
-}
-
-func TestConnectRelayEnvOverride(t *testing.T) {
-	t.Setenv(envConnectRelay, "ws://127.0.0.1:4000/agent")
-	c := &CLI{}
-
-	cc := c.connectConfig("", false, false, 0, nil, "", 0)
-	if cc.RelayURL != "ws://127.0.0.1:4000/agent" {
-		t.Fatalf("RelayURL = %q, want the env override", cc.RelayURL)
-	}
-
-	saved := &CLI{cfg: &config.Config{Connect: &config.ConnectConfig{RelayURL: "wss://relay.example.com/agent"}}}
-	if got := saved.connectConfig("", false, false, 0, nil, "", 0).RelayURL; got != "wss://relay.example.com/agent" {
-		t.Fatalf("RelayURL = %q, want the configured relay", got)
+	if got := saved.connectConfig("explicit", false, 0, nil, "", 0).Token; got != "explicit" {
+		t.Fatalf("Token = %q, want explicit", got)
 	}
 }

@@ -31,22 +31,6 @@ func Endpoint(relayURL, token string) (string, error) {
 	return parsed.String(), nil
 }
 
-func TokenFromURL(relayURL string) string {
-	parsed, err := url.Parse(strings.TrimSpace(relayURL))
-	if err != nil {
-		return ""
-	}
-	return parsed.Query().Get(TokenQueryParam)
-}
-
-func StripToken(relayURL string) string {
-	stripped, err := Endpoint(relayURL, "")
-	if err != nil {
-		return relayURL
-	}
-	return stripped
-}
-
 func MaskToken(token string) string {
 	switch {
 	case token == "":

@@ -21,8 +21,6 @@ import (
 
 type tokenSource int
 
-const envConnectRelay = "PEGG_CONNECT_RELAY"
-
 const (
 	tokenFromArgument tokenSource = iota
 	tokenFromFlag
@@ -73,7 +71,6 @@ func promptConnectToken(out io.Writer) (string, error) {
 
 func (c *CLI) newConnectCommand() *cobra.Command {
 	var token string
-	var insecure bool
 	var autoApprove bool
 	var maxConcurrency int
 	var allowed []string
@@ -92,20 +89,19 @@ Only a pairing token is needed — create one on the website under
 Agents → Connect a device. The token is saved to the config on first use, so
 later runs just need "pegg connect"; use "pegg connect logout" to forget it.
 
-The relay endpoint is built in (connect.relay_url overrides it). The daemon
-authenticates with a local Ed25519 device identity stored at
-~/.pegg/connect/device.json and reconnects automatically.`,
+The relay endpoint is fixed at wss://connect.pegg.dev. The daemon authenticates
+with a local Ed25519 device identity stored at ~/.pegg/connect/device.json and
+reconnects automatically.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			argToken := ""
 			if len(args) > 0 {
 				argToken = args[0]
 			}
-			return c.runConnect(cmd.OutOrStdout(), argToken, token, insecure, autoApprove, maxConcurrency, allowed, deviceName, responseTimeout)
+			return c.runConnect(cmd.OutOrStdout(), argToken, token, autoApprove, maxConcurrency, allowed, deviceName, responseTimeout)
 		},
 	}
 	cmd.Flags().StringVar(&token, "token", "", "pairing token (may also be passed as the argument)")
-	cmd.Flags().BoolVar(&insecure, "insecure", false, "allow ws:// to a non-loopback host (not recommended)")
 	cmd.Flags().BoolVar(&autoApprove, "auto-approve", false, "skip local confirmation for sensitive remote actions (not recommended)")
 	cmd.Flags().IntVar(&maxConcurrency, "max-concurrency", 0, "maximum parallel runs (default from config)")
 	cmd.Flags().StringArrayVar(&allowed, "allowed-method", nil, "restrict methods the backend may call (repeatable, supports prefix*)")
@@ -146,36 +142,13 @@ func (c *CLI) connectDeps() connect.Deps {
 	}
 }
 
-func connectRelayURL(configured string) string {
-	if trimmed := strings.TrimSpace(configured); trimmed != "" {
-		return trimmed
-	}
-	if env := strings.TrimSpace(os.Getenv(envConnectRelay)); env != "" {
-		return env
-	}
-	return config.DefaultConnectRelayURL
-}
-
-func (c *CLI) connectConfig(token string, insecure, autoApprove bool, maxConcurrency int, allowed []string, deviceName string, responseTimeout int) *config.ConnectConfig {
+func (c *CLI) connectConfig(token string, autoApprove bool, maxConcurrency int, allowed []string, deviceName string, responseTimeout int) *config.ConnectConfig {
 	cc := config.DefaultConfig().Connect
-	savedRelay, savedToken := "", ""
 	if c.cfg != nil && c.cfg.Connect != nil {
 		*cc = *c.cfg.Connect
-		savedRelay, savedToken = cc.RelayURL, cc.Token
 	}
-	if embedded := connect.TokenFromURL(savedRelay); embedded != "" {
-		savedRelay = connect.StripToken(savedRelay)
-		if savedToken == "" {
-			savedToken = embedded
-		}
-	}
-	cc.RelayURL = connectRelayURL(savedRelay)
-	cc.Token = savedToken
 	if token != "" {
 		cc.Token = token
-	}
-	if insecure {
-		cc.Insecure = true
 	}
 	if autoApprove {
 		cc.AutoApprove = true
@@ -203,27 +176,11 @@ func (c *CLI) savedConnectToken() string {
 	return c.cfg.Connect.Token
 }
 
-func (c *CLI) savedRelayURL() string {
-	if c.cfg == nil || c.cfg.Connect == nil {
-		return ""
-	}
-	return c.cfg.Connect.RelayURL
-}
-
-func (c *CLI) connectConfigForSave(cc *config.ConnectConfig) *config.ConnectConfig {
-	if strings.TrimSpace(c.savedRelayURL()) != "" {
-		return cc
-	}
-	clone := *cc
-	clone.RelayURL = ""
-	return &clone
-}
-
-func (c *CLI) runConnect(out io.Writer, argToken, flagToken string, insecure, autoApprove bool, maxConcurrency int, allowed []string, deviceName string, responseTimeout int) error {
+func (c *CLI) runConnect(out io.Writer, argToken, flagToken string, autoApprove bool, maxConcurrency int, allowed []string, deviceName string, responseTimeout int) error {
 	if os.Getenv("PEGG_CONNECT_LOG") == "console" && c.log != nil {
 		c.log.AddHandler(logger.NewConsoleHandler(config.LoggerConfig{}))
 	}
-	cc := c.connectConfig(flagToken, insecure, autoApprove, maxConcurrency, allowed, deviceName, responseTimeout)
+	cc := c.connectConfig(flagToken, autoApprove, maxConcurrency, allowed, deviceName, responseTimeout)
 
 	token, source, err := resolveConnectToken(
 		argToken, flagToken, c.savedConnectToken(), stdinInteractive(),
@@ -233,7 +190,7 @@ func (c *CLI) runConnect(out io.Writer, argToken, flagToken string, insecure, au
 		return err
 	}
 	cc.Token = token
-	if err := config.UpsertConnect(c.connectConfigForSave(cc)); err != nil {
+	if err := config.UpsertConnect(cc); err != nil {
 		return fmt.Errorf("connect: save config: %w", err)
 	}
 	if !source.isSaved() {
@@ -249,7 +206,7 @@ func (c *CLI) runConnect(out io.Writer, argToken, flagToken string, insecure, au
 	id := conn.Identity()
 	fmt.Fprintf(out, "pegg connect: device %s (%s)\n", id.DeviceID, id.Name)
 	fmt.Fprintf(out, "  public key: %s\n", id.PublicKey)
-	fmt.Fprintf(out, "  relay:      %s\n", cc.RelayURL)
+	fmt.Fprintf(out, "  relay:      %s\n", conn.RelayURL())
 	fmt.Fprintf(out, "  token:      %s\n", connect.MaskToken(cc.Token))
 	fmt.Fprintf(out, "  methods:    %d\n", len(conn.MethodNames()))
 	if !cc.AutoApprove && !stdinInteractive() {
@@ -263,7 +220,7 @@ func (c *CLI) runConnect(out io.Writer, argToken, flagToken string, insecure, au
 }
 
 func (c *CLI) runConnectLogin(out io.Writer, argToken, flagToken string) error {
-	cc := c.connectConfig(flagToken, false, false, 0, nil, "", 0)
+	cc := c.connectConfig(flagToken, false, 0, nil, "", 0)
 	token, source, err := resolveConnectToken(
 		argToken, flagToken, c.savedConnectToken(), stdinInteractive(),
 		func() (string, error) { return promptConnectToken(out) },
@@ -272,7 +229,7 @@ func (c *CLI) runConnectLogin(out io.Writer, argToken, flagToken string) error {
 		return err
 	}
 	cc.Token = token
-	if err := config.UpsertConnect(c.connectConfigForSave(cc)); err != nil {
+	if err := config.UpsertConnect(cc); err != nil {
 		return fmt.Errorf("connect: save config: %w", err)
 	}
 	if source.isSaved() {
@@ -280,7 +237,7 @@ func (c *CLI) runConnectLogin(out io.Writer, argToken, flagToken string) error {
 	} else {
 		fmt.Fprintf(out, "pairing token saved: %s\n", connect.MaskToken(token))
 	}
-	fmt.Fprintf(out, "relay: %s\n", cc.RelayURL)
+	fmt.Fprintf(out, "relay: %s\n", config.ConnectRelayURL)
 	fmt.Fprintln(out, "run `pegg connect` to start the relay")
 	return nil
 }

@@ -73,13 +73,13 @@ func TestConnectorHandshakeAndStatus(t *testing.T) {
 	defer srv.Close()
 
 	cfg := config.DefaultConfig().Connect
-	cfg.RelayURL = "ws" + strings.TrimPrefix(srv.URL, "http")
 	cfg.MaxConcurrency = 2
 
 	conn, err := New(Deps{Config: config.DefaultConfig(), Bus: event.New(), Log: testLogger(), Version: "test"}, cfg)
 	if err != nil {
 		t.Fatalf("new connector: %v", err)
 	}
+	conn.relayURL = "ws" + strings.TrimPrefix(srv.URL, "http")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -147,11 +147,11 @@ func TestConnectorRejectsUnknownMethod(t *testing.T) {
 	defer srv.Close()
 
 	cfg := config.DefaultConfig().Connect
-	cfg.RelayURL = "ws" + strings.TrimPrefix(srv.URL, "http")
 	conn, err := New(Deps{Config: config.DefaultConfig(), Bus: event.New(), Log: testLogger(), Version: "test"}, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
+	conn.relayURL = "ws" + strings.TrimPrefix(srv.URL, "http")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() { _ = conn.Run(ctx) }()
