@@ -71,6 +71,9 @@ extra:
 extra_css:
   - style.css
 
+extra_javascript:
+  - javascripts/mermaid-panzoom.mjs
+
 markdown_extensions:
   - abbr
   - admonition
@@ -129,6 +132,7 @@ nav:
   - Home: https://pegg.dev
   - Pegg:
       - Overview: pegg/overview.md
+      - Architecture: pegg/architecture.md
       - Installation: pegg/installation.md
       - Providers & Models: pegg/providers-and-models.md
       - Config: pegg/config.md
