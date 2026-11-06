@@ -39,11 +39,11 @@ re-pairing with a new token reuses the same device. Use --all to also delete the
 device identity (a new one is generated on the next connect).`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cc := c.connectConfig("", false, false, 0, nil, "", 0)
+			cc := c.connectConfig("", false, 0, nil, "", 0)
 			hadToken := cc.Token != ""
 			cc.Token = ""
 			cc.Enabled = false
-			if err := config.UpsertConnect(c.connectConfigForSave(cc)); err != nil {
+			if err := config.UpsertConnect(cc); err != nil {
 				return fmt.Errorf("connect: save config: %w", err)
 			}
 
@@ -74,7 +74,7 @@ func (c *CLI) newConnectPairCommand(deviceName string) *cobra.Command {
 		Short: "Show this device's identity and how to pair it",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cc := c.connectConfig("", false, false, 0, nil, deviceName, 0)
+			cc := c.connectConfig("", false, 0, nil, deviceName, 0)
 			id, err := connect.LoadOrCreateIdentity(cc.DeviceName)
 			if err != nil {
 				return err
@@ -83,7 +83,7 @@ func (c *CLI) newConnectPairCommand(deviceName string) *cobra.Command {
 			fmt.Fprintf(out, "Device ID:   %s\n", id.DeviceID)
 			fmt.Fprintf(out, "Device name: %s\n", id.Name)
 			fmt.Fprintf(out, "Public key:  %s\n", id.PublicKey)
-			fmt.Fprintf(out, "Relay URL:   %s\n\n", relayOrEmpty(cc.RelayURL))
+			fmt.Fprintf(out, "Relay URL:   %s\n\n", config.ConnectRelayURL)
 			fmt.Fprintln(out, "Create a pairing token on the website (Agents → Connect a device), then run:")
 			fmt.Fprintln(out, "    pegg connect <token>")
 			return nil
@@ -97,11 +97,10 @@ func (c *CLI) newConnectStatusCommand(deviceName string) *cobra.Command {
 		Short: "Show connect configuration, token and device identity",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cc := c.connectConfig("", false, false, 0, nil, deviceName, 0)
+			cc := c.connectConfig("", false, 0, nil, deviceName, 0)
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "relay:          %s\n", relayOrEmpty(cc.RelayURL))
+			fmt.Fprintf(out, "relay:          %s\n", config.ConnectRelayURL)
 			fmt.Fprintf(out, "token:          %s\n", tokenStatus(cc.Token))
-			fmt.Fprintf(out, "insecure:       %v\n", cc.Insecure)
 			fmt.Fprintf(out, "auto-approve:   %v\n", cc.AutoApprove)
 			fmt.Fprintf(out, "max-concurrency:%d\n", cc.MaxConcurrency)
 			rt := cc.ResponseTimeoutSecs
@@ -146,7 +145,7 @@ func (c *CLI) newConnectMethodsCommand() *cobra.Command {
 		Short: "List methods the backend may call",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			conn, err := connect.New(c.connectDeps(), c.connectConfig("", false, false, 0, nil, "", 0))
+			conn, err := connect.New(c.connectDeps(), c.connectConfig("", false, 0, nil, "", 0))
 			if err != nil {
 				return err
 			}
@@ -158,13 +157,6 @@ func (c *CLI) newConnectMethodsCommand() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-func relayOrEmpty(s string) string {
-	if s == "" {
-		return "(not configured)"
-	}
-	return s
 }
 
 func tokenStatus(token string) string {

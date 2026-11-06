@@ -164,6 +164,10 @@ func (m *Manager) SetModel(id, provider, model string) error {
 }
 
 func (m *Manager) AppendMessage(sessionID string, msg llm.Message) (*Message, error) {
+	return m.AppendMessageWithDuration(sessionID, msg, 0)
+}
+
+func (m *Manager) AppendMessageWithDuration(sessionID string, msg llm.Message, duration time.Duration) (*Message, error) {
 	if _, err := m.store.Get(sessionID); err != nil {
 		return nil, err
 	}
@@ -188,6 +192,7 @@ func (m *Manager) AppendMessage(sessionID string, msg llm.Message) (*Message, er
 		ToolCallID: msg.ToolCallID,
 		ToolCalls:  msg.ToolCalls,
 		CreatedAt:  time.Now(),
+		Duration:   duration,
 	}
 	if err := m.store.InsertMessage(rec); err != nil {
 		return nil, err

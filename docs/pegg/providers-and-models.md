@@ -328,7 +328,8 @@ each model this includes:
 
 | Field | Used for |
 |---|---|
-| `max_input_tokens`, `max_output_tokens`, `max_tokens` | Context-window usage indicator and request limits |
+| `max_input_tokens`, `max_tokens` | Context-window usage indicator |
+| `max_output_tokens` | The request's output token budget (`max_tokens` / `max_output_tokens`) |
 | `input_cost_per_token`, `output_cost_per_token`, `cache_read_cost_per_token` | Cost display in the TUI status bar and session usage |
 | `supports_reasoning`, `reasoning_options` | The TUI **Reasoning** setting (`default`, `low`, `medium`, `high`) |
 | `reasoning_options[].type`, `.values` | The effort levels offered for the model (`effort` values, `max_tokens` bounds) |
@@ -342,6 +343,22 @@ Metadata can also be declared directly in `pegg.json` — see
 [Declaring models](config.md#declaring-models). A declared model wins over the
 discovered one, and a provider without a reachable `/models` endpoint still
 works with the declared catalogue.
+
+### Output token budget
+
+The request's output budget comes from the model's `max_output_tokens`. When the
+model is unknown the field is omitted and the provider default applies. Built-in
+agents do not pin their own value, because reasoning tokens are counted against
+that budget: a small cap makes a thinking model spend everything on internal
+reasoning and return an empty answer.
+
+When the provider reports `finish_reason=length` anyway, Pegg keeps the partial
+answer and asks the model to continue (up to three times). If the model produced
+no content at all, the budget is doubled up to the model limit and retried. Once
+the limit is reached the run fails with
+`agent: response truncated by the output token limit` instead of reporting an
+empty response. The TUI prints a warning when a run ends truncated, and ACP
+clients receive `stopReason: max_tokens`.
 
 On the website, **Team AI** model entries carry the same metadata. The model
 dialog has fields for the context window, the output limit, the prices, the

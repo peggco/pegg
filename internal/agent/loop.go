@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/agent/reminder"
@@ -25,11 +26,21 @@ type runState struct {
 	pendingAttachments []llm.Attachment
 	continuation       string
 	emptyResponses     int
+	maxTokens          int
+	truncations        int
+	truncatedOutput    string
 }
 
 const (
 	maxEmptyResponseRetries = 3
+	maxTruncationRecoveries = 3
 	maxParallelToolCalls    = 8
+
+	defaultEscalatedMaxTokens = 16384
+
+	continuationEmptyResponse = "Your previous turn ended without producing any response content or tool calls. Continue the task and provide the response now."
+	continuationTruncated     = "Your previous response was cut off because it reached the output token limit. Continue exactly where you left off, without repeating what you already wrote and without re-introducing the answer."
+	continuationThinkingOnly  = "Your previous turn used the whole output token budget on internal reasoning and produced no visible answer. Do not spend more time reasoning about the problem; reply with the answer or the next tool call now."
 )
 
 func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*RunResult, error) {
@@ -52,7 +63,7 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 	}
 
 	ctx = WithAgent(ctx, a)
-	state := &runState{agent: a, stream: stream}
+	state := &runState{agent: a, stream: stream, maxTokens: a.maxOutputTokens()}
 	ctx = WithHistory(ctx, &state.history)
 	ctx = WithStream(ctx, stream)
 	a.debugf("agent %q started run", a.Name)
@@ -117,7 +128,7 @@ func (a *Agent) resume(ctx context.Context, input string, history []llm.Message,
 	}
 
 	ctx = WithAgent(ctx, a)
-	state := &runState{agent: a, stream: stream}
+	state := &runState{agent: a, stream: stream, maxTokens: a.maxOutputTokens()}
 	ctx = WithHistory(ctx, &state.history)
 	ctx = WithStream(ctx, stream)
 	a.debugf("agent %q resumed run", a.Name)
@@ -181,6 +192,7 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 		default:
 		}
 		state.iterations++
+		state.finishReason = ""
 		msg, calls, err := a.iterate(ctx, state, prov)
 		if err != nil {
 			if msg.Role == llm.RoleAssistant && !emptyAssistantMessage(msg) {
@@ -188,6 +200,7 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 			}
 			return a.partialResult(state), a.fail(ctx, err)
 		}
+		a.debugIteration(state, msg, calls)
 		if !emptyAssistantMessage(msg) {
 			state.history = append(state.history, msg)
 			a.publish(TopicAgentMessage, AgentMessage{
@@ -207,21 +220,30 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 		if a.HasPendingNotifications() {
 			continue
 		}
+		if state.finishReason == llm.FinishReasonLength {
+			if ctx.Err() != nil {
+				return a.partialResult(state), a.fail(ctx, ctx.Err())
+			}
+			if !a.recoverTruncatedTurn(state, msg) {
+				if emptyAssistantMessage(msg) {
+					return a.partialResult(state), a.fail(ctx, a.truncatedError(state))
+				}
+				a.debugf("agent %q stopped after %d truncated continuations", a.Name, state.truncations)
+				finished = true
+				break
+			}
+			continue
+		}
 		if emptyAssistantMessage(msg) {
 			if ctx.Err() != nil {
 				return a.partialResult(state), a.fail(ctx, ctx.Err())
 			}
 			canRetry := a.MaxIterations <= 0 || state.iterations < a.MaxIterations
-			if !canRetry {
-				finished = true
-				break
-			}
-			if state.emptyResponses >= maxEmptyResponseRetries {
-				err := fmt.Errorf("%w after %d attempts", ErrEmptyResponse, state.emptyResponses)
-				return a.partialResult(state), a.fail(ctx, err)
+			if !canRetry || state.emptyResponses >= maxEmptyResponseRetries {
+				return a.partialResult(state), a.fail(ctx, a.emptyResponseError(state))
 			}
 			state.emptyResponses++
-			state.continuation = "Your previous turn ended without producing any response content or tool calls. Continue the task and provide the response now."
+			state.continuation = continuationEmptyResponse
 			continue
 		}
 		state.emptyResponses = 0
@@ -233,7 +255,7 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 		AgentName:    a.Name,
 		Model:        a.Model,
 		Provider:     state.provider,
-		Output:       state.output,
+		Output:       state.truncatedOutput + state.output,
 		History:      state.history,
 		Usage:        state.usage,
 		Iterations:   state.iterations,
@@ -316,6 +338,112 @@ func (a *Agent) attachToolAttachments(state *runState) {
 
 func emptyAssistantMessage(m llm.Message) bool {
 	return m.Role == llm.RoleAssistant && len(m.ToolCalls) == 0 && strings.TrimSpace(llm.MessageText(m)) == ""
+}
+
+func (a *Agent) modelOutputLimit() int {
+	if a.Model.Config == nil {
+		return 0
+	}
+	return a.Model.Config.MaxOutputTokens
+}
+
+func (a *Agent) maxOutputTokens() int {
+	limit := a.modelOutputLimit()
+	switch {
+	case a.MaxTokens <= 0:
+		return limit
+	case limit > 0 && a.MaxTokens > limit:
+		return limit
+	default:
+		return a.MaxTokens
+	}
+}
+
+func (a *Agent) recoverTruncatedTurn(state *runState, msg llm.Message) bool {
+	if state.truncations >= maxTruncationRecoveries {
+		return false
+	}
+	state.truncations++
+	state.emptyResponses = 0
+	if emptyAssistantMessage(msg) {
+		if !a.escalateOutputBudget(state) {
+			return false
+		}
+		state.continuation = continuationThinkingOnly
+		return true
+	}
+	state.truncatedOutput += llm.MessageText(msg)
+	state.continuation = continuationTruncated
+	return true
+}
+
+func (a *Agent) escalateOutputBudget(state *runState) bool {
+	next := state.maxTokens * 2
+	if next <= 0 {
+		next = defaultEscalatedMaxTokens
+	}
+	if limit := a.modelOutputLimit(); limit > 0 {
+		if next > limit {
+			next = limit
+		}
+		if next <= state.maxTokens {
+			return false
+		}
+	}
+	if next == state.maxTokens {
+		return false
+	}
+	state.maxTokens = next
+	return true
+}
+
+func (a *Agent) emptyResponseError(state *runState) error {
+	attempts := state.emptyResponses
+	if attempts <= 0 {
+		attempts = 1
+	}
+	return fmt.Errorf("%w after %d attempts (%s)", ErrEmptyResponse, attempts, state.outputDiagnostics())
+}
+
+func (a *Agent) truncatedError(state *runState) error {
+	hint := "raise the model's max output tokens or lower the reasoning effort"
+	if limit := a.modelOutputLimit(); limit > 0 && state.maxTokens >= limit {
+		hint = fmt.Sprintf("the model's output limit of %d tokens is already in use; lower the reasoning effort", limit)
+	}
+	return fmt.Errorf("%w after %d attempts (%s): the model exhausted its output budget before producing a reply — %s",
+		ErrResponseTruncated, state.truncations, state.outputDiagnostics(), hint)
+}
+
+func (a *Agent) debugIteration(state *runState, msg llm.Message, calls []llm.ToolCall) {
+	a.debugf("agent %q iteration %d: finish_reason=%q max_tokens=%d content=%dB reasoning=%dB tool_calls=%d completion_tokens=%d",
+		a.Name, state.iterations, state.finishReason, state.maxTokens,
+		len(llm.MessageText(msg)), len(reasoningText(msg)), len(calls), state.usage.CompletionTokens)
+}
+
+func reasoningText(m llm.Message) string {
+	s, _ := m.Reasoning.(string)
+	return s
+}
+
+func (s *runState) outputDiagnostics() string {
+	parts := []string{"finish_reason=" + finishReasonLabel(s.finishReason)}
+	if s.maxTokens > 0 {
+		parts = append(parts, fmt.Sprintf("output_limit=%d", s.maxTokens))
+	}
+	if s.usage.CompletionTokens > 0 {
+		parts = append(parts, fmt.Sprintf("completion_tokens=%d", s.usage.CompletionTokens))
+	}
+	if s.usage.CompletionTokensDetails != nil && s.usage.CompletionTokensDetails.ReasoningTokens > 0 {
+		parts = append(parts, fmt.Sprintf("reasoning_tokens=%d", s.usage.CompletionTokensDetails.ReasoningTokens))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func finishReasonLabel(r llm.FinishReason) string {
+	if strings.TrimSpace(string(r)) == "" {
+		return "unknown"
+	}
+	return string(r)
 }
 
 func appendReminder(msgs []llm.Message, text string) []llm.Message {
@@ -517,10 +645,13 @@ type toolExecResult struct {
 	output      string
 	attachments []llm.Attachment
 	toolErr     error
+	duration    time.Duration
 }
 
-func (a *Agent) runTool(ctx context.Context, call llm.ToolCall) toolExecResult {
-	res := toolExecResult{call: call}
+func (a *Agent) runTool(ctx context.Context, call llm.ToolCall) (res toolExecResult) {
+	res = toolExecResult{call: call}
+	start := time.Now()
+	defer func() { res.duration = time.Since(start) }()
 
 	if err := a.chain.BeforeTool(ctx, call); err != nil {
 		res.output = fmt.Sprintf("Error: tool call aborted by middleware: %v", err)
@@ -590,11 +721,11 @@ func (a *Agent) executeTools(ctx context.Context, state *runState, calls []llm.T
 	for _, res := range results {
 		state.history = append(state.history, llm.ToolMessage(res.output, res.call.ID))
 		state.pendingAttachments = append(state.pendingAttachments, res.attachments...)
-		a.emitToolResult(state, res.call, res.output, res.attachments, res.toolErr)
+		a.emitToolResult(state, res.call, res.output, res.attachments, res.toolErr, res.duration)
 	}
 }
 
-func (a *Agent) emitToolResult(state *runState, call llm.ToolCall, output string, attachments []llm.Attachment, toolErr error) {
+func (a *Agent) emitToolResult(state *runState, call llm.ToolCall, output string, attachments []llm.Attachment, toolErr error, duration time.Duration) {
 	a.publish(TopicAgentToolResult, AgentToolResult{
 		AgentID:     a.ID,
 		AgentName:   a.Name,
@@ -604,6 +735,7 @@ func (a *Agent) emitToolResult(state *runState, call llm.ToolCall, output string
 		Output:      output,
 		Attachments: attachments,
 		Err:         toolErr,
+		Duration:    duration,
 	})
 	if state.stream != nil {
 		callCopy := call
@@ -627,8 +759,8 @@ func (a *Agent) buildRequest(state *runState) *llm.Request {
 	if a.TopP != 0 {
 		req.TopP = a.TopP
 	}
-	if a.MaxTokens != 0 {
-		req.MaxTokens = a.MaxTokens
+	if state.maxTokens > 0 {
+		req.MaxTokens = state.maxTokens
 	}
 	if a.ReasoningEffort != "" {
 		req.ReasoningEffort = a.ReasoningEffort

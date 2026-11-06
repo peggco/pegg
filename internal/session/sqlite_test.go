@@ -155,6 +155,26 @@ func TestSQLiteStoreToolCallsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSQLiteStoreMessageDurationRoundTrip(t *testing.T) {
+	s := newTestSQLiteStore(t)
+	if err := s.Create(testSession("s1")); err != nil {
+		t.Fatal(err)
+	}
+	m := testMessage("s1", 1, llm.RoleTool, "ok")
+	m.ToolCallID = "call-1"
+	m.Duration = 1500 * time.Millisecond
+	if err := s.InsertMessage(m); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Messages("s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 || msgs[0].Duration != 1500*time.Millisecond {
+		t.Fatalf("duration = %v, want 1.5s", msgs[0].Duration)
+	}
+}
+
 func TestSQLiteStoreSnapshotRestore(t *testing.T) {
 	s := newTestSQLiteStore(t)
 	if err := s.Create(testSession("s1")); err != nil {

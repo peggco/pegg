@@ -241,7 +241,7 @@ func (s *Server) sessionHistory(sessionID string) ([]session.Message, error) {
 		return msgs, nil
 	}
 	active, _ := s.runs.Active(sessionID)
-	if active == nil || active.BaseSeq <= 0 {
+	if active == nil {
 		return msgs, nil
 	}
 	filtered := make([]session.Message, 0, len(msgs))

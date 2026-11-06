@@ -60,22 +60,6 @@ func TestEndpointRejectsInvalidURLs(t *testing.T) {
 	}
 }
 
-func TestTokenFromURLAndStrip(t *testing.T) {
-	relay := "wss://connect.example.com/agent?token=abc&region=eu"
-	if got := connect.TokenFromURL(relay); got != "abc" {
-		t.Fatalf("TokenFromURL = %q, want abc", got)
-	}
-	if got := connect.TokenFromURL("wss://connect.example.com/agent"); got != "" {
-		t.Fatalf("TokenFromURL without token = %q, want empty", got)
-	}
-	if got := connect.StripToken(relay); got != "wss://connect.example.com/agent?region=eu" {
-		t.Fatalf("StripToken = %q", got)
-	}
-	if got := connect.StripToken("nonsense"); got != "nonsense" {
-		t.Fatalf("StripToken(invalid) = %q, want unchanged", got)
-	}
-}
-
 func TestMaskToken(t *testing.T) {
 	if got := connect.MaskToken(""); got != "(none)" {
 		t.Fatalf("MaskToken(\"\") = %q", got)

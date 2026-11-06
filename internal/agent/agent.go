@@ -362,7 +362,7 @@ func (a *Agent) Continue(ctx context.Context, history []llm.Message) (*RunResult
 	}
 
 	ctx = WithAgent(ctx, a)
-	state := &runState{agent: a}
+	state := &runState{agent: a, maxTokens: a.maxOutputTokens()}
 	ctx = WithHistory(ctx, &state.history)
 	a.debugf("agent %q continued run", a.Name)
 	a.publish(TopicAgentStarted, AgentStarted{

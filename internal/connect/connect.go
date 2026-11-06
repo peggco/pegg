@@ -2,9 +2,7 @@ package connect
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -56,6 +54,7 @@ type Deps struct {
 type Connector struct {
 	deps     Deps
 	cfg      *config.ConnectConfig
+	relayURL string
 	identity *Identity
 	dispatch *Dispatcher
 	runs     *runManager
@@ -106,6 +105,7 @@ func New(deps Deps, cfg *config.ConnectConfig) (*Connector, error) {
 	c := &Connector{
 		deps:       deps,
 		cfg:        cfg,
+		relayURL:   config.ConnectRelayURL,
 		identity:   identity,
 		log:        deps.Log,
 		dispatch:   newDispatcher(),
@@ -125,12 +125,12 @@ func New(deps Deps, cfg *config.ConnectConfig) (*Connector, error) {
 
 func (c *Connector) Identity() *Identity { return c.identity }
 
-func (c *Connector) RelayURL() string { return c.cfg.RelayURL }
+func (c *Connector) RelayURL() string { return c.relayURL }
 
 func (c *Connector) Endpoint() string {
-	endpoint, err := Endpoint(c.cfg.RelayURL, c.cfg.Token)
+	endpoint, err := Endpoint(c.relayURL, c.cfg.Token)
 	if err != nil {
-		return c.cfg.RelayURL
+		return c.relayURL
 	}
 	return endpoint
 }
@@ -160,15 +160,15 @@ func (c *Connector) Stop() {
 }
 
 func (c *Connector) Run(ctx context.Context) error {
-	if c.cfg.RelayURL == "" {
-		return errors.New("connect: relay_url is not configured (set connect.relay_url or PEGG_CONNECT_RELAY)")
-	}
-	if err := c.validateRelayURL(); err != nil {
+	if _, err := Endpoint(c.relayURL, c.cfg.Token); err != nil {
 		return err
 	}
-	if _, err := Endpoint(c.cfg.RelayURL, c.cfg.Token); err != nil {
+
+	release, err := acquireLock()
+	if err != nil {
 		return err
 	}
+	defer release()
 
 	backoff := time.Second
 	for {
@@ -199,34 +199,6 @@ func (c *Connector) Run(ctx context.Context) error {
 	}
 }
 
-func (c *Connector) validateRelayURL() error {
-	url := c.cfg.RelayURL
-	if strings.HasPrefix(url, "wss://") {
-		return nil
-	}
-	if strings.HasPrefix(url, "ws://") {
-		rest := strings.TrimPrefix(url, "ws://")
-		host := rest
-		if i := strings.IndexAny(rest, "/?#"); i != -1 {
-			host = rest[:i]
-		}
-		if c.cfg.Insecure || isLoopbackHost(host) {
-			return nil
-		}
-		return fmt.Errorf("connect: refusing insecure ws:// to non-loopback host %q (use wss:// or set insecure=true)", host)
-	}
-	return fmt.Errorf("connect: unsupported relay_url scheme in %q (want ws:// or wss://)", url)
-}
-
-func isLoopbackHost(host string) bool {
-	h := host
-	if i := strings.LastIndex(h, ":"); i != -1 {
-		h = h[:i]
-	}
-	h = strings.Trim(h, "[]")
-	return h == "localhost" || h == "127.0.0.1" || h == "::1"
-}
-
 func (c *Connector) runOnce(ctx context.Context) error {
 	dialCtx, cancel := context.WithTimeout(ctx, handshakeTimeout)
 	defer cancel()
@@ -243,9 +215,9 @@ func (c *Connector) runOnce(ctx context.Context) error {
 	}
 
 	Audit("connected", map[string]any{
-		"relay":     c.cfg.RelayURL,
+		"relay":     c.relayURL,
 		"device_id": c.identity.DeviceID,
 	})
-	c.log.Finfo("connect: connected to relay %s", c.cfg.RelayURL)
+	c.log.Finfo("connect: connected to relay %s", c.relayURL)
 	return c.serve(ctx, conn)
 }

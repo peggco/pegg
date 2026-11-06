@@ -191,6 +191,7 @@ func (s *JSONStore) UpdateMessage(m Message) error {
 		f.Messages[i].Name = m.Name
 		f.Messages[i].ToolCallID = m.ToolCallID
 		f.Messages[i].ToolCalls = m.ToolCalls
+		f.Messages[i].Duration = m.Duration
 		return s.persist(f)
 	}
 	return ErrMessageNotFound

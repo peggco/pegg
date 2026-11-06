@@ -681,13 +681,14 @@ func (r *Recorder) handleToolResult(e agent.AgentToolResult) {
 		"output":      e.Output,
 		"error":       errMsg,
 		"attachments": e.Attachments,
+		"duration_ms": e.Duration.Milliseconds(),
 	})
 	if id, ok := r.sessionID(e.AgentID); ok {
 		msg := llm.ToolMessage(e.Output, e.CallID)
 		if len(e.Attachments) > 0 {
 			msg.Content = llm.ContentWithAttachments(e.Output, e.Attachments)
 		}
-		if _, err := r.mgr.AppendMessage(id, msg); err != nil {
+		if _, err := r.mgr.AppendMessageWithDuration(id, msg, e.Duration); err != nil {
 			r.log.Fdebug("session recorder: append tool result: %v", err)
 		}
 	}

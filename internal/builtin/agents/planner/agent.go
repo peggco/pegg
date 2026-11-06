@@ -16,7 +16,7 @@ const (
 
 	agentTemperature   = 0.4
 	agentTopP          = 0.95
-	agentMaxTokens     = 8192
+	agentMaxTokens     = 0
 	agentMaxIterations = 150
 )
 

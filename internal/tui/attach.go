@@ -10,9 +10,6 @@ import (
 )
 
 func messagesUpTo(msgs []session.Message, maxSeq int) []session.Message {
-	if maxSeq <= 0 {
-		return msgs
-	}
 	out := make([]session.Message, 0, len(msgs))
 	for _, m := range msgs {
 		if m.Seq <= maxSeq {
@@ -42,7 +39,7 @@ func (a *App) beginSessionFollow(info settings.SessionInfo) {
 			}
 		}
 	}
-	if active != nil && active.BaseSeq > 0 {
+	if active != nil {
 		info.Messages = messagesUpTo(info.Messages, active.BaseSeq)
 	}
 
@@ -360,6 +357,7 @@ func (a *App) handleAttachedEvent(e session.RunEvent, mainAgentID string) {
 			ToolName:  ev.ToolName,
 			Output:    ev.ToolOutput,
 			Err:       toolErr,
+			Duration:  ev.ToolDuration,
 		})
 	case session.AgentEventUsage:
 		a.onAgentUsage(agent.AgentUsage{AgentID: ev.AgentID, AgentName: ev.AgentName, Usage: ev.Usage})

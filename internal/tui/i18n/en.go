@@ -160,6 +160,7 @@ var en = map[string]string{
 	"chat.menu.fork":          "Fork message",
 	"chat.compaction":         "↻ Context compacted (%s) — %d messages, %d tokens",
 	"chat.compactedDivider":   "context compacted",
+	"chat.truncated":          "Response hit the output token limit — the answer may be incomplete",
 	"chat.error.revert":       "revert failed: %s",
 	"chat.error.fork":         "fork failed: %s",
 	"chat.error.loadSession":  "load session failed: %s",

@@ -302,8 +302,14 @@ func spinnerAt(elapsed time.Duration) rune {
 }
 
 func formatDuration(d time.Duration) string {
-	if d < time.Second {
+	switch {
+	case d <= 0:
+		return "0ms"
+	case d < time.Millisecond:
+		return "<1ms"
+	case d < time.Second:
 		return fmt.Sprintf("%dms", d.Milliseconds())
+	default:
+		return fmt.Sprintf("%.1fs", d.Seconds())
 	}
-	return fmt.Sprintf("%.1fs", d.Seconds())
 }

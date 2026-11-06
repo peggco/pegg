@@ -30,7 +30,7 @@ func (c *Connector) handleStatusGet(_ context.Context, _ *Request) (any, error) 
 		"version":         c.deps.Version,
 		"protocol":        ProtocolVersion,
 		"uptime_secs":     int(time.Since(c.startedAt).Seconds()),
-		"relay":           c.cfg.RelayURL,
+		"relay":           c.relayURL,
 		"running_runs":    len(c.runs.List()),
 		"max_concurrency": maxConcurrency(c.cfg),
 		"sessions":        sessionTotal,

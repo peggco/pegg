@@ -101,9 +101,7 @@ type PluginConfig struct {
 
 type ConnectConfig struct {
 	Enabled             bool     `json:"enabled"`
-	RelayURL            string   `json:"relay_url,omitempty"`
 	Token               string   `json:"token,omitempty"`
-	Insecure            bool     `json:"insecure,omitempty"`
 	AutoApprove         bool     `json:"auto_approve,omitempty"`
 	MaxConcurrency      int      `json:"max_concurrency,omitempty"`
 	AllowedMethods      []string `json:"allowed_methods,omitempty"`
@@ -111,7 +109,7 @@ type ConnectConfig struct {
 	ResponseTimeoutSecs int      `json:"response_timeout_secs,omitempty"`
 }
 
-const DefaultConnectRelayURL = "wss://connect.pegg.dev"
+const ConnectRelayURL = "wss://connect.pegg.dev"
 
 const DefaultConnectConcurrency = 4
 

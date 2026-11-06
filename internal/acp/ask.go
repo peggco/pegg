@@ -55,7 +55,17 @@ func (s *Server) subscribeAsk() {
 	_ = s.bus.Subscribe(agent.TopicAgentStarted, s.handleAgentStarted)
 	_ = s.bus.Subscribe(session.TopicRunAskResolved, s.handleRunAskResolved)
 	_ = s.bus.Subscribe(session.TopicSessionUpdated, s.handleSessionUpdated)
+	_ = s.bus.Subscribe(session.TopicSessionCreated, s.handleSessionCreated)
+	_ = s.bus.Subscribe(session.TopicSessionDeleted, s.handleSessionDeleted)
 	s.subscribeSubagents()
+}
+
+func (s *Server) handleSessionCreated(session.SessionCreated) {
+	s.notifySessionsChanged()
+}
+
+func (s *Server) handleSessionDeleted(session.SessionDeleted) {
+	s.notifySessionsChanged()
 }
 
 func (s *Server) handleAgentStarted(ev agent.AgentStarted) {
@@ -168,6 +178,7 @@ func (s *Server) handleRunAskResolved(e session.RunAskResolved) {
 }
 
 func (s *Server) handleSessionUpdated(e session.SessionUpdated) {
+	s.notifySessionsChanged()
 	if s.sessions == nil {
 		return
 	}

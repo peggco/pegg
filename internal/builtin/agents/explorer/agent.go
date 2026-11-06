@@ -13,7 +13,7 @@ func Register() error {
 const (
 	agentTemperature   = 0.1
 	agentTopP          = 0.9
-	agentMaxTokens     = 4096
+	agentMaxTokens     = 0
 	agentMaxIterations = 150
 )
 
