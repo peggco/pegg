@@ -218,6 +218,7 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ github.ref_name }}
+          GOFLAGS: -tags=gui
         run: |
           cd pkg/desktop
           wails build -clean -tags "${{ matrix.tags }}" -platform "${{ matrix.platform }}" \

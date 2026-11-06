@@ -35,10 +35,10 @@ desktop-icon:
 	cp pkg/desktop/assets/appicon.png pkg/desktop/build/appicon.png
 
 desktop-dev: desktop-deps desktop-icon
-	cd pkg/desktop && $(WAILS) dev -tags "$(DESKTOP_TAGS)"
+	cd pkg/desktop && GOFLAGS="-tags=gui" $(WAILS) dev -tags "$(DESKTOP_TAGS)"
 
 desktop-build: desktop-deps desktop-icon
-	cd pkg/desktop && $(WAILS) build -tags "$(DESKTOP_TAGS)"
+	cd pkg/desktop && GOFLAGS="-tags=gui" $(WAILS) build -tags "$(DESKTOP_TAGS)"
 
 desktop-test: desktop-frontend
 	npm --prefix pkg/desktop/frontend run typecheck
