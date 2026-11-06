@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	json "github.com/goccy/go-json"
 
@@ -370,6 +371,7 @@ func (a *App) onAgentToolResult(e agent.AgentToolResult) {
 	if files := fileAttachmentsOf(e.Attachments); len(files) > 0 {
 		it.Attachments = files
 	}
+	it.Duration = e.Duration
 	it.ToolDone = true
 	if a.viewID == t.id {
 		a.chat.InvalidateItemPtr(it)
@@ -1363,6 +1365,7 @@ func messagesToItems(msgs []session.Message) []*components.ChatItem {
 	toolByID := make(map[string]*components.ChatItem)
 	pendingToolResults := make(map[string]string)
 	pendingToolFiles := make(map[string][]llm.Attachment)
+	pendingToolDurations := make(map[string]time.Duration)
 
 	isErrorOutput := func(s string) bool {
 		return strings.HasPrefix(s, "Error: ")
@@ -1393,6 +1396,10 @@ func messagesToItems(msgs []session.Message) []*components.ChatItem {
 				}
 				it.ToolDone = true
 				delete(pendingToolResults, tc.ID)
+			}
+			if d, ok := pendingToolDurations[tc.ID]; ok {
+				it.Duration = d
+				delete(pendingToolDurations, tc.ID)
 			}
 			if files := pendingToolFiles[tc.ID]; len(files) > 0 {
 				it.Attachments = files
@@ -1435,12 +1442,14 @@ func messagesToItems(msgs []session.Message) []*components.ChatItem {
 				if len(files) > 0 {
 					it.Attachments = files
 				}
+				it.Duration = m.Duration
 				it.ToolDone = true
 			} else {
 				pendingToolResults[m.ToolCallID] = text
 				if len(files) > 0 {
 					pendingToolFiles[m.ToolCallID] = files
 				}
+				pendingToolDurations[m.ToolCallID] = m.Duration
 			}
 		}
 	}

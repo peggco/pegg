@@ -1,6 +1,10 @@
 package agent
 
-import "github.com/peggco/pegg/internal/llm"
+import (
+	"time"
+
+	"github.com/peggco/pegg/internal/llm"
+)
 
 const (
 	TopicAgentStarted         = "agent.started"
@@ -69,6 +73,7 @@ type AgentToolResult struct {
 	Output      string
 	Attachments []llm.Attachment
 	Err         error
+	Duration    time.Duration
 }
 
 type AgentUsage struct {

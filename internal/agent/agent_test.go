@@ -613,6 +613,28 @@ func TestRunEventsCarryModel(t *testing.T) {
 	}
 }
 
+func TestToolResultEventCarriesDuration(t *testing.T) {
+	bus := event.New()
+	var gotResult *AgentToolResult
+	_ = bus.Subscribe(TopicAgentToolResult, func(e AgentToolResult) { gotResult = &e })
+
+	a, prov := newTestAgent(t, WithBus(bus), WithTool(echoTool()))
+	prov.responses = []mockResponse{
+		{calls: []llm.ToolCall{toolCall("c1", "echo", "{}")}},
+		{content: "done"},
+	}
+
+	if _, err := a.Run(context.Background(), "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if gotResult == nil {
+		t.Fatal("no tool result event")
+	}
+	if gotResult.Duration <= 0 {
+		t.Fatalf("tool result duration = %v, want > 0", gotResult.Duration)
+	}
+}
+
 func TestRunTokenAndErrorEventsCarryModel(t *testing.T) {
 	model := llm.Model{ID: "mock-model", Config: &llm.ModelConfig{MaxInputTokens: 40000}}
 

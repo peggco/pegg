@@ -1,6 +1,8 @@
 package live
 
 import (
+	"time"
+
 	json "github.com/goccy/go-json"
 
 	"github.com/peggco/pegg/internal/agent"
@@ -27,6 +29,8 @@ type AgentEvent struct {
 	ToolName   string
 	ToolOutput string
 	ToolError  string
+
+	ToolDuration time.Duration
 
 	ToolAttachments []llm.Attachment
 
@@ -138,6 +142,7 @@ func DecodeAgentEvent(e session.RunEvent) (AgentEvent, bool) {
 			Output      string           `json:"output"`
 			Error       string           `json:"error"`
 			Attachments []llm.Attachment `json:"attachments"`
+			DurationMS  int64            `json:"duration_ms"`
 		}
 		if json.Unmarshal(e.Data, &d) != nil {
 			return ev, false
@@ -147,6 +152,7 @@ func DecodeAgentEvent(e session.RunEvent) (AgentEvent, bool) {
 		ev.ToolOutput = d.Output
 		ev.ToolError = d.Error
 		ev.ToolAttachments = d.Attachments
+		ev.ToolDuration = time.Duration(d.DurationMS) * time.Millisecond
 		ev.ToolCall = llm.ToolCall{ID: d.CallID}
 		ev.ToolCall.Function.Name = d.ToolName
 	case session.AgentEventUsage:

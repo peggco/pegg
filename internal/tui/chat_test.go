@@ -225,6 +225,7 @@ func TestChatToolItemAndResult(t *testing.T) {
 		CallID:   "call-1",
 		ToolName: "edit",
 		Output:   "edited",
+		Duration: 250 * time.Millisecond,
 	})
 
 	app.chatMu.Lock()
@@ -239,8 +240,37 @@ func TestChatToolItemAndResult(t *testing.T) {
 	if it.ToolOutput != "edited" {
 		t.Errorf("tool output = %q, want edited", it.ToolOutput)
 	}
+	if it.Duration != 250*time.Millisecond {
+		t.Errorf("tool duration = %v, want 250ms", it.Duration)
+	}
 	if !components.HasDiff(it.Diff) {
 		t.Error("edit tool should carry a diff")
+	}
+}
+
+func TestMessagesToItemsCarriesToolDuration(t *testing.T) {
+	msgs := []session.Message{
+		{
+			ID: "m1", Seq: 1, Role: llm.RoleAssistant,
+			ToolCalls: []llm.ToolCall{{
+				ID:       "call-1",
+				Function: llm.Function{Name: "bash", Arguments: `{"command":"echo hi"}`},
+			}},
+		},
+		{ID: "m2", Seq: 2, Role: llm.RoleTool, ToolCallID: "call-1", Content: "hi", Duration: 1200 * time.Millisecond},
+	}
+	items := messagesToItems(msgs)
+	var tool *components.ChatItem
+	for _, it := range items {
+		if it.Kind == components.ItemTool {
+			tool = it
+		}
+	}
+	if tool == nil {
+		t.Fatal("no tool item")
+	}
+	if tool.Duration != 1200*time.Millisecond {
+		t.Fatalf("duration = %v, want 1.2s", tool.Duration)
 	}
 }
 

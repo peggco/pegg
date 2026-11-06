@@ -3,6 +3,7 @@ package components
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -75,6 +76,23 @@ func TestWrapTextPreservesBlankLines(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("lines = %q, want %q", got, want)
+		}
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	cases := []struct {
+		in   time.Duration
+		want string
+	}{
+		{0, "0ms"},
+		{500 * time.Microsecond, "<1ms"},
+		{250 * time.Millisecond, "250ms"},
+		{1500 * time.Millisecond, "1.5s"},
+	}
+	for _, c := range cases {
+		if got := formatDuration(c.in); got != c.want {
+			t.Errorf("formatDuration(%v) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }

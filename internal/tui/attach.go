@@ -357,6 +357,7 @@ func (a *App) handleAttachedEvent(e session.RunEvent, mainAgentID string) {
 			ToolName:  ev.ToolName,
 			Output:    ev.ToolOutput,
 			Err:       toolErr,
+			Duration:  ev.ToolDuration,
 		})
 	case session.AgentEventUsage:
 		a.onAgentUsage(agent.AgentUsage{AgentID: ev.AgentID, AgentName: ev.AgentName, Usage: ev.Usage})

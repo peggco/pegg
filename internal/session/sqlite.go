@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	json "github.com/goccy/go-json"
 
@@ -169,9 +170,9 @@ func (s *SQLiteStore) List(q query.Query) ([]Session, int, error) {
 
 func (s *SQLiteStore) InsertMessage(m Message) error {
 	_, err := s.db.Exec(
-		"INSERT INTO session_messages (id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO session_messages (id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		m.ID, m.SessionID, m.Seq, string(m.Role), marshalJSON(m.Content),
-		marshalJSON(m.Reasoning), m.Name, m.ToolCallID, marshalJSON(m.ToolCalls), m.CreatedAt,
+		marshalJSON(m.Reasoning), m.Name, m.ToolCallID, marshalJSON(m.ToolCalls), m.CreatedAt, m.Duration.Milliseconds(),
 	)
 	return err
 }
@@ -196,7 +197,7 @@ func (s *SQLiteStore) UpdateMessage(m Message) error {
 
 func (s *SQLiteStore) Messages(sessionID string) ([]Message, error) {
 	rows, err := s.db.Query(
-		"SELECT id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at FROM session_messages WHERE session_id = ? ORDER BY seq ASC",
+		"SELECT id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at, duration_ms FROM session_messages WHERE session_id = ? ORDER BY seq ASC",
 		sessionID,
 	)
 	if err != nil {
@@ -208,9 +209,11 @@ func (s *SQLiteStore) Messages(sessionID string) ([]Message, error) {
 	for rows.Next() {
 		var m Message
 		var role, content, reasoning, toolCalls string
-		if err := rows.Scan(&m.ID, &m.SessionID, &m.Seq, &role, &content, &reasoning, &m.Name, &m.ToolCallID, &toolCalls, &m.CreatedAt); err != nil {
+		var durationMS int64
+		if err := rows.Scan(&m.ID, &m.SessionID, &m.Seq, &role, &content, &reasoning, &m.Name, &m.ToolCallID, &toolCalls, &m.CreatedAt, &durationMS); err != nil {
 			return nil, err
 		}
+		m.Duration = time.Duration(durationMS) * time.Millisecond
 		m.Role = llmRole(role)
 		if err := unmarshalJSON(content, &m.Content); err != nil {
 			return nil, err
@@ -247,7 +250,7 @@ func (s *SQLiteStore) TruncateAfter(sessionID, messageID string) ([]Message, err
 	defer tx.Rollback()
 
 	rows, err := tx.Query(
-		"SELECT id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at FROM session_messages WHERE session_id = ? AND seq > ? ORDER BY seq ASC",
+		"SELECT id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at, duration_ms FROM session_messages WHERE session_id = ? AND seq > ? ORDER BY seq ASC",
 		sessionID, targetSeq,
 	)
 	if err != nil {
@@ -257,10 +260,12 @@ func (s *SQLiteStore) TruncateAfter(sessionID, messageID string) ([]Message, err
 	for rows.Next() {
 		var m Message
 		var role, content, reasoning, toolCalls string
-		if err := rows.Scan(&m.ID, &m.SessionID, &m.Seq, &role, &content, &reasoning, &m.Name, &m.ToolCallID, &toolCalls, &m.CreatedAt); err != nil {
+		var durationMS int64
+		if err := rows.Scan(&m.ID, &m.SessionID, &m.Seq, &role, &content, &reasoning, &m.Name, &m.ToolCallID, &toolCalls, &m.CreatedAt, &durationMS); err != nil {
 			rows.Close()
 			return nil, err
 		}
+		m.Duration = time.Duration(durationMS) * time.Millisecond
 		m.Role = llmRole(role)
 		if err := unmarshalJSON(content, &m.Content); err != nil {
 			rows.Close()
@@ -308,7 +313,7 @@ func (s *SQLiteStore) TruncateFrom(sessionID, messageID string) ([]Message, erro
 	defer tx.Rollback()
 
 	rows, err := tx.Query(
-		"SELECT id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at FROM session_messages WHERE session_id = ? AND seq >= ? ORDER BY seq ASC",
+		"SELECT id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at, duration_ms FROM session_messages WHERE session_id = ? AND seq >= ? ORDER BY seq ASC",
 		sessionID, targetSeq,
 	)
 	if err != nil {
@@ -318,10 +323,12 @@ func (s *SQLiteStore) TruncateFrom(sessionID, messageID string) ([]Message, erro
 	for rows.Next() {
 		var m Message
 		var role, content, reasoning, toolCalls string
-		if err := rows.Scan(&m.ID, &m.SessionID, &m.Seq, &role, &content, &reasoning, &m.Name, &m.ToolCallID, &toolCalls, &m.CreatedAt); err != nil {
+		var durationMS int64
+		if err := rows.Scan(&m.ID, &m.SessionID, &m.Seq, &role, &content, &reasoning, &m.Name, &m.ToolCallID, &toolCalls, &m.CreatedAt, &durationMS); err != nil {
 			rows.Close()
 			return nil, err
 		}
+		m.Duration = time.Duration(durationMS) * time.Millisecond
 		m.Role = llmRole(role)
 		if err := unmarshalJSON(content, &m.Content); err != nil {
 			rows.Close()
@@ -416,9 +423,9 @@ func (s *SQLiteStore) RestoreSnapshot(sessionID string, messages []Message) erro
 
 	for _, m := range messages {
 		if _, err := tx.Exec(
-			"INSERT OR REPLACE INTO session_messages (id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			"INSERT OR REPLACE INTO session_messages (id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 			m.ID, sessionID, m.Seq, string(m.Role), marshalJSON(m.Content),
-			marshalJSON(m.Reasoning), m.Name, m.ToolCallID, marshalJSON(m.ToolCalls), m.CreatedAt,
+			marshalJSON(m.Reasoning), m.Name, m.ToolCallID, marshalJSON(m.ToolCalls), m.CreatedAt, m.Duration.Milliseconds(),
 		); err != nil {
 			return err
 		}

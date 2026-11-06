@@ -59,6 +59,7 @@ var (
 		{"tool_call_id", "TEXT NOT NULL DEFAULT ''"},
 		{"tool_calls", "TEXT NOT NULL DEFAULT ''"},
 		{"created_at", "DATETIME NOT NULL"},
+		{"duration_ms", "INTEGER NOT NULL DEFAULT 0"},
 	}
 
 	snapshotColumns = []columnDef{

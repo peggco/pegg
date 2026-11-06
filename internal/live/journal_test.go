@@ -2,6 +2,7 @@ package live
 
 import (
 	"testing"
+	"time"
 
 	json "github.com/goccy/go-json"
 
@@ -42,5 +43,28 @@ func TestDecodeAgentEventToolAttachments(t *testing.T) {
 	}
 	if att.Type != llm.AttachmentTypeFile {
 		t.Fatalf("type = %q", att.Type)
+	}
+}
+
+func TestDecodeAgentEventToolDuration(t *testing.T) {
+	data, err := json.Marshal(map[string]any{
+		"call_id":     "c1",
+		"tool_name":   "bash",
+		"output":      "ok",
+		"duration_ms": int64(1500),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, ok := DecodeAgentEvent(session.RunEvent{
+		Type:    session.AgentEventToolResult,
+		AgentID: "a1",
+		Data:    data,
+	})
+	if !ok {
+		t.Fatal("expected the event to decode")
+	}
+	if ev.ToolDuration != 1500*time.Millisecond {
+		t.Fatalf("duration = %v, want 1.5s", ev.ToolDuration)
 	}
 }

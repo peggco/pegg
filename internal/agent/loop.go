@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/agent/reminder"
@@ -644,10 +645,13 @@ type toolExecResult struct {
 	output      string
 	attachments []llm.Attachment
 	toolErr     error
+	duration    time.Duration
 }
 
-func (a *Agent) runTool(ctx context.Context, call llm.ToolCall) toolExecResult {
-	res := toolExecResult{call: call}
+func (a *Agent) runTool(ctx context.Context, call llm.ToolCall) (res toolExecResult) {
+	res = toolExecResult{call: call}
+	start := time.Now()
+	defer func() { res.duration = time.Since(start) }()
 
 	if err := a.chain.BeforeTool(ctx, call); err != nil {
 		res.output = fmt.Sprintf("Error: tool call aborted by middleware: %v", err)
@@ -717,11 +721,11 @@ func (a *Agent) executeTools(ctx context.Context, state *runState, calls []llm.T
 	for _, res := range results {
 		state.history = append(state.history, llm.ToolMessage(res.output, res.call.ID))
 		state.pendingAttachments = append(state.pendingAttachments, res.attachments...)
-		a.emitToolResult(state, res.call, res.output, res.attachments, res.toolErr)
+		a.emitToolResult(state, res.call, res.output, res.attachments, res.toolErr, res.duration)
 	}
 }
 
-func (a *Agent) emitToolResult(state *runState, call llm.ToolCall, output string, attachments []llm.Attachment, toolErr error) {
+func (a *Agent) emitToolResult(state *runState, call llm.ToolCall, output string, attachments []llm.Attachment, toolErr error, duration time.Duration) {
 	a.publish(TopicAgentToolResult, AgentToolResult{
 		AgentID:     a.ID,
 		AgentName:   a.Name,
@@ -731,6 +735,7 @@ func (a *Agent) emitToolResult(state *runState, call llm.ToolCall, output string
 		Output:      output,
 		Attachments: attachments,
 		Err:         toolErr,
+		Duration:    duration,
 	})
 	if state.stream != nil {
 		callCopy := call

@@ -54,6 +54,7 @@ type Message struct {
 	ToolCallID string
 	ToolCalls  []llm.ToolCall
 	CreatedAt  time.Time
+	Duration   time.Duration
 }
 
 type Snapshot struct {
