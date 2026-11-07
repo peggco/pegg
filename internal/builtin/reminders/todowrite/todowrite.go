@@ -117,7 +117,7 @@ func (r *Reminder) bump(agentID string) {
 	r.mu.Unlock()
 
 	if fire {
-		a.QueueNotification(reminder.New("todowrite", reminderContent))
+		a.QueueDisplayNotification(reminder.New("todowrite", reminderContent))
 	}
 }
 

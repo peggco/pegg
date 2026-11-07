@@ -37,7 +37,7 @@ func TestMessageCountFiresAt20(t *testing.T) {
 			Model:   model,
 		})
 	}
-	if a.HasPendingNotifications() {
+	if a.HasDisplayNotifications() {
 		t.Fatal("should not fire at 19 messages")
 	}
 
@@ -45,7 +45,7 @@ func TestMessageCountFiresAt20(t *testing.T) {
 		AgentID: a.ID,
 		Model:   model,
 	})
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("should fire at 20 messages")
 	}
 }
@@ -67,7 +67,7 @@ func TestMessageCountDoesNotFireBefore20(t *testing.T) {
 			Model:   model,
 		})
 	}
-	if a.HasPendingNotifications() {
+	if a.HasDisplayNotifications() {
 		t.Fatal("should not fire before 20 messages")
 	}
 }
@@ -88,7 +88,7 @@ func TestTokenUsageFiresAt20Percent(t *testing.T) {
 		Model:   model,
 		Usage:   llm.Usage{TotalTokens: 25000},
 	})
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("should fire at 25% usage")
 	}
 }
@@ -109,7 +109,7 @@ func TestTokenUsageDoesNotFireBelow20(t *testing.T) {
 		Model:   model,
 		Usage:   llm.Usage{TotalTokens: 15000},
 	})
-	if a.HasPendingNotifications() {
+	if a.HasDisplayNotifications() {
 		t.Fatal("should not fire at 15% usage")
 	}
 }
@@ -130,7 +130,7 @@ func TestTokenUsageFiresAtMultipleThresholds(t *testing.T) {
 		Model:   model,
 		Usage:   llm.Usage{TotalTokens: 25000},
 	})
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("should fire at 20%")
 	}
 
@@ -139,7 +139,7 @@ func TestTokenUsageFiresAtMultipleThresholds(t *testing.T) {
 		Model:   model,
 		Usage:   llm.Usage{TotalTokens: 45000},
 	})
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("should fire at 40%")
 	}
 
@@ -148,7 +148,7 @@ func TestTokenUsageFiresAtMultipleThresholds(t *testing.T) {
 		Model:   model,
 		Usage:   llm.Usage{TotalTokens: 50000},
 	})
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("should still have pending notifications")
 	}
 
@@ -157,7 +157,7 @@ func TestTokenUsageFiresAtMultipleThresholds(t *testing.T) {
 		Model:   model,
 		Usage:   llm.Usage{TotalTokens: 65000},
 	})
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("should fire at 60%")
 	}
 }
@@ -179,7 +179,7 @@ func TestNotificationContent(t *testing.T) {
 		Usage:   llm.Usage{TotalTokens: 25000},
 	})
 
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("should have pending notification")
 	}
 }
@@ -260,7 +260,7 @@ func TestNoContextWindowSkipsTokenReminder(t *testing.T) {
 		Model:   model,
 		Usage:   llm.Usage{TotalTokens: 50000},
 	})
-	if a.HasPendingNotifications() {
+	if a.HasDisplayNotifications() {
 		t.Fatal("should not fire when no context window info")
 	}
 }
@@ -284,10 +284,10 @@ func TestMultipleAgentsTrackedIndependently(t *testing.T) {
 		})
 	}
 
-	if !a1.HasPendingNotifications() {
+	if !a1.HasDisplayNotifications() {
 		t.Fatal("agent-1 should have notification")
 	}
-	if a2.HasPendingNotifications() {
+	if a2.HasDisplayNotifications() {
 		t.Fatal("agent-2 should not have notification")
 	}
 }

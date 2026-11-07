@@ -122,7 +122,7 @@ func (r *Reminder) bump(agentID string) {
 	r.mu.Unlock()
 
 	if fire {
-		a.QueueNotification(reminder.New("task_tools", reminderContent))
+		a.QueueDisplayNotification(reminder.New("task_tools", reminderContent))
 	}
 }
 

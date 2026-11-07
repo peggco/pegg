@@ -183,6 +183,7 @@ func appendSystemReminders(history []llm.Message, reminders []string) []llm.Mess
 }
 
 func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*RunResult, error) {
+	defer a.clearDisplayNotifications()
 	finished := false
 	for a.MaxIterations <= 0 || state.iterations < a.MaxIterations {
 		ctx = a.withSession(ctx)

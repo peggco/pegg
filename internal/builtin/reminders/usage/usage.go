@@ -156,7 +156,7 @@ func (r *Reminder) queueNotification(agentID string, s *agentState) {
 		llm.FormatTokens(used),
 		llm.FormatTokens(maxTokens),
 		llm.FormatTokens(remaining))
-	a.QueueNotification(reminder.New("usage", content))
+	a.QueueDisplayNotification(reminder.New("usage", content))
 }
 
 func (r *Reminder) queueUsageNotification(agentID string, usage llm.Usage, maxTokens, pct int) {
@@ -178,5 +178,5 @@ func (r *Reminder) queueUsageNotification(agentID string, usage llm.Usage, maxTo
 		llm.FormatTokens(usage.TotalTokens),
 		llm.FormatTokens(maxTokens),
 		llm.FormatTokens(remaining))
-	a.QueueNotification(reminder.New("usage", content))
+	a.QueueDisplayNotification(reminder.New("usage", content))
 }
