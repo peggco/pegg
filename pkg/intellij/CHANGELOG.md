@@ -2,9 +2,47 @@
 
 ## [Unreleased]
 
+### Added
+
+- Full ACP v1 client rework: session modes, model and config-option pickers,
+  session list, load, resume, delete, and close, plus the standard
+  `session/set_model` and `session/set_config_option` methods.
+- Session message attachments: dropped files attach, persist, and render in the
+  chat history, with a matching `sendfile` tool.
+- Skill hub support: browse, search, and install skills from the composer.
+- Lazy-loaded long session history with a "load earlier messages" control.
+
+### Fixed
+
+- Model and mode pickers now populate from the session `models` field and
+  `configOptions`, so they are available immediately after a session starts.
+
 ## [0.2.3] - 2026-11-06
 
+### Added
+
+- Session message attachments: dropped files attach, persist, and show in the
+  chat history.
+- Skill hub support: browse, search, and install skills from the composer.
+- Session list changes are pushed to the plugin, so the sessions tab refreshes
+  without a manual reload.
+
+### Changed
+
+- Long session history is lazy-loaded, so opening a large session no longer
+  blocks the chat.
+
 ## [0.2.2] - 2026-10-26
+
+### Added
+
+- Live runs are synced across all clients, so a run started elsewhere appears in
+  the plugin in real time.
+
+### Fixed
+
+- Restored compatibility with IntelliJ Platform 2026.2 and later.
+- Updated the plugin id.
 
 ## [0.2.1] - 2026-10-23
 
@@ -36,6 +74,8 @@
   subagents, permissions, attachments, voice, editor actions, and binary
   management.
 
-[Unreleased]: https://github.com/peggco/pegg/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/peggco/pegg/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/peggco/pegg/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/peggco/pegg/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/peggco/pegg/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/peggco/pegg/commits/v0.2.0
