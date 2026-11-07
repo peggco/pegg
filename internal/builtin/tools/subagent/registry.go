@@ -455,34 +455,53 @@ func (r *registry) finish(sa *SubAgent, output string, err error) {
 	}
 	close(sa.done)
 
+	var (
+		notify  bool
+		parent  *agent.Agent
+		rem     reminder.Reminder
+		detach  bool
+		msgName = sa.Name
+		msgIDs  = append([]string(nil), sa.TaskIDs...)
+		msgOut  = output
+		msgErr  = ""
+	)
+	if err != nil {
+		msgErr = err.Error()
+	}
 	if sa.Background && sa.ParentAgentID != "" {
-		if parent, ok := r.parents[sa.ParentAgentID]; ok {
-			var rem reminder.Reminder
+		if p, ok := r.parents[sa.ParentAgentID]; ok {
+			parent = p
+			notify = true
 			if err != nil {
 				rem = reminder.SubAgentFailed(sa.Name, sa.TaskIDs, err.Error())
 			} else {
 				rem = reminder.SubAgentDone(sa.Name, sa.TaskIDs, output)
 			}
-			parent.QueueNotification(rem)
-			if !r.otherBackgroundRunning(sa.ParentAgentID, sa) {
-				parent.DetachReminder()
+			detach = !r.otherBackgroundRunning(sa.ParentAgentID, sa)
+		}
+	}
+	parentAgentID := sa.ParentAgentID
+	r.mu.Unlock()
+
+	if notify && parent != nil {
+		parent.QueueNotification(rem)
+		if detach {
+			parent.DetachReminder()
+		}
+		if parent.Bus != nil {
+			n := agent.SubAgentNotification{
+				ParentAgentID: parentAgentID,
+				SubAgentName:  msgName,
+				TaskIDs:       msgIDs,
+				Output:        msgOut,
 			}
-			if parent.Bus != nil {
-				n := agent.SubAgentNotification{
-					ParentAgentID: sa.ParentAgentID,
-					SubAgentName:  sa.Name,
-					TaskIDs:       append([]string(nil), sa.TaskIDs...),
-					Output:        output,
-				}
-				if err != nil {
-					n.Err = err.Error()
-				}
-				parent.Bus.Publish(agent.TopicSubAgentNotification, n)
+			if msgErr != "" {
+				n.Err = msgErr
 			}
+			parent.Bus.Publish(agent.TopicSubAgentNotification, n)
 		}
 	}
 
-	r.mu.Unlock()
 	r.saveFor(sa)
 }
 

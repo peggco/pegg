@@ -26,6 +26,11 @@ func SpawnForked(parent *agent.Agent, name, sessionID, prompt string) (string, e
 	}
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				store.finish(sa, "", fmt.Errorf("subagent %q panicked: %v", sa.Name, r))
+			}
+		}()
 		sub := parent.Clone(name)
 		sub.ParentAgentID = parent.ID
 		sub.DisplayName = name
