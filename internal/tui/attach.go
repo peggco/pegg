@@ -281,7 +281,7 @@ func (a *App) handleAttachedEvent(e session.RunEvent, mainAgentID string) {
 		return
 	}
 	if e.Type == session.RunEventAskResolved {
-		a.resetAsk()
+		a.postUI(a.resetAsk)
 		return
 	}
 	ev, ok := live.DecodeAgentEvent(e)

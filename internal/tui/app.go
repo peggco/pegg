@@ -113,6 +113,8 @@ type App struct {
 	pasteBuffer strings.Builder
 
 	redrawPending atomic.Bool
+	uiMu          sync.Mutex
+	uiQueue       []func()
 }
 
 type selectedModel struct {
@@ -226,6 +228,34 @@ func (a *App) getOverlay() components.Component {
 
 func (a *App) requestRedraw() {
 	a.redrawPending.Store(true)
+}
+
+func (a *App) postUI(fn func()) {
+	if fn == nil {
+		return
+	}
+	a.uiMu.Lock()
+	a.uiQueue = append(a.uiQueue, fn)
+	a.uiMu.Unlock()
+	if a.screen != nil {
+		_ = a.screen.PostEvent(tcell.NewEventInterrupt(nil))
+	}
+}
+
+func (a *App) runUIQueue() {
+	for {
+		a.uiMu.Lock()
+		if len(a.uiQueue) == 0 {
+			a.uiMu.Unlock()
+			return
+		}
+		fns := a.uiQueue
+		a.uiQueue = nil
+		a.uiMu.Unlock()
+		for _, fn := range fns {
+			fn()
+		}
+	}
 }
 
 func Run(bus event.Bus, deps settings.Deps) error {
@@ -508,6 +538,9 @@ func (a *App) loop() error {
 			if a.redrawPending.Swap(false) {
 				a.draw()
 			}
+		case *tcell.EventInterrupt:
+			a.runUIQueue()
+			a.draw()
 		case *tcell.EventMouse:
 			x, y := e.Position()
 			a.mouseX, a.mouseY = x, y

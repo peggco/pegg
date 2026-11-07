@@ -504,21 +504,24 @@ func (a *App) onAgentAsk(e agent.AgentAsk) {
 		return
 	}
 	a.askQueue = append(a.askQueue, pendingAsk{agentID: e.AgentID, requestID: e.RequestID, questions: e.Questions})
-	var next *pendingAsk
-	if a.askAgentID == "" && (a.home == nil || !a.home.AskOpen()) {
+	a.chatMu.Unlock()
+	a.postUI(a.pumpAsk)
+}
+
+func (a *App) pumpAsk() {
+	a.chatMu.Lock()
+	if a.askAgentID == "" && len(a.askQueue) > 0 && (a.home == nil || !a.home.AskOpen()) {
 		q := a.askQueue[0]
 		a.askQueue = a.askQueue[1:]
 		a.askAgentID = q.agentID
 		a.askRequestID = q.requestID
-		next = &q
+		a.renderAskLocked(q)
 	}
 	a.chatMu.Unlock()
-	if next != nil {
-		a.renderAsk(*next)
-	}
+	a.requestRedraw()
 }
 
-func (a *App) renderAsk(pk pendingAsk) {
+func (a *App) renderAskLocked(pk pendingAsk) {
 	if a.home == nil {
 		return
 	}
@@ -532,14 +535,16 @@ func (a *App) renderAsk(pk pendingAsk) {
 			Required: q.Required,
 		}
 	}
+	if len(qs) == 0 {
+		return
+	}
 	a.home.SetAsk(qs)
 	a.home.AskPicker().SetOnSend(func(answers map[string]string) {
 		a.answerAsk(pk.agentID, pk.requestID, answers)
 	})
 	a.home.AskPicker().SetOnDone(func() {
-		a.advanceAsk(pk.agentID, pk.requestID)
+		a.dismissAsk(pk.agentID, pk.requestID)
 	})
-	a.requestRedraw()
 }
 
 func (a *App) answerAsk(agentID, requestID string, answers map[string]string) {
@@ -563,7 +568,7 @@ func (a *App) answerAsk(agentID, requestID string, answers map[string]string) {
 	a.chatMu.Unlock()
 }
 
-func (a *App) advanceAsk(agentID, requestID string) {
+func (a *App) dismissAsk(agentID, requestID string) {
 	a.chatMu.Lock()
 	if a.askAgentID != agentID || (requestID != "" && a.askRequestID != "" && a.askRequestID != requestID) {
 		a.chatMu.Unlock()
@@ -571,22 +576,16 @@ func (a *App) advanceAsk(agentID, requestID string) {
 	}
 	a.askAgentID = ""
 	a.askRequestID = ""
-	var next *pendingAsk
 	if len(a.askQueue) > 0 {
 		q := a.askQueue[0]
 		a.askQueue = a.askQueue[1:]
 		a.askAgentID = q.agentID
 		a.askRequestID = q.requestID
-		next = &q
-	}
-	a.chatMu.Unlock()
-	if next != nil {
-		a.renderAsk(*next)
-		return
-	}
-	if a.home != nil {
+		a.renderAskLocked(q)
+	} else if a.home != nil {
 		a.home.ClearAsk()
 	}
+	a.chatMu.Unlock()
 	a.requestRedraw()
 }
 
@@ -595,28 +594,22 @@ func (a *App) resetAsk() {
 	a.askAgentID = ""
 	a.askRequestID = ""
 	a.askQueue = nil
-	a.chatMu.Unlock()
 	if a.home != nil && a.home.AskOpen() {
 		a.home.ClearAsk()
-		a.requestRedraw()
 	}
+	a.chatMu.Unlock()
+	a.requestRedraw()
 }
 
 func (a *App) onAgentAskAnswer(e agent.AgentAskAnswer) {
 	a.chatMu.Lock()
-	if !a.acceptAgentEventLocked(e.AgentID, "") {
-		a.chatMu.Unlock()
-		return
-	}
-	if a.askSubmitting {
-		a.chatMu.Unlock()
-		return
-	}
-	match := a.askAgentID != "" && a.askAgentID == e.AgentID &&
+	ok := a.acceptAgentEventLocked(e.AgentID, "")
+	submitting := a.askSubmitting
+	match := ok && !submitting && a.askAgentID != "" && a.askAgentID == e.AgentID &&
 		(e.RequestID == "" || a.askRequestID == "" || a.askRequestID == e.RequestID)
 	a.chatMu.Unlock()
 	if match {
-		a.advanceAsk(e.AgentID, e.RequestID)
+		a.postUI(func() { a.dismissAsk(e.AgentID, e.RequestID) })
 	}
 }
 
