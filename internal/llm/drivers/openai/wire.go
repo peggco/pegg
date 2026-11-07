@@ -58,6 +58,8 @@ type chatResponse struct {
 	Choices           []chatChoice `json:"choices"`
 	Usage             chatUsage    `json:"usage"`
 	SystemFingerprint string       `json:"system_fingerprint,omitempty"`
+
+	Data *chatResponse `json:"data,omitempty"`
 }
 
 type chatChoice struct {

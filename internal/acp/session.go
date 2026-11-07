@@ -183,7 +183,6 @@ func (s *Server) handleSessionNew(ctx context.Context, params json.RawMessage) (
 	}
 	mode := orch.CurrentMode()
 	vs, err := s.sessions.Create(session.CreateOptions{
-		Title:      "ACP Session",
 		Provider:   provName,
 		Model:      orch.Model.ID,
 		Mode:       string(mode),
