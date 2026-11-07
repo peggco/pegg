@@ -33,6 +33,7 @@ func newPlannerAgent(fs *vfs.VFS) (*agent.Agent, error) {
 	}
 
 	main := agent.New("planner",
+		agent.WithDescription("Planning agent. Researches the codebase, writes an implementation plan under .pegg/plans/, and creates a dependency-aware todo hierarchy. Use to design multi-step approaches before implementation."),
 		agent.WithSystemPromptFn(func(providerID, modelID string) string {
 			sys, err := generatePlannerPrompt(providerID, modelID)
 			if err != nil {

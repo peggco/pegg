@@ -55,8 +55,8 @@ func agentOutput(res *agent.RunResult, runErr error) string {
 	return ""
 }
 
-func generateTaskToolPrompt(agents []string) (string, error) {
-	sys, err := taskToolPromptBuilder(agents).
+func generateTaskToolPrompt(infos []agents.Info) (string, error) {
+	sys, err := taskToolPromptBuilder(infos).
 		Build(prompt.FormatMarkdown)
 	if err != nil {
 		return "", err
@@ -65,9 +65,13 @@ func generateTaskToolPrompt(agents []string) (string, error) {
 }
 
 func subAgentTool() tool.Tool {
-	agentsList := agents.List()
+	agentsInfo := agents.ListInfo()
+	agentsList := make([]string, len(agentsInfo))
+	for i, a := range agentsInfo {
+		agentsList[i] = a.Name
+	}
 
-	prompt, err := generateTaskToolPrompt(agentsList)
+	prompt, err := generateTaskToolPrompt(agentsInfo)
 	if err != nil {
 		panic(fmt.Sprintf("failed to generate task tool prompt: %v", err))
 	}

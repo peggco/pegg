@@ -23,6 +23,7 @@ const (
 
 func newDeveloperAgent(fs *vfs.VFS) (*agent.Agent, error) {
 	main := agent.New("developer",
+		agent.WithDescription("Implementation agent. Writes and edits files, runs shell commands and tests, and verifies changes. Use for actually building, modifying, or fixing code and running checks."),
 		agent.WithSystemPromptFn(func(providerID, modelID string) string {
 			sys, err := generateDeveloperPrompt(providerID, modelID)
 			if err != nil {
