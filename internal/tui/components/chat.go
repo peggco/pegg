@@ -47,6 +47,7 @@ type ChatItem struct {
 	ToolDone     bool
 	Diff         []DiffHunk
 	WriteContent string
+	Activity     string
 
 	AgentID          string
 	SubagentName     string
@@ -1013,8 +1014,10 @@ func (c *Chat) toolLines(it *ChatItem, width int) []Line {
 	isRunning := !it.ToolDone && it.ToolErr == "" && it.ToolOutput == ""
 
 	if isRunning {
-		left := c.toolStatusLine(it, width, '◌', th.Running, " "+string(spinnerAt(c.now))+" "+i18n.T("chat.status.running"))
-		return []Line{left}
+		if isBash {
+			return c.bashCardLines(it, width)
+		}
+		return []Line{c.runningToolLine(it, width)}
 	}
 
 	if it.ToolErr != "" {
@@ -1060,6 +1063,39 @@ func (c *Chat) toolLines(it *ChatItem, width int) []Line {
 	}
 
 	return []Line{c.toolStatusLine(it, width, '✔', th.Success, " ✔ "+formatDuration(it.Duration))}
+}
+
+func (c *Chat) runningToolLine(it *ChatItem, width int) Line {
+	th := styles.Current()
+	label := it.Activity
+	if label == "" {
+		label = it.ToolName
+	}
+	pulse := lerpColor(th.TextDim, th.Accent, glowT(c.now))
+	markStyle := th.Base().Foreground(pulse).Bold(true).Background(th.Background)
+	labelStyle := th.Base().Foreground(th.Foreground).Background(th.Background)
+	dimStyle := th.Base().Foreground(th.Muted).Background(th.Background)
+
+	line := Line{{R: spinnerAt(c.now), S: markStyle}, {R: ' ', S: th.Base()}}
+	for _, r := range label {
+		if line.Width() >= width-4 {
+			line = append(line, Cell{R: '…', S: dimStyle})
+			break
+		}
+		line = append(line, Cell{R: r, S: labelStyle})
+	}
+	dots := int(c.now/(300*time.Millisecond)) % 4
+	for i := 0; i < 3; i++ {
+		if line.Width() >= width-1 {
+			break
+		}
+		r := ' '
+		if i < dots {
+			r = '·'
+		}
+		line = append(line, Cell{R: r, S: dimStyle})
+	}
+	return line
 }
 
 func (c *Chat) toolStatusLine(it *ChatItem, width int, mark rune, color tcell.Color, statusText string) Line {
@@ -1497,6 +1533,7 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 	dim := th.Base().Foreground(th.TextDim).Background(th.Background)
 	muted := th.Base().Foreground(th.Muted).Background(th.Background)
 	success := th.Base().Foreground(th.Success).Background(th.Background)
+	running := !it.ToolDone && it.ToolErr == "" && it.ToolOutput == ""
 
 	var lines []Line
 
@@ -1509,6 +1546,10 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 	cmdStyle := th.Base().Foreground(th.Foreground).Background(th.Background)
 	statusText := " ✓ " + formatDuration(it.Duration)
 	statusStyle := success.Bold(true)
+	if running {
+		statusText = " " + string(spinnerAt(c.now)) + " " + i18n.T("chat.status.running")
+		statusStyle = th.Base().Foreground(lerpColor(th.Running, th.Accent, glowT(c.now))).Bold(true).Background(th.Background)
+	}
 
 	cmdLabel := "$ " + cmd
 	rightSide := statusText
@@ -1548,6 +1589,41 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 	}
 	sep = append(sep, Cell{R: '┤', S: border})
 	lines = append(lines, sep)
+
+	if running {
+		dots := int(c.now/(300*time.Millisecond)) % 4
+		row := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
+		msg := i18n.T("chat.status.running") + strings.Repeat(".", dots)
+		for _, r := range msg {
+			row = append(row, Cell{R: r, S: dim})
+		}
+		if glowT(c.now) >= 0.5 {
+			row = append(row, Cell{R: '▌', S: accent})
+		}
+		for row.Width() < width-1 {
+			row = append(row, Cell{R: ' ', S: th.Base()})
+		}
+		row = append(row, Cell{R: '│', S: border})
+		lines = append(lines, row)
+
+		sepRun := Line{{R: '├', S: border}}
+		for i := 0; i < width-2; i++ {
+			sepRun = append(sepRun, Cell{R: '─', S: border})
+		}
+		sepRun = append(sepRun, Cell{R: '┤', S: border})
+		lines = append(lines, sepRun)
+
+		footer := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
+		for _, r := range i18n.T("chat.status.running") {
+			footer = append(footer, Cell{R: r, S: muted})
+		}
+		for footer.Width() < width-1 {
+			footer = append(footer, Cell{R: ' ', S: th.Base()})
+		}
+		footer = append(footer, Cell{R: '│', S: border})
+		lines = append(lines, footer)
+		return lines
+	}
 
 	output := it.ToolOutput
 	if output == "" {
@@ -2351,4 +2427,16 @@ func (c *Chat) subagentLines(it *ChatItem, width int) []Line {
 
 func (c *Chat) OnTick(blinkOn bool) {
 	c.now += 450 * time.Millisecond
+	if c.hasLiveItems() {
+		c.dirty = true
+	}
+}
+
+func (c *Chat) hasLiveItems() bool {
+	for _, it := range c.items {
+		if c.isLiveItem(it) {
+			return true
+		}
+	}
+	return false
 }

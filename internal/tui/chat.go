@@ -679,6 +679,7 @@ func (a *App) addToolItem(t *agentTranscript, call llm.ToolCall, agentID string)
 		ID:       call.ID,
 		ToolName: call.Function.Name,
 		ToolArgs: call.Function.Arguments,
+		Activity: formatActivity(call),
 	}
 
 	name := call.Function.Name
