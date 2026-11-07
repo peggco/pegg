@@ -93,8 +93,9 @@ func (s *Server) handleAgentAsk(ev agent.AgentAsk) {
 	acpSess, ok := s.sessionForAgent(ev.AgentID)
 	if !ok {
 		s.bus.Publish(agent.TopicAgentAskAnswer, agent.AgentAskAnswer{
-			AgentID: ev.AgentID,
-			Answers: deniedAnswers(ev.Questions),
+			AgentID:   ev.AgentID,
+			RequestID: ev.RequestID,
+			Answers:   deniedAnswers(ev.Questions),
 		})
 		return
 	}
@@ -125,8 +126,9 @@ func (s *Server) handleAgentAsk(ev agent.AgentAsk) {
 		answers = map[string]string{}
 	}
 	s.bus.Publish(agent.TopicAgentAskAnswer, agent.AgentAskAnswer{
-		AgentID: ev.AgentID,
-		Answers: answers,
+		AgentID:   ev.AgentID,
+		RequestID: ev.RequestID,
+		Answers:   answers,
 	})
 }
 

@@ -91,6 +91,9 @@ type App struct {
 	followSessionID string
 	followGen       int
 	askAgentID      string
+	askRequestID    string
+	askQueue        []pendingAsk
+	askSubmitting   bool
 
 	lastCtrlC  time.Time
 	ctrlCTimer *time.Timer

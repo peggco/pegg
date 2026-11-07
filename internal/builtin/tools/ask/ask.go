@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	json "github.com/goccy/go-json"
 
@@ -133,43 +132,24 @@ func executeAsk(ctx context.Context, args string) (string, error) {
 		return "", fmt.Errorf("askuserquestion: agent has no event bus")
 	}
 
-	var (
-		once    sync.Once
-		done    = make(chan map[string]string, 1)
-		replyFn any
-	)
-
-	replyFn = func(e agent.AgentAskAnswer) {
-		if e.AgentID != parent.ID {
-			return
-		}
-		once.Do(func() {
-			done <- e.Answers
+	reqID := agent.NewAskRequestID()
+	answers, err := agent.Ask(ctx, parent.Bus, parent.ID, reqID, func() {
+		parent.Bus.Publish(agent.TopicAgentAsk, agent.AgentAsk{
+			AgentID:   parent.ID,
+			AgentName: parent.Name,
+			RequestID: reqID,
+			Questions: questions,
 		})
-	}
-
-	if err := parent.Bus.SubscribeOnce(agent.TopicAgentAskAnswer, replyFn); err != nil {
-		return "", fmt.Errorf("askuserquestion: subscribe for answer: %w", err)
-	}
-	defer parent.Bus.Unsubscribe(agent.TopicAgentAskAnswer, replyFn)
-
-	parent.Bus.Publish(agent.TopicAgentAsk, agent.AgentAsk{
-		AgentID:   parent.ID,
-		AgentName: parent.Name,
-		Questions: questions,
 	})
-
-	select {
-	case answers := <-done:
-		if len(answers) == 0 {
-			return "{}", nil
-		}
-		b, err := json.Marshal(map[string]any{"answers": answers})
-		if err != nil {
-			return "", fmt.Errorf("askuserquestion: marshal answers: %w", err)
-		}
-		return string(b), nil
-	case <-ctx.Done():
-		return "", ctx.Err()
+	if err != nil {
+		return "", err
 	}
+	if len(answers) == 0 {
+		return "{}", nil
+	}
+	b, err := json.Marshal(map[string]any{"answers": answers})
+	if err != nil {
+		return "", fmt.Errorf("askuserquestion: marshal answers: %w", err)
+	}
+	return string(b), nil
 }

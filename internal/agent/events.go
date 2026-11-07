@@ -103,6 +103,7 @@ type AgentError struct {
 type AgentAsk struct {
 	AgentID   string
 	AgentName string
+	RequestID string
 	Questions []AskQuestion
 }
 
@@ -115,8 +116,9 @@ type AskQuestion struct {
 }
 
 type AgentAskAnswer struct {
-	AgentID string
-	Answers map[string]string
+	AgentID   string
+	RequestID string
+	Answers   map[string]string
 }
 
 type ErrorMessage struct {

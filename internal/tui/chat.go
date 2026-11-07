@@ -39,6 +39,12 @@ func newTranscript(id, name string) *agentTranscript {
 	return &agentTranscript{id: id, name: name, toolByID: make(map[string]*components.ChatItem)}
 }
 
+type pendingAsk struct {
+	agentID   string
+	requestID string
+	questions []agent.AskQuestion
+}
+
 func (a *App) transcriptFor(id, name string) *agentTranscript {
 	if a.agent != nil && id == a.agent.ID {
 		if a.main == nil {
@@ -497,10 +503,27 @@ func (a *App) onAgentAsk(e agent.AgentAsk) {
 		a.chatMu.Unlock()
 		return
 	}
-	a.askAgentID = e.AgentID
+	a.askQueue = append(a.askQueue, pendingAsk{agentID: e.AgentID, requestID: e.RequestID, questions: e.Questions})
+	var next *pendingAsk
+	if a.askAgentID == "" && (a.home == nil || !a.home.AskOpen()) {
+		q := a.askQueue[0]
+		a.askQueue = a.askQueue[1:]
+		a.askAgentID = q.agentID
+		a.askRequestID = q.requestID
+		next = &q
+	}
 	a.chatMu.Unlock()
-	qs := make([]components.AskQuestion, len(e.Questions))
-	for i, q := range e.Questions {
+	if next != nil {
+		a.renderAsk(*next)
+	}
+}
+
+func (a *App) renderAsk(pk pendingAsk) {
+	if a.home == nil {
+		return
+	}
+	qs := make([]components.AskQuestion, len(pk.questions))
+	for i, q := range pk.questions {
 		qs[i] = components.AskQuestion{
 			ID:       q.ID,
 			Question: q.Question,
@@ -510,25 +533,73 @@ func (a *App) onAgentAsk(e agent.AgentAsk) {
 		}
 	}
 	a.home.SetAsk(qs)
-	attachRunID := a.attachRunID
 	a.home.AskPicker().SetOnSend(func(answers map[string]string) {
-		if attachRunID != "" && a.deps.Runs != nil {
-			_ = a.deps.Runs.Answer(attachRunID, answers)
-			return
-		}
-		a.bus.Publish(agent.TopicAgentAskAnswer, agent.AgentAskAnswer{
-			AgentID: e.AgentID,
-			Answers: answers,
-		})
+		a.answerAsk(pk.agentID, pk.requestID, answers)
 	})
 	a.home.AskPicker().SetOnDone(func() {
-		a.chatMu.Lock()
-		a.askAgentID = ""
-		a.chatMu.Unlock()
-		a.home.ClearAsk()
-		a.requestRedraw()
+		a.advanceAsk(pk.agentID, pk.requestID)
 	})
 	a.requestRedraw()
+}
+
+func (a *App) answerAsk(agentID, requestID string, answers map[string]string) {
+	if a.attachRunID != "" && a.deps.Runs != nil {
+		_ = a.deps.Runs.Answer(a.attachRunID, answers)
+		return
+	}
+	if a.bus == nil {
+		return
+	}
+	a.chatMu.Lock()
+	a.askSubmitting = true
+	a.chatMu.Unlock()
+	a.bus.Publish(agent.TopicAgentAskAnswer, agent.AgentAskAnswer{
+		AgentID:   agentID,
+		RequestID: requestID,
+		Answers:   answers,
+	})
+	a.chatMu.Lock()
+	a.askSubmitting = false
+	a.chatMu.Unlock()
+}
+
+func (a *App) advanceAsk(agentID, requestID string) {
+	a.chatMu.Lock()
+	if a.askAgentID != agentID || (requestID != "" && a.askRequestID != "" && a.askRequestID != requestID) {
+		a.chatMu.Unlock()
+		return
+	}
+	a.askAgentID = ""
+	a.askRequestID = ""
+	var next *pendingAsk
+	if len(a.askQueue) > 0 {
+		q := a.askQueue[0]
+		a.askQueue = a.askQueue[1:]
+		a.askAgentID = q.agentID
+		a.askRequestID = q.requestID
+		next = &q
+	}
+	a.chatMu.Unlock()
+	if next != nil {
+		a.renderAsk(*next)
+		return
+	}
+	if a.home != nil {
+		a.home.ClearAsk()
+	}
+	a.requestRedraw()
+}
+
+func (a *App) resetAsk() {
+	a.chatMu.Lock()
+	a.askAgentID = ""
+	a.askRequestID = ""
+	a.askQueue = nil
+	a.chatMu.Unlock()
+	if a.home != nil && a.home.AskOpen() {
+		a.home.ClearAsk()
+		a.requestRedraw()
+	}
 }
 
 func (a *App) onAgentAskAnswer(e agent.AgentAskAnswer) {
@@ -537,14 +608,15 @@ func (a *App) onAgentAskAnswer(e agent.AgentAskAnswer) {
 		a.chatMu.Unlock()
 		return
 	}
-	match := a.askAgentID == "" || a.askAgentID == e.AgentID
-	if match {
-		a.askAgentID = ""
+	if a.askSubmitting {
+		a.chatMu.Unlock()
+		return
 	}
+	match := a.askAgentID != "" && a.askAgentID == e.AgentID &&
+		(e.RequestID == "" || a.askRequestID == "" || a.askRequestID == e.RequestID)
 	a.chatMu.Unlock()
-	if match && a.home != nil && a.home.AskOpen() {
-		a.home.ClearAsk()
-		a.requestRedraw()
+	if match {
+		a.advanceAsk(e.AgentID, e.RequestID)
 	}
 }
 
