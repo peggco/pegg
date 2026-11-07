@@ -66,22 +66,73 @@ object ChatStateOps {
                 size = update.size ?: state.usage.size,
                 cost = update.cost?.amount ?: state.usage.cost,
             )
-            "current_mode_update" -> if (update.mode != null) state.mode = update.mode
-            "run_state_update" -> state.running = update.runState == "running"
-            "current_model_update" -> {
-                if (update.provider != null) state.provider = update.provider
-                if (update.model != null) state.model = update.model
+            "current_mode_update" -> if (update.currentModeId != null) state.mode = update.currentModeId
+            "config_option_update" -> applyConfigOptions(state, update.configOptions)
+            "run_state_update" -> {
+                state.running = update.runState == "running"
+                val error = update.metaError
+                if (!error.isNullOrBlank()) {
+                    state.items.add(ChatItem.Error(nextId(state, "error"), error, now))
+                    state.error = error
+                }
             }
-            "available_commands_update" -> if (update.commands != null) {
-                state.commands = update.commands.toMutableList()
+            "run_ask_resolved", "agent_warning_clear" -> Unit
+            "available_commands_update" -> if (update.availableCommands != null) {
+                state.commands = update.availableCommands.toMutableList()
             }
+            "session_info_update" -> if (!update.title.isNullOrBlank()) state.title = update.title
+            "notice" -> applyNotice(state, update, now)
+            "compaction_update" -> applyCompaction(state, update, now)
+            "compaction_summary_chunk" -> Unit
             "error" -> {
-                val text = update.error ?: "Unknown error"
+                val text = update.error ?: update.metaError ?: "Unknown error"
                 state.items.add(ChatItem.Error(nextId(state, "error"), text, now))
                 state.error = text
             }
         }
         return state
+    }
+
+    private fun applyConfigOptions(state: ChatState, options: List<dev.pegg.intellij.acp.SessionConfigOption>?) {
+        if (options == null) return
+        for (option in options) {
+            when (option.id) {
+                "mode" -> option.currentString?.let { state.mode = it }
+                "model" -> option.currentString?.let { state.model = it }
+            }
+        }
+    }
+
+    private fun applyNotice(state: ChatState, update: SessionUpdate, now: Long) {
+        val title = update.title ?: update.description ?: "Notice"
+        val text = if (!update.description.isNullOrBlank() && update.description != title) {
+            "$title: ${update.description}"
+        } else {
+            title
+        }
+        val level = when (update.severity) {
+            "error" -> "error"
+            "warning" -> "warn"
+            else -> "info"
+        }
+        if (level == "error") {
+            state.items.add(ChatItem.Error(nextId(state, "error"), text, now))
+            state.error = text
+        } else {
+            state.items.add(ChatItem.Notice(nextId(state, "notice"), text, level, now))
+        }
+    }
+
+    private fun applyCompaction(state: ChatState, update: SessionUpdate, now: Long) {
+        val summary = update.summary?.mapNotNull { it.text }?.joinToString("\n").orEmpty()
+        val text = summary.ifBlank {
+            when (update.status) {
+                "failed" -> update.error ?: "Context compaction failed"
+                "cancelled" -> "Context compaction cancelled"
+                else -> "Context compacted"
+            }
+        }
+        state.items.add(ChatItem.Notice(nextId(state, "notice"), text, "info", now))
     }
 
     private fun applyMessage(state: ChatState, update: SessionUpdate, now: Long) {
@@ -188,26 +239,27 @@ object ChatStateOps {
 
     private fun applyTool(state: ChatState, update: SessionUpdate, now: Long) {
         val id = update.toolCallId ?: nextId(state, "tool")
-        val toolName = update.toolName?.lowercase()
+        val toolName = update.name?.lowercase()
         val taskTitle = update.title?.startsWith("task:", ignoreCase = true) == true
         if (toolName == "task" || taskTitle) {
             state.items.removeAll { it.id == id }
             return
         }
-        val diff = update.contents?.firstOrNull { it.type == "diff" && it.diff != null }?.diff
+        val diff = update.toolContents?.firstOrNull { it.type == "diff" && it.diff != null }?.diff
+        val error = update.metaError ?: update.error
         val index = state.items.indexOfFirst { it.id == id && it is ChatItem.Tool }
         if (index >= 0) {
             val item = state.items[index] as ChatItem.Tool
             val old = item.tool
             val newTitle = update.title ?: old.title
             val newTool = old.copy(
-                name = update.toolName ?: old.name,
+                name = update.name ?: old.name,
                 title = newTitle,
                 kind = inferToolKind(update.kind, newTitle, old.kind),
                 status = normalizeStatus(update.status) ?: old.status,
                 input = nonNull(update.rawInput) ?: old.input,
                 output = nonNull(update.rawOutput) ?: old.output,
-                error = update.error ?: old.error,
+                error = error ?: old.error,
                 locations = update.locations ?: old.locations,
                 diff = diff ?: old.diff,
                 files = mergeFiles(old.files, update.attachments),
@@ -224,13 +276,13 @@ object ChatStateOps {
                 createdAt = now,
                 tool = ToolState(
                     id = id,
-                    name = update.toolName,
+                    name = update.name,
                     title = title,
                     kind = inferToolKind(update.kind, title, null),
                     status = normalizeStatus(update.status) ?: "pending",
                     input = nonNull(update.rawInput),
                     output = nonNull(update.rawOutput),
-                    error = update.error,
+                    error = error,
                     locations = update.locations,
                     diff = diff,
                     files = update.attachments?.takeIf { it.isNotEmpty() },
@@ -256,7 +308,7 @@ object ChatStateOps {
                 agentName = update.agentName ?: item.agentName,
                 task = update.title ?: item.task,
                 output = if (nonNull(update.rawOutput) != null) elementString(update.rawOutput) else item.output,
-                error = update.error ?: item.error,
+                error = update.metaError ?: item.error,
             )
         } else {
             state.items.add(
@@ -267,7 +319,7 @@ object ChatStateOps {
                     status = status,
                     task = update.title,
                     output = if (nonNull(update.rawOutput) != null) elementString(update.rawOutput) else null,
-                    error = update.error,
+                    error = update.metaError,
                     createdAt = now,
                 ),
             )
@@ -353,10 +405,6 @@ object ChatStateOps {
             val status = if (result.stopReason == "cancelled") "cancelled" else "completed"
             item.copy(tool = item.tool.copy(status = status))
         }.toMutableList()
-        val usage = result.usage
-        if (usage != null && usage.used > 0) {
-            state.usage = UsageState(usage.used, usage.size, usage.cost?.amount)
-        }
         when (result.stopReason) {
             "error" -> addNotice(state, "Pegg stopped with an error.", "error")
             "cancelled" -> addNotice(state, "Run cancelled.", "warn")

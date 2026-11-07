@@ -133,7 +133,7 @@ const App = GoApp as unknown as {
   ResetSession(): Promise<void>;
   LoadSession(input: LoadSessionInput): Promise<SessionInfo>;
   ListSessions(cwd: string, all: boolean): Promise<SessionListResult>;
-  LoadSessionsPage(cwd: string, all: boolean, offset: number, limit: number): Promise<SessionListResult>;
+  LoadSessionsPage(cwd: string, all: boolean, cursor: string): Promise<SessionListResult>;
   LoadHistory(input: LoadHistoryInput): Promise<HistoryPageResult>;
   SendPrompt(input: PromptInput): Promise<PromptResult>;
   Cancel(sessionId: string): Promise<void>;

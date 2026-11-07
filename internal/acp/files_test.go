@@ -40,7 +40,7 @@ func TestToolResultFilesSurfaceAsAttachments(t *testing.T) {
 	})
 
 	raw := bt.last()
-	for _, want := range []string{`"attachments"`, `"build.zip"`, `"application/zip"`, `"size":2048`, `"path":"/tmp/build.zip"`} {
+	for _, want := range []string{`com.pegg/attachments`, `"build.zip"`, `"application/zip"`, `"size":2048`, `"path":"/tmp/build.zip"`} {
 		if !strings.Contains(raw, want) {
 			t.Fatalf("tool update missing %s: %s", want, raw)
 		}

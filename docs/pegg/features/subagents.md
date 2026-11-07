@@ -30,10 +30,10 @@ chain: loop detection, secret redaction, retry, and permissions.
 
 | Agent | Temperature | Top-p | Max tokens | Max iterations |
 |---|---|---|---|---|
-| `orchestrator` | 0.2 | 0.9 | 4096 | unlimited |
-| `planner` | 0.4 | 0.95 | 8192 | 150 |
-| `explorer` | 0.1 | 0.9 | 4096 | 150 |
-| `developer` | 0.2 | 0.9 | 8192 | 150 |
+| `orchestrator` | 0.2 | 0.9 | `max_tokens` / `max_output_tokens` | unlimited |
+| `planner` | 0.4 | 0.95 | `max_tokens` / `max_output_tokens` | 150 |
+| `explorer` | 0.1 | 0.9 | `max_tokens` / `max_output_tokens` | 150 |
+| `developer` | 0.2 | 0.9 | `max_tokens` / `max_output_tokens` | 150 |
 
 Sampling stays close to deterministic for tool routing, file research, and code
 changes (`orchestrator`, `explorer`, `developer`), and moves into the reasoning

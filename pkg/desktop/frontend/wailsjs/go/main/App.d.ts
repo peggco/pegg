@@ -51,13 +51,13 @@ export function InstallHubSkill(arg1:string,arg2:string,arg3:string):Promise<mai
 
 export function ListModels(arg1:string):Promise<acpclient.ModelListResult>;
 
-export function ListSessions(arg1:string,arg2:boolean):Promise<acpclient.SessionListResult>;
+export function ListSessions(arg1:string,arg2:boolean):Promise<main.SessionListResult>;
 
 export function LoadHistory(arg1:main.LoadHistoryRequest):Promise<acpclient.SessionHistoryResult>;
 
 export function LoadSession(arg1:main.LoadSessionRequest):Promise<main.SessionInfo>;
 
-export function LoadSessionsPage(arg1:string,arg2:boolean,arg3:number,arg4:number):Promise<acpclient.SessionListResult>;
+export function LoadSessionsPage(arg1:string,arg2:boolean,arg3:string):Promise<main.SessionListResult>;
 
 export function Log(arg1:string):Promise<void>;
 
@@ -102,6 +102,8 @@ export function RenameSession(arg1:string,arg2:string):Promise<void>;
 export function ResetSession():Promise<void>;
 
 export function RespondAsk(arg1:string,arg2:Record<string, string>):Promise<void>;
+
+export function RespondElicitation(arg1:string,arg2:string,arg3:Record<string, any>):Promise<void>;
 
 export function RespondPermission(arg1:string,arg2:string):Promise<void>;
 

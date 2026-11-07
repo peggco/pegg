@@ -47,6 +47,11 @@ const (
 	ErrCodeCancelled = -32800
 )
 
+const (
+	ErrCodeAuthRequired     = -32000
+	ErrCodeResourceNotFound = -32002
+)
+
 func isNotification(data []byte) bool {
 	var n struct {
 		ID any `json:"id"`

@@ -45,7 +45,7 @@ class AcpClientIntegrationTest {
                             put("optionId", "reject_once")
                         })
                     }
-                    "pegg/ask" -> buildJsonObject {
+                    "_pegg/ask" -> buildJsonObject {
                         put("answers", buildJsonObject { })
                     }
                     else -> throw IllegalStateException("Unsupported method: $method")
@@ -73,7 +73,7 @@ class AcpClientIntegrationTest {
 
                 val models = ACP_JSON.decodeFromJsonElement(
                     ModelListResult.serializer(),
-                    client.request("pegg/models", buildJsonObject { }, 60_000),
+                    client.request("_pegg/models", buildJsonObject { }, 60_000),
                 )
                 assertTrue(models.models.size >= 0)
 
@@ -86,7 +86,7 @@ class AcpClientIntegrationTest {
                     30_000,
                 )
                 client.request(
-                    "session/rename",
+                    "_pegg/session/rename",
                     buildJsonObject {
                         put("sessionId", newSession.sessionId)
                         put("title", "ACP IntelliJ test")

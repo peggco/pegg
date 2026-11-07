@@ -17,10 +17,11 @@ export function registerChatParticipant(controller: ChatController): vscode.Disp
           const text =
             typeof content === 'string'
               ? content
-              : content && content.type === 'text'
+              : content && !Array.isArray(content) && content.type === 'text'
                 ? content.text ?? ''
                 : '';
-          if (text && (!update.agentName || update.agentName === 'orchestrator')) {
+          const agentName = update._meta?.['com.pegg/agentName'];
+          if (text && (!agentName || agentName === 'orchestrator')) {
             streamed = true;
             stream.markdown(text);
           }
@@ -30,12 +31,18 @@ export function registerChatParticipant(controller: ChatController): vscode.Disp
           stream.progress(`Pegg: ${update.title ?? 'working'}`);
           for (const location of update.locations ?? []) files.add(location.path);
           break;
-        case 'tool_call_update':
-          if (update.status === 'failed' && update.error) stream.markdown(`\n\n**Tool failed:** ${update.error}\n\n`);
+        case 'tool_call_update': {
+          const error = update._meta?.['com.pegg/error'];
+          if (update.status === 'failed' && typeof error === 'string') {
+            stream.markdown(`\n\n**Tool failed:** ${error}\n\n`);
+          }
           break;
-        case 'error':
-          if (update.error) stream.markdown(`\n\n**Error:** ${update.error}\n\n`);
+        }
+        case 'notice': {
+          const text = update.description ? `${update.title ?? ''}: ${update.description}` : update.title;
+          if (text) stream.markdown(`\n\n**${update.severity ?? 'info'}:** ${text}\n\n`);
           break;
+        }
       }
     };
 

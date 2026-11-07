@@ -11,10 +11,12 @@ import com.intellij.openapi.wm.ToolWindowManager
 import dev.pegg.intellij.acp.ACP_JSON
 import dev.pegg.intellij.acp.AcpClient
 import dev.pegg.intellij.acp.AskParams
+import dev.pegg.intellij.acp.AskQuestion
 import dev.pegg.intellij.acp.AttachmentInfo
 import dev.pegg.intellij.acp.ChatItem
 import dev.pegg.intellij.acp.ChatState
 import dev.pegg.intellij.acp.ContentBlock
+import dev.pegg.intellij.acp.ElicitationCreateParams
 import dev.pegg.intellij.acp.HubSkill
 import dev.pegg.intellij.acp.HubSkillsResult
 import dev.pegg.intellij.acp.InitializeResult
@@ -28,8 +30,12 @@ import dev.pegg.intellij.acp.SessionForkResult
 import dev.pegg.intellij.acp.SessionListItem
 import dev.pegg.intellij.acp.SessionListResult
 import dev.pegg.intellij.acp.SessionNewResult
+import dev.pegg.intellij.acp.SessionStateResult
 import dev.pegg.intellij.acp.SessionUpdate
 import dev.pegg.intellij.acp.SkillInstallResult
+import dev.pegg.intellij.acp.TerminalCreateParams
+import dev.pegg.intellij.acp.TerminalExitStatus
+import dev.pegg.intellij.acp.TerminalIdParams
 import dev.pegg.intellij.acp.UsageState
 import dev.pegg.intellij.acp.VoiceResult
 import dev.pegg.intellij.acp.textOf
@@ -91,6 +97,7 @@ class ChatController(
     private var voiceStarting = false
     private var forceFallback = false
     private val resolvers = ConcurrentHashMap<String, CompletableFuture<JsonElement>>()
+    private val terminals = ConcurrentHashMap<String, TerminalSession>()
 
     private var chatVisible: () -> Boolean = { false }
 
@@ -190,7 +197,6 @@ class ChatController(
                 state.provider = result.provider
                 state.model = result.model
                 state.permissionMode = result.permissionMode
-                state.commands = (result.commands ?: emptyList()).toMutableList()
                 state.title = "New session"
                 if (legacyStreaming) {
                     ChatStateOps.addNotice(
@@ -237,9 +243,9 @@ class ChatController(
         }
         emitState()
         loadingSession = true
-        var history: JsonElement? = null
+        var history: SessionStateResult? = null
         try {
-            history = request<JsonElement>(
+            history = request<SessionStateResult>(
                 "session/load",
                 buildJsonObject {
                     put("sessionId", peggSessionId)
@@ -251,23 +257,21 @@ class ChatController(
         } finally {
             loadingSession = false
         }
-        val historyObj = history as? JsonObject
         val meta = runCatching { listSessions(false) }.getOrDefault(emptyList())
             .firstOrNull { it.id == peggSessionId }
         synchronized(stateLock) {
             state.title = meta?.title ?: "Session"
             state.provider = meta?.provider ?: state.provider
-            state.model = meta?.model ?: state.model
-            state.mode = meta?.mode ?: state.mode
-            state.historyOldestSeq =
-                historyObj?.get("oldestSeq")?.jsonPrimitive?.intOrNull ?: 0
-            state.historyHasMore =
-                historyObj?.get("hasMore")?.jsonPrimitive?.booleanOrNull ?: false
-            if (meta?.usage != null) {
+            state.model = meta?.model ?: history?.model ?: state.model
+            state.mode = meta?.mode ?: history?.mode ?: state.mode
+            state.historyOldestSeq = history?.oldestSeq ?: 0
+            state.historyHasMore = history?.hasMore ?: false
+            val usage = meta?.usage
+            if (usage != null) {
                 state.usage = UsageState(
-                    used = (meta.usage.totalTokens ?: 0).toInt(),
+                    used = (usage.totalTokens ?: 0).toInt(),
                     size = 0,
-                    cost = meta.usage.cost,
+                    cost = usage.cost,
                 )
             }
             if (legacyStreaming) {
@@ -314,7 +318,7 @@ class ChatController(
         ensureStarted()
         val sessionId = if (state.peggSessionId == peggSessionId) state.acpSessionId else peggSessionId
         request<JsonElement>(
-            "session/rename",
+            "_pegg/session/rename",
             buildJsonObject {
                 put("sessionId", sessionId ?: peggSessionId)
                 put("title", title)
@@ -430,7 +434,7 @@ class ChatController(
             put("model", model)
             if (!reasoningEffort.isNullOrBlank()) put("reasoningEffort", reasoningEffort)
         }
-        request<JsonElement>("session/set_model", params, 30_000)
+        request<JsonElement>("_pegg/session/set_model", params, 30_000)
         synchronized(stateLock) {
             state.provider = provider
             state.model = model
@@ -444,7 +448,7 @@ class ChatController(
         if (capabilities?.pegg?.models != true) {
             throw IllegalStateException("This Pegg binary does not support model listing. Update the Pegg binary first.")
         }
-        return request<ModelListResult>("pegg/models", buildJsonObject { }, 60_000).models
+        return request<ModelListResult>("_pegg/models", buildJsonObject { }, 60_000).models
     }
 
     suspend fun searchHubSkills(query: String, limit: Int = 8): List<HubSkill> {
@@ -453,7 +457,7 @@ class ChatController(
             put("query", query)
             put("limit", limit)
         }
-        return request<HubSkillsResult>("pegg/skills/search", params, 30_000).items
+        return request<HubSkillsResult>("_pegg/skills/search", params, 30_000).items
     }
 
     suspend fun installHubSkill(source: String, skillId: String, scope: String = "global"): SkillInstallResult {
@@ -463,7 +467,7 @@ class ChatController(
             put("skillId", skillId)
             put("scope", scope)
         }
-        val result = request<SkillInstallResult>("pegg/skills/install", params, 120_000)
+        val result = request<SkillInstallResult>("_pegg/skills/install", params, 120_000)
         if (result.commands.isNotEmpty()) {
             synchronized(stateLock) {
                 state.commands.clear()
@@ -481,7 +485,7 @@ class ChatController(
         }
         try {
             ensureStarted()
-            request<JsonElement>("stt/record/start", buildJsonObject { }, 30_000)
+            request<JsonElement>("_pegg/stt/record/start", buildJsonObject { }, 30_000)
         } catch (e: Throwable) {
             synchronized(this) { voiceStarting = false }
             throw e
@@ -491,7 +495,7 @@ class ChatController(
     suspend fun stopVoice(): String {
         synchronized(this) { voiceStarting = false }
         ensureStarted()
-        return request<VoiceResult>("stt/record/stop", buildJsonObject { }, 120_000).text
+        return request<VoiceResult>("_pegg/stt/record/stop", buildJsonObject { }, 120_000).text
     }
 
     suspend fun transcribe(audio: String, mediaType: String, fileName: String?): String {
@@ -501,7 +505,7 @@ class ChatController(
             put("mediaType", mediaType)
             if (!fileName.isNullOrBlank()) put("fileName", fileName)
         }
-        return request<VoiceResult>("stt/transcribe", params, 120_000).text
+        return request<VoiceResult>("_pegg/stt/transcribe", params, 120_000).text
     }
 
     suspend fun forkMessage(itemId: String) {
@@ -511,7 +515,7 @@ class ChatController(
         ensureSession()
         if (state.running) throw IllegalStateException("Wait for Pegg to finish before forking.")
         if (!historySupported) throw IllegalStateException("This Pegg binary does not support forking. Update it first.")
-        val result = request<SessionForkResult>("session/fork", messageRef(item), 60_000)
+        val result = request<SessionForkResult>("_pegg/session/fork", messageRef(item), 60_000)
         resumeSession(result.sessionId)
         composerTextListeners.forEach { it(item.text) }
         emitSessions()
@@ -524,7 +528,7 @@ class ChatController(
         ensureSession()
         if (state.running) throw IllegalStateException("Wait for Pegg to finish before reverting.")
         if (!historySupported) throw IllegalStateException("This Pegg binary does not support reverting. Update it first.")
-        request<JsonElement>("session/revert", messageRef(item), 60_000)
+        request<JsonElement>("_pegg/session/revert", messageRef(item), 60_000)
         synchronized(stateLock) {
             ChatStateOps.truncateFrom(state, itemId)
             state.usage = UsageState()
@@ -679,11 +683,15 @@ class ChatController(
     }
 
     private fun onNotification(method: String, params: JsonElement?) {
-        if (method == "pegg/sessions_changed") {
+        if (method == "_pegg/sessions_changed") {
             emitSessions()
             return
         }
-        if (method != "session/update") {
+        if (method == "elicitation/complete") {
+            PeggLog.debug("ACP elicitation completed")
+            return
+        }
+        if (method != "session/update" && method != "_pegg/update") {
             PeggLog.debug("ACP notification: $method")
             return
         }
@@ -740,7 +748,7 @@ class ChatController(
         emitState()
         try {
             val history = request<JsonElement>(
-                "session/history",
+                "_pegg/session/history",
                 buildJsonObject {
                     put("sessionId", sessionId)
                     put("cwd", projectRoot() ?: "")
@@ -774,7 +782,13 @@ class ChatController(
     private suspend fun onServerRequest(method: String, params: JsonElement?): JsonElement {
         return when (method) {
             "session/request_permission" -> requestPermission(params)
-            "pegg/ask" -> requestAnswers(params)
+            "_pegg/ask" -> requestAnswers(params)
+            "terminal/create" -> createTerminal(params)
+            "terminal/output" -> terminalOutput(params)
+            "terminal/wait_for_exit" -> terminalWaitForExit(params)
+            "terminal/kill" -> terminalKill(params)
+            "terminal/release" -> terminalRelease(params)
+            "elicitation/create" -> requestElicitation(params)
             else -> throw IllegalStateException("Unsupported client method: $method")
         }
     }
@@ -831,11 +845,16 @@ class ChatController(
         val decoded = params?.let {
             runCatching { ACP_JSON.decodeFromJsonElement(AskParams.serializer(), it) }.getOrNull()
         } ?: AskParams()
+        return answersResult(askQuestions(decoded.questions, decoded.agentName))
+    }
+
+    private suspend fun askQuestions(questions: List<AskQuestion>, agentName: String?): Map<String, String> {
+        if (questions.isEmpty()) return emptyMap()
         val id = "ask-${System.currentTimeMillis()}-${(0..999999).random()}"
         val pending = PendingInteraction.Question(
             id = id,
-            agentName = decoded.agentName,
-            questions = decoded.questions,
+            agentName = agentName,
+            questions = questions,
             answers = linkedMapOf(),
         )
         val future = CompletableFuture<JsonElement>()
@@ -850,12 +869,166 @@ class ChatController(
         }
 
         return try {
-            withContext(Dispatchers.IO) { future.get(30, TimeUnit.MINUTES) }
+            val result = withContext(Dispatchers.IO) { future.get(30, TimeUnit.MINUTES) }
+            (result as? JsonObject)?.get("answers")?.let { element ->
+                runCatching {
+                    ACP_JSON.decodeFromJsonElement<Map<String, String>>(element)
+                }.getOrNull()
+            } ?: emptyMap()
         } catch (e: Throwable) {
             resolvers.remove(id)
             synchronized(stateLock) { state.pending.removeAll { it.id == id } }
             emitState()
-            answersResult(emptyMap())
+            emptyMap()
+        }
+    }
+
+    private suspend fun requestElicitation(params: JsonElement?): JsonElement {
+        val decoded = params?.let {
+            runCatching { ACP_JSON.decodeFromJsonElement(ElicitationCreateParams.serializer(), it) }.getOrNull()
+        } ?: ElicitationCreateParams()
+        val schema = decoded.requestedSchema
+        if (decoded.mode != "form" || schema == null) {
+            return elicitationResult("decline", null)
+        }
+        val questions = schema.properties.map { (id, property) ->
+            val type = when {
+                property.type == "boolean" -> "boolean"
+                property.type == "array" -> "multiselect"
+                property.enumValues != null -> "select"
+                else -> "text"
+            }
+            AskQuestion(
+                id = id,
+                question = property.title ?: property.description ?: id,
+                type = type,
+                options = property.enumValues ?: property.items?.enumValues,
+                required = schema.required.contains(id),
+            )
+        }
+        if (questions.isEmpty()) return elicitationResult("decline", null)
+        val answers = askQuestions(questions, null)
+        if (answers.isEmpty()) return elicitationResult("decline", null)
+        return elicitationResult("accept", buildJsonObject {
+            answers.forEach { (key, value) -> put(key, value) }
+        })
+    }
+
+    private fun elicitationResult(action: String, content: JsonElement?): JsonElement = buildJsonObject {
+        put("action", action)
+        if (content != null) put("content", content)
+    }
+
+    private suspend fun createTerminal(params: JsonElement?): JsonElement {
+        val decoded = params?.let {
+            runCatching { ACP_JSON.decodeFromJsonElement(TerminalCreateParams.serializer(), it) }.getOrNull()
+        } ?: throw IllegalStateException("invalid terminal/create params")
+        val command = mutableListOf(decoded.command)
+        command.addAll(decoded.args)
+        val builder = ProcessBuilder(command)
+        decoded.cwd?.takeIf { it.isNotBlank() }?.let { builder.directory(File(it)) }
+        decoded.env.forEach { builder.environment()[it.name] = it.value }
+        val process = builder.start()
+        val id = "term-${System.currentTimeMillis()}-${(0..999999).random()}"
+        val session = TerminalSession(process, decoded.outputByteLimit ?: 1_000_000)
+        terminals[id] = session
+        session.startReaders()
+        return buildJsonObject { put("terminalId", id) }
+    }
+
+    private suspend fun terminalOutput(params: JsonElement?): JsonElement {
+        val decoded = decodeTerminalId(params)
+        val session = terminals[decoded.terminalId]
+            ?: throw IllegalStateException("unknown terminal: ${decoded.terminalId}")
+        return buildJsonObject {
+            put("output", session.snapshot())
+            put("truncated", session.truncated)
+            session.exitStatus()?.let { status ->
+                put("exitStatus", buildJsonObject {
+                    status.exitCode?.let { put("exitCode", it) }
+                    status.signal?.let { put("signal", it) }
+                })
+            }
+        }
+    }
+
+    private suspend fun terminalWaitForExit(params: JsonElement?): JsonElement {
+        val decoded = decodeTerminalId(params)
+        val session = terminals[decoded.terminalId]
+            ?: throw IllegalStateException("unknown terminal: ${decoded.terminalId}")
+        val status = withContext(Dispatchers.IO) { session.waitForExit() }
+        return buildJsonObject {
+            status.exitCode?.let { put("exitCode", it) }
+            status.signal?.let { put("signal", it) }
+        }
+    }
+
+    private suspend fun terminalKill(params: JsonElement?): JsonElement {
+        val decoded = decodeTerminalId(params)
+        terminals[decoded.terminalId]?.process?.destroy()
+        return buildJsonObject { }
+    }
+
+    private suspend fun terminalRelease(params: JsonElement?): JsonElement {
+        val decoded = decodeTerminalId(params)
+        terminals.remove(decoded.terminalId)?.process?.destroy()
+        return buildJsonObject { }
+    }
+
+    private fun decodeTerminalId(params: JsonElement?): TerminalIdParams =
+        params?.let {
+            runCatching { ACP_JSON.decodeFromJsonElement(TerminalIdParams.serializer(), it) }.getOrNull()
+        } ?: throw IllegalStateException("invalid terminal params")
+
+    private class TerminalSession(
+        val process: Process,
+        private val limit: Int,
+    ) {
+        private val output = StringBuilder()
+        @Volatile var truncated = false
+            private set
+
+        fun startReaders() {
+            startReader(process.inputStream)
+            startReader(process.errorStream)
+        }
+
+        private fun startReader(stream: java.io.InputStream) {
+            Thread {
+                runCatching {
+                    stream.bufferedReader(Charsets.UTF_8).forEachLine { line ->
+                        append(line + "\n")
+                    }
+                }
+            }.apply {
+                isDaemon = true
+                name = "pegg-terminal-reader"
+                start()
+            }
+        }
+
+        @Synchronized
+        private fun append(text: String) {
+            if (output.length + text.length > limit) {
+                val remaining = (limit - output.length).coerceAtLeast(0)
+                if (remaining > 0) output.append(text, 0, remaining)
+                truncated = true
+                return
+            }
+            output.append(text)
+        }
+
+        @Synchronized
+        fun snapshot(): String = output.toString()
+
+        fun waitForExit(): TerminalExitStatus {
+            val code = process.waitFor()
+            return TerminalExitStatus(exitCode = code)
+        }
+
+        fun exitStatus(): TerminalExitStatus? {
+            if (process.isAlive) return null
+            return runCatching { TerminalExitStatus(exitCode = process.exitValue()) }.getOrNull()
         }
     }
 

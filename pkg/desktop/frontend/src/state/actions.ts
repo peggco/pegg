@@ -85,7 +85,7 @@ export async function loadSessions(): Promise<void> {
   store.set({ sessionsLoading: true });
   void api.Log(`loadSessions workspace=${workspace}`).catch(() => undefined);
   try {
-    const res = await api.LoadSessionsPage(workspace, true, 0, 30);
+    const res = await api.LoadSessionsPage(workspace, true, '');
     store.set({ sessions: res.sessions ?? [], sessionsLoading: false, sessionsNextCursor: res.nextCursor });
   } catch (err) {
     store.set({ sessionsLoading: false });
@@ -100,7 +100,7 @@ export async function loadMoreSessions(): Promise<void> {
   if (state.sessionsLoading || !state.sessionsNextCursor) return;
   store.set({ sessionsLoading: true });
   try {
-    const res = await api.LoadSessionsPage(state.workspace, true, Number(state.sessionsNextCursor) || state.sessions.length, 30);
+    const res = await api.LoadSessionsPage(state.workspace, true, state.sessionsNextCursor);
     store.set((current) => {
       const seen = new Set(current.sessions.map((item) => item.id));
       const extra = (res.sessions ?? []).filter((item) => !seen.has(item.id));
@@ -483,16 +483,6 @@ export async function sendPrompt(input: SendInput): Promise<void> {
       const summary = lastAssistant?.text.replace(/\s+/g, ' ').trim().slice(0, 140) || 'Task completed';
       void api.Notify('Pegg finished', summary).catch(() => undefined);
     }
-    if (result?.usage?.used) {
-      store.setChat((c) => ({
-        ...c,
-        usage: {
-          used: result.usage?.used ?? c.usage.used,
-          size: result.usage?.size ?? c.usage.size,
-          cost: result.usage?.cost?.amount ?? c.usage.cost,
-        },
-      }));
-    }
     void loadSessions();
   } catch (err) {
     const message = errorText(err);
@@ -629,8 +619,9 @@ export function handleUpdates(sessionId: string, updates: SessionUpdate[]): void
   const chat = store.get().chat;
   if (!chat.acpId) return;
   if (sessionId !== chat.acpId && sessionId !== chat.peggId) return;
-  const history = updates.filter((u) => u.historyPage);
-  const live = updates.filter((u) => !u.historyPage);
+  const isHistory = (u: SessionUpdate) => u._meta?.['com.pegg/historyPage'] === true;
+  const history = updates.filter(isHistory);
+  const live = updates.filter((u) => !isHistory(u));
   store.setChat((c) => {
     let next = live.length ? applyUpdates(c, live) : c;
     if (history.length) {
@@ -644,7 +635,9 @@ export function handleUpdates(sessionId: string, updates: SessionUpdate[]): void
     if (updates.some((u) => u.sessionUpdate === 'agent_message_chunk' || u.sessionUpdate === 'user_message_chunk')) {
       next = settlePendingTools(next, 'completed');
     }
-    if (updates.some((u) => u.sessionUpdate === 'error')) next = { ...next, running: false };
+    if (updates.some((u) => u.sessionUpdate === 'notice' && u.severity === 'error')) {
+      next = { ...next, running: false };
+    }
     return next;
   });
 }

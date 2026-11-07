@@ -85,6 +85,7 @@ func TestSessionNew(t *testing.T) {
 func TestSessionNewEmptyCwd(t *testing.T) {
 	srv := newTestServer(t)
 	srv.transport = newBufferTransport()
+	initServer(t, srv)
 	ctx := context.Background()
 
 	params := SessionNewParams{Cwd: ""}
@@ -161,17 +162,22 @@ func TestSessionList(t *testing.T) {
 func TestSessionDeleteMissing(t *testing.T) {
 	srv := newTestServer(t)
 	srv.transport = newBufferTransport()
+	initServer(t, srv)
 	ctx := context.Background()
 
 	resp := sendRequest(t, srv, ctx, "session/delete", SessionDeleteParams{SessionId: "does-not-exist"})
-	if !strings.Contains(resp, `"code"`) {
-		t.Errorf("expected error for missing session, got %s", resp)
+	if strings.Contains(resp, `"error"`) {
+		t.Errorf("expected missing session delete to succeed silently, got %s", resp)
+	}
+	if !strings.Contains(resp, `"result"`) {
+		t.Errorf("expected a result for missing session delete, got %s", resp)
 	}
 }
 
 func TestMethodNotFound(t *testing.T) {
 	srv := newTestServer(t)
 	srv.transport = newBufferTransport()
+	initServer(t, srv)
 	ctx := context.Background()
 
 	raw, _ := json.Marshal(map[string]any{
@@ -297,6 +303,7 @@ func TestExtractContentNonString(t *testing.T) {
 func TestSessionPromptMissingSession(t *testing.T) {
 	srv := newTestServer(t)
 	srv.transport = newBufferTransport()
+	initServer(t, srv)
 	ctx := context.Background()
 
 	params := SessionPromptParams{
@@ -304,14 +311,15 @@ func TestSessionPromptMissingSession(t *testing.T) {
 		Prompt:    []ContentBlock{{Type: "text", Text: "hi"}},
 	}
 	resp := sendRequest(t, srv, ctx, "session/prompt", params)
-	if !strings.Contains(resp, `"code"`) {
-		t.Errorf("expected error for missing session, got %s", resp)
+	if !strings.Contains(resp, `"code":-32002`) {
+		t.Errorf("expected resource-not-found error for missing session, got %s", resp)
 	}
 }
 
 func TestSessionPromptMalformed(t *testing.T) {
 	srv := newTestServer(t)
 	srv.transport = newBufferTransport()
+	initServer(t, srv)
 	ctx := context.Background()
 
 	raw, _ := json.Marshal(map[string]any{
@@ -348,7 +356,7 @@ func TestSessionUpdateSerialization(t *testing.T) {
 		SessionUpdate: "tool_call",
 		ToolCallID:    "call_1",
 		Title:         "read file",
-		Kind:          string(ToolKindRead),
+		Kind:          ToolKindRead,
 		Status:        string(ToolCallPending),
 	}
 	data, err := json.Marshal(update)
@@ -557,8 +565,8 @@ func TestSessionNewReturnsAutoMode(t *testing.T) {
 		t.Fatalf("session/new failed: %v", err)
 	}
 	sr := result.(SessionNewResult)
-	if sr.Mode != string(agent.ModeAuto) {
-		t.Fatalf("mode = %q, want auto", sr.Mode)
+	if sr.Modes == nil || sr.Modes.CurrentModeId != SessionModeId(agent.ModeAuto) {
+		t.Fatalf("mode = %+v, want auto", sr.Modes)
 	}
 	acpSess, _ := srv.getSession(string(sr.SessionId))
 	if acpSess.Agent.CurrentMode() != agent.ModeAuto {

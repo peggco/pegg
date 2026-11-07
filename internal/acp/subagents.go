@@ -20,12 +20,11 @@ func (s *Server) handleSubagentInput(ev agent.AgentInput) {
 	if !ok {
 		return
 	}
-	s.notify(acpSess.ID, SessionUpdate{
+	s.notifyPegg(acpSess.ID, SessionUpdate{
 		SessionUpdate: "subagent",
-		AgentID:       ev.AgentID,
-		AgentName:     ev.AgentName,
 		Status:        "running",
 		Title:         attach.StripBlock(ev.Input),
+		Meta:          Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName},
 	})
 }
 
@@ -34,12 +33,11 @@ func (s *Server) handleSubagentFinished(ev agent.AgentFinished) {
 	if !ok {
 		return
 	}
-	s.notify(acpSess.ID, SessionUpdate{
+	s.notifyPegg(acpSess.ID, SessionUpdate{
 		SessionUpdate: "subagent",
-		AgentID:       ev.AgentID,
-		AgentName:     ev.AgentName,
 		Status:        "finished",
 		RawOutput:     truncate(ev.Output, 64*1024),
+		Meta:          Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName},
 	})
 }
 
@@ -52,12 +50,10 @@ func (s *Server) handleSubagentError(ev agent.AgentError) {
 	if ev.Err != nil {
 		message = ev.Err.Error()
 	}
-	s.notify(acpSess.ID, SessionUpdate{
+	s.notifyPegg(acpSess.ID, SessionUpdate{
 		SessionUpdate: "subagent",
-		AgentID:       ev.AgentID,
-		AgentName:     ev.AgentName,
 		Status:        "error",
-		Error:         message,
+		Meta:          Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName, "com.pegg/error": message},
 	})
 }
 

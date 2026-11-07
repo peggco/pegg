@@ -60,14 +60,14 @@ func (s *Server) handleSubagentMessage(ev agent.AgentMessage) {
 	if !ok {
 		return
 	}
+	meta := Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName}
 	msg := ev.Message
 	if reasoning, ok := msg.Reasoning.(string); ok && strings.TrimSpace(reasoning) != "" {
 		s.notify(acpSess.ID, SessionUpdate{
 			SessionUpdate: "agent_thought_chunk",
-			MessageID:     "thought-" + uuid.NewString(),
-			AgentID:       ev.AgentID,
-			AgentName:     ev.AgentName,
+			MessageID:     MessageId("thought-" + uuid.NewString()),
 			Content:       &ContentBlock{Type: "text", Text: reasoning},
+			Meta:          meta,
 		})
 	}
 	text := llm.MessageText(msg)
@@ -76,10 +76,9 @@ func (s *Server) handleSubagentMessage(ev agent.AgentMessage) {
 	}
 	s.notify(acpSess.ID, SessionUpdate{
 		SessionUpdate: "agent_message_chunk",
-		MessageID:     uuid.NewString(),
-		AgentID:       ev.AgentID,
-		AgentName:     ev.AgentName,
+		MessageID:     MessageId(uuid.NewString()),
 		Content:       &ContentBlock{Type: "text", Text: text},
+		Meta:          meta,
 	})
 }
 
@@ -95,15 +94,14 @@ func (s *Server) handleSubagentToolCall(ev agent.AgentToolCall) {
 	}
 	s.notify(acpSess.ID, SessionUpdate{
 		SessionUpdate: "tool_call",
-		ToolCallID:    call.ID,
-		ToolName:      call.Function.Name,
+		ToolCallID:    ToolCallId(call.ID),
 		Title:         toolTitle(call.Function.Name, args),
-		Kind:          string(toolKind(call.Function.Name)),
+		Name:          call.Function.Name,
+		Kind:          toolKind(call.Function.Name),
 		Status:        string(ToolCallPending),
 		RawInput:      args,
 		Locations:     toolLocations(acpSess.Cwd, args),
-		AgentID:       ev.AgentID,
-		AgentName:     ev.AgentName,
+		Meta:          Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName},
 	})
 }
 
@@ -118,26 +116,31 @@ func (s *Server) handleSubagentToolResult(ev agent.AgentToolResult) {
 		status = ToolCallFailed
 		errText = ev.Err.Error()
 	}
+	m := Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName}
+	if errText != "" {
+		m["com.pegg/error"] = errText
+	}
+	if atts := fileAttachments(ev.Attachments); len(atts) > 0 {
+		m["com.pegg/attachments"] = atts
+	}
 	update := SessionUpdate{
 		SessionUpdate: "tool_call_update",
-		ToolCallID:    ev.CallID,
-		ToolName:      ev.ToolName,
+		ToolCallID:    ToolCallId(ev.CallID),
+		Name:          ev.ToolName,
 		Status:        string(status),
 		RawOutput:     truncate(ev.Output, 128*1024),
-		Error:         errText,
-		Attachments:   fileAttachments(ev.Attachments),
-		AgentID:       ev.AgentID,
-		AgentName:     ev.AgentName,
+		Meta:          m,
 	}
 	if status == ToolCallCompleted && s.subStreams != nil && isEditTool(ev.ToolName) {
 		if edit, ok := s.subStreams.take(ev.CallID); ok {
 			content, err := os.ReadFile(edit.path)
 			if err == nil {
-				update.Contents = []ToolCallContent{{
+				old := truncate(edit.old, 2*1024*1024)
+				update.Content = []ToolCallContent{{
 					Type: "diff",
 					Diff: &Diff{
 						Path:    edit.path,
-						OldText: truncate(edit.old, 2*1024*1024),
+						OldText: &old,
 						NewText: truncate(string(content), 2*1024*1024),
 					},
 				}}

@@ -1,4 +1,14 @@
-import { AttachmentInfo, ContentBlock, PlanEntry, SessionMode, SessionUpdate, SlashCommand } from './types';
+import {
+  AttachmentInfo,
+  ContentBlock,
+  Meta,
+  PlanEntry,
+  SessionConfigOption,
+  SessionMode,
+  SessionUpdate,
+  SlashCommand,
+  ToolCallContent,
+} from './types';
 
 export type { AttachmentInfo } from './types';
 
@@ -141,21 +151,65 @@ function findItem<T extends ChatItem>(state: ChatState, id: string, kind: T['kin
 function contentText(content: SessionUpdate['content']): string {
   if (typeof content === 'string') return content;
   if (!content) return '';
+  if (Array.isArray(content)) {
+    return content
+      .map((entry) => {
+        const block = (entry as ToolCallContent).content;
+        return block?.type === 'text' ? block.text ?? '' : '';
+      })
+      .join('');
+  }
   const block = content as ContentBlock;
   if (block.type === 'text') return block.text ?? '';
   return '';
 }
 
+function toolContents(content: SessionUpdate['content']): ToolCallContent[] | undefined {
+  return Array.isArray(content) ? (content as ToolCallContent[]) : undefined;
+}
+
+function metaString(meta: Meta | undefined, key: string): string | undefined {
+  const value = meta?.[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function metaNumber(meta: Meta | undefined, key: string): number | undefined {
+  const value = meta?.[key];
+  return typeof value === 'number' ? value : undefined;
+}
+
+function metaAttachments(meta: Meta | undefined): AttachmentInfo[] | undefined {
+  const value = meta?.['com.pegg/attachments'];
+  return Array.isArray(value) ? (value as AttachmentInfo[]) : undefined;
+}
+
+function applyConfigOptions(state: ChatState, options: SessionConfigOption[] | undefined): void {
+  if (!options) return;
+  for (const option of options) {
+    if (option.id === 'mode' && typeof option.currentValue === 'string') {
+      state.mode = option.currentValue as SessionMode;
+    }
+    if (option.id === 'model' && typeof option.currentValue === 'string') {
+      state.model = option.currentValue;
+    }
+  }
+}
+
 export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState {
   const state = { ...input, items: [...input.items], plan: [...input.plan] };
   const now = Date.now();
-  const seq = update.seq && update.seq > 0 ? update.seq : undefined;
+  const meta = update._meta;
+  const seq = metaNumber(meta, 'com.pegg/seq');
+  const agentId = metaString(meta, 'com.pegg/agentId');
+  const agentName = metaString(meta, 'com.pegg/agentName');
+  const metaError = metaString(meta, 'com.pegg/error');
+  const metaAttachmentsValue = metaAttachments(meta);
 
   switch (update.sessionUpdate) {
     case 'agent_message_chunk':
     case 'user_message_chunk': {
       const text = contentText(update.content);
-      const attachments = update.attachments?.length ? update.attachments : undefined;
+      const attachments = metaAttachmentsValue?.length ? metaAttachmentsValue : undefined;
       if (!text && !attachments) return state;
       const id = update.messageId || nextId(state, 'message');
       const kind = update.sessionUpdate === 'user_message_chunk' ? 'user' : 'assistant';
@@ -176,7 +230,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
         );
       } else if (
         (last?.kind === 'user' && kind === 'user') ||
-        (last?.kind === 'assistant' && kind === 'assistant' && (last.agentName ?? '') === (update.agentName ?? ''))
+        (last?.kind === 'assistant' && kind === 'assistant' && (last.agentName ?? '') === (agentName ?? ''))
       ) {
         state.items = [
           ...state.items.slice(0, -1),
@@ -193,8 +247,8 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           kind,
           id,
           text,
-          agentId: update.agentId,
-          agentName: update.agentName,
+          agentId,
+          agentName,
           createdAt: now,
           seq,
           ...(kind === 'user' && attachments ? { attachments } : {}),
@@ -211,7 +265,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       const last = state.items[state.items.length - 1];
       if (existing) {
         existing.text += text;
-      } else if (last?.kind === 'reasoning' && (last.agentName ?? '') === (update.agentName ?? '')) {
+      } else if (last?.kind === 'reasoning' && (last.agentName ?? '') === (agentName ?? '')) {
         state.items = [
           ...state.items.slice(0, -1),
           { ...last, text: last.text + text },
@@ -221,8 +275,8 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           kind: 'reasoning',
           id,
           text,
-          agentId: update.agentId,
-          agentName: update.agentName,
+          agentId,
+          agentName,
           createdAt: now,
           seq,
         });
@@ -240,18 +294,18 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
         existing.tool.status = status || existing.tool.status;
         if (update.rawInput !== undefined) existing.tool.input = update.rawInput;
         if (update.rawOutput !== undefined) existing.tool.output = update.rawOutput;
-        if (update.error !== undefined) existing.tool.error = update.error;
+        if (metaError !== undefined) existing.tool.error = metaError;
         if (update.locations) existing.tool.locations = update.locations;
-        if (update.toolName) existing.tool.name = update.toolName;
-        if (update.agentId) existing.tool.agentId = update.agentId;
-        if (update.agentName) existing.tool.agentName = update.agentName;
-        if (update.attachments?.length) {
-          existing.tool.files = mergeFiles(existing.tool.files, update.attachments);
+        if (update.name) existing.tool.name = update.name;
+        if (agentId) existing.tool.agentId = agentId;
+        if (agentName) existing.tool.agentName = agentName;
+        if (metaAttachmentsValue?.length) {
+          existing.tool.files = mergeFiles(existing.tool.files, metaAttachmentsValue);
         }
-        const diff = update.contents?.find((c) => c.type === 'diff' && c.diff)?.diff;
+        const diff = toolContents(update.content)?.find((c) => c.type === 'diff' && c.diff)?.diff;
         if (diff) existing.tool.diff = diff;
       } else {
-        const diff = update.contents?.find((c) => c.type === 'diff' && c.diff)?.diff;
+        const diff = toolContents(update.content)?.find((c) => c.type === 'diff' && c.diff)?.diff;
         state.items.push({
           kind: 'tool',
           id,
@@ -259,54 +313,54 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           seq,
           tool: {
             id,
-            name: update.toolName,
+            name: update.name,
             title: update.title || update.toolCallId || 'Tool',
             kind: inferToolKind(update.kind, update.title, undefined),
             status: status || 'pending',
             input: update.rawInput,
             output: update.rawOutput,
-            error: update.error,
+            error: metaError,
             locations: update.locations,
             diff,
-            files: update.attachments?.length ? update.attachments : undefined,
-            agentId: update.agentId,
-            agentName: update.agentName,
+            files: metaAttachmentsValue?.length ? metaAttachmentsValue : undefined,
+            agentId,
+            agentName,
           },
         });
       }
       return state;
     }
     case 'subagent': {
-      const agentId = update.agentId ?? '';
-      if (!agentId) return state;
+      const subagentId = agentId ?? '';
+      if (!subagentId) return state;
       const status: 'running' | 'finished' | 'error' =
         update.status === 'finished' ? 'finished' : update.status === 'error' ? 'error' : 'running';
       const existing = state.items.find(
-        (item) => item.kind === 'subagent' && item.agentId === agentId,
+        (item) => item.kind === 'subagent' && item.agentId === subagentId,
       ) as Extract<ChatItem, { kind: 'subagent' }> | undefined;
       if (existing) {
         existing.status = status;
-        if (update.agentName) existing.agentName = update.agentName;
+        if (agentName) existing.agentName = agentName;
         if (update.title) {
           existing.task = update.title;
-          pushSubagentPrompt(state, agentId, update.title, now);
+          pushSubagentPrompt(state, subagentId, update.title, now);
         }
         if (update.rawOutput !== undefined) existing.output = String(update.rawOutput ?? '');
-        if (update.error) existing.error = update.error;
+        if (metaError) existing.error = metaError;
         return state;
       }
       state.items.push({
         kind: 'subagent',
-        id: `subagent-${agentId}`,
-        agentId,
-        agentName: update.agentName,
+        id: `subagent-${subagentId}`,
+        agentId: subagentId,
+        agentName,
         status,
         task: update.title,
         output: update.rawOutput === undefined ? undefined : String(update.rawOutput ?? ''),
-        error: update.error,
+        error: metaError,
         createdAt: now,
       });
-      if (update.title) pushSubagentPrompt(state, agentId, update.title, now);
+      if (update.title) pushSubagentPrompt(state, subagentId, update.title, now);
       return state;
     }
     case 'plan':
@@ -320,24 +374,31 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       };
       return state;
     case 'current_mode_update':
-      if (update.mode) state.mode = update.mode as SessionMode;
+      if (update.currentModeId) state.mode = update.currentModeId as SessionMode;
       return state;
-    case 'current_model_update':
-      if (update.provider) state.provider = update.provider;
-      if (update.model) state.model = update.model;
+    case 'config_option_update':
+      applyConfigOptions(state, update.configOptions);
       return state;
     case 'available_commands_update':
-      if (update.commands) state.commands = update.commands;
+      if (update.availableCommands) state.commands = update.availableCommands;
       return state;
-    case 'error':
+    case 'session_info_update':
+      if (update.title) state.title = update.title;
+      return state;
+    case 'notice': {
+      const level: 'info' | 'warn' | 'error' =
+        update.severity === 'error' ? 'error' : update.severity === 'warning' ? 'warn' : 'info';
+      const text = update.description ? `${update.title ?? ''}: ${update.description}` : update.title ?? '';
       state.items.push({
-        kind: 'error',
-        id: nextId(state, 'error'),
-        text: update.error || 'Unknown error',
+        kind: 'notice',
+        id: nextId(state, 'notice'),
+        text,
+        level,
         createdAt: now,
       });
-      state.error = update.error;
+      if (level === 'error') state.error = text;
       return state;
+    }
     default:
       return state;
   }

@@ -16,7 +16,7 @@ import (
 )
 
 type skillsReloadResult struct {
-	Commands []SlashCommand `json:"commands"`
+	Commands []AvailableCommand `json:"commands"`
 }
 
 type skillsReloadParams struct {
@@ -92,9 +92,9 @@ type skillsInstallParams struct {
 }
 
 type skillsInstallResult struct {
-	Name     string         `json:"name"`
-	Path     string         `json:"path"`
-	Commands []SlashCommand `json:"commands"`
+	Name     string             `json:"name"`
+	Path     string             `json:"path"`
+	Commands []AvailableCommand `json:"commands"`
 }
 
 func (s *Server) handleSkillsInstall(ctx context.Context, params json.RawMessage) (any, error) {

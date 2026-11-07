@@ -1,20 +1,31 @@
 import * as vscode from 'vscode';
 import { EventEmitter } from 'node:events';
+import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
 import { delimiter } from 'node:path';
 import { AcpClient, contentText } from '../acp/client';
 import {
   AskParams,
   ContentBlock,
+  ElicitationCreateParams,
+  ElicitationCreateResult,
   InitializeResult,
   ModelListResult,
+  PeggCapabilities,
   PermissionParams,
   PromptResult,
+  SessionInfo,
   SessionListItem,
   SessionListResult,
   SessionMode,
   SessionForkResult,
+  SessionHistoryResult,
   SessionNewResult,
+  SessionStateResult,
   SessionUpdate,
+  TerminalCreateParams,
+  TerminalExitStatus,
+  TerminalIdParams,
+  TerminalOutputResult,
 } from '../acp/types';
 import { BinaryManager } from '../binary/manager';
 import { searchDirs } from '../binary/paths';
@@ -49,6 +60,15 @@ interface PendingResolver {
   reject: (err: Error) => void;
 }
 
+interface TerminalProcess {
+  child: ChildProcessWithoutNullStreams;
+  output: string;
+  truncated: boolean;
+  exitStatus?: TerminalExitStatus;
+  exited: Promise<TerminalExitStatus>;
+  limit: number;
+}
+
 export interface PromptOptions {
   context?: string;
   attachments?: ComposerAttachment[];
@@ -68,6 +88,7 @@ export class ChatController extends EventEmitter {
   private loadingSession = false;
   private loadingOlder = false;
   private historyBuffer: SessionUpdate[] = [];
+  private terminals = new Map<string, TerminalProcess>();
   private binaryFingerprint: string | undefined;
   private voiceStart: Promise<void> | undefined;
   private disposed = false;
@@ -86,6 +107,11 @@ export class ChatController extends EventEmitter {
 
   setForceFallback(value: boolean): void {
     this.forceFallback = value;
+  }
+
+  private peggCaps(): PeggCapabilities | undefined {
+    const caps = this.capabilities?._meta?.['com.pegg/capabilities'];
+    return caps && typeof caps === 'object' ? (caps as PeggCapabilities) : undefined;
   }
 
   async activate(): Promise<void> {
@@ -117,15 +143,14 @@ export class ChatController extends EventEmitter {
     this.emitState();
     try {
       const result = await this.client!.request<SessionNewResult>('session/new', { cwd: root }, 60000);
+      const meta = result._meta ?? {};
       this.state = {
         ...this.state,
         acpSessionId: result.sessionId,
-        peggSessionId: result.peggSessionId,
-        mode: (result.mode as SessionMode) || cfg.defaultMode,
-        provider: result.provider,
-        model: result.model,
-        permissionMode: result.permissionMode,
-        commands: result.commands ?? [],
+        peggSessionId: metaString(meta, 'com.pegg/sessionId'),
+        mode: (result.modes?.currentModeId as SessionMode) || cfg.defaultMode,
+        model: configOptionValue(result.configOptions, 'model'),
+        permissionMode: metaString(meta, 'com.pegg/permissionMode'),
         title: 'New session',
       };
       if (this.legacyStreaming) {
@@ -137,12 +162,7 @@ export class ChatController extends EventEmitter {
       }
       this.emitState();
       await this.saveSession();
-      if (
-        cfg.provider &&
-        cfg.model &&
-        this.capabilities?.pegg?.models &&
-        (cfg.provider !== result.provider || cfg.model !== result.model)
-      ) {
+      if (cfg.provider && cfg.model && this.peggCaps()?.models && cfg.model !== this.state.model) {
         try {
           await this.setModel(cfg.provider, cfg.model);
         } catch (err) {
@@ -174,15 +194,16 @@ export class ChatController extends EventEmitter {
     this.emitState();
     this.loadingSession = true;
     try {
-      const history = await this.client!.request<{ oldestSeq?: number; hasMore?: boolean }>(
+      const history = await this.client!.request<SessionStateResult>(
         'session/load',
         { sessionId: peggSessionId, cwd: root, historyLimit: 50 },
         60000,
       );
+      const meta = history?._meta ?? {};
       this.state = {
         ...this.state,
-        historyOldestSeq: history?.oldestSeq ?? 0,
-        historyHasMore: Boolean(history?.hasMore),
+        historyOldestSeq: metaNumber(meta, 'com.pegg/oldestSeq') ?? 0,
+        historyHasMore: Boolean(meta['com.pegg/hasMore']),
       };
     } finally {
       this.loadingSession = false;
@@ -223,7 +244,7 @@ export class ChatController extends EventEmitter {
       { cwd: root, all, limit: 100 },
       60000,
     );
-    return result.sessions ?? [];
+    return (result.sessions ?? []).map(toSessionListItem);
   }
 
   async deleteSession(peggSessionId: string): Promise<void> {
@@ -243,7 +264,7 @@ export class ChatController extends EventEmitter {
   async renameSession(peggSessionId: string, title: string): Promise<void> {
     await this.ensureStarted();
     const sessionId = this.state.peggSessionId === peggSessionId ? this.state.acpSessionId : peggSessionId;
-    await this.client!.request('session/rename', { sessionId, title }, 60000);
+    await this.client!.request('_pegg/session/rename', { sessionId, title }, 60000);
     if (this.state.peggSessionId === peggSessionId) {
       this.state = { ...this.state, title };
       this.emitState();
@@ -325,11 +346,11 @@ export class ChatController extends EventEmitter {
 
   async setModel(provider: string, model: string, reasoningEffort?: string): Promise<void> {
     await this.ensureSession();
-    if (!this.capabilities?.pegg?.models) {
+    if (!this.peggCaps()?.models) {
       throw new Error('This Pegg binary does not support model switching. Update the Pegg binary first.');
     }
     await this.client!.request(
-      'session/set_model',
+      '_pegg/session/set_model',
       { sessionId: this.state.acpSessionId, provider, model, reasoningEffort },
       30000,
     );
@@ -340,10 +361,10 @@ export class ChatController extends EventEmitter {
 
   async models(): Promise<ModelListResult['models']> {
     await this.ensureStarted();
-    if (!this.capabilities?.pegg?.models) {
+    if (!this.peggCaps()?.models) {
       throw new Error('This Pegg binary does not support model listing. Update the Pegg binary first.');
     }
-    const result = await this.client!.request<ModelListResult>('pegg/models', {}, 60000);
+    const result = await this.client!.request<ModelListResult>('_pegg/models', {}, 60000);
     return result.models ?? [];
   }
 
@@ -354,7 +375,7 @@ export class ChatController extends EventEmitter {
     await this.ensureStarted();
     const result = await this.client!.request<{
       items?: Array<{ name: string; skillId: string; source: string; official?: boolean }>;
-    }>('pegg/skills/search', { query, limit }, 30000);
+    }>('_pegg/skills/search', { query, limit }, 30000);
     return result.items ?? [];
   }
 
@@ -368,9 +389,15 @@ export class ChatController extends EventEmitter {
       name?: string;
       path?: string;
       commands?: Array<{ name: string; description?: string }>;
-    }>('pegg/skills/install', { source, skillId, scope }, 120000);
+    }>('_pegg/skills/install', { source, skillId, scope }, 120000);
     if (result.commands?.length) {
-      this.state = { ...this.state, commands: result.commands };
+      this.state = {
+        ...this.state,
+        commands: result.commands.map((command) => ({
+          name: command.name,
+          description: command.description ?? '',
+        })),
+      };
       this.emitState();
     }
     return result;
@@ -380,7 +407,7 @@ export class ChatController extends EventEmitter {
     if (this.voiceStart) throw new Error('A recording is already in progress.');
     this.voiceStart = (async () => {
       await this.ensureStarted();
-      await this.client!.request('stt/record/start', {}, 30000);
+      await this.client!.request('_pegg/stt/record/start', {}, 30000);
     })();
     try {
       await this.voiceStart;
@@ -394,14 +421,14 @@ export class ChatController extends EventEmitter {
     if (this.voiceStart) await this.voiceStart.catch(() => undefined);
     this.voiceStart = undefined;
     await this.ensureStarted();
-    const result = await this.client!.request<{ text: string }>('stt/record/stop', {}, 120000);
+    const result = await this.client!.request<{ text: string }>('_pegg/stt/record/stop', {}, 120000);
     return result.text;
   }
 
   async transcribe(audio: string, mediaType: string, fileName?: string): Promise<string> {
     await this.ensureStarted();
     const result = await this.client!.request<{ text: string }>(
-      'stt/transcribe',
+      '_pegg/stt/transcribe',
       { audio, mediaType, fileName },
       120000,
     );
@@ -409,7 +436,7 @@ export class ChatController extends EventEmitter {
   }
 
   get historySupported(): boolean {
-    return Boolean(this.capabilities?.pegg?.history);
+    return Boolean(this.peggCaps()?.history);
   }
 
   async forkMessage(itemId: string): Promise<void> {
@@ -417,10 +444,10 @@ export class ChatController extends EventEmitter {
     if (!item || item.kind !== 'user') throw new Error('Message not found');
     await this.ensureSession();
     if (this.state.running) throw new Error('Wait for Pegg to finish before forking.');
-    if (!this.capabilities?.pegg?.history) {
+    if (!this.peggCaps()?.history) {
       throw new Error('This Pegg binary does not support forking. Update it first.');
     }
-    const result = await this.client!.request<SessionForkResult>('session/fork', this.messageRef(itemId), 60000);
+    const result = await this.client!.request<SessionForkResult>('_pegg/session/fork', this.messageRef(itemId), 60000);
     await this.resumeSession(result.sessionId);
     this.emit('composerText', item.text);
   }
@@ -430,10 +457,10 @@ export class ChatController extends EventEmitter {
     if (!item || item.kind !== 'user') throw new Error('Message not found');
     await this.ensureSession();
     if (this.state.running) throw new Error('Wait for Pegg to finish before reverting.');
-    if (!this.capabilities?.pegg?.history) {
+    if (!this.peggCaps()?.history) {
       throw new Error('This Pegg binary does not support reverting. Update it first.');
     }
-    await this.client!.request('session/revert', this.messageRef(itemId), 60000);
+    await this.client!.request('_pegg/session/revert', this.messageRef(itemId), 60000);
     this.state = truncateFrom(this.state, itemId);
     this.state = { ...this.state, usage: { used: 0, size: 0 }, plan: [] };
     this.emitState();
@@ -477,6 +504,10 @@ export class ChatController extends EventEmitter {
     this.disposed = true;
     this.voiceStart = undefined;
     this.rejectPending('Extension disposed');
+    for (const [id, term] of this.terminals) {
+      if (!term.exitStatus) term.child.kill('SIGKILL');
+      this.terminals.delete(id);
+    }
     if (this.client) await this.client.stop();
   }
 
@@ -591,11 +622,11 @@ export class ChatController extends EventEmitter {
       this.binaryFingerprint = await this.binary.fingerprint();
       const capabilities = await client.initialize();
       this.capabilities = capabilities.agentCapabilities;
-      this.log.info('Pegg capabilities', JSON.stringify(capabilities.agentCapabilities?.pegg ?? {}));
+      const pegg = this.peggCaps();
+      this.log.info('Pegg capabilities', JSON.stringify(pegg ?? {}));
       this.started = true;
       this.state = { ...this.state, connected: true };
       this.emitState();
-      const pegg = capabilities.agentCapabilities?.pegg;
       this.legacyStreaming = !pegg;
       if (!pegg?.permissions) {
         this.log.warn('The installed Pegg CLI does not advertise interactive permission support.');
@@ -618,11 +649,15 @@ export class ChatController extends EventEmitter {
   }
 
   private onNotification(method: string, params: any): void {
-    if (method === 'pegg/sessions_changed') {
+    if (method === '_pegg/sessions_changed') {
       this.emit('sessions');
       return;
     }
-    if (method !== 'session/update') {
+    if (method === 'elicitation/complete') {
+      this.log.debug('Elicitation complete', params?.elicitationId);
+      return;
+    }
+    if (method !== 'session/update' && method !== '_pegg/update') {
       this.log.debug('ACP notification', method);
       return;
     }
@@ -630,7 +665,8 @@ export class ChatController extends EventEmitter {
     const update = params?.update as SessionUpdate | undefined;
     if (!update) return;
     if (sessionId && this.state.acpSessionId && sessionId !== this.state.acpSessionId) return;
-    if (update.historyPage && this.loadingOlder) {
+    const meta = update._meta ?? {};
+    if (meta['com.pegg/historyPage'] && this.loadingOlder) {
       this.historyBuffer.push(update);
       return;
     }
@@ -642,7 +678,7 @@ export class ChatController extends EventEmitter {
     }
 
     if (update.sessionUpdate === 'run_state_update') {
-      this.state = { ...this.state, running: update.runState === 'running' };
+      this.state = { ...this.state, running: meta['com.pegg/runState'] === 'running' };
       this.emit('update', update, this.state);
       this.emitState();
       return;
@@ -652,7 +688,7 @@ export class ChatController extends EventEmitter {
       this.legacyStreaming &&
       !this.loadingSession &&
       update.sessionUpdate === 'agent_message_chunk' &&
-      !update.agentName
+      !meta['com.pegg/agentName']
     ) {
       const text = sessionUpdateText(update.content);
       const last = this.state.items[this.state.items.length - 1];
@@ -684,8 +720,8 @@ export class ChatController extends EventEmitter {
     this.state = { ...this.state, historyLoading: true };
     this.emitState();
     try {
-      const history = await this.client!.request<{ oldestSeq?: number; hasMore?: boolean }>(
-        'session/history',
+      const history = await this.client!.request<SessionHistoryResult>(
+        '_pegg/session/history',
         {
           sessionId,
           cwd: workspaceRoot(),
@@ -716,21 +752,151 @@ export class ChatController extends EventEmitter {
   }
 
   private async onServerRequest(method: string, params: unknown): Promise<unknown> {
-    if (method === 'session/request_permission') {
-      return this.requestPermission(params as PermissionParams);
+    switch (method) {
+      case 'session/request_permission':
+        return this.requestPermission(params as PermissionParams);
+      case '_pegg/ask':
+        return this.requestAnswers(params as AskParams);
+      case 'fs/read_text_file':
+        return this.readTextFile(params as { path: string; line?: number; limit?: number });
+      case 'fs/write_text_file':
+        return this.writeTextFile(params as { path: string; content: string });
+      case 'terminal/create':
+        return this.createTerminal(params as TerminalCreateParams);
+      case 'terminal/output':
+        return this.terminalOutput(params as TerminalIdParams);
+      case 'terminal/wait_for_exit':
+        return this.terminalWaitForExit(params as TerminalIdParams);
+      case 'terminal/kill':
+        return this.terminalKill(params as TerminalIdParams);
+      case 'terminal/release':
+        return this.terminalRelease(params as TerminalIdParams);
+      case 'elicitation/create':
+        return this.createElicitation(params as ElicitationCreateParams);
+      default:
+        throw new Error(`Unsupported client method: ${method}`);
     }
-    if (method === 'pegg/ask') {
-      return this.requestAnswers(params as AskParams);
+  }
+
+  private async readTextFile(params: { path: string; line?: number; limit?: number }): Promise<{ content: string }> {
+    const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(params.path));
+    let text = Buffer.from(bytes).toString('utf8');
+    if (params.line || params.limit) {
+      const lines = text.split('\n');
+      const start = Math.max((params.line ?? 1) - 1, 0);
+      const end = params.limit ? start + params.limit : lines.length;
+      text = lines.slice(start, end).join('\n');
     }
-    throw new Error(`Unsupported client method: ${method}`);
+    return { content: text };
+  }
+
+  private async writeTextFile(params: { path: string; content: string }): Promise<Record<string, never>> {
+    await vscode.workspace.fs.writeFile(vscode.Uri.file(params.path), Buffer.from(params.content, 'utf8'));
+    return {};
+  }
+
+  private createTerminal(params: TerminalCreateParams): Promise<{ terminalId: string }> {
+    const id = `term-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const child = spawn(params.command, params.args ?? [], {
+      cwd: params.cwd,
+      env: { ...process.env, ...envRecord(params.env) },
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    child.stdin.end();
+    const limit = params.outputByteLimit && params.outputByteLimit > 0 ? params.outputByteLimit : 1024 * 1024;
+    const term: TerminalProcess = {
+      child,
+      output: '',
+      truncated: false,
+      limit,
+      exited: new Promise<TerminalExitStatus>((resolve) => {
+        child.on('exit', (code, signal) => {
+          term.exitStatus = { exitCode: code ?? undefined, signal: signal ?? undefined };
+          resolve(term.exitStatus);
+        });
+        child.on('error', () => {
+          term.exitStatus = { exitCode: undefined, signal: undefined };
+          resolve(term.exitStatus);
+        });
+      }),
+    };
+    const append = (chunk: Buffer) => {
+      term.output += chunk.toString('utf8');
+      if (term.output.length > limit) {
+        term.output = term.output.slice(term.output.length - limit);
+        term.truncated = true;
+      }
+    };
+    child.stdout.on('data', append);
+    child.stderr.on('data', append);
+    this.terminals.set(id, term);
+    return Promise.resolve({ terminalId: id });
+  }
+
+  private terminalOutput(params: TerminalIdParams): TerminalOutputResult {
+    const term = this.terminals.get(params.terminalId);
+    if (!term) throw new Error(`Unknown terminal: ${params.terminalId}`);
+    return { output: term.output, truncated: term.truncated, exitStatus: term.exitStatus };
+  }
+
+  private async terminalWaitForExit(params: TerminalIdParams): Promise<TerminalExitStatus> {
+    const term = this.terminals.get(params.terminalId);
+    if (!term) throw new Error(`Unknown terminal: ${params.terminalId}`);
+    return term.exited;
+  }
+
+  private terminalKill(params: TerminalIdParams): Record<string, never> {
+    const term = this.terminals.get(params.terminalId);
+    if (term && !term.exitStatus) term.child.kill('SIGTERM');
+    return {};
+  }
+
+  private terminalRelease(params: TerminalIdParams): Record<string, never> {
+    const term = this.terminals.get(params.terminalId);
+    if (term) {
+      if (!term.exitStatus) term.child.kill('SIGKILL');
+      this.terminals.delete(params.terminalId);
+    }
+    return {};
+  }
+
+  private async createElicitation(params: ElicitationCreateParams): Promise<ElicitationCreateResult> {
+    if (params.mode === 'url' && params.url) {
+      const choice = await vscode.window.showInformationMessage(params.message, 'Open', 'Cancel');
+      if (choice !== 'Open') return { action: 'cancel' };
+      await vscode.env.openExternal(vscode.Uri.parse(params.url));
+      return { action: 'accept' };
+    }
+    const content: Record<string, unknown> = {};
+    const properties = params.requestedSchema?.properties ?? {};
+    for (const [key, schema] of Object.entries(properties)) {
+      const title = schema.title ?? key;
+      if (schema.type === 'boolean') {
+        const pick = await vscode.window.showQuickPick(['Yes', 'No'], { title });
+        if (pick === undefined) return { action: 'cancel' };
+        content[key] = pick === 'Yes';
+      } else if (schema.enum?.length) {
+        const pick = await vscode.window.showQuickPick(schema.enum, { title });
+        if (pick === undefined) return { action: 'cancel' };
+        content[key] = pick;
+      } else {
+        const value = await vscode.window.showInputBox({ prompt: title });
+        if (value === undefined) return { action: 'cancel' };
+        content[key] = value;
+      }
+    }
+    return { action: 'accept', content };
   }
 
   private requestPermission(params: PermissionParams): Promise<unknown> {
     const id = `perm-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const question = params._meta?.['com.pegg/question'];
     const pending: PendingPermission = {
       kind: 'permission',
       id,
-      question: params.question || params.toolCall?.title || 'Allow this tool call?',
+      question:
+        (typeof question === 'string' && question) || params.toolCall?.title || 'Allow this tool call?',
       options: params.options ?? [
         { optionId: 'allow_once', name: 'Allow', kind: 'allow_once' },
         { optionId: 'allow_always', name: 'Allow All', kind: 'allow_always' },
@@ -811,19 +977,7 @@ export class ChatController extends EventEmitter {
         return { ...item, tool: { ...item.tool, status: result.stopReason === 'cancelled' ? 'cancelled' : 'completed' } };
       }),
     };
-    if (result.usage && result.usage.used > 0) {
-      this.state = {
-        ...this.state,
-        usage: {
-          used: result.usage.used,
-          size: result.usage.size,
-          cost: result.usage.cost?.amount,
-        },
-      };
-    }
-    if (result.stopReason === 'error') {
-      this.state = addNotice(this.state, 'Pegg stopped with an error.', 'error');
-    } else if (result.stopReason === 'cancelled') {
+    if (result.stopReason === 'cancelled') {
       this.state = addNotice(this.state, 'Run cancelled.', 'warn');
     }
     this.emitState();
@@ -864,8 +1018,47 @@ export class ChatController extends EventEmitter {
 
 function sessionUpdateText(content: SessionUpdate['content']): string {
   if (typeof content === 'string') return content;
-  if (content && typeof content === 'object' && content.type === 'text') return content.text ?? '';
+  if (content && !Array.isArray(content) && typeof content === 'object' && content.type === 'text') return content.text ?? '';
   return '';
+}
+
+function metaString(meta: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = meta?.[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function metaNumber(meta: Record<string, unknown> | undefined, key: string): number | undefined {
+  const value = meta?.[key];
+  return typeof value === 'number' ? value : undefined;
+}
+
+function configOptionValue(
+  options: { id: string; currentValue: string | boolean }[] | undefined,
+  id: string,
+): string | undefined {
+  const option = options?.find((entry) => entry.id === id);
+  return typeof option?.currentValue === 'string' ? option.currentValue : undefined;
+}
+
+function toSessionListItem(session: SessionInfo): SessionListItem {
+  const meta = session._meta ?? {};
+  return {
+    id: session.sessionId,
+    title: session.title || 'Untitled session',
+    projectDir: session.cwd,
+    provider: metaString(meta, 'com.pegg/provider'),
+    model: metaString(meta, 'com.pegg/model'),
+    mode: metaString(meta, 'com.pegg/mode'),
+    usage: meta['com.pegg/usage'] as SessionListItem['usage'],
+    createdAt: metaString(meta, 'com.pegg/createdAt') ?? session.updatedAt ?? '',
+    updatedAt: session.updatedAt ?? '',
+  };
+}
+
+function envRecord(env: { name: string; value: string }[] | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const entry of env ?? []) out[entry.name] = entry.value;
+  return out;
 }
 
 function truncate(text: string, max: number): string {

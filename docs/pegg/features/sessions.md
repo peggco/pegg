@@ -150,7 +150,7 @@ compacted view plus everything said afterwards.
 |---|---|---|---|---|---|
 | List | `sessions list` | Settings → Session → Load | Sessions view | `GET /api/sessions` | `session/list` |
 | Show details | `sessions show <id>` | transcript | chat transcript | `GET /api/sessions/{id}` | — |
-| Rename | — | Settings → Session → Change title | **Pegg: Rename Session** | — | `session/rename` |
+| Rename | — | Settings → Session → Change title | **Pegg: Rename Session** | — | `_pegg/session/rename` |
 | Delete | — | Settings → Session → Delete | **Pegg: Delete Session** | `DELETE /api/sessions/{id}` | `session/delete` |
 | Resume | `run --session` | Load session | `POST /api/run` | `session/resume` / `session/load` |
 

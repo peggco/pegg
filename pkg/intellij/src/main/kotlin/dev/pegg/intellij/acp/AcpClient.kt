@@ -80,6 +80,15 @@ class AcpClient(
                     put("readTextFile", true)
                     put("writeTextFile", false)
                 })
+                put("elicitation", buildJsonObject {
+                    put("form", buildJsonObject { })
+                })
+                put("session", buildJsonObject {
+                    put("configOptions", buildJsonObject {
+                        put("boolean", buildJsonObject { })
+                    })
+                    put("notices", buildJsonObject { })
+                })
             })
         }
         val result = request("initialize", params, 60_000)

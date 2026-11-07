@@ -24,7 +24,7 @@ func TestListSessionsIntegration(t *testing.T) {
 	if _, err := client.Request(ctx, "initialize", InitializeParams{ProtocolVersion: 1}); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := client.Request(ctx, "session/list", SessionListParams{All: true, Limit: 5})
+	raw, err := client.Request(ctx, "session/list", SessionListParams{})
 	if err != nil {
 		t.Fatal(err)
 	}

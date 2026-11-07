@@ -148,6 +148,29 @@ func newTestServer(t *testing.T) *Server {
 	return s
 }
 
+func initServer(t *testing.T, srv *Server) {
+	t.Helper()
+	if _, err := srv.handleInitialize(context.Background(), toJSON(t, InitializeParams{ProtocolVersion: 1})); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+}
+
+func peggSessionID(sr SessionNewResult) string {
+	if sr.Meta == nil {
+		return ""
+	}
+	id, _ := sr.Meta["com.pegg/sessionId"].(string)
+	return id
+}
+
+func updateMeta(u SessionUpdate, key string) string {
+	if u.Meta == nil {
+		return ""
+	}
+	v, _ := u.Meta[key].(string)
+	return v
+}
+
 type bufferTransport struct {
 	msg   chan Message
 	sends []string

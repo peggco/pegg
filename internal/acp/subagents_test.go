@@ -57,7 +57,7 @@ func TestSubagentLifecycleNotifications(t *testing.T) {
 		if update.SessionUpdate != "subagent" {
 			t.Fatalf("update type = %q", update.SessionUpdate)
 		}
-		if update.AgentID != "sub-1" || update.AgentName != "explorer" {
+		if updateMeta(update, "com.pegg/agentId") != "sub-1" || updateMeta(update, "com.pegg/agentName") != "explorer" {
 			t.Fatalf("update = %+v", update)
 		}
 	}
@@ -92,7 +92,8 @@ func TestSubagentErrorNotification(t *testing.T) {
 
 	updates := collectUpdates(t, transport)
 	last := updates[len(updates)-1]
-	if last.Status != "error" || last.Error != errTestSubagent.Error() {
+	errMsg, _ := last.Meta["com.pegg/error"].(string)
+	if last.Status != "error" || errMsg != errTestSubagent.Error() {
 		t.Fatalf("error update = %+v", last)
 	}
 }
@@ -154,23 +155,24 @@ func TestSubagentStreamIsForwarded(t *testing.T) {
 
 	var sawMessage, sawToolCall, sawToolResult, sawMain bool
 	for _, update := range collectUpdates(t, transport) {
+		agentID, _ := update.Meta["com.pegg/agentId"].(string)
 		switch update.SessionUpdate {
 		case "agent_message_chunk":
-			if update.AgentID == "sub-1" {
+			if agentID == "sub-1" {
 				sawMessage = true
 				if update.MessageID == "" {
 					t.Fatal("the subagent message needs an id")
 				}
 			}
-			if update.AgentID == orch.ID {
+			if agentID == orch.ID {
 				sawMain = true
 			}
 		case "tool_call":
-			if update.AgentID == "sub-1" && update.ToolName == "read" && update.ToolCallID == "c1" {
+			if agentID == "sub-1" && update.Name == "read" && update.ToolCallID == "c1" {
 				sawToolCall = true
 			}
 		case "tool_call_update":
-			if update.AgentID == "sub-1" && update.RawOutput == "file contents" {
+			if agentID == "sub-1" && update.RawOutput == "file contents" {
 				sawToolResult = true
 			}
 		}

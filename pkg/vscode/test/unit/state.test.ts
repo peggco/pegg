@@ -41,7 +41,7 @@ describe('chat state', () => {
       toolCallId: 't1',
       status: 'completed',
       rawOutput: 'ok',
-      contents: [{ type: 'diff', diff: { path: 'main.go', oldText: 'a', newText: 'b' } }],
+      content: [{ type: 'diff', diff: { path: 'main.go', oldText: 'a', newText: 'b' } }],
     });
     expect(state.items).toHaveLength(1);
     const item = state.items[0];
@@ -81,13 +81,13 @@ describe('chat state', () => {
     state = applyUpdate(state, {
       sessionUpdate: 'agent_message_chunk',
       messageId: 'a1',
-      agentName: 'orchestrator',
+      _meta: { 'com.pegg/agentName': 'orchestrator' },
       content: { type: 'text', text: 'One ' },
     });
     state = applyUpdate(state, {
       sessionUpdate: 'agent_message_chunk',
       messageId: 'a2',
-      agentName: 'orchestrator',
+      _meta: { 'com.pegg/agentName': 'orchestrator' },
       content: { type: 'text', text: 'response' },
     });
     expect(state.items).toHaveLength(1);
@@ -99,13 +99,13 @@ describe('chat state', () => {
     state = applyUpdate(state, {
       sessionUpdate: 'agent_thought_chunk',
       messageId: 'r1',
-      agentName: 'orchestrator',
+      _meta: { 'com.pegg/agentName': 'orchestrator' },
       content: { type: 'text', text: 'I should' },
     });
     state = applyUpdate(state, {
       sessionUpdate: 'agent_thought_chunk',
       messageId: 'r2',
-      agentName: 'orchestrator',
+      _meta: { 'com.pegg/agentName': 'orchestrator' },
       content: { type: 'text', text: ' inspect the repo' },
     });
     expect(state.items).toHaveLength(1);
@@ -119,13 +119,19 @@ describe('chat state', () => {
       entries: [{ content: 'one', status: 'pending' }],
     });
     state = applyUpdate(state, { sessionUpdate: 'usage_update', used: 10, size: 100, cost: { amount: 0.1, currency: 'USD' } });
-    state = applyUpdate(state, { sessionUpdate: 'current_mode_update', mode: 'plan' });
-    state = applyUpdate(state, { sessionUpdate: 'current_model_update', provider: 'openai', model: 'gpt' });
-    state = applyUpdate(state, { sessionUpdate: 'available_commands_update', commands: [{ name: 'init' }] });
+    state = applyUpdate(state, { sessionUpdate: 'current_mode_update', currentModeId: 'plan' });
+    state = applyUpdate(state, {
+      sessionUpdate: 'config_option_update',
+      configOptions: [{ id: 'model', name: 'Model', type: 'select', currentValue: 'gpt' }],
+    });
+    state = applyUpdate(state, {
+      sessionUpdate: 'available_commands_update',
+      availableCommands: [{ name: 'init', description: '' }],
+    });
     expect(state.plan[0].content).toBe('one');
     expect(state.usage.cost).toBe(0.1);
     expect(state.mode).toBe('plan');
-    expect(state.provider).toBe('openai');
+    expect(state.model).toBe('gpt');
     expect(state.commands[0].name).toBe('init');
   });
 
@@ -136,9 +142,9 @@ describe('chat state', () => {
       messageId: 'r1',
       content: { type: 'text', text: 'thinking' },
     });
-    state = applyUpdate(state, { sessionUpdate: 'error', error: 'boom' });
+    state = applyUpdate(state, { sessionUpdate: 'notice', severity: 'error', title: 'boom' });
     state = addNotice(state, 'careful', 'warn');
-    expect(state.items.map((item) => item.kind)).toEqual(['reasoning', 'error', 'notice']);
+    expect(state.items.map((item) => item.kind)).toEqual(['reasoning', 'notice', 'notice']);
   });
 
   it('attaches files to user messages and history chunks', () => {
@@ -155,7 +161,7 @@ describe('chat state', () => {
       sessionUpdate: 'user_message_chunk',
       messageId: 'm1',
       content: { type: 'text', text: '' },
-      attachments: [{ name: 'report.pdf', mediaType: 'application/pdf', type: 'file' }],
+      _meta: { 'com.pegg/attachments': [{ name: 'report.pdf', mediaType: 'application/pdf', type: 'file' }] },
     });
     expect(state.items).toHaveLength(1);
     expect(state.items[0]).toMatchObject({

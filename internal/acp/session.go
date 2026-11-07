@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
@@ -20,22 +21,31 @@ import (
 )
 
 type SessionNewParams struct {
-	Cwd                   string      `json:"cwd"`
-	MCPServers            []MCPServer `json:"mcpServers,omitempty"`
-	AdditionalDirectories []string    `json:"additionalDirectories,omitempty"`
+	Meta                  Meta          `json:"_meta,omitempty"`
+	Cwd                   string        `json:"cwd"`
+	MCPServers            []MCPServer   `json:"mcpServers"`
+	AdditionalDirectories []string      `json:"additionalDirectories,omitempty"`
+	SystemPrompt          *SystemPrompt `json:"systemPrompt,omitempty"`
 }
 
 type SessionNewResult struct {
-	SessionId      SessionId      `json:"sessionId"`
-	PeggSessionId  string         `json:"peggSessionId,omitempty"`
-	Mode           string         `json:"mode,omitempty"`
-	Provider       string         `json:"provider,omitempty"`
-	Model          string         `json:"model,omitempty"`
-	PermissionMode string         `json:"permissionMode,omitempty"`
-	Commands       []SlashCommand `json:"commands,omitempty"`
+	Meta          Meta                  `json:"_meta,omitempty"`
+	SessionId     SessionId             `json:"sessionId"`
+	Modes         *SessionModeState     `json:"modes,omitempty"`
+	ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
+	Models        *SessionModelState    `json:"models,omitempty"`
+}
+
+type SessionStateResult struct {
+	Meta          Meta                  `json:"_meta,omitempty"`
+	SessionId     SessionId             `json:"sessionId,omitempty"`
+	Modes         *SessionModeState     `json:"modes,omitempty"`
+	ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
+	Models        *SessionModelState    `json:"models,omitempty"`
 }
 
 type MCPServer struct {
+	Meta    Meta         `json:"_meta,omitempty"`
 	Name    string       `json:"name"`
 	Command string       `json:"command,omitempty"`
 	Args    []string     `json:"args,omitempty"`
@@ -46,25 +56,30 @@ type MCPServer struct {
 }
 
 type EnvVar struct {
+	Meta  Meta   `json:"_meta,omitempty"`
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
 
 type HttpHeader struct {
+	Meta  Meta   `json:"_meta,omitempty"`
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
 
 type SessionLoadParams struct {
-	SessionId             SessionId   `json:"sessionId"`
-	Cwd                   string      `json:"cwd"`
-	MCPServers            []MCPServer `json:"mcpServers,omitempty"`
-	AdditionalDirectories []string    `json:"additionalDirectories,omitempty"`
-	HistoryLimit          int         `json:"historyLimit,omitempty"`
-	HistoryBefore         int         `json:"historyBefore,omitempty"`
+	Meta                  Meta          `json:"_meta,omitempty"`
+	SessionId             SessionId     `json:"sessionId"`
+	Cwd                   string        `json:"cwd"`
+	MCPServers            []MCPServer   `json:"mcpServers"`
+	AdditionalDirectories []string      `json:"additionalDirectories,omitempty"`
+	SystemPrompt          *SystemPrompt `json:"systemPrompt,omitempty"`
+	HistoryLimit          int           `json:"historyLimit,omitempty"`
+	HistoryBefore         int           `json:"historyBefore,omitempty"`
 }
 
 type SessionHistoryParams struct {
+	Meta      Meta      `json:"_meta,omitempty"`
 	SessionId SessionId `json:"sessionId"`
 	Cwd       string    `json:"cwd,omitempty"`
 	Limit     int       `json:"limit,omitempty"`
@@ -72,53 +87,68 @@ type SessionHistoryParams struct {
 }
 
 type SessionHistoryResult struct {
+	Meta      Meta `json:"_meta,omitempty"`
 	OldestSeq int  `json:"oldestSeq"`
 	HasMore   bool `json:"hasMore"`
 }
 
 type SessionResumeParams struct {
-	SessionId             SessionId   `json:"sessionId"`
-	Cwd                   string      `json:"cwd"`
-	MCPServers            []MCPServer `json:"mcpServers,omitempty"`
-	AdditionalDirectories []string    `json:"additionalDirectories,omitempty"`
+	Meta                  Meta          `json:"_meta,omitempty"`
+	SessionId             SessionId     `json:"sessionId"`
+	Cwd                   string        `json:"cwd"`
+	MCPServers            []MCPServer   `json:"mcpServers"`
+	AdditionalDirectories []string      `json:"additionalDirectories,omitempty"`
+	SystemPrompt          *SystemPrompt `json:"systemPrompt,omitempty"`
 }
 
 type SessionDeleteParams struct {
+	Meta      Meta      `json:"_meta,omitempty"`
 	SessionId SessionId `json:"sessionId"`
 }
 
 type SessionCloseParams struct {
+	Meta      Meta      `json:"_meta,omitempty"`
 	SessionId SessionId `json:"sessionId"`
 }
 
 type SessionSetModeParams struct {
+	Meta      Meta      `json:"_meta,omitempty"`
 	SessionId SessionId `json:"sessionId"`
 	ModeId    string    `json:"modeId"`
 }
 
+type SessionSetConfigOptionParams struct {
+	Meta      Meta            `json:"_meta,omitempty"`
+	SessionId SessionId       `json:"sessionId"`
+	ConfigId  SessionConfigId `json:"configId"`
+	Type      string          `json:"type,omitempty"`
+	Value     any             `json:"value"`
+}
+
+type SessionSetConfigOptionResult struct {
+	Meta          Meta                  `json:"_meta,omitempty"`
+	ConfigOptions []SessionConfigOption `json:"configOptions"`
+}
+
 type SessionListParams struct {
+	Meta   Meta   `json:"_meta,omitempty"`
 	Cursor string `json:"cursor,omitempty"`
-	Offset int    `json:"offset,omitempty"`
-	Limit  int    `json:"limit,omitempty"`
 	Cwd    string `json:"cwd,omitempty"`
-	All    bool   `json:"all,omitempty"`
 }
 
 type SessionListResult struct {
-	Sessions   []SessionListItem `json:"sessions"`
-	NextCursor string            `json:"nextCursor,omitempty"`
+	Meta       Meta          `json:"_meta,omitempty"`
+	Sessions   []SessionInfo `json:"sessions"`
+	NextCursor string        `json:"nextCursor,omitempty"`
 }
 
-type SessionListItem struct {
-	ID         SessionId `json:"id"`
-	Title      string    `json:"title"`
-	ProjectDir string    `json:"projectDir,omitempty"`
-	Provider   string    `json:"provider,omitempty"`
-	Model      string    `json:"model,omitempty"`
-	Mode       string    `json:"mode,omitempty"`
-	Usage      llm.Usage `json:"usage,omitempty"`
-	CreatedAt  string    `json:"createdAt"`
-	UpdatedAt  string    `json:"updatedAt"`
+type SessionInfo struct {
+	Meta                  Meta      `json:"_meta,omitempty"`
+	SessionId             SessionId `json:"sessionId"`
+	Cwd                   string    `json:"cwd"`
+	Title                 string    `json:"title,omitempty"`
+	UpdatedAt             string    `json:"updatedAt,omitempty"`
+	AdditionalDirectories []string  `json:"additionalDirectories,omitempty"`
 }
 
 func (s *Server) handleSessionNew(ctx context.Context, params json.RawMessage) (any, error) {
@@ -133,6 +163,9 @@ func (s *Server) handleSessionNew(ctx context.Context, params json.RawMessage) (
 	orch, err := s.newAgent()
 	if err != nil {
 		return nil, &RPCError{Code: ErrCodeInternal, Message: "failed to create agent: " + err.Error()}
+	}
+	if err := applySystemPrompt(orch, req.SystemPrompt); err != nil {
+		return nil, err
 	}
 
 	acpID := uuid.NewString()
@@ -172,13 +205,14 @@ func (s *Server) handleSessionNew(ctx context.Context, params json.RawMessage) (
 	s.notifyMode(acpID, string(mode))
 	s.notifyCommands(acpID)
 	return SessionNewResult{
-		SessionId:      SessionId(acpID),
-		PeggSessionId:  acpSess.PeggSessionID,
-		Mode:           string(mode),
-		Provider:       acpSess.Provider,
-		Model:          acpSess.Model,
-		PermissionMode: s.permissionMode(),
-		Commands:       availableCommands(),
+		SessionId:     SessionId(acpID),
+		Modes:         s.modes(orch),
+		ConfigOptions: s.configOptions(orch),
+		Models:        s.sessionModelState(orch),
+		Meta: Meta{
+			"com.pegg/sessionId":      acpSess.PeggSessionID,
+			"com.pegg/permissionMode": s.permissionMode(),
+		},
 	}, nil
 }
 
@@ -190,12 +224,15 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 
 	vs, err := s.sessions.Get(string(req.SessionId))
 	if err != nil {
-		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "session not found"}
+		return nil, &RPCError{Code: ErrCodeResourceNotFound, Message: "session not found", Data: map[string]any{"sessionId": req.SessionId}}
 	}
 
 	orch, err := s.newAgent()
 	if err != nil {
 		return nil, &RPCError{Code: ErrCodeInternal, Message: "failed to create agent: " + err.Error()}
+	}
+	if err := applySystemPrompt(orch, req.SystemPrompt); err != nil {
+		return nil, err
 	}
 
 	mode := agent.NormalizeMode(agent.Mode(vs.Mode))
@@ -203,11 +240,11 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 	orch.SetSessionID(vs.ID)
 	s.applyStoredModel(orch, vs)
 
-	result := SessionHistoryResult{}
+	oldest, hasMore := 0, false
 	if msgs, err := s.sessionHistory(vs.ID); err == nil {
-		page, oldest, hasMore := paginateHistory(msgs, req.HistoryBefore, req.HistoryLimit)
+		page, o, more := paginateHistory(msgs, req.HistoryBefore, req.HistoryLimit)
 		s.emitHistoryMessages(string(req.SessionId), req.Cwd, page, false)
-		result = SessionHistoryResult{OldestSeq: oldest, HasMore: hasMore}
+		oldest, hasMore = o, more
 	}
 	acpSess := &ACPSession{
 		ID:            string(req.SessionId),
@@ -229,7 +266,16 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 	s.notifyCommands(string(req.SessionId))
 	s.startSessionFollow(acpSess)
 
-	return result, nil
+	return SessionStateResult{
+		SessionId:     req.SessionId,
+		Modes:         s.modes(orch),
+		ConfigOptions: s.configOptions(orch),
+		Models:        s.sessionModelState(orch),
+		Meta: Meta{
+			"com.pegg/oldestSeq": oldest,
+			"com.pegg/hasMore":   hasMore,
+		},
+	}, nil
 }
 
 func (s *Server) sessionHistory(sessionID string) ([]session.Message, error) {
@@ -279,14 +325,17 @@ func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Messa
 		if msg.Role == llm.RoleUser {
 			updateType = "user_message_chunk"
 		}
+		meta := Meta{"com.pegg/seq": msg.Seq}
+		if historyPage {
+			meta["com.pegg/historyPage"] = true
+		}
 		if msg.Reasoning != nil && msg.Role == llm.RoleAssistant {
 			if text, ok := msg.Reasoning.(string); ok && text != "" {
 				s.notify(sessionID, SessionUpdate{
 					SessionUpdate: "agent_thought_chunk",
-					MessageID:     "thought-" + msg.ID,
+					MessageID:     MessageId("thought-" + msg.ID),
 					Content:       &ContentBlock{Type: "text", Text: text},
-					Seq:           msg.Seq,
-					HistoryPage:   historyPage,
+					Meta:          meta,
 				})
 			}
 		}
@@ -300,13 +349,18 @@ func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Messa
 				if content == nil {
 					content = &ContentBlock{Type: "text"}
 				}
+				m := Meta{"com.pegg/seq": msg.Seq}
+				if historyPage {
+					m["com.pegg/historyPage"] = true
+				}
+				if len(atts) > 0 {
+					m["com.pegg/attachments"] = atts
+				}
 				s.notify(sessionID, SessionUpdate{
 					SessionUpdate: updateType,
-					MessageID:     msg.ID,
+					MessageID:     MessageId(msg.ID),
 					Content:       content,
-					Attachments:   atts,
-					Seq:           msg.Seq,
-					HistoryPage:   historyPage,
+					Meta:          m,
 				})
 			}
 		}
@@ -314,14 +368,14 @@ func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Messa
 			callArgs := parseArgs(call.Function.Arguments)
 			s.notify(sessionID, SessionUpdate{
 				SessionUpdate: "tool_call",
-				ToolCallID:    call.ID,
+				ToolCallID:    ToolCallId(call.ID),
 				Title:         toolTitle(call.Function.Name, callArgs),
-				Kind:          string(toolKind(call.Function.Name)),
+				Name:          call.Function.Name,
+				Kind:          toolKind(call.Function.Name),
 				Status:        string(ToolCallCompleted),
 				RawInput:      callArgs,
 				Locations:     toolLocations(cwd, callArgs),
-				Seq:           msg.Seq,
-				HistoryPage:   historyPage,
+				Meta:          meta,
 			})
 		}
 		if msg.Role == llm.RoleTool && msg.ToolCallID != "" {
@@ -329,14 +383,19 @@ func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Messa
 			if block := rawContent(msg); block != nil {
 				out = block.Text
 			}
+			m := Meta{"com.pegg/seq": msg.Seq}
+			if historyPage {
+				m["com.pegg/historyPage"] = true
+			}
+			if atts := fileAttachments(session.AttachmentsOf(msg)); len(atts) > 0 {
+				m["com.pegg/attachments"] = atts
+			}
 			s.notify(sessionID, SessionUpdate{
 				SessionUpdate: "tool_call_update",
-				ToolCallID:    msg.ToolCallID,
+				ToolCallID:    ToolCallId(msg.ToolCallID),
 				Status:        string(ToolCallCompleted),
 				RawOutput:     truncate(out, 64*1024),
-				Attachments:   fileAttachments(session.AttachmentsOf(msg)),
-				Seq:           msg.Seq,
-				HistoryPage:   historyPage,
+				Meta:          m,
 			})
 		}
 	}
@@ -345,11 +404,11 @@ func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Messa
 func (s *Server) handleSessionHistory(ctx context.Context, params json.RawMessage) (any, error) {
 	var req SessionHistoryParams
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid session/history params"}
+		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid _pegg/session/history params"}
 	}
 	vs, err := s.sessions.Get(string(req.SessionId))
 	if err != nil {
-		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "session not found"}
+		return nil, &RPCError{Code: ErrCodeResourceNotFound, Message: "session not found", Data: map[string]any{"sessionId": req.SessionId}}
 	}
 	msgs, err := s.sessionHistory(vs.ID)
 	if err != nil {
@@ -368,12 +427,15 @@ func (s *Server) handleSessionResume(ctx context.Context, params json.RawMessage
 
 	vs, err := s.sessions.Get(string(req.SessionId))
 	if err != nil {
-		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "session not found"}
+		return nil, &RPCError{Code: ErrCodeResourceNotFound, Message: "session not found", Data: map[string]any{"sessionId": req.SessionId}}
 	}
 
 	orch, err := s.newAgent()
 	if err != nil {
 		return nil, &RPCError{Code: ErrCodeInternal, Message: "failed to create agent: " + err.Error()}
+	}
+	if err := applySystemPrompt(orch, req.SystemPrompt); err != nil {
+		return nil, err
 	}
 
 	mode := agent.NormalizeMode(agent.Mode(vs.Mode))
@@ -401,7 +463,12 @@ func (s *Server) handleSessionResume(ctx context.Context, params json.RawMessage
 	s.notifyCommands(string(req.SessionId))
 	s.startSessionFollow(acpSess)
 
-	return map[string]any{}, nil
+	return SessionStateResult{
+		SessionId:     req.SessionId,
+		Modes:         s.modes(orch),
+		ConfigOptions: s.configOptions(orch),
+		Models:        s.sessionModelState(orch),
+	}, nil
 }
 
 func (s *Server) handleSessionDelete(ctx context.Context, params json.RawMessage) (any, error) {
@@ -413,9 +480,10 @@ func (s *Server) handleSessionDelete(ctx context.Context, params json.RawMessage
 		_ = s.runs.CancelSession(string(req.SessionId))
 	}
 	if err := s.sessions.Delete(string(req.SessionId)); err != nil {
-		return nil, &RPCError{Code: ErrCodeInternal, Message: "failed to delete session"}
+		s.log.Fdebug("acp: delete session %s: %v", req.SessionId, err)
 	}
-	return nil, nil
+	s.removeSession(string(req.SessionId))
+	return map[string]any{}, nil
 }
 
 func (s *Server) handleSessionClose(ctx context.Context, params json.RawMessage) (any, error) {
@@ -434,7 +502,7 @@ func (s *Server) handleSessionSetMode(ctx context.Context, params json.RawMessag
 	}
 	acpSess, ok := s.getSession(string(req.SessionId))
 	if !ok {
-		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "session not found"}
+		return nil, &RPCError{Code: ErrCodeResourceNotFound, Message: "session not found", Data: map[string]any{"sessionId": req.SessionId}}
 	}
 	m := agent.Mode(req.ModeId)
 	if !m.Valid() {
@@ -448,7 +516,60 @@ func (s *Server) handleSessionSetMode(ctx context.Context, params json.RawMessag
 		_ = s.sessions.SetMode(acpSess.PeggSessionID, string(m))
 	}
 	s.notifyMode(acpSess.ID, string(m))
+	s.notifyConfigOptions(acpSess)
 	return map[string]any{}, nil
+}
+
+func (s *Server) handleSessionSetConfigOption(ctx context.Context, params json.RawMessage) (any, error) {
+	var req SessionSetConfigOptionParams
+	if err := json.Unmarshal(params, &req); err != nil {
+		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid session/set_config_option params"}
+	}
+	acpSess, ok := s.getSession(string(req.SessionId))
+	if !ok {
+		return nil, &RPCError{Code: ErrCodeResourceNotFound, Message: "session not found", Data: map[string]any{"sessionId": req.SessionId}}
+	}
+	value, _ := req.Value.(string)
+	switch req.ConfigId {
+	case "mode":
+		m := agent.Mode(value)
+		if !m.Valid() {
+			return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid mode value"}
+		}
+		m = agent.NormalizeMode(m)
+		if acpSess.Agent != nil {
+			acpSess.Agent.SetMode(m)
+		}
+		if acpSess.PeggSessionID != "" {
+			_ = s.sessions.SetMode(acpSess.PeggSessionID, string(m))
+		}
+		s.notifyMode(acpSess.ID, string(m))
+	case "model":
+		if acpSess.IsRunning() {
+			return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "cannot change model while a prompt is running"}
+		}
+		prov, mdl, err := s.resolveModel("", value)
+		if err != nil {
+			return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "unknown model"}
+		}
+		if acpSess.Agent != nil {
+			acpSess.Agent.SetModelProvider(mdl, prov)
+		}
+		acpSess.Provider = prov.Name()
+		acpSess.Model = mdl.ID
+		if acpSess.PeggSessionID != "" {
+			_ = s.sessions.SetModel(acpSess.PeggSessionID, acpSess.Provider, acpSess.Model)
+		}
+	case "reasoning_effort":
+		if acpSess.Agent != nil {
+			acpSess.Agent.ReasoningEffort = value
+		}
+	default:
+		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "unknown configId: " + string(req.ConfigId)}
+	}
+	opts := s.configOptions(acpSess.Agent)
+	s.notifyConfigOptions(acpSess)
+	return SessionSetConfigOptionResult{ConfigOptions: opts}, nil
 }
 
 func (s *Server) handleSessionList(ctx context.Context, params json.RawMessage) (any, error) {
@@ -456,22 +577,23 @@ func (s *Server) handleSessionList(ctx context.Context, params json.RawMessage) 
 	if len(params) > 0 {
 		_ = json.Unmarshal(params, &req)
 	}
-	size := req.Limit
-	if size <= 0 || size > 200 {
-		size = 50
-	}
-	offset := req.Offset
-	if offset <= 0 && req.Cursor != "" {
-		offset, _ = strconv.Atoi(req.Cursor)
-	}
-	if offset < 0 {
-		offset = 0
+	const size = 50
+	offset := 0
+	if req.Cursor != "" {
+		decoded, err := base64.StdEncoding.DecodeString(req.Cursor)
+		if err != nil {
+			return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid cursor"}
+		}
+		offset, err = strconv.Atoi(string(decoded))
+		if err != nil || offset < 0 {
+			return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid cursor"}
+		}
 	}
 	filters := []query.Filter{
 		session.MainSessionsFilter(),
 		{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""},
 	}
-	if req.Cwd != "" && !req.All {
+	if req.Cwd != "" {
 		filters = append(filters, query.Filter{Column: "project_dir", Operator: query.OpEqual, Value: req.Cwd})
 	}
 	q := query.Query{
@@ -485,35 +607,38 @@ func (s *Server) handleSessionList(ctx context.Context, params json.RawMessage) 
 		return nil, &RPCError{Code: ErrCodeInternal, Message: "failed to list sessions"}
 	}
 
-	items := make([]SessionListItem, 0, len(sessions))
+	items := make([]SessionInfo, 0, len(sessions))
 	for _, sess := range sessions {
-		items = append(items, SessionListItem{
-			ID:         SessionId(sess.ID),
-			Title:      sess.Title,
-			ProjectDir: sess.ProjectDir,
-			Provider:   sess.Provider,
-			Model:      sess.Model,
-			Mode:       sess.Mode,
-			Usage:      sess.Usage,
-			CreatedAt:  sess.CreatedAt.Format("2006-01-02T15:04:05Z"),
-			UpdatedAt:  sess.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		items = append(items, SessionInfo{
+			SessionId: SessionId(sess.ID),
+			Cwd:       sess.ProjectDir,
+			Title:     sess.Title,
+			UpdatedAt: sess.UpdatedAt.UTC().Format(time.RFC3339),
+			Meta: Meta{
+				"com.pegg/provider":  sess.Provider,
+				"com.pegg/model":     sess.Model,
+				"com.pegg/mode":      sess.Mode,
+				"com.pegg/usage":     sess.Usage,
+				"com.pegg/createdAt": sess.CreatedAt.UTC().Format(time.RFC3339),
+			},
 		})
 	}
 
 	next := ""
 	if offset+len(items) < total {
-		next = strconv.Itoa(offset + len(items))
+		next = base64.StdEncoding.EncodeToString([]byte(strconv.Itoa(offset + len(items))))
 	}
 	return SessionListResult{Sessions: items, NextCursor: next}, nil
 }
 
 func (s *Server) handleSessionRename(ctx context.Context, params json.RawMessage) (any, error) {
 	var req struct {
+		Meta      Meta      `json:"_meta,omitempty"`
 		SessionId SessionId `json:"sessionId"`
 		Title     string    `json:"title"`
 	}
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid session/rename params"}
+		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid _pegg/session/rename params"}
 	}
 	id := string(req.SessionId)
 	if acpSess, ok := s.getSession(string(req.SessionId)); ok && acpSess != nil && acpSess.PeggSessionID != "" {
@@ -522,6 +647,10 @@ func (s *Server) handleSessionRename(ctx context.Context, params json.RawMessage
 	if err := s.sessions.SetTitle(id, req.Title); err != nil {
 		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: err.Error()}
 	}
+	s.notify(string(req.SessionId), SessionUpdate{
+		SessionUpdate: "session_info_update",
+		Title:         req.Title,
+	})
 	return map[string]any{}, nil
 }
 
@@ -532,23 +661,160 @@ func (s *Server) permissionMode() string {
 	return "semi-ask"
 }
 
-func availableCommands() []SlashCommand {
+func availableCommands() []AvailableCommand {
 	skills := skill.List()
-	out := make([]SlashCommand, 0, len(skills))
+	out := make([]AvailableCommand, 0, len(skills))
 	for _, sk := range skills {
 		desc := sk.Description
 		if desc == "" {
 			desc = sk.WhenToUse
 		}
-		out = append(out, SlashCommand{Name: sk.Name, Description: desc})
+		out = append(out, AvailableCommand{Name: sk.Name, Description: desc})
 	}
 	return out
 }
 
 func (s *Server) notifyCommands(sessionID string) {
 	s.notify(sessionID, SessionUpdate{
-		SessionUpdate: "available_commands_update",
-		Commands:      availableCommands(),
+		SessionUpdate:     "available_commands_update",
+		AvailableCommands: availableCommands(),
+	})
+}
+
+func (s *Server) modes(orch *agent.Agent) *SessionModeState {
+	current := agent.ModeAuto
+	if orch != nil {
+		current = orch.CurrentMode()
+	}
+	return &SessionModeState{
+		CurrentModeId: SessionModeId(string(current)),
+		AvailableModes: []SessionMode{
+			{ID: "build", Name: "Build", Description: "Write and modify code with full tool access"},
+			{ID: "plan", Name: "Plan", Description: "Design and plan without implementation"},
+			{ID: "auto", Name: "Auto", Description: "Automatically choose the best approach"},
+		},
+	}
+}
+
+func (s *Server) configOptions(orch *agent.Agent) []SessionConfigOption {
+	current := agent.ModeAuto
+	provider, model := "", ""
+	if orch != nil {
+		current = orch.CurrentMode()
+		if orch.Provider != nil {
+			provider = orch.Provider.Name()
+		}
+		model = orch.Model.ID
+	}
+	opts := []SessionConfigOption{
+		{
+			ID:           "mode",
+			Name:         "Session Mode",
+			Description:  "Controls how the agent requests permission",
+			Category:     ConfigCategoryMode,
+			Type:         "select",
+			CurrentValue: string(current),
+			Options: []SessionConfigSelectOption{
+				{Value: "build", Name: "Build", Description: "Write and modify code with full tool access"},
+				{Value: "plan", Name: "Plan", Description: "Design and plan without implementation"},
+				{Value: "auto", Name: "Auto", Description: "Automatically choose the best approach"},
+			},
+		},
+	}
+	if models := s.modelOptions(provider); len(models) > 0 {
+		if model == "" {
+			model = string(models[0].Value)
+		}
+		opts = append(opts, SessionConfigOption{
+			ID:           "model",
+			Name:         "Model",
+			Category:     ConfigCategoryModel,
+			Type:         "select",
+			CurrentValue: model,
+			Options:      models,
+		})
+	}
+	return opts
+}
+
+func (s *Server) modelOptions(provider string) []SessionConfigSelectOption {
+	if s.llmMgr == nil {
+		return nil
+	}
+	if !s.llmMgr.Ready() {
+		s.llmMgr.WaitUntilReadyTimeout(2 * time.Second)
+	}
+	providers := []string{provider}
+	if provider == "" {
+		providers = s.providerNames()
+	}
+	seen := make(map[string]bool)
+	out := make([]SessionConfigSelectOption, 0)
+	for _, p := range providers {
+		models, ok := s.llmMgr.ModelsNow(p)
+		if !ok {
+			continue
+		}
+		for _, m := range models {
+			if m.ID == "" || seen[m.ID] {
+				continue
+			}
+			seen[m.ID] = true
+			out = append(out, SessionConfigSelectOption{Value: SessionConfigValueId(m.ID), Name: m.ID})
+		}
+	}
+	return out
+}
+
+func (s *Server) sessionModelState(orch *agent.Agent) *SessionModelState {
+	current := ""
+	if orch != nil {
+		current = orch.Model.ID
+	}
+	opts := s.modelOptions("")
+	if len(opts) == 0 {
+		return nil
+	}
+	models := make([]ModelInfo, 0, len(opts))
+	for _, o := range opts {
+		models = append(models, ModelInfo{ModelId: string(o.Value), Name: o.Name})
+	}
+	if current == "" {
+		current = string(opts[0].Value)
+	}
+	return &SessionModelState{
+		CurrentModelId:  current,
+		AvailableModels: models,
+	}
+}
+
+func (s *Server) providerNames() []string {
+	if s.cfg == nil {
+		return nil
+	}
+	seen := make(map[string]bool)
+	out := make([]string, 0, len(s.cfg.Providers))
+	for _, p := range s.cfg.Providers {
+		name := p.Provider
+		if name == "" {
+			name = p.Driver
+		}
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	return out
+}
+
+func (s *Server) notifyConfigOptions(acpSess *ACPSession) {
+	if acpSess == nil {
+		return
+	}
+	s.notify(acpSess.ID, SessionUpdate{
+		SessionUpdate: "config_option_update",
+		ConfigOptions: s.configOptions(acpSess.Agent),
 	})
 }
 
@@ -567,6 +833,36 @@ func (s *Server) applyStoredModel(orch *agent.Agent, vs *session.Session) {
 	}
 }
 
+func applySystemPrompt(orch *agent.Agent, sp *SystemPrompt) error {
+	if sp == nil || orch == nil {
+		return nil
+	}
+	if len(sp.Content) == 0 {
+		return &RPCError{Code: ErrCodeInvalidParams, Message: "systemPrompt content must not be empty"}
+	}
+	var parts []string
+	for _, b := range sp.Content {
+		if b.Type != "text" {
+			return &RPCError{Code: ErrCodeInvalidParams, Message: "systemPrompt only supports text content blocks"}
+		}
+		parts = append(parts, b.Text)
+	}
+	text := strings.Join(parts, "\n\n")
+	switch sp.Mode {
+	case SystemPromptAppend:
+		if orch.SystemPrompt != "" {
+			orch.SystemPrompt = orch.SystemPrompt + "\n\n" + text
+		} else {
+			orch.SystemPrompt = text
+		}
+	case SystemPromptOverride:
+		orch.SystemPrompt = text
+	default:
+		return &RPCError{Code: ErrCodeInvalidParams, Message: "unsupported systemPrompt mode: " + string(sp.Mode)}
+	}
+	return nil
+}
+
 func (s *Server) newAgent() (*agent.Agent, error) {
 	return s.newAgentFn()
 }
@@ -578,11 +874,11 @@ func (s *Server) newOrchestratorAgent() (*agent.Agent, error) {
 	}
 	orch.Bus = s.bus
 
-	prov, mdl, err := s.resolveModel("", "")
-	if err != nil {
-		return nil, fmt.Errorf("resolve model: %w", err)
+	if prov, mdl, err := s.resolveModel("", ""); err == nil {
+		orch.SetModelProvider(mdl, prov)
+	} else {
+		s.log.Fdebug("acp: no model resolved for new session: %v", err)
 	}
-	orch.SetModelProvider(mdl, prov)
 	return orch, nil
 }
 

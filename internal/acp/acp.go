@@ -90,6 +90,15 @@ func (s *ACPSession) Cancel() {
 	}
 }
 
+func (s *ACPSession) matchesRequest(id any) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.running {
+		return false
+	}
+	return jsonIDToString(s.reqID) == jsonIDToString(id)
+}
+
 func (s *ACPSession) SetAttach(cancel context.CancelFunc, runID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -131,7 +140,8 @@ type Server struct {
 	agents map[string]string
 	mu     sync.RWMutex
 
-	clientCaps *ClientCapabilities
+	clientCaps  *ClientCapabilities
+	initialized bool
 
 	recMu sync.Mutex
 	rec   *recording
@@ -230,18 +240,27 @@ func (s *Server) handleFrame(ctx context.Context, msg Message) {
 }
 
 func (s *Server) dispatch(ctx context.Context, id any, method string, params json.RawMessage) {
+	if method != "initialize" && !s.isInitialized() {
+		if id != nil {
+			s.writeError(id, ErrCodeInvalidReq, "initialize must be called first", nil)
+		}
+		return
+	}
+
 	var result any
 	var handlerErr error
 
 	switch method {
 	case "initialize":
 		result, handlerErr = s.handleInitialize(ctx, params)
+	case "authenticate":
+		result, handlerErr = s.handleAuthenticate(ctx, params)
+	case "logout":
+		result, handlerErr = s.handleLogout(ctx, params)
 	case "session/new":
 		result, handlerErr = s.handleSessionNew(ctx, params)
 	case "session/load":
 		result, handlerErr = s.handleSessionLoad(ctx, params)
-	case "session/history":
-		result, handlerErr = s.handleSessionHistory(ctx, params)
 	case "session/resume":
 		result, handlerErr = s.handleSessionResume(ctx, params)
 	case "session/prompt":
@@ -254,34 +273,40 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleSessionSetMode(ctx, params)
 	case "session/set_model":
 		result, handlerErr = s.handleSessionSetModel(ctx, params)
-	case "session/rename":
-		result, handlerErr = s.handleSessionRename(ctx, params)
-	case "session/fork":
-		result, handlerErr = s.handleSessionFork(ctx, params)
-	case "session/revert":
-		result, handlerErr = s.handleSessionRevert(ctx, params)
+	case "session/set_config_option":
+		result, handlerErr = s.handleSessionSetConfigOption(ctx, params)
 	case "session/list":
 		result, handlerErr = s.handleSessionList(ctx, params)
-	case "pegg/models":
+	case "_pegg/session/history":
+		result, handlerErr = s.handleSessionHistory(ctx, params)
+	case "_pegg/session/rename":
+		result, handlerErr = s.handleSessionRename(ctx, params)
+	case "_pegg/session/set_model":
+		result, handlerErr = s.handleSessionSetModel(ctx, params)
+	case "_pegg/session/fork":
+		result, handlerErr = s.handleSessionFork(ctx, params)
+	case "_pegg/session/revert":
+		result, handlerErr = s.handleSessionRevert(ctx, params)
+	case "_pegg/models":
 		result, handlerErr = s.handleListModels(ctx, params)
-	case "pegg/skills/reload":
+	case "_pegg/skills/reload":
 		result, handlerErr = s.handleSkillsReload(ctx, params)
-	case "pegg/skills/search":
+	case "_pegg/skills/search":
 		result, handlerErr = s.handleSkillsSearch(ctx, params)
-	case "pegg/skills/install":
+	case "_pegg/skills/install":
 		result, handlerErr = s.handleSkillsInstall(ctx, params)
-	case "stt/transcribe":
+	case "_pegg/stt/transcribe":
 		result, handlerErr = s.handleSTTTranscribe(ctx, params)
-	case "stt/record/start":
+	case "_pegg/stt/record/start":
 		result, handlerErr = s.handleSTTRecordStart(ctx, params)
-	case "stt/record/stop":
+	case "_pegg/stt/record/stop":
 		result, handlerErr = s.handleSTTRecordStop(ctx, params)
 	case "session/cancel":
 		handlerErr = s.handleSessionCancel(ctx, params)
 		if handlerErr == nil {
 			return
 		}
-	case "$/cancelRequest":
+	case "$/cancel_request":
 		handlerErr = s.handleCancelRequest(ctx, params)
 		if handlerErr == nil {
 			return
@@ -358,6 +383,18 @@ func (s *Server) clientCapabilities() *ClientCapabilities {
 	return s.clientCaps
 }
 
+func (s *Server) markInitialized() {
+	s.mu.Lock()
+	s.initialized = true
+	s.mu.Unlock()
+}
+
+func (s *Server) isInitialized() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.initialized
+}
+
 func (s *Server) notify(sessionID string, update SessionUpdate) {
 	payload := map[string]any{
 		"jsonrpc": "2.0",
@@ -376,8 +413,26 @@ func (s *Server) notify(sessionID string, update SessionUpdate) {
 	}
 }
 
+func (s *Server) notifyPegg(sessionID string, update SessionUpdate) {
+	payload := map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "_pegg/update",
+		"params": map[string]any{
+			"sessionId": sessionID,
+			"update":    update,
+		},
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	if s.transport != nil {
+		s.transport.Send(Message{SessionId: sessionID, Body: raw})
+	}
+}
+
 func (s *Server) notifyMode(sessionID, mode string) {
-	s.notify(sessionID, SessionUpdate{SessionUpdate: "current_mode_update", Mode: mode})
+	s.notify(sessionID, SessionUpdate{SessionUpdate: "current_mode_update", CurrentModeId: SessionModeId(mode)})
 }
 
 func (s *Server) HTTPHandler() http.Handler {
@@ -447,7 +502,9 @@ func (s *Server) resolveModel(provider, model string) (llm.Provider, llm.Model, 
 	if s.llmMgr == nil {
 		return nil, llm.Model{}, ErrModelUnavailable
 	}
-	s.llmMgr.WaitUntilReady()
+	if !s.llmMgr.WaitUntilReadyTimeout(20 * time.Second) {
+		return nil, llm.Model{}, ErrModelUnavailable
+	}
 
 	mode := llm.SelectModePreferred
 	if model != "" {

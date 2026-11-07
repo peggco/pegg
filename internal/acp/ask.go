@@ -34,17 +34,18 @@ type askResult struct {
 }
 
 type permissionRequestParams struct {
-	SessionID string             `json:"sessionId"`
-	Question  string             `json:"question,omitempty"`
+	Meta      Meta               `json:"_meta,omitempty"`
+	SessionID SessionId          `json:"sessionId"`
 	ToolCall  permissionToolCall `json:"toolCall"`
 	Options   []PermissionOption `json:"options"`
 }
 
 type permissionToolCall struct {
-	ToolCallID string `json:"toolCallId,omitempty"`
-	Title      string `json:"title,omitempty"`
-	Kind       string `json:"kind,omitempty"`
-	RawInput   any    `json:"rawInput,omitempty"`
+	Meta       Meta       `json:"_meta,omitempty"`
+	ToolCallID ToolCallId `json:"toolCallId"`
+	Title      string     `json:"title,omitempty"`
+	Kind       ToolKind   `json:"kind,omitempty"`
+	RawInput   any        `json:"rawInput,omitempty"`
 }
 
 func (s *Server) subscribeAsk() {
@@ -81,11 +82,10 @@ func (s *Server) handleAgentStarted(ev agent.AgentStarted) {
 	if !ok {
 		return
 	}
-	s.notify(sessionID, SessionUpdate{
+	s.notifyPegg(sessionID, SessionUpdate{
 		SessionUpdate: "subagent",
-		AgentID:       ev.AgentID,
-		AgentName:     ev.AgentName,
 		Status:        "running",
+		Meta:          Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName},
 	})
 }
 
@@ -165,10 +165,9 @@ func (s *Server) resolveAsk(key, runID, agentID, fallbackSessionID string) {
 	if fallbackSessionID == "" {
 		return
 	}
-	s.notify(fallbackSessionID, SessionUpdate{
+	s.notifyPegg(fallbackSessionID, SessionUpdate{
 		SessionUpdate: "run_ask_resolved",
-		RunID:         runID,
-		AgentID:       agentID,
+		Meta:          Meta{"com.pegg/runId": runID, "com.pegg/agentId": agentID},
 	})
 }
 
@@ -214,7 +213,22 @@ func (s *Server) askClient(ctx context.Context, acpSess *ACPSession, ev agent.Ag
 	if len(ev.Questions) == 1 && isPermissionQuestion(ev.Questions[0]) {
 		return s.askPermission(ctx, acpSess, ev)
 	}
+	if s.clientSupportsElicitation("form") {
+		return s.askElicitation(ctx, acpSess, ev)
+	}
 	return s.askQuestions(ctx, acpSess, ev)
+}
+
+func (s *Server) askElicitation(ctx context.Context, acpSess *ACPSession, ev agent.AgentAsk) (map[string]string, error) {
+	params := askToElicitation(acpSess.ID, ev)
+	res, err := s.Elicit(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	if res.Action == "accept" {
+		return elicitationAnswers(ev.Questions, res.Content), nil
+	}
+	return deniedAnswers(ev.Questions), nil
 }
 
 func isPermissionQuestion(q agent.AskQuestion) bool {
@@ -269,11 +283,12 @@ func (s *Server) askPermission(ctx context.Context, acpSess *ACPSession, ev agen
 	defer cancel()
 
 	params := permissionRequestParams{
-		SessionID: acpSess.ID,
-		Question:  question,
+		SessionID: SessionId(acpSess.ID),
+		Meta:      Meta{"com.pegg/question": question},
 		ToolCall: permissionToolCall{
-			Title: q.Question,
-			Kind:  string(ToolKindOther),
+			ToolCallID: ToolCallId("perm-" + q.ID),
+			Title:      q.Question,
+			Kind:       ToolKindOther,
 		},
 		Options: []PermissionOption{
 			{OptionId: "allow_once", Name: "Allow", Kind: PermAllowOnce},
@@ -307,7 +322,7 @@ func (s *Server) askQuestions(ctx context.Context, acpSess *ACPSession, ev agent
 		AgentName: ev.AgentName,
 		Questions: ev.Questions,
 	}
-	raw, err := s.client.call(ctx, "pegg/ask", params, askTimeout)
+	raw, err := s.client.call(ctx, "_pegg/ask", params, askTimeout)
 	if err != nil {
 		return nil, err
 	}
