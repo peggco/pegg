@@ -107,8 +107,9 @@ func (s *summarizer) run(ctx context.Context, a *agent.Agent, history []llm.Mess
 	if sid := llm.SessionIDFrom(ctx); sid != "" {
 		ctx = llm.WithSessionID(ctx, sid)
 	}
+	runner := a.Clone("compaction-summarizer")
 	input := formatHistoryForSummary(history)
-	res, err := a.Run(ctx, input)
+	res, err := runner.Run(ctx, input)
 	if err != nil {
 		return "", fmt.Errorf("compaction: summarizer run: %w", err)
 	}

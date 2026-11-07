@@ -3,6 +3,7 @@ package middlewares
 import (
 	"testing"
 
+	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/llm"
 )
 
@@ -101,10 +102,9 @@ func TestLoopDetectorTextLoop(t *testing.T) {
 		}
 	}
 
-	ld.mu.Lock()
-	detected := ld.loopDetected
-	reason := ld.loopReason
-	ld.mu.Unlock()
+	st := ld.stateFor(loopKey(t.Context()))
+	detected := st.loopDetected
+	reason := st.loopReason
 
 	if !detected {
 		t.Fatal("expected loop detection after 3 identical texts")
@@ -124,11 +124,9 @@ func TestLoopDetectorTextLoop(t *testing.T) {
 		t.Errorf("expected system role, got %v", req.Messages[0].Role)
 	}
 
-	ld.mu.Lock()
-	if ld.loopDetected {
+	if ld.stateFor(loopKey(t.Context())).loopDetected {
 		t.Fatal("loop flag should be cleared after injection")
 	}
-	ld.mu.Unlock()
 }
 
 func TestLoopDetectorToolLoop(t *testing.T) {
@@ -146,10 +144,9 @@ func TestLoopDetectorToolLoop(t *testing.T) {
 		ld.AfterLLM(t.Context(), nil, resp)
 	}
 
-	ld.mu.Lock()
-	detected := ld.loopDetected
-	reason := ld.loopReason
-	ld.mu.Unlock()
+	st := ld.stateFor(loopKey(t.Context()))
+	detected := st.loopDetected
+	reason := st.loopReason
 
 	if !detected {
 		t.Fatal("expected loop detection for repeated tool calls")
@@ -171,12 +168,9 @@ func TestLoopDetectorNoDetection(t *testing.T) {
 		ld.AfterLLM(t.Context(), nil, resp)
 	}
 
-	ld.mu.Lock()
-	if ld.loopDetected {
-		ld.mu.Unlock()
+	if ld.stateFor(loopKey(t.Context())).loopDetected {
 		t.Fatal("expected no loop detection for different texts")
 	}
-	ld.mu.Unlock()
 }
 
 func TestOnErrorResets(t *testing.T) {
@@ -190,23 +184,19 @@ func TestOnErrorResets(t *testing.T) {
 		ld.AfterLLM(t.Context(), nil, resp)
 	}
 
-	ld.mu.Lock()
-	if !ld.loopDetected {
-		ld.mu.Unlock()
+	if !ld.stateFor(loopKey(t.Context())).loopDetected {
 		t.Fatal("expected loop detection")
 	}
-	ld.mu.Unlock()
 
 	ld.OnError(t.Context(), nil)
 
-	ld.mu.Lock()
-	if ld.loopDetected {
+	st := ld.stateFor(loopKey(t.Context()))
+	if st.loopDetected {
 		t.Fatal("loop flag should be reset after OnError")
 	}
-	if len(ld.recentTexts) != 0 {
+	if len(st.recentTexts) != 0 {
 		t.Fatal("texts should be reset after OnError")
 	}
-	ld.mu.Unlock()
 }
 
 func TestDetectReasoningLoop(t *testing.T) {
@@ -222,16 +212,44 @@ func TestDetectReasoningLoop(t *testing.T) {
 		ld.AfterLLM(t.Context(), nil, resp)
 	}
 
-	ld.mu.Lock()
-	detected := ld.loopDetected
-	reason := ld.loopReason
-	ld.mu.Unlock()
+	st := ld.stateFor(loopKey(t.Context()))
+	detected := st.loopDetected
+	reason := st.loopReason
 
 	if !detected {
 		t.Fatal("expected reasoning loop detection")
 	}
 	if !contains(reason, "thinking") {
 		t.Errorf("expected 'thinking' in reason, got: %s", reason)
+	}
+}
+
+func TestLoopDetectorIsolatesAgents(t *testing.T) {
+	ld := NewLoopDetector()
+	a := agent.New("a")
+	b := agent.New("b")
+	ctxA := agent.WithAgent(t.Context(), a)
+	ctxB := agent.WithAgent(t.Context(), b)
+
+	ld.BeforeRun(ctxA, "a", "in")
+	ld.BeforeRun(ctxB, "b", "in")
+
+	for i := 0; i < 3; i++ {
+		resp := &llm.Response{Choices: []llm.Choice{{Message: contentMsg("same")}}}
+		if err := ld.AfterLLM(ctxA, nil, resp); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !ld.stateFor(loopKey(ctxA)).loopDetected {
+		t.Fatal("agent A should detect a loop")
+	}
+	if ld.stateFor(loopKey(ctxB)).loopDetected {
+		t.Fatal("agent B must not be affected by agent A's loop")
+	}
+
+	ld.BeforeRun(ctxB, "b", "in")
+	if !ld.stateFor(loopKey(ctxA)).loopDetected {
+		t.Fatal("agent B BeforeRun must not reset agent A's state")
 	}
 }
 
@@ -250,10 +268,9 @@ func TestDetectCombinedTextToolLoop(t *testing.T) {
 		ld.AfterLLM(t.Context(), nil, resp)
 	}
 
-	ld.mu.Lock()
-	detected := ld.loopDetected
-	reason := ld.loopReason
-	ld.mu.Unlock()
+	st := ld.stateFor(loopKey(t.Context()))
+	detected := st.loopDetected
+	reason := st.loopReason
 
 	if !detected {
 		t.Fatal("expected combined text-tool loop detection")

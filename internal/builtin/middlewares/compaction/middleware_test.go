@@ -132,9 +132,7 @@ func TestBeforeLLMSlidingWindow(t *testing.T) {
 
 	req := &llm.Request{Messages: msgs}
 
-	m.mu.Lock()
-	m.needsCompact = true
-	m.mu.Unlock()
+	m.setNeeds(ctx, 0)
 
 	err := m.BeforeLLM(ctx, req)
 	if err != nil {
@@ -185,9 +183,7 @@ func TestAfterLLMDetectsPressure(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	m.mu.Lock()
-	needs := m.needsCompact
-	m.mu.Unlock()
+	needs := m.peekNeeds(ctx).needsCompact
 
 	if !needs {
 		t.Error("AfterLLM should detect pressure when prompt tokens exceed threshold")
@@ -222,9 +218,7 @@ func TestAfterLLMNoPressureBelowThreshold(t *testing.T) {
 
 	_ = m.AfterLLM(ctx, req, resp)
 
-	m.mu.Lock()
-	needs := m.needsCompact
-	m.mu.Unlock()
+	needs := m.peekNeeds(ctx).needsCompact
 
 	if needs {
 		t.Error("AfterLLM should not detect pressure below threshold")
@@ -363,9 +357,7 @@ func TestSlidingWindowPreservesSystemAndRecent(t *testing.T) {
 	ctx := agent.WithHistory(context.Background(), ref)
 	req := &llm.Request{Messages: msgs}
 
-	m.mu.Lock()
-	m.needsCompact = true
-	m.mu.Unlock()
+	m.setNeeds(ctx, 0)
 
 	_ = m.BeforeLLM(ctx, req)
 
@@ -407,9 +399,7 @@ func TestSlidingWindowPreservesFirstSystemMessage(t *testing.T) {
 	ctx := agent.WithHistory(context.Background(), ref)
 	req := &llm.Request{Messages: msgs}
 
-	m.mu.Lock()
-	m.needsCompact = true
-	m.mu.Unlock()
+	m.setNeeds(ctx, 0)
 
 	_ = m.BeforeLLM(ctx, req)
 
@@ -460,10 +450,7 @@ func TestSlidingWindowUsesContextWindowSize(t *testing.T) {
 	ctx = agent.WithHistory(ctx, ref)
 	req := &llm.Request{Messages: msgs}
 
-	m.mu.Lock()
-	m.needsCompact = true
-	m.lastPromptTokens = 900
-	m.mu.Unlock()
+	m.setNeeds(ctx, 900)
 
 	_ = m.BeforeLLM(ctx, req)
 
@@ -522,10 +509,7 @@ func TestBeforeLLMEmitsStreamAndBusEvents(t *testing.T) {
 	_ = a.Bus.Subscribe(TopicCompactionFinished, func(e Event) { busEvt = &e })
 
 	req := &llm.Request{Messages: msgs}
-	m.mu.Lock()
-	m.needsCompact = true
-	m.lastPromptTokens = 900
-	m.mu.Unlock()
+	m.setNeeds(ctx, 900)
 
 	if err := m.BeforeLLM(ctx, req); err != nil {
 		t.Fatal(err)
@@ -616,9 +600,7 @@ func TestCompactSummarizationShrinksHistory(t *testing.T) {
 	ctx = agent.WithHistory(ctx, ref)
 	req := &llm.Request{Messages: history}
 
-	m.mu.Lock()
-	m.needsCompact = true
-	m.mu.Unlock()
+	m.setNeeds(ctx, 0)
 
 	if err := m.BeforeLLM(ctx, req); err != nil {
 		t.Fatalf("BeforeLLM: %v", err)
@@ -658,9 +640,7 @@ func TestCompactSummarizationKeepsHistoryOnFailure(t *testing.T) {
 	ctx = agent.WithHistory(ctx, ref)
 	req := &llm.Request{Messages: history}
 
-	m.mu.Lock()
-	m.needsCompact = true
-	m.mu.Unlock()
+	m.setNeeds(ctx, 0)
 
 	if err := m.BeforeLLM(ctx, req); err != nil {
 		t.Fatalf("BeforeLLM should not surface summarizer errors: %v", err)
@@ -672,9 +652,7 @@ func TestCompactSummarizationKeepsHistoryOnFailure(t *testing.T) {
 	prov.mu.Lock()
 	prov.fail = false
 	prov.mu.Unlock()
-	m.mu.Lock()
-	m.needsCompact = true
-	m.mu.Unlock()
+	m.setNeeds(ctx, 0)
 	if err := m.BeforeLLM(ctx, req); err != nil {
 		t.Fatalf("BeforeLLM retry: %v", err)
 	}
@@ -696,10 +674,35 @@ func TestAfterLLMUsesFallbackContextWindow(t *testing.T) {
 	if err := m.AfterLLM(ctx, &llm.Request{}, resp); err != nil {
 		t.Fatal(err)
 	}
-	m.mu.Lock()
-	needs := m.needsCompact
-	m.mu.Unlock()
+	needs := m.peekNeeds(ctx).needsCompact
 	if !needs {
 		t.Fatal("compaction should trigger at the fallback window even without model config")
+	}
+}
+
+func TestCompactionStateIsolatedPerAgent(t *testing.T) {
+	m := New(Deps{Config: &config.CompactionConfig{
+		Enabled:   true,
+		Strategy:  []string{"sliding-window"},
+		Threshold: 80,
+	}})
+	mk := func(name string) *agent.Agent {
+		return agent.New(name, agent.WithModel(llm.Model{
+			ID:     "m",
+			Config: &llm.ModelConfig{MaxInputTokens: 1000},
+		}))
+	}
+	a, b := mk("a"), mk("b")
+	ctxA := agent.WithAgent(context.Background(), a)
+	ctxB := agent.WithAgent(context.Background(), b)
+
+	if err := m.AfterLLM(ctxA, &llm.Request{}, &llm.Response{Usage: llm.Usage{PromptTokens: 900}}); err != nil {
+		t.Fatal(err)
+	}
+	if !m.peekNeeds(ctxA).needsCompact {
+		t.Fatal("agent A should need compaction")
+	}
+	if m.peekNeeds(ctxB).needsCompact {
+		t.Fatal("agent B must not inherit agent A's compaction pressure")
 	}
 }

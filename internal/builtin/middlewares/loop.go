@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/peggco/pegg/internal/agent"
 	agentmw "github.com/peggco/pegg/internal/agent/middleware"
 	"github.com/peggco/pegg/internal/llm"
 )
@@ -15,17 +16,19 @@ type responseRecord struct {
 	toolSigs []string
 }
 
-type loopDetector struct {
-	agentmw.BaseMiddleware
-
-	mu sync.Mutex
-
+type loopState struct {
 	recentTexts     []string
 	recentReasoning []string
 	recentResponses []responseRecord
+	loopDetected    bool
+	loopReason      string
+}
 
-	loopDetected bool
-	loopReason   string
+type loopDetector struct {
+	agentmw.BaseMiddleware
+
+	mu     sync.Mutex
+	states map[string]*loopState
 }
 
 const (
@@ -35,55 +38,78 @@ const (
 )
 
 func NewLoopDetector() *loopDetector {
-	return &loopDetector{}
+	return &loopDetector{states: make(map[string]*loopState)}
 }
 
-func (l *loopDetector) BeforeRun(_ context.Context, _, _ string) error {
+func loopKey(ctx context.Context) string {
+	if a := agent.FromContext(ctx); a != nil && a.ID != "" {
+		return a.ID
+	}
+	return ""
+}
+
+func (l *loopDetector) stateFor(key string) *loopState {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.recentTexts = nil
-	l.recentReasoning = nil
-	l.recentResponses = nil
-	l.loopDetected = false
-	l.loopReason = ""
+	st := l.states[key]
+	if st == nil {
+		st = &loopState{}
+		l.states[key] = st
+	}
+	return st
+}
+
+func (l *loopDetector) forget(key string) {
+	l.mu.Lock()
+	delete(l.states, key)
+	l.mu.Unlock()
+}
+
+func (l *loopDetector) BeforeRun(ctx context.Context, _, _ string) error {
+	key := loopKey(ctx)
+	l.mu.Lock()
+	l.states[key] = &loopState{}
+	l.mu.Unlock()
 	return nil
 }
 
-func (l *loopDetector) BeforeLLM(_ context.Context, req *llm.Request) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+func (l *loopDetector) AfterRun(ctx context.Context, _ string, _ *agentmw.Result, _ error) error {
+	l.forget(loopKey(ctx))
+	return nil
+}
 
-	if !l.loopDetected {
+func (l *loopDetector) BeforeLLM(ctx context.Context, req *llm.Request) error {
+	st := l.stateFor(loopKey(ctx))
+	if !st.loopDetected {
 		return nil
 	}
 
-	msg := fmt.Sprintf("An execution loop was detected: %s. Attempt an alternative reasoning path, change your approach, or use different tool arguments. Do not repeat the same pattern.", l.loopReason)
+	msg := fmt.Sprintf("An execution loop was detected: %s. Attempt an alternative reasoning path, change your approach, or use different tool arguments. Do not repeat the same pattern.", st.loopReason)
 	req.Messages = append(req.Messages, llm.SystemMessage(msg))
 
-	l.loopDetected = false
-	l.loopReason = ""
+	st.loopDetected = false
+	st.loopReason = ""
 	return nil
 }
 
-func (l *loopDetector) AfterLLM(_ context.Context, _ *llm.Request, resp *llm.Response) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+func (l *loopDetector) AfterLLM(ctx context.Context, _ *llm.Request, resp *llm.Response) error {
+	st := l.stateFor(loopKey(ctx))
 
 	content := normalizeText(resp.GetContent())
 	reasoning := normalizeText(resp.GetReasoning())
 	toolCalls := resp.GetToolCalls()
 
 	if content != "" {
-		l.recentTexts = append(l.recentTexts, content)
-		if len(l.recentTexts) > loopWindow {
-			l.recentTexts = l.recentTexts[1:]
+		st.recentTexts = append(st.recentTexts, content)
+		if len(st.recentTexts) > loopWindow {
+			st.recentTexts = st.recentTexts[1:]
 		}
 	}
 
 	if reasoning != "" {
-		l.recentReasoning = append(l.recentReasoning, reasoning)
-		if len(l.recentReasoning) > loopWindow {
-			l.recentReasoning = l.recentReasoning[1:]
+		st.recentReasoning = append(st.recentReasoning, reasoning)
+		if len(st.recentReasoning) > loopWindow {
+			st.recentReasoning = st.recentReasoning[1:]
 		}
 	}
 
@@ -92,26 +118,26 @@ func (l *loopDetector) AfterLLM(_ context.Context, _ *llm.Request, resp *llm.Res
 		sigs = append(sigs, toolSig(tc))
 	}
 	rec := responseRecord{content: content, toolSigs: sigs}
-	l.recentResponses = append(l.recentResponses, rec)
-	if len(l.recentResponses) > loopWindow {
-		l.recentResponses = l.recentResponses[1:]
+	st.recentResponses = append(st.recentResponses, rec)
+	if len(st.recentResponses) > loopWindow {
+		st.recentResponses = st.recentResponses[1:]
 	}
 
 	if len(sigs) > 0 {
-		if reason := detectResponseLoop(l.recentResponses); reason != "" {
-			l.loopDetected = true
-			l.loopReason = reason
+		if reason := detectResponseLoop(st.recentResponses); reason != "" {
+			st.loopDetected = true
+			st.loopReason = reason
 			return nil
 		}
 	}
-	if reason := detectLoop(l.recentTexts, "text"); reason != "" {
-		l.loopDetected = true
-		l.loopReason = reason
+	if reason := detectLoop(st.recentTexts, "text"); reason != "" {
+		st.loopDetected = true
+		st.loopReason = reason
 		return nil
 	}
-	if reason := detectLoop(l.recentReasoning, "thinking"); reason != "" {
-		l.loopDetected = true
-		l.loopReason = reason
+	if reason := detectLoop(st.recentReasoning, "thinking"); reason != "" {
+		st.loopDetected = true
+		st.loopReason = reason
 		return nil
 	}
 
@@ -195,13 +221,7 @@ func normalizeText(s string) string {
 	return s
 }
 
-func (l *loopDetector) OnError(_ context.Context, _ error) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.recentTexts = nil
-	l.recentReasoning = nil
-	l.recentResponses = nil
-	l.loopDetected = false
-	l.loopReason = ""
+func (l *loopDetector) OnError(ctx context.Context, _ error) error {
+	l.forget(loopKey(ctx))
 	return nil
 }
