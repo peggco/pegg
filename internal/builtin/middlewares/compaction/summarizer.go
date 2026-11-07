@@ -22,16 +22,13 @@ func generateSummarizerPrompt() (string, error) {
 }
 
 type summarizer struct {
-	once    sync.Once
-	agent   *agent.Agent
-	prompt  string
-	prov    llm.Provider
-	model   llm.Model
-	initErr error
+	mu     sync.Mutex
+	prompt string
+	agents map[string]*agent.Agent
 }
 
 func newSummarizer() *summarizer {
-	return &summarizer{}
+	return &summarizer{agents: make(map[string]*agent.Agent)}
 }
 
 func (s *summarizer) resolve(cfg *config.CompactionConfig, llmMgr *llm.Manager, parent *agent.Agent) (llm.Provider, llm.Model) {
@@ -70,38 +67,48 @@ func (s *summarizer) resolve(cfg *config.CompactionConfig, llmMgr *llm.Manager, 
 	return prov, res.Model
 }
 
-func (s *summarizer) get(cfg *config.CompactionConfig, llmMgr *llm.Manager, parent *agent.Agent) *agent.Agent {
-	s.once.Do(func() {
-		s.prompt, s.initErr = generateSummarizerPrompt()
-		if s.initErr != nil {
-			return
-		}
+func (s *summarizer) get(cfg *config.CompactionConfig, llmMgr *llm.Manager, parent *agent.Agent) (*agent.Agent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-		s.prov, s.model = s.resolve(cfg, llmMgr, parent)
-		if s.prov == nil {
-			s.initErr = fmt.Errorf("compaction: summarizer provider unavailable")
-			return
+	if s.prompt == "" {
+		p, err := generateSummarizerPrompt()
+		if err != nil {
+			return nil, err
 		}
-
-		s.agent = agent.New("compaction-summarizer",
-			agent.WithProvider(s.prov),
-			agent.WithModel(s.model),
-			agent.WithSystemPrompt(s.prompt),
-			agent.WithMaxIterations(1),
-		)
-	})
-	if s.initErr != nil {
-		return nil
+		s.prompt = p
 	}
-	return s.agent
+
+	prov, model := s.resolve(cfg, llmMgr, parent)
+	if prov == nil || model.ID == "" {
+		return nil, fmt.Errorf("compaction: summarizer provider unavailable")
+	}
+
+	key := prov.Name() + "\x00" + model.ID
+	if a, ok := s.agents[key]; ok {
+		return a, nil
+	}
+
+	a := agent.New("compaction-summarizer",
+		agent.WithProvider(prov),
+		agent.WithModel(model),
+		agent.WithSystemPrompt(s.prompt),
+		agent.WithMaxIterations(1),
+	)
+	s.agents[key] = a
+	return a, nil
 }
 
-func (s *summarizer) run(ctx context.Context, history []llm.Message) (string, error) {
-	if s.agent == nil {
+func (s *summarizer) run(ctx context.Context, a *agent.Agent, history []llm.Message) (string, error) {
+	if a == nil {
 		return "", fmt.Errorf("compaction: summarizer not initialized")
 	}
+	ctx = context.WithoutCancel(ctx)
+	if sid := llm.SessionIDFrom(ctx); sid != "" {
+		ctx = llm.WithSessionID(ctx, sid)
+	}
 	input := formatHistoryForSummary(history)
-	res, err := s.agent.Run(ctx, input)
+	res, err := a.Run(ctx, input)
 	if err != nil {
 		return "", fmt.Errorf("compaction: summarizer run: %w", err)
 	}

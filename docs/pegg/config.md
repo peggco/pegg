@@ -201,8 +201,16 @@ TUI in Settings → Session → Compaction.
 - **sliding-window** — when the threshold is reached, keeps only the most recent N
   messages (calculated from token budget, falling back to `max_messages`).
 - **summarization** — when the threshold is reached, uses a dedicated LLM agent to
-  compress the conversation history into a summary. Falls back to sliding-window on
-  failure.
+  compress the conversation history into a summary. If the summary call fails, the
+  history is left untouched and compaction retries on the next call instead of
+  staying disabled.
+
+!!! note
+
+    The threshold is a percentage of the model's input window. Declare a model's
+    real window with `providers[].models[].config.max_input_tokens`; when a model
+    declares none, Pegg assumes `128000` so compaction still triggers instead of
+    being silently skipped.
 
 **Persistence:** When a compaction runs, Pegg does not overwrite the original
 conversation. Instead, the compacted messages are stored in a **new session linked

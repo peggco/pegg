@@ -19,6 +19,13 @@ func isPlaceholderTitle(title string) bool {
 	return strings.HasPrefix(title, defaultTitlePrefix)
 }
 
+const compactedSuffix = " (compacted)"
+
+func compactedTitle(title string) string {
+	title = strings.TrimSuffix(strings.TrimSpace(title), compactedSuffix)
+	return title + compactedSuffix
+}
+
 var (
 	ErrNotFound         = errors.New("session: not found")
 	ErrDuplicate        = errors.New("session: already exists")

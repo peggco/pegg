@@ -142,6 +142,9 @@ compacted view plus everything said afterwards.
   `compaction` stream event / `↻ Context compacted (...)` line.
 - Resuming re-applies compaction to the loaded history (sliding-window and
   tool-clearing), so resumed conversations stay within the context budget.
+- If a summarization call fails, the history is left untouched and compaction
+  retries on the next LLM call; a failed summarizer never disables compaction for
+  the rest of the process.
 - Deleting an original session deletes its whole compaction chain.
 
 ## Managing sessions

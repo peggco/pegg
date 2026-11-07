@@ -2,6 +2,8 @@ package compaction
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/peggco/pegg/internal/agent"
@@ -74,17 +76,29 @@ func (m *Middleware) publish(ctx context.Context, topic string, evt Event) {
 	}
 }
 
+const DefaultContextWindow = 128000
+
+func (m *Middleware) contextWindow(a *agent.Agent) int {
+	if a == nil {
+		return DefaultContextWindow
+	}
+	if maxInput := a.Model.MaxInputTokens(); maxInput > 0 {
+		return maxInput
+	}
+	return DefaultContextWindow
+}
+
 func (m *Middleware) AfterLLM(ctx context.Context, req *llm.Request, resp *llm.Response) error {
 	if m.cfg == nil || !m.cfg.Enabled {
 		return nil
 	}
 
 	a := agent.FromContext(ctx)
-	if a == nil || a.Model.Config == nil {
+	if a == nil {
 		return nil
 	}
 
-	maxInput := a.Model.MaxInputTokens()
+	maxInput := m.contextWindow(a)
 	if maxInput <= 0 {
 		return nil
 	}
@@ -167,14 +181,17 @@ func (m *Middleware) compactSummarization(ctx context.Context, req *llm.Request,
 	}
 
 	a := agent.FromContext(ctx)
-	s := m.summarizer.get(m.cfg, m.llm, a)
-	if s == nil {
-		return nil
-	}
-
-	summary, err := m.summarizer.run(ctx, history)
+	s, err := m.summarizer.get(m.cfg, m.llm, a)
 	if err != nil {
 		return err
+	}
+
+	summary, err := m.summarizer.run(ctx, s, history)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(summary) == "" {
+		return fmt.Errorf("compaction: summarizer returned an empty summary")
 	}
 
 	systemMsg := history[0]
@@ -205,10 +222,7 @@ func (m *Middleware) compactSlidingWindow(ctx context.Context, req *llm.Request,
 	}
 
 	a := agent.FromContext(ctx)
-	maxInput := 0
-	if a != nil && a.Model.Config != nil {
-		maxInput = a.Model.MaxInputTokens()
-	}
+	maxInput := m.contextWindow(a)
 
 	keepCount := 0
 	if maxInput > 0 && promptTokens > 0 {
@@ -255,10 +269,10 @@ func (m *Middleware) compactSlidingWindow(ctx context.Context, req *llm.Request,
 
 func (m *Middleware) checkResumeOverflow(ctx context.Context, req *llm.Request) {
 	a := agent.FromContext(ctx)
-	if a == nil || a.Model.Config == nil {
+	if a == nil {
 		return
 	}
-	maxInput := a.Model.MaxInputTokens()
+	maxInput := m.contextWindow(a)
 	if maxInput <= 0 {
 		return
 	}

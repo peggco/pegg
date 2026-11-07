@@ -2,12 +2,15 @@ package compaction
 
 import (
 	"context"
+	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
+	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/llm"
 )
 
@@ -546,5 +549,157 @@ func TestBeforeLLMEmitsStreamAndBusEvents(t *testing.T) {
 	}
 	if streamEvt.AgentID == "" || streamEvt.AgentName != "agent-1" || streamEvt.Strategy != "sliding-window" || streamEvt.Messages == 0 || streamEvt.Tokens != 900 {
 		t.Fatalf("stream event = %+v", streamEvt)
+	}
+}
+
+type summaryProvider struct {
+	mu    sync.Mutex
+	calls int
+	fail  bool
+}
+
+func (p *summaryProvider) Name() string { return "summary" }
+
+func (p *summaryProvider) Chat(_ context.Context, _ *llm.Request) (*llm.Response, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.calls++
+	if p.fail {
+		return nil, errors.New("provider down")
+	}
+	msg := llm.AssistantMessage("concise conversation summary")
+	fr := llm.FinishReasonStop
+	return &llm.Response{Choices: []llm.Choice{{Message: &msg, FinishReason: &fr}}}, nil
+}
+
+func (p *summaryProvider) ChatStream(context.Context, *llm.Request, llm.StreamHandler) error {
+	return nil
+}
+
+func (p *summaryProvider) ListModels(context.Context) ([]llm.Model, error) { return nil, nil }
+
+func (p *summaryProvider) Calls() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.calls
+}
+
+func newSummarizationMiddleware(t *testing.T, cfg *config.CompactionConfig) *Middleware {
+	t.Helper()
+	mgr := llm.NewManager(event.New(), &logger.Logger{}, nil)
+	return New(Deps{Config: cfg, LLM: mgr})
+}
+
+func summaryHistory() []llm.Message {
+	msgs := []llm.Message{llm.SystemMessage("system prompt")}
+	for i := 0; i < 6; i++ {
+		msgs = append(msgs, llm.UserMessage("question"))
+		msgs = append(msgs, llm.AssistantMessage("answer"))
+	}
+	msgs = append(msgs, llm.UserMessage("latest question"))
+	return msgs
+}
+
+func TestCompactSummarizationShrinksHistory(t *testing.T) {
+	m := newSummarizationMiddleware(t, &config.CompactionConfig{
+		Enabled:   true,
+		Strategy:  []string{"summarization"},
+		Threshold: 80,
+	})
+	prov := &summaryProvider{}
+	parent := agent.New("parent", agent.WithProvider(prov), agent.WithModel(llm.Model{ID: "m1"}))
+
+	history := summaryHistory()
+	origLen := len(history)
+	ref := &history
+	ctx := agent.WithAgent(context.Background(), parent)
+	ctx = agent.WithHistory(ctx, ref)
+	req := &llm.Request{Messages: history}
+
+	m.mu.Lock()
+	m.needsCompact = true
+	m.mu.Unlock()
+
+	if err := m.BeforeLLM(ctx, req); err != nil {
+		t.Fatalf("BeforeLLM: %v", err)
+	}
+	if len(req.Messages) >= origLen {
+		t.Fatalf("history not compacted: %d >= %d", len(req.Messages), origLen)
+	}
+	if len(req.Messages) != 3 {
+		t.Fatalf("compacted history = %d messages, want 3", len(req.Messages))
+	}
+	if req.Messages[0].Role != llm.RoleSystem {
+		t.Fatalf("first message should be system, got %v", req.Messages[0].Role)
+	}
+	if !strings.Contains(llm.MessageText(req.Messages[1]), "concise conversation summary") {
+		t.Fatalf("summary message = %q", llm.MessageText(req.Messages[1]))
+	}
+	if llm.MessageText(req.Messages[2]) != "latest question" {
+		t.Fatalf("last user message not preserved: %q", llm.MessageText(req.Messages[2]))
+	}
+	if prov.Calls() != 1 {
+		t.Fatalf("summarizer calls = %d, want 1", prov.Calls())
+	}
+}
+
+func TestCompactSummarizationKeepsHistoryOnFailure(t *testing.T) {
+	m := newSummarizationMiddleware(t, &config.CompactionConfig{
+		Enabled:   true,
+		Strategy:  []string{"summarization"},
+		Threshold: 80,
+	})
+	prov := &summaryProvider{fail: true}
+	parent := agent.New("parent", agent.WithProvider(prov), agent.WithModel(llm.Model{ID: "m1"}))
+
+	history := summaryHistory()
+	ref := &history
+	ctx := agent.WithAgent(context.Background(), parent)
+	ctx = agent.WithHistory(ctx, ref)
+	req := &llm.Request{Messages: history}
+
+	m.mu.Lock()
+	m.needsCompact = true
+	m.mu.Unlock()
+
+	if err := m.BeforeLLM(ctx, req); err != nil {
+		t.Fatalf("BeforeLLM should not surface summarizer errors: %v", err)
+	}
+	if len(req.Messages) != len(history) {
+		t.Fatalf("history changed after a failed summary: %d != %d", len(req.Messages), len(history))
+	}
+
+	prov.mu.Lock()
+	prov.fail = false
+	prov.mu.Unlock()
+	m.mu.Lock()
+	m.needsCompact = true
+	m.mu.Unlock()
+	if err := m.BeforeLLM(ctx, req); err != nil {
+		t.Fatalf("BeforeLLM retry: %v", err)
+	}
+	if len(req.Messages) != 3 {
+		t.Fatalf("retry did not compact: %d messages", len(req.Messages))
+	}
+}
+
+func TestAfterLLMUsesFallbackContextWindow(t *testing.T) {
+	m := New(Deps{Config: &config.CompactionConfig{
+		Enabled:   true,
+		Strategy:  []string{"sliding-window"},
+		Threshold: 80,
+	}})
+	a := agent.New("test", agent.WithModel(llm.Model{ID: "no-config"}))
+	ctx := agent.WithAgent(context.Background(), a)
+
+	resp := &llm.Response{Usage: llm.Usage{PromptTokens: DefaultContextWindow}}
+	if err := m.AfterLLM(ctx, &llm.Request{}, resp); err != nil {
+		t.Fatal(err)
+	}
+	m.mu.Lock()
+	needs := m.needsCompact
+	m.mu.Unlock()
+	if !needs {
+		t.Fatal("compaction should trigger at the fallback window even without model config")
 	}
 }
