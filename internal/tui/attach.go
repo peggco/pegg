@@ -281,13 +281,7 @@ func (a *App) handleAttachedEvent(e session.RunEvent, mainAgentID string) {
 		return
 	}
 	if e.Type == session.RunEventAskResolved {
-		a.chatMu.Lock()
-		a.askAgentID = ""
-		a.chatMu.Unlock()
-		if a.home != nil && a.home.AskOpen() {
-			a.home.ClearAsk()
-			a.requestRedraw()
-		}
+		a.postUI(a.resetAsk)
 		return
 	}
 	ev, ok := live.DecodeAgentEvent(e)

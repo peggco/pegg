@@ -136,6 +136,24 @@ func (m *Manager) WaitUntilReady() {
 	<-m.ready
 }
 
+func (m *Manager) WaitUntilReadyTimeout(d time.Duration) bool {
+	select {
+	case <-m.ready:
+		return true
+	case <-time.After(d):
+		return false
+	}
+}
+
+func (m *Manager) Ready() bool {
+	select {
+	case <-m.ready:
+		return true
+	default:
+		return false
+	}
+}
+
 func (m *Manager) EnsurePricesCached(ctx context.Context) error {
 	if m.cacheStore == nil {
 		return errors.New("llm: no cache store available")
@@ -538,6 +556,21 @@ func (m *Manager) Models(name string) ([]Model, error) {
 		return nil, fmt.Errorf("llm: provider %q not loaded", name)
 	}
 	return e.models, nil
+}
+
+func (m *Manager) ModelsNow(name string) ([]Model, bool) {
+	m.mu.RLock()
+	if e, ok := m.entries[name]; ok && len(e.models) > 0 {
+		models := e.models
+		m.mu.RUnlock()
+		return models, true
+	}
+	m.mu.RUnlock()
+
+	if models, ok := m.loadCachedModels(name); ok && len(models) > 0 {
+		return models, true
+	}
+	return nil, false
 }
 
 func providerName(cfg config.LLMConfig) string {

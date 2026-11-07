@@ -674,15 +674,18 @@ func TestRunCommandSelectSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.sessions.Create(session.CreateOptions{Title: "alpha session", Provider: "runprov", Model: "m1", ProjectDir: dir}); err != nil {
-		t.Fatal(err)
-	}
+	first, err := c.sessions.Create(session.CreateOptions{Title: "alpha session", Provider: "runprov", Model: "m1", ProjectDir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
 	second, err := c.sessions.Create(session.CreateOptions{Title: "beta session", Provider: "runprov", Model: "m1", ProjectDir: dir})
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, id := range []string{first.ID, second.ID} {
+		if _, err := c.sessions.AppendMessage(id, llm.UserMessage("hi")); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	var buf bytes.Buffer
@@ -711,7 +714,7 @@ func TestRunCommandSelectSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) != 2 {
+	if len(msgs) != 3 {
 		t.Fatalf("expected resumed session to gain 2 messages, got %d", len(msgs))
 	}
 }
@@ -729,6 +732,9 @@ func TestRunCommandSelectSessionPagination(t *testing.T) {
 			t.Fatal(err)
 		}
 		ids[i] = s.ID
+		if _, err := c.sessions.AppendMessage(s.ID, llm.UserMessage("hi")); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	var buf bytes.Buffer
@@ -758,7 +764,7 @@ func TestRunCommandSelectSessionPagination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) != 2 {
+	if len(msgs) != 3 {
 		t.Fatalf("expected session %s (page 2) to be resumed, got %d messages", ids[1], len(msgs))
 	}
 }

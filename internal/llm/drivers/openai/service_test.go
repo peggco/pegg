@@ -404,3 +404,26 @@ func TestChatOmitsSessionHeaderWithoutSession(t *testing.T) {
 		t.Errorf("%s = %q, want header omitted without a session", llm.SessionHeader, v)
 	}
 }
+
+func TestChatUnwrapsDataEnvelope(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"id":"1","object":"chat.completion","model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}}`))
+	}))
+	defer srv.Close()
+
+	svc := NewService("test", ServiceConfig{BaseURL: srv.URL, APIKey: "k"})
+	resp, err := svc.Chat(context.Background(), llm.NewRequest("m", []llm.Message{llm.UserMessage("hi")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Choices) != 1 || resp.Choices[0].Message == nil {
+		t.Fatalf("choices = %+v, want one message", resp.Choices)
+	}
+	if got := llm.MessageText(*resp.Choices[0].Message); got != "hello" {
+		t.Fatalf("content = %q, want hello", got)
+	}
+	if resp.Usage.TotalTokens != 2 {
+		t.Fatalf("usage = %+v, want total 2", resp.Usage)
+	}
+}

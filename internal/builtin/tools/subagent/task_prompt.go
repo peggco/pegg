@@ -1,11 +1,20 @@
 package subagent
 
-import "github.com/peggco/pegg/internal/agent/prompt"
+import (
+	"fmt"
 
-func taskToolPromptBuilder(agents []string) *prompt.Prompt {
-	agentsAny := make([]any, len(agents))
-	for i, agent := range agents {
-		agentsAny[i] = agent
+	"github.com/peggco/pegg/internal/agent/agents"
+	"github.com/peggco/pegg/internal/agent/prompt"
+)
+
+func taskToolPromptBuilder(infos []agents.Info) *prompt.Prompt {
+	agentItems := make([]any, len(infos))
+	for i, a := range infos {
+		if a.Description != "" {
+			agentItems[i] = fmt.Sprintf("`%s`: %s", a.Name, a.Description)
+		} else {
+			agentItems[i] = fmt.Sprintf("`%s`", a.Name)
+		}
 	}
 	return prompt.New().
 		Paragraph("Launch a new agent to handle complex, multistep tasks autonomously.").
@@ -132,8 +141,8 @@ func taskToolPromptBuilder(agents []string) *prompt.Prompt {
 			prompt.XMLTag("reasoning",
 				prompt.Paragraph("The assistant did not use the subagent tool because this is a single, straightforward task that can be completed in one step. There's no need to spawn a subagent for such a simple operation."))).
 		Add(prompt.IfFn(
-			func(vars prompt.Vars) bool { return len(agents) > 0 },
-			prompt.Paragraph("Available Agents:"),
-			prompt.OrderedList(agentsAny...),
+			func(vars prompt.Vars) bool { return len(infos) > 0 },
+			prompt.Paragraph("Available agents. Pass the value in backticks as `subagent_type`. Match each task to the agent whose description fits best:"),
+			prompt.OrderedList(agentItems...),
 		))
 }

@@ -19,6 +19,7 @@ const (
 
 func newExplorerAgent() (*agent.Agent, error) {
 	main := agent.New("explorer",
+		agent.WithDescription("Read-only research and exploration agent. Investigates the codebase and the web to gather context (search, read files, fetch URLs) and reports findings. Use before acting when you need to understand code or locate where things live. Does not modify files."),
 		agent.WithSystemPromptFn(func(providerID, modelID string) string {
 			sys, err := generateExplorerPrompt(providerID, modelID)
 			if err != nil {

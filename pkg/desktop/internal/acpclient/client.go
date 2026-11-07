@@ -75,14 +75,19 @@ type Client struct {
 
 	nextID atomic.Int64
 	exitCh chan struct{}
+
+	termMu    sync.Mutex
+	terminals map[string]*terminalProcess
+	termSeq   atomic.Int64
 }
 
 func New(opts Options) *Client {
 	return &Client{
-		opts:    opts,
-		writes:  make(chan []byte, writeQueueDepth),
-		pending: make(map[string]*pending),
-		exitCh:  make(chan struct{}),
+		opts:      opts,
+		writes:    make(chan []byte, writeQueueDepth),
+		pending:   make(map[string]*pending),
+		exitCh:    make(chan struct{}),
+		terminals: make(map[string]*terminalProcess),
 	}
 }
 
@@ -280,7 +285,7 @@ func (c *Client) handleFrame(frame []byte) {
 	switch {
 	case env.Method != "" && hasID:
 		go c.handleServerRequest(env.ID, env.Method, env.Params)
-	case env.Method == "session/update":
+	case env.Method == "session/update" || env.Method == "_pegg/update":
 		c.handleUpdate(env.Params)
 	case env.Method != "":
 		if c.opts.OnNotification != nil {
@@ -323,6 +328,21 @@ func (c *Client) handleServerRequest(id json.RawMessage, method string, params j
 		return
 	case "fs/write_text_file":
 		c.respondError(id, -32601, "writeTextFile is not supported")
+		return
+	case "terminal/create":
+		c.handleTerminalCreate(id, params)
+		return
+	case "terminal/output":
+		c.handleTerminalOutput(id, params)
+		return
+	case "terminal/wait_for_exit":
+		c.handleTerminalWaitForExit(id, params)
+		return
+	case "terminal/kill":
+		c.handleTerminalKill(id, params)
+		return
+	case "terminal/release":
+		c.handleTerminalRelease(id, params)
 		return
 	}
 	if c.opts.OnServerRequest != nil {
@@ -417,7 +437,7 @@ func (c *Client) Request(ctx context.Context, method string, params any) (json.R
 }
 
 func (c *Client) ReloadSkills(ctx context.Context, workspace string) ([]SlashCommand, error) {
-	raw, err := c.Request(ctx, "pegg/skills/reload", map[string]string{"workspace": workspace})
+	raw, err := c.Request(ctx, "_pegg/skills/reload", map[string]string{"workspace": workspace})
 	if err != nil {
 		return nil, err
 	}
@@ -491,6 +511,7 @@ func (c *Client) Close() {
 	cmd := c.cmd
 	c.mu.Unlock()
 
+	c.closeTerminals()
 	close(c.writes)
 	if stdin != nil {
 		_ = stdin.Close()

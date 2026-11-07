@@ -37,11 +37,12 @@ describe.skipIf(!binary)('ACP client against the real binary', () => {
   it('initializes with Pegg capabilities', async () => {
     const init = await client.initialize();
     expect(init.protocolVersion).toBe(1);
-    expect(init.agentCapabilities.pegg.permissions).toBe(true);
+    const pegg = init.agentCapabilities?._meta?.['com.pegg/capabilities'] as { permissions?: boolean } | undefined;
+    expect(pegg?.permissions).toBe(true);
   });
 
   it('lists models and sessions', async () => {
-    const models = await client.request('pegg/models', {});
+    const models = await client.request('_pegg/models', {});
     expect(Array.isArray(models.models)).toBe(true);
     const sessions = await client.request<SessionListResult>('session/list', { cwd, all: true, limit: 5 });
     expect(Array.isArray(sessions.sessions)).toBe(true);
@@ -50,9 +51,10 @@ describe.skipIf(!binary)('ACP client against the real binary', () => {
   it('creates, renames, sets mode and deletes a session', async () => {
     const session = await client.request<SessionNewResult>('session/new', { cwd });
     expect(session.sessionId).toBeTruthy();
-    expect(session.peggSessionId).toBeTruthy();
-    created = session.peggSessionId;
-    await client.request('session/rename', { sessionId: session.sessionId, title: 'ACP smoke' });
+    const peggSessionId = session._meta?.['com.pegg/sessionId'];
+    expect(peggSessionId).toBeTruthy();
+    created = typeof peggSessionId === 'string' ? peggSessionId : undefined;
+    await client.request('_pegg/session/rename', { sessionId: session.sessionId, title: 'ACP smoke' });
     await client.request('session/set_mode', { sessionId: session.sessionId, modeId: 'plan' });
     await client.request('session/delete', { sessionId: created });
     created = undefined;

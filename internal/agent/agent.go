@@ -56,6 +56,7 @@ type Agent struct {
 	log             *logger.Logger
 
 	pendingNotifications []reminder.Reminder
+	displayNotifications []reminder.Reminder
 	attachedReminder     *reminder.Reminder
 	notificationsMu      sync.Mutex
 
@@ -307,6 +308,12 @@ func (a *Agent) QueueNotification(r reminder.Reminder) {
 	a.pendingNotifications = append(a.pendingNotifications, r)
 }
 
+func (a *Agent) QueueDisplayNotification(r reminder.Reminder) {
+	a.notificationsMu.Lock()
+	defer a.notificationsMu.Unlock()
+	a.displayNotifications = append(a.displayNotifications, r)
+}
+
 func (a *Agent) AttachReminder(r reminder.Reminder) {
 	a.notificationsMu.Lock()
 	defer a.notificationsMu.Unlock()
@@ -335,15 +342,30 @@ func (a *Agent) HasPendingNotifications() bool {
 	return len(a.pendingNotifications) > 0
 }
 
+func (a *Agent) HasDisplayNotifications() bool {
+	a.notificationsMu.Lock()
+	defer a.notificationsMu.Unlock()
+	return len(a.displayNotifications) > 0
+}
+
 func (a *Agent) drainNotifications() []reminder.Reminder {
 	a.notificationsMu.Lock()
 	defer a.notificationsMu.Unlock()
-	if len(a.pendingNotifications) == 0 {
+	if len(a.pendingNotifications) == 0 && len(a.displayNotifications) == 0 {
 		return nil
 	}
-	msgs := a.pendingNotifications
+	msgs := make([]reminder.Reminder, 0, len(a.pendingNotifications)+len(a.displayNotifications))
+	msgs = append(msgs, a.pendingNotifications...)
+	msgs = append(msgs, a.displayNotifications...)
 	a.pendingNotifications = nil
+	a.displayNotifications = nil
 	return msgs
+}
+
+func (a *Agent) clearDisplayNotifications() {
+	a.notificationsMu.Lock()
+	a.displayNotifications = nil
+	a.notificationsMu.Unlock()
 }
 
 func (a *Agent) Continue(ctx context.Context, history []llm.Message) (*RunResult, error) {

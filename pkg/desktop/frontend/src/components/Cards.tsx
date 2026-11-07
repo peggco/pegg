@@ -91,7 +91,10 @@ export function PermissionCard({ request }: { request: PendingPermission }) {
           ],
     [params.options],
   );
-  const question = params.question || params.toolCall?.title || 'Allow this tool call?';
+  const question =
+    (params._meta?.['com.pegg/question'] as string | undefined) ||
+    params.toolCall?.title ||
+    'Allow this tool call?';
   const toolPreview = params.toolCall?.rawInput ? JSON.stringify(params.toolCall.rawInput, null, 2) : '';
 
   return (

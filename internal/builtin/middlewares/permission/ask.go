@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/llm"
@@ -84,37 +83,16 @@ func (m *Middleware) askUser(ctx context.Context, call llm.ToolCall, permErr err
 }
 
 func (m *Middleware) prompt(ctx context.Context, a *agent.Agent, q agent.AskQuestion) (map[string]string, error) {
-	var (
-		once    sync.Once
-		done    = make(chan map[string]string, 1)
-		replyFn any
-	)
-	replyFn = func(e agent.AgentAskAnswer) {
-		if e.AgentID != a.ID {
-			return
-		}
-		once.Do(func() {
-			done <- e.Answers
+	if a == nil || a.Bus == nil {
+		return nil, errors.New("no agent bus available")
+	}
+	reqID := agent.NewAskRequestID()
+	return agent.Ask(ctx, a.Bus, a.ID, reqID, func() {
+		a.Bus.Publish(agent.TopicAgentAsk, agent.AgentAsk{
+			AgentID:   a.ID,
+			AgentName: a.Name,
+			RequestID: reqID,
+			Questions: []agent.AskQuestion{q},
 		})
-	}
-	if err := a.Bus.SubscribeOnce(agent.TopicAgentAskAnswer, replyFn); err != nil {
-		return nil, fmt.Errorf("permission: subscribe for answer: %w", err)
-	}
-	defer a.Bus.Unsubscribe(agent.TopicAgentAskAnswer, replyFn)
-
-	a.Bus.Publish(agent.TopicAgentAsk, agent.AgentAsk{
-		AgentID:   a.ID,
-		AgentName: a.Name,
-		Questions: []agent.AskQuestion{q},
 	})
-
-	select {
-	case answers := <-done:
-		if answers == nil {
-			answers = map[string]string{}
-		}
-		return answers, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
 }

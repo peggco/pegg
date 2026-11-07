@@ -142,6 +142,9 @@ compacted view plus everything said afterwards.
   `compaction` stream event / `↻ Context compacted (...)` line.
 - Resuming re-applies compaction to the loaded history (sliding-window and
   tool-clearing), so resumed conversations stay within the context budget.
+- If a summarization call fails, the history is left untouched and compaction
+  retries on the next LLM call; a failed summarizer never disables compaction for
+  the rest of the process.
 - Deleting an original session deletes its whole compaction chain.
 
 ## Managing sessions
@@ -150,7 +153,7 @@ compacted view plus everything said afterwards.
 |---|---|---|---|---|---|
 | List | `sessions list` | Settings → Session → Load | Sessions view | `GET /api/sessions` | `session/list` |
 | Show details | `sessions show <id>` | transcript | chat transcript | `GET /api/sessions/{id}` | — |
-| Rename | — | Settings → Session → Change title | **Pegg: Rename Session** | — | `session/rename` |
+| Rename | — | Settings → Session → Change title | **Pegg: Rename Session** | — | `_pegg/session/rename` |
 | Delete | — | Settings → Session → Delete | **Pegg: Delete Session** | `DELETE /api/sessions/{id}` | `session/delete` |
 | Resume | `run --session` | Load session | `POST /api/run` | `session/resume` / `session/load` |
 
@@ -168,4 +171,8 @@ HTTP API yet.
 
 - Sessions are scoped to a project directory; use `--all` (CLI) to see everything.
 - Run `pegg doctor` or check the status bar to see cumulative cost per session.
-- ACP sessions created with `session/new` appear in listings titled `ACP Session`.
+- ACP sessions created with `session/new` appear in listings titled `ACP Session`
+  once the first message is recorded. Sessions with no messages are hidden from
+  every listing (CLI, TUI, connect, HTTP, SDK, and ACP `session/list`) so clients
+  that open a session eagerly while probing an agent do not leave empty entries
+  behind.

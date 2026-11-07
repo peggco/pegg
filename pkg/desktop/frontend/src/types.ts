@@ -46,13 +46,34 @@ export interface SlashCommand {
   description?: string;
 }
 
+export interface SessionConfigSelectOption {
+  value: string;
+  name: string;
+  description?: string;
+}
+
+export interface SessionConfigOption {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  type: string;
+  currentValue: unknown;
+  options?: SessionConfigSelectOption[];
+}
+
+export interface SessionModeState {
+  currentModeId: string;
+  availableModes: { id: string; name: string; description?: string }[];
+}
+
 export interface SessionUpdate {
   sessionUpdate: string;
+  _meta?: Record<string, unknown>;
   messageId?: string;
-  content?: ContentBlock | string;
-  attachments?: AttachmentInfo[];
+  content?: ContentBlock | ToolCallContent[];
   toolCallId?: string;
-  toolName?: string;
+  name?: string;
   title?: string;
   kind?: string;
   status?: string;
@@ -60,22 +81,18 @@ export interface SessionUpdate {
   rawInput?: unknown;
   rawOutput?: unknown;
   entries?: PlanEntry[];
+  availableCommands?: SlashCommand[];
+  currentModeId?: string;
+  configOptions?: SessionConfigOption[];
+  updatedAt?: string;
   used?: number;
   size?: number;
   cost?: { amount: number; currency: string };
-  mode?: string;
-  provider?: string;
-  model?: string;
-  commands?: SlashCommand[];
-  agentId?: string;
-  agentName?: string;
+  severity?: 'info' | 'warning' | 'error';
+  description?: string;
+  compactionId?: string;
+  summary?: ContentBlock[];
   error?: string;
-  contents?: ToolCallContent[];
-  runId?: string;
-  runState?: string;
-  baseSeq?: number;
-  seq?: number;
-  historyPage?: boolean;
 }
 
 export interface SessionListItem {
@@ -121,7 +138,6 @@ export interface ModelListResult {
 
 export interface PromptResult {
   stopReason: string;
-  usage?: { used: number; size: number; cost?: { amount: number; currency: string } };
 }
 
 export interface PermissionOption {
@@ -132,7 +148,7 @@ export interface PermissionOption {
 
 export interface PermissionParams {
   sessionId: string;
-  question?: string;
+  _meta?: Record<string, unknown>;
   toolCall?: { toolCallId?: string; title?: string; kind?: string; rawInput?: unknown };
   options?: PermissionOption[];
 }

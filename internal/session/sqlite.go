@@ -69,7 +69,8 @@ func newSQLiteStore(db *sql.DB) (*SQLiteStore, error) {
 		db: db,
 		builder: query.NewBuilder("sessions", columns...).
 			SelectColumns(columns...).
-			DefaultSort("created_at", query.Desc),
+			DefaultSort("created_at", query.Desc).
+			ExcludeEmptyWhen("EXISTS (SELECT 1 FROM session_messages WHERE session_messages.session_id = sessions.id)"),
 	}, nil
 }
 

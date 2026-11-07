@@ -806,3 +806,39 @@ func TestRegistry_ConcurrentSpawnAndFinish(t *testing.T) {
 		}
 	}
 }
+
+type panicProvider struct{ stubProvider }
+
+func (panicProvider) Chat(context.Context, *llm.Request) (*llm.Response, error) {
+	panic("provider boom")
+}
+
+func TestSubAgentTool_PanicDoesNotHang(t *testing.T) {
+	tt, _ := tools.Get("task")
+	parent := agent.New("panic-parent")
+	parent.Provider = panicProvider{}
+	parent.Model = llm.Model{ID: "panic-model"}
+	ctx := agent.WithAgent(context.Background(), parent)
+
+	name := fmt.Sprintf("panic-%d", time.Now().UnixNano())
+	args := singleArgs(t, spec(name, "sub-agent", "do it"))
+
+	done := make(chan struct{})
+	go func() {
+		_, _ = tt.Execute(ctx, args)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("task execute hung after subagent panic")
+	}
+
+	sa, ok := store.get(name, nil)
+	if !ok {
+		t.Fatal("subagent not recorded")
+	}
+	if sa.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", sa.Status)
+	}
+}

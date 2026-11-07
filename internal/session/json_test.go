@@ -259,3 +259,39 @@ func TestJSONStoreList(t *testing.T) {
 		}
 	})
 }
+
+func TestJSONStoreListExcludeEmpty(t *testing.T) {
+	s := newTestJSONStore(t)
+
+	for _, id := range []string{"empty", "with-msg"} {
+		if err := s.Create(testSession(id)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.InsertMessage(Message{
+		ID:        "m1",
+		SessionID: "with-msg",
+		Seq:       1,
+		Role:      llm.RoleUser,
+		Content:   "hello",
+		CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	all, total, err := s.List(query.Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || len(all) != 2 {
+		t.Fatalf("without filter: got %d sessions, total %d", len(all), total)
+	}
+
+	got, total, err := s.List(query.Query{ExcludeEmpty: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(got) != 1 || got[0].ID != "with-msg" {
+		t.Fatalf("with filter: got %+v, total %d", got, total)
+	}
+}

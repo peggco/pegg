@@ -7,7 +7,7 @@ import (
 func (s *Server) notifySessionsChanged() {
 	payload := map[string]any{
 		"jsonrpc": "2.0",
-		"method":  "pegg/sessions_changed",
+		"method":  "_pegg/sessions_changed",
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {

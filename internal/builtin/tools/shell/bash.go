@@ -14,6 +14,21 @@ import (
 	"github.com/peggco/pegg/internal/vfs"
 )
 
+type TerminalRunner interface {
+	RunTerminal(ctx context.Context, command string, timeout time.Duration) (output string, handled bool, err error)
+}
+
+type terminalRunnerKey struct{}
+
+func WithTerminalRunner(ctx context.Context, r TerminalRunner) context.Context {
+	return context.WithValue(ctx, terminalRunnerKey{}, r)
+}
+
+func terminalRunnerFrom(ctx context.Context) TerminalRunner {
+	r, _ := ctx.Value(terminalRunnerKey{}).(TerminalRunner)
+	return r
+}
+
 func generateBashToolPrompt() (string, error) {
 	sys, err := bashToolPromptBuilder().
 		Build(prompt.FormatMarkdown)
@@ -68,6 +83,15 @@ func bashTool(fs *vfs.VFS) tool.Tool {
 			timeout := 40 * time.Second
 			if params.Timeout > 0 {
 				timeout = time.Duration(params.Timeout) * time.Second
+			}
+
+			if runner := terminalRunnerFrom(ctx); runner != nil {
+				if out, handled, err := runner.RunTerminal(ctx, params.Command, timeout); handled {
+					if err != nil {
+						return "", err
+					}
+					return out, nil
+				}
 			}
 
 			workdir := fs.Root()

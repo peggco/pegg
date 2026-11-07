@@ -7,6 +7,7 @@ import type {
   SessionMode,
   SessionUpdate,
   SlashCommand,
+  ToolCallContent,
 } from '../types';
 
 export interface UsageState {
@@ -149,10 +150,37 @@ function nextId(state: ChatState, prefix: string): string {
 }
 
 function contentText(content: SessionUpdate['content']): string {
-  if (typeof content === 'string') return content;
   if (!content) return '';
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => (item.type === 'content' && item.content ? contentText(item.content) : ''))
+      .join('');
+  }
   const block = content as ContentBlock;
   return block.type === 'text' ? (block.text ?? '') : '';
+}
+
+function toolContents(update: SessionUpdate): ToolCallContent[] {
+  return Array.isArray(update.content) ? update.content : [];
+}
+
+function peggMeta(update: SessionUpdate, key: string): unknown {
+  return update._meta?.[`com.pegg/${key}`];
+}
+
+function peggString(update: SessionUpdate, key: string): string | undefined {
+  const value = peggMeta(update, key);
+  return typeof value === 'string' ? value : undefined;
+}
+
+function peggNumber(update: SessionUpdate, key: string): number | undefined {
+  const value = peggMeta(update, key);
+  return typeof value === 'number' ? value : undefined;
+}
+
+function peggAttachments(update: SessionUpdate): AttachmentInfo[] | undefined {
+  const value = peggMeta(update, 'attachments');
+  return Array.isArray(value) ? (value as AttachmentInfo[]) : undefined;
 }
 
 function inferToolKind(kind: string | undefined, title: string | undefined, previous?: string): string | undefined {
@@ -237,12 +265,15 @@ export function pruneChat(state: ChatState): ChatState {
 }
 
 export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState {
-  if (update.agentId && update.sessionUpdate !== 'subagent' && input.subagents[update.agentId]) {
-    return applySubagentUpdate(input, update, update.agentId);
+  const agentId = peggString(update, 'agentId');
+  const agentName = peggString(update, 'agentName');
+  if (agentId && update.sessionUpdate !== 'subagent' && input.subagents[agentId]) {
+    return applySubagentUpdate(input, update, agentId);
   }
   let state: ChatState = { ...input, items: input.items, plan: input.plan };
   const now = Date.now();
-  const seq = update.seq && update.seq > 0 ? update.seq : undefined;
+  const seqValue = peggNumber(update, 'seq');
+  const seq = seqValue && seqValue > 0 ? seqValue : undefined;
 
   const replaceItem = (index: number, next: ChatItem) => {
     const items = state.items.slice();
@@ -257,7 +288,8 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
     case 'agent_message_chunk':
     case 'user_message_chunk': {
       const text = contentText(update.content);
-      const attachments = update.attachments?.length ? update.attachments : undefined;
+      const metaAttachments = peggAttachments(update);
+      const attachments = metaAttachments?.length ? metaAttachments : undefined;
       if (!text && !attachments) return state;
       const kind = update.sessionUpdate === 'user_message_chunk' ? 'user' : 'assistant';
       const id = update.messageId || nextId(state, 'message');
@@ -274,7 +306,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
         (last?.kind === 'user' && kind === 'user') ||
         (last?.kind === 'assistant' &&
           kind === 'assistant' &&
-          (last.agentName ?? '') === (update.agentName ?? ''))
+          (last.agentName ?? '') === (agentName ?? ''))
       ) {
         replaceItem(state.items.length - 1, {
           ...last,
@@ -289,8 +321,8 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           kind,
           id,
           text,
-          agentId: update.agentId,
-          agentName: update.agentName,
+          agentId,
+          agentName,
           createdAt: now,
           seq,
           ...(kind === 'user' && attachments ? { attachments } : {}),
@@ -308,15 +340,15 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       if (idx >= 0) {
         const item = state.items[idx] as Extract<ChatItem, { kind: 'reasoning' }>;
         replaceItem(idx, { ...item, text: item.text + text });
-      } else if (last?.kind === 'reasoning' && (last.agentName ?? '') === (update.agentName ?? '')) {
+      } else if (last?.kind === 'reasoning' && (last.agentName ?? '') === (agentName ?? '')) {
         replaceItem(state.items.length - 1, { ...last, text: last.text + text });
       } else {
         pushItem({
           kind: 'reasoning',
           id,
           text,
-          agentId: update.agentId,
-          agentName: update.agentName,
+          agentId,
+          agentName,
           createdAt: now,
           seq,
         });
@@ -340,18 +372,22 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           kind: inferToolKind(update.kind, update.title || item.tool.title, item.tool.kind),
           status: nextStatus,
         };
+        const error = peggString(update, 'error');
+        const attachments = peggAttachments(update);
         if (update.rawInput !== undefined) tool.input = update.rawInput;
         if (update.rawOutput !== undefined) tool.output = update.rawOutput;
-        if (update.error !== undefined) tool.error = update.error;
+        if (error !== undefined) tool.error = error;
         if (update.locations) tool.locations = update.locations;
-        if (update.toolName) tool.name = update.toolName;
-        if (update.agentId) tool.agentId = update.agentId;
-        if (update.agentName) tool.agentName = update.agentName;
-        if (update.attachments?.length) tool.files = mergeFiles(tool.files, update.attachments);
-        const diff = update.contents?.find((c) => c.type === 'diff' && c.diff)?.diff;
+        if (update.name) tool.name = update.name;
+        if (agentId) tool.agentId = agentId;
+        if (agentName) tool.agentName = agentName;
+        if (attachments?.length) tool.files = mergeFiles(tool.files, attachments);
+        const diff = toolContents(update).find((c) => c.type === 'diff' && c.diff)?.diff;
         if (diff) tool.diff = diff;
         replaceItem(idx, { ...item, tool });
       } else {
+        const error = peggString(update, 'error');
+        const attachments = peggAttachments(update);
         pushItem({
           kind: 'tool',
           id,
@@ -359,73 +395,75 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           seq,
           tool: {
             id,
-            name: update.toolName,
-            title: update.title || update.toolName || 'Tool call',
+            name: update.name,
+            title: update.title || update.name || 'Tool call',
             kind: inferToolKind(update.kind, update.title),
             status: status ?? 'pending',
             input: update.rawInput,
             output: update.rawOutput,
-            error: update.error,
+            error,
             locations: update.locations,
-            diff: update.contents?.find((c) => c.type === 'diff' && c.diff)?.diff,
-            files: update.attachments?.length ? update.attachments : undefined,
-            agentId: update.agentId,
-            agentName: update.agentName,
+            diff: toolContents(update).find((c) => c.type === 'diff' && c.diff)?.diff,
+            files: attachments?.length ? attachments : undefined,
+            agentId,
+            agentName,
           },
         });
       }
       return state;
     }
     case 'subagent': {
-      const agentId = update.agentId ?? '';
-      if (!agentId) return state;
+      const subId = peggString(update, 'agentId') ?? '';
+      if (!subId) return state;
+      const subName = peggString(update, 'agentName');
+      const subError = peggString(update, 'error');
       const status: 'running' | 'finished' | 'error' =
         update.status === 'finished' ? 'finished' : update.status === 'error' ? 'error' : 'running';
-      const existingRun = state.subagents[agentId];
+      const existingRun = state.subagents[subId];
       const settleStatus: ToolState['status'] | undefined =
         status === 'finished' ? 'completed' : status === 'error' ? 'failed' : undefined;
       const run: SubagentRun = existingRun
         ? {
             ...existingRun,
             status,
-            agentName: update.agentName || existingRun.agentName,
+            agentName: subName || existingRun.agentName,
             task: update.title || existingRun.task,
             output: update.rawOutput !== undefined ? String(update.rawOutput ?? '') : existingRun.output,
-            error: update.error || existingRun.error,
+            error: subError || existingRun.error,
             items: settleStatus ? settleTools(existingRun.items, settleStatus) : existingRun.items,
           }
         : {
-            agentId,
-            agentName: update.agentName,
+            agentId: subId,
+            agentName: subName,
             status,
             task: update.title,
             output: update.rawOutput === undefined ? undefined : String(update.rawOutput ?? ''),
-            error: update.error,
+            error: subError,
             items: [],
             counter: 0,
           };
-      state = { ...state, subagents: { ...state.subagents, [agentId]: run } };
-      const idx = state.items.findIndex((item) => item.kind === 'subagent' && item.agentId === agentId);
+      state = { ...state, subagents: { ...state.subagents, [subId]: run } };
+      const idx = state.items.findIndex((item) => item.kind === 'subagent' && item.agentId === subId);
       if (idx >= 0) {
         const item = state.items[idx] as Extract<ChatItem, { kind: 'subagent' }>;
         replaceItem(idx, {
           ...item,
           status,
-          agentName: update.agentName || item.agentName,
+          agentName: subName || item.agentName,
           task: update.title || item.task,
           output: update.rawOutput !== undefined ? String(update.rawOutput ?? '') : item.output,
-          error: update.error || item.error,
+          error: subError || item.error,
         });
       } else {
         pushItem({
           kind: 'subagent',
-          id: `subagent-${agentId}`,
-          agentId,
-          agentName: update.agentName,
+          id: `subagent-${subId}`,
+          agentId: subId,
+          agentName: subName,
           status,
           task: update.title,
           output: update.rawOutput === undefined ? undefined : String(update.rawOutput ?? ''),
-          error: update.error,
+          error: subError,
           createdAt: now,
         });
       }
@@ -445,48 +483,70 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       };
       return state;
     case 'current_mode_update':
-      if (update.mode) state = { ...state, mode: update.mode as SessionMode };
+      if (update.currentModeId) state = { ...state, mode: update.currentModeId as SessionMode };
       return state;
-    case 'current_model_update':
-      state = {
-        ...state,
-        provider: update.provider ?? state.provider,
-        model: update.model ?? state.model,
-      };
+    case 'config_option_update': {
+      let mode = state.mode;
+      let model = state.model;
+      for (const option of update.configOptions ?? []) {
+        if (option.id === 'mode' && typeof option.currentValue === 'string') {
+          mode = option.currentValue as SessionMode;
+        }
+        if (option.id === 'model' && typeof option.currentValue === 'string') {
+          model = option.currentValue;
+        }
+      }
+      state = { ...state, mode, model };
       return state;
+    }
     case 'available_commands_update':
-      if (update.commands) state = { ...state, commands: update.commands };
+      if (update.availableCommands) state = { ...state, commands: update.availableCommands };
       return state;
-    case 'run_state_update':
-      if (update.runState) {
-        const running = /running|started|active/i.test(update.runState);
+    case 'session_info_update':
+      if (update.title) state = { ...state, title: update.title };
+      return state;
+    case 'run_state_update': {
+      const runState = peggString(update, 'runState');
+      if (runState) {
+        const running = /running|started|active/i.test(runState);
         if (running) {
           state = { ...state, running };
         } else {
-          const status: ToolState['status'] = /cancel/i.test(update.runState)
+          const status: ToolState['status'] = /cancel/i.test(runState)
             ? 'cancelled'
-            : /error|fail/i.test(update.runState)
+            : /error|fail/i.test(runState)
               ? 'failed'
               : 'completed';
           state = { ...settlePendingTools(state, status), running };
         }
       }
       return state;
-    case 'error':
+    }
+    case 'run_ask_resolved':
+      return { ...state, asks: [] };
+    case 'agent_warning_clear':
+      return { ...state, items: state.items.filter((item) => !(item.kind === 'notice' && item.level === 'warn')) };
+    case 'notice': {
+      const level: 'info' | 'warn' | 'error' =
+        update.severity === 'error' ? 'error' : update.severity === 'warning' ? 'warn' : 'info';
+      const text = [update.title, update.description].filter(Boolean).join(': ') || 'Notice';
       state = {
         ...state,
-        error: update.error,
-        items: [
-          ...state.items,
-          {
-            kind: 'error',
-            id: nextId(state, 'error'),
-            text: update.error || 'Unknown error',
-            createdAt: now,
-          },
-        ],
+        ...(level === 'error' ? { error: text } : {}),
+        items: [...state.items, { kind: 'notice', id: nextId(state, 'notice'), text, level, createdAt: now }],
       };
       return state;
+    }
+    case 'compaction_update': {
+      const text = update.summary?.map((block) => block.text ?? '').join('') || update.error;
+      if (!text) return state;
+      const level: 'info' | 'warn' | 'error' = update.error ? 'error' : 'info';
+      state = {
+        ...state,
+        items: [...state.items, { kind: 'notice', id: nextId(state, 'notice'), text, level, createdAt: now }],
+      };
+      return state;
+    }
     default:
       return state;
   }
@@ -505,7 +565,9 @@ function applySubagentUpdate(state: ChatState, update: SessionUpdate, agentId: s
     counter: run.counter,
   };
   const next = applyUpdate(subState, update);
-  const status: SubagentRun['status'] = update.sessionUpdate === 'error' ? 'error' : run.status;
+  const error = peggString(update, 'error');
+  const status: SubagentRun['status'] =
+    update.sessionUpdate === 'notice' && update.severity === 'error' ? 'error' : run.status;
   return {
     ...state,
     subagents: {
@@ -515,7 +577,7 @@ function applySubagentUpdate(state: ChatState, update: SessionUpdate, agentId: s
         status,
         items: next.items,
         counter: next.counter,
-        error: update.error || run.error,
+        error: error || run.error,
       },
     },
   };

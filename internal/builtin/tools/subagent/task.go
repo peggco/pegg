@@ -21,6 +21,15 @@ func backgroundReminder(name string) reminder.Reminder {
 	return reminder.New("background_subagent", content, "agent", name)
 }
 
+func runSafely(sa *SubAgent, fn func(context.Context), runCtx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			store.finish(sa, "", fmt.Errorf("subagent %q panicked: %v", sa.Name, r))
+		}
+	}()
+	fn(runCtx)
+}
+
 func agentOutput(res *agent.RunResult, runErr error) string {
 	if res != nil && strings.TrimSpace(res.Output) != "" {
 		return res.Output
@@ -46,8 +55,8 @@ func agentOutput(res *agent.RunResult, runErr error) string {
 	return ""
 }
 
-func generateTaskToolPrompt(agents []string) (string, error) {
-	sys, err := taskToolPromptBuilder(agents).
+func generateTaskToolPrompt(infos []agents.Info) (string, error) {
+	sys, err := taskToolPromptBuilder(infos).
 		Build(prompt.FormatMarkdown)
 	if err != nil {
 		return "", err
@@ -56,9 +65,13 @@ func generateTaskToolPrompt(agents []string) (string, error) {
 }
 
 func subAgentTool() tool.Tool {
-	agentsList := agents.List()
+	agentsInfo := agents.ListInfo()
+	agentsList := make([]string, len(agentsInfo))
+	for i, a := range agentsInfo {
+		agentsList[i] = a.Name
+	}
 
-	prompt, err := generateTaskToolPrompt(agentsList)
+	prompt, err := generateTaskToolPrompt(agentsInfo)
 	if err != nil {
 		panic(fmt.Sprintf("failed to generate task tool prompt: %v", err))
 	}
@@ -176,11 +189,11 @@ func subAgentTool() tool.Tool {
 
 				if params.Background {
 					parent.AttachReminder(backgroundReminder(params.Name))
-					go runAgent(context.Background())
+					go runSafely(sa, runAgent, context.Background())
 					return fmt.Sprintf("Resumed subagent %q in background with existing context.\n", params.Name), nil
 				}
 
-				go runAgent(ctx)
+				go runSafely(sa, runAgent, ctx)
 
 				select {
 				case <-sa.done:
@@ -228,11 +241,11 @@ func subAgentTool() tool.Tool {
 
 			if params.Background {
 				parent.AttachReminder(backgroundReminder(params.Name))
-				go runAgent(context.Background())
+				go runSafely(sa, runAgent, context.Background())
 				return fmt.Sprintf("Started subagent in background: %s\n", params.Name), nil
 			}
 
-			go runAgent(ctx)
+			go runSafely(sa, runAgent, ctx)
 
 			select {
 			case <-sa.done:

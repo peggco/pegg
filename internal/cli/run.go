@@ -350,6 +350,7 @@ func (c *CLI) selectSession() (string, error) {
 			Filters: []query.Filter{{Column: "project_dir", Operator: query.OpEqual, Value: dir},
 				session.MainSessionsFilter(),
 				{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""}},
+			ExcludeEmpty: true,
 		}
 		sessions, total, err := c.sessions.List(q)
 		if err != nil {
@@ -1258,6 +1259,13 @@ func (r *runRenderer) onCompaction(e compaction.Event) {
 
 func (r *runRenderer) onAsk(e agent.AgentAsk) {
 	if e.AgentID != r.mainID {
+		if r.bus != nil {
+			r.bus.Publish(agent.TopicAgentAskAnswer, agent.AgentAskAnswer{
+				AgentID:   e.AgentID,
+				RequestID: e.RequestID,
+				Answers:   map[string]string{},
+			})
+		}
 		return
 	}
 	r.write("\n%s %s is asking:\n", r.green("askuserquestion"), e.AgentName)
@@ -1344,8 +1352,9 @@ func (r *runRenderer) onAsk(e agent.AgentAsk) {
 
 done:
 	r.bus.Publish(agent.TopicAgentAskAnswer, agent.AgentAskAnswer{
-		AgentID: e.AgentID,
-		Answers: answers,
+		AgentID:   e.AgentID,
+		RequestID: e.RequestID,
+		Answers:   answers,
 	})
 }
 

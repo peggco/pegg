@@ -102,8 +102,8 @@ export function LoadSession(arg1) {
   return window['go']['main']['App']['LoadSession'](arg1);
 }
 
-export function LoadSessionsPage(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['LoadSessionsPage'](arg1, arg2, arg3, arg4);
+export function LoadSessionsPage(arg1, arg2, arg3) {
+  return window['go']['main']['App']['LoadSessionsPage'](arg1, arg2, arg3);
 }
 
 export function Log(arg1) {
@@ -192,6 +192,10 @@ export function ResetSession() {
 
 export function RespondAsk(arg1, arg2) {
   return window['go']['main']['App']['RespondAsk'](arg1, arg2);
+}
+
+export function RespondElicitation(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RespondElicitation'](arg1, arg2, arg3);
 }
 
 export function RespondPermission(arg1, arg2) {

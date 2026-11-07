@@ -24,8 +24,9 @@ type modelEntry struct {
 
 type sessionSetModelParams struct {
 	SessionId       SessionId `json:"sessionId"`
-	Provider        string    `json:"provider"`
-	Model           string    `json:"model"`
+	Provider        string    `json:"provider,omitempty"`
+	Model           string    `json:"model,omitempty"`
+	ModelId         string    `json:"modelId,omitempty"`
 	ReasoningEffort string    `json:"reasoningEffort,omitempty"`
 }
 
@@ -83,8 +84,12 @@ func (s *Server) handleSessionSetModel(ctx context.Context, params json.RawMessa
 	if err := json.Unmarshal(params, &req); err != nil {
 		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid session/set_model params"}
 	}
-	if req.Provider == "" || req.Model == "" {
-		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "provider and model are required"}
+	model := req.Model
+	if model == "" {
+		model = req.ModelId
+	}
+	if model == "" {
+		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "model is required"}
 	}
 	acpSess, ok := s.getSession(string(req.SessionId))
 	if !ok {
@@ -93,7 +98,7 @@ func (s *Server) handleSessionSetModel(ctx context.Context, params json.RawMessa
 	if acpSess.IsRunning() {
 		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "cannot change model while a prompt is running"}
 	}
-	prov, mdl, err := s.resolveModel(req.Provider, req.Model)
+	prov, mdl, err := s.resolveModel(req.Provider, model)
 	if err != nil {
 		return nil, err
 	}
@@ -108,10 +113,6 @@ func (s *Server) handleSessionSetModel(ctx context.Context, params json.RawMessa
 	if acpSess.PeggSessionID != "" {
 		_ = s.sessions.SetModel(acpSess.PeggSessionID, acpSess.Provider, acpSess.Model)
 	}
-	s.notify(acpSess.ID, SessionUpdate{
-		SessionUpdate: "current_model_update",
-		Provider:      acpSess.Provider,
-		Model:         acpSess.Model,
-	})
+	s.notifyConfigOptions(acpSess)
 	return map[string]string{"provider": acpSess.Provider, "model": acpSess.Model}, nil
 }

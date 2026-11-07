@@ -76,7 +76,7 @@ If nothing is found, Settings → Agent and the first-run screen offer **Downloa
   you reopen a session.
 - **Voice** — the mic button uses the ACP STT configuration from the Pegg settings.
 - **Modes** — Auto, Plan, Build.
-- **Models** — the model menu is populated from `pegg/models`.
+- **Models** — the model menu is populated from `_pegg/models`.
 - **Stop** — the send button becomes a stop button while a run is active.
 
 ## Settings

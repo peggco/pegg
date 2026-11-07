@@ -114,7 +114,7 @@ func TestAgentAskCustomQuestions(t *testing.T) {
 		for time.Now().Before(deadline) {
 			if bt.count() > 0 {
 				raw := bt.last()
-				if !strings.Contains(raw, `"method":"pegg/ask"`) {
+				if !strings.Contains(raw, `"method":"_pegg/ask"`) {
 					time.Sleep(time.Millisecond)
 					continue
 				}
@@ -274,8 +274,13 @@ func TestHistoryEmitsAttachmentChips(t *testing.T) {
 	if update.SessionUpdate != "user_message_chunk" {
 		t.Fatalf("sessionUpdate = %q", update.SessionUpdate)
 	}
-	if len(update.Attachments) != 1 || update.Attachments[0].Name != "r.pdf" || update.Attachments[0].Type != "file" {
-		t.Fatalf("attachments = %+v", update.Attachments)
+	atts, _ := update.Meta["com.pegg/attachments"].([]any)
+	if len(atts) != 1 {
+		t.Fatalf("attachments = %+v", update.Meta)
+	}
+	att, _ := atts[0].(map[string]any)
+	if att["name"] != "r.pdf" || att["type"] != "file" {
+		t.Fatalf("attachment = %+v", att)
 	}
 }
 
@@ -305,7 +310,7 @@ func TestToolMetadata(t *testing.T) {
 	}
 	args := parseArgs(`{"filePath":"/tmp/a.go","line":4}`)
 	locs := toolLocations("/tmp", args)
-	if len(locs) != 1 || locs[0].Path != "/tmp/a.go" || locs[0].Line != 4 {
+	if len(locs) != 1 || locs[0].Path != "/tmp/a.go" || locs[0].Line == nil || *locs[0].Line != 4 {
 		t.Fatalf("unexpected locations: %+v", locs)
 	}
 	entries, ok := planEntries(parseArgs(`{"todos":[{"title":"one","status":"pending","priority":"high"}]}`))
@@ -332,8 +337,11 @@ func TestSessionListMetadata(t *testing.T) {
 		t.Fatalf("new: %v", err)
 	}
 	created := res.(SessionNewResult)
-	if created.PeggSessionId == "" {
+	if peggSessionID(created) == "" {
 		t.Fatal("expected pegg session id")
+	}
+	if _, err := srv.sessions.AppendMessage(peggSessionID(created), llm.UserMessage("hi")); err != nil {
+		t.Fatalf("append message: %v", err)
 	}
 	lr, err := srv.handleSessionList(ctx, toJSON(t, SessionListParams{Cwd: "/tmp/project"}))
 	if err != nil {
@@ -343,11 +351,42 @@ func TestSessionListMetadata(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("sessions = %d, want 1", len(items))
 	}
-	if items[0].ProjectDir != "/tmp/project" {
-		t.Fatalf("project dir = %q", items[0].ProjectDir)
+	if items[0].Cwd != "/tmp/project" {
+		t.Fatalf("cwd = %q", items[0].Cwd)
 	}
-	if items[0].Mode != string(agent.ModeAuto) {
-		t.Fatalf("mode = %q", items[0].Mode)
+	if items[0].Meta["com.pegg/mode"] != string(agent.ModeAuto) {
+		t.Fatalf("mode = %v", items[0].Meta["com.pegg/mode"])
+	}
+}
+
+func TestSessionListHidesEmptySessions(t *testing.T) {
+	srv := newTestServer(t)
+	ctx := context.Background()
+
+	res, err := srv.handleSessionNew(ctx, toJSON(t, SessionNewParams{Cwd: "/tmp/project"}))
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	created := res.(SessionNewResult)
+	peggID := peggSessionID(created)
+
+	lr, err := srv.handleSessionList(ctx, toJSON(t, SessionListParams{Cwd: "/tmp/project"}))
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if got := len(lr.(SessionListResult).Sessions); got != 0 {
+		t.Fatalf("empty session should be hidden, got %d", got)
+	}
+
+	if _, err := srv.sessions.AppendMessage(peggID, llm.UserMessage("hi")); err != nil {
+		t.Fatalf("append message: %v", err)
+	}
+	lr, err = srv.handleSessionList(ctx, toJSON(t, SessionListParams{Cwd: "/tmp/project"}))
+	if err != nil {
+		t.Fatalf("list after message: %v", err)
+	}
+	if got := len(lr.(SessionListResult).Sessions); got != 1 {
+		t.Fatalf("session with a message should be listed, got %d", got)
 	}
 }
 

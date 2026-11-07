@@ -64,3 +64,23 @@ func TestRegisterDuplicate(t *testing.T) {
 		t.Fatalf("err = %v, want ErrDuplicate", err)
 	}
 }
+
+func TestListInfoDescriptions(t *testing.T) {
+	if err := Register(func() (*agent.Agent, error) {
+		return agent.New("described-agent", agent.WithDescription("does described things")), nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, info := range ListInfo() {
+		if info.Name == "described-agent" {
+			found = true
+			if info.Description != "does described things" {
+				t.Fatalf("description = %q", info.Description)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("described-agent missing from ListInfo")
+	}
+}

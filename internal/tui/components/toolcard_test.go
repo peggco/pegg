@@ -21,9 +21,60 @@ func flattenLines(lines []Line) string {
 	return b.String()
 }
 
-func TestSendFileCardListsFiles(t *testing.T) {
+func TestRunningBashShowsLiveTerminal(t *testing.T) {
 	styles.RegisterDefaults()
 	styles.Set("dark")
+	c := NewChat()
+	it := &ChatItem{Kind: ItemTool, ToolName: "bash:go test ./..."}
+	lines := c.toolLines(it, 80)
+	out := flattenLines(lines)
+	if !strings.Contains(out, "$ go test ./...") {
+		t.Fatalf("running bash should show the command as a terminal:\n%s", out)
+	}
+	if !strings.Contains(out, "running") {
+		t.Fatalf("running bash should show a running status:\n%s", out)
+	}
+	if len(lines) < 3 {
+		t.Fatalf("running bash should render a terminal box, got %d lines:\n%s", len(lines), out)
+	}
+}
+
+func TestRunningBashFillsOutputWhenDone(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+	c := NewChat()
+	it := &ChatItem{Kind: ItemTool, ToolName: "bash:echo hi", ToolOutput: "hi", ToolDone: true}
+	out := flattenLines(c.toolLines(it, 80))
+	if !strings.Contains(out, "hi") {
+		t.Fatalf("finished bash should show output:\n%s", out)
+	}
+}
+
+func TestRunningToolShowsAnimatedActivity(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+	c := NewChat()
+	it := &ChatItem{Kind: ItemTool, ToolName: "read:foo.go", Activity: "Reading foo.go"}
+	out := flattenLines(c.toolLines(it, 80))
+	if !strings.Contains(out, "Reading foo.go") {
+		t.Fatalf("running tool should show its activity:\n%s", out)
+	}
+}
+
+func TestOnTickRefreshesLiveItems(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+	c := NewChat()
+	c.AppendItem(&ChatItem{Kind: ItemTool, ToolName: "bash:sleep 1"})
+	c.dirty = false
+	c.OnTick(true)
+	if !c.dirty {
+		t.Fatal("a running tool should mark the chat dirty on tick so it animates")
+	}
+}
+
+func TestSendFileCardListsFiles(t *testing.T) {
+	styles.RegisterDefaults()
 	c := NewChat()
 
 	it := &ChatItem{

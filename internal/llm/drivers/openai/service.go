@@ -113,7 +113,14 @@ func (s *Service) Chat(ctx context.Context, req *llm.Request) (*llm.Response, er
 	if err := s.httpClient.Do(ctx, "POST", s.chatPath(req.Model), body, &resp); err != nil {
 		return nil, mapError(err)
 	}
-	return s.toLLMResponse(resp), nil
+	return s.toLLMResponse(unwrapChatResponse(resp)), nil
+}
+
+func unwrapChatResponse(resp chatResponse) chatResponse {
+	if len(resp.Choices) == 0 && resp.Data != nil && len(resp.Data.Choices) > 0 {
+		return *resp.Data
+	}
+	return resp
 }
 
 func (s *Service) chatAccumulated(ctx context.Context, req *llm.Request) (*llm.Response, error) {

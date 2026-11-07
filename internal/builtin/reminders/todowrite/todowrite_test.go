@@ -47,12 +47,12 @@ func TestFiresAfter30ToolEvents(t *testing.T) {
 	for i := 0; i < 29; i++ {
 		bus.Publish(agent.TopicAgentToolCall, toolCallEvent(a.ID, "bash"))
 	}
-	if a.HasPendingNotifications() {
+	if a.HasDisplayNotifications() {
 		t.Fatal("should not fire at 29 events")
 	}
 
 	bus.Publish(agent.TopicAgentToolCall, toolCallEvent(a.ID, "bash"))
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("should fire at 30 events")
 	}
 }
@@ -73,7 +73,7 @@ func TestDoesNotFireWithoutTools(t *testing.T) {
 			Content: "thinking and content generation does not count",
 		})
 	}
-	if a.HasPendingNotifications() {
+	if a.HasDisplayNotifications() {
 		t.Fatal("should not fire for token-only activity")
 	}
 }
@@ -92,19 +92,19 @@ func TestTodoWriteResetsCounter(t *testing.T) {
 		bus.Publish(agent.TopicAgentToolCall, toolCallEvent(a.ID, "bash"))
 	}
 	bus.Publish(agent.TopicAgentToolCall, toolCallEvent(a.ID, todoWriteTool))
-	if a.HasPendingNotifications() {
+	if a.HasDisplayNotifications() {
 		t.Fatal("todowrite usage should not queue a reminder")
 	}
 
 	for i := 0; i < 29; i++ {
 		bus.Publish(agent.TopicAgentToolResult, toolResultEvent(a.ID, "bash"))
 	}
-	if a.HasPendingNotifications() {
+	if a.HasDisplayNotifications() {
 		t.Fatal("should not fire at 29 events after reset")
 	}
 
 	bus.Publish(agent.TopicAgentToolResult, toolResultEvent(a.ID, "bash"))
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("should fire at 30 events after reset")
 	}
 }
@@ -122,7 +122,7 @@ func TestToolResultsCount(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		bus.Publish(agent.TopicAgentToolResult, toolResultEvent(a.ID, "read"))
 	}
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("tool results should count as stream events")
 	}
 }
@@ -145,7 +145,7 @@ func TestTodoWriteResultsResetToo(t *testing.T) {
 	for i := 0; i < 29; i++ {
 		bus.Publish(agent.TopicAgentToolCall, toolCallEvent(a.ID, "bash"))
 	}
-	if a.HasPendingNotifications() {
+	if a.HasDisplayNotifications() {
 		t.Fatal("should not fire at 29 events after reset")
 	}
 }
@@ -163,14 +163,14 @@ func TestFiresAgainAfterReminder(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		bus.Publish(agent.TopicAgentToolCall, toolCallEvent(a.ID, "bash"))
 	}
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("should fire at 30 events")
 	}
 
 	for i := 0; i < 29; i++ {
 		bus.Publish(agent.TopicAgentToolCall, toolCallEvent(a.ID, "bash"))
 	}
-	if !a.HasPendingNotifications() {
+	if !a.HasDisplayNotifications() {
 		t.Fatal("should still have the first pending notification")
 	}
 }
@@ -217,10 +217,10 @@ func TestMultipleAgentsTrackedIndependently(t *testing.T) {
 		bus.Publish(agent.TopicAgentToolCall, toolCallEvent(a1.ID, "bash"))
 	}
 
-	if !a1.HasPendingNotifications() {
+	if !a1.HasDisplayNotifications() {
 		t.Fatal("agent-1 should have notification")
 	}
-	if a2.HasPendingNotifications() {
+	if a2.HasDisplayNotifications() {
 		t.Fatal("agent-2 should not have notification")
 	}
 }

@@ -1,19 +1,5 @@
 export namespace acpclient {
 	
-	export class Cost {
-	    amount: number;
-	    currency: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Cost(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.amount = source["amount"];
-	        this.currency = source["currency"];
-	    }
-	}
 	export class ModelInfo {
 	    id: string;
 	    name?: string;
@@ -102,6 +88,8 @@ export namespace acpclient {
 	    diffs?: boolean;
 	    plan?: boolean;
 	    history?: boolean;
+	    terminals?: boolean;
+	    elicitation?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new PeggCapabilities(source);
@@ -117,9 +105,12 @@ export namespace acpclient {
 	        this.diffs = source["diffs"];
 	        this.plan = source["plan"];
 	        this.history = source["history"];
+	        this.terminals = source["terminals"];
+	        this.elicitation = source["elicitation"];
 	    }
 	}
 	export class STTResult {
+	    _meta?: Record<string, any>;
 	    text: string;
 	    provider?: string;
 	    model?: string;
@@ -130,12 +121,14 @@ export namespace acpclient {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this._meta = source["_meta"];
 	        this.text = source["text"];
 	        this.provider = source["provider"];
 	        this.model = source["model"];
 	    }
 	}
 	export class SessionForkResult {
+	    _meta?: Record<string, any>;
 	    sessionId: string;
 	    title?: string;
 	    parentId?: string;
@@ -146,12 +139,14 @@ export namespace acpclient {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this._meta = source["_meta"];
 	        this.sessionId = source["sessionId"];
 	        this.title = source["title"];
 	        this.parentId = source["parentId"];
 	    }
 	}
 	export class SessionHistoryResult {
+	    _meta?: Record<string, any>;
 	    oldestSeq: number;
 	    hasMore: boolean;
 	
@@ -161,145 +156,14 @@ export namespace acpclient {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this._meta = source["_meta"];
 	        this.oldestSeq = source["oldestSeq"];
 	        this.hasMore = source["hasMore"];
 	    }
 	}
-	export class SessionUsage {
-	    prompt_tokens?: number;
-	    completion_tokens?: number;
-	    total_tokens?: number;
-	    cost?: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new SessionUsage(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.prompt_tokens = source["prompt_tokens"];
-	        this.completion_tokens = source["completion_tokens"];
-	        this.total_tokens = source["total_tokens"];
-	        this.cost = source["cost"];
-	    }
-	}
-	export class SessionListItem {
-	    id: string;
-	    title: string;
-	    projectDir?: string;
-	    provider?: string;
-	    model?: string;
-	    mode?: string;
-	    usage?: SessionUsage;
-	    createdAt: string;
-	    updatedAt: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new SessionListItem(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.title = source["title"];
-	        this.projectDir = source["projectDir"];
-	        this.provider = source["provider"];
-	        this.model = source["model"];
-	        this.mode = source["mode"];
-	        this.usage = this.convertValues(source["usage"], SessionUsage);
-	        this.createdAt = source["createdAt"];
-	        this.updatedAt = source["updatedAt"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class SessionListResult {
-	    sessions: SessionListItem[];
-	    nextCursor?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new SessionListResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.sessions = this.convertValues(source["sessions"], SessionListItem);
-	        this.nextCursor = source["nextCursor"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class Usage {
-	    used: number;
-	    size: number;
-	    cost?: Cost;
-	    total_tokens?: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new Usage(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.used = source["used"];
-	        this.size = source["size"];
-	        this.cost = this.convertValues(source["cost"], Cost);
-	        this.total_tokens = source["total_tokens"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 	export class SessionPromptResult {
+	    _meta?: Record<string, any>;
 	    stopReason: string;
-	    usage?: Usage;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionPromptResult(source);
@@ -307,29 +171,12 @@ export namespace acpclient {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this._meta = source["_meta"];
 	        this.stopReason = source["stopReason"];
-	        this.usage = this.convertValues(source["usage"], Usage);
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 	export class SessionRevertResult {
+	    _meta?: Record<string, any>;
 	    removed: number;
 	    snapshotId?: string;
 	
@@ -339,14 +186,17 @@ export namespace acpclient {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this._meta = source["_meta"];
 	        this.removed = source["removed"];
 	        this.snapshotId = source["snapshotId"];
 	    }
 	}
-	
 	export class SlashCommand {
+	    _meta?: Record<string, any>;
 	    name: string;
 	    description?: string;
+	    // Go type: struct { Hint string "json:\"hint\"" }
+	    input?: any;
 	
 	    static createFrom(source: any = {}) {
 	        return new SlashCommand(source);
@@ -354,9 +204,29 @@ export namespace acpclient {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this._meta = source["_meta"];
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.input = this.convertValues(source["input"], Object);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
@@ -486,7 +356,6 @@ export namespace main {
 	}
 	export class ConnectSettings {
 	    enabled: boolean;
-	    relayUrl: string;
 	    token?: string;
 	    clearToken?: boolean;
 	    tokenMasked: string;
@@ -507,7 +376,6 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
-	        this.relayUrl = source["relayUrl"];
 	        this.token = source["token"];
 	        this.clearToken = source["clearToken"];
 	        this.tokenMasked = source["tokenMasked"];
@@ -1129,6 +997,102 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class SessionUsage {
+	    prompt_tokens?: number;
+	    completion_tokens?: number;
+	    total_tokens?: number;
+	    cost?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.prompt_tokens = source["prompt_tokens"];
+	        this.completion_tokens = source["completion_tokens"];
+	        this.total_tokens = source["total_tokens"];
+	        this.cost = source["cost"];
+	    }
+	}
+	export class SessionListItem {
+	    id: string;
+	    title: string;
+	    projectDir?: string;
+	    provider?: string;
+	    model?: string;
+	    mode?: string;
+	    usage?: SessionUsage;
+	    createdAt: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionListItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.projectDir = source["projectDir"];
+	        this.provider = source["provider"];
+	        this.model = source["model"];
+	        this.mode = source["mode"];
+	        this.usage = this.convertValues(source["usage"], SessionUsage);
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SessionListResult {
+	    sessions: SessionListItem[];
+	    nextCursor?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionListResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessions = this.convertValues(source["sessions"], SessionListItem);
+	        this.nextCursor = source["nextCursor"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SessionSettings {
 	    acpId: string;
 	    peggId: string;
@@ -1153,6 +1117,7 @@ export namespace main {
 	        this.model = source["model"];
 	    }
 	}
+	
 	export class SkillSetting {
 	    name: string;
 	    description: string;

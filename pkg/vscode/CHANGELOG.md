@@ -2,9 +2,32 @@
 
 ## Unreleased
 
+- Empty sessions (no messages yet) are hidden from the sessions tree and resume
+  picker, so clients that open a session eagerly no longer leave blank entries.
+- Full ACP v1 client rework: session modes, model and config-option pickers,
+  session list, load, resume, delete, and close, plus the standard
+  `session/set_model` and `session/set_config_option` methods.
+- Model and mode pickers now populate from the session `models` field and
+  `configOptions`, so they are available immediately after a session starts.
+- Session message attachments: dropped files attach, persist, and render in the
+  chat history, with a matching `sendfile` tool.
+- Skill hub support: browse, search, and install skills from the composer.
+- Lazy-loaded long session history with a "load earlier messages" control.
+
 ## 0.2.3
 
+- Session message attachments: dropped files attach, persist, and show in the
+  chat history.
+- Skill hub support: browse, search, and install skills from the composer.
+- Session list changes are pushed to the extension, so the sessions tree
+  refreshes without a manual reload.
+- Long session history is lazy-loaded, so opening a large session no longer
+  blocks the chat.
+
 ## 0.2.2
+
+- Live runs are synced across all clients, so a run started elsewhere appears in
+  the extension in real time.
 
 ## 0.2.1
 

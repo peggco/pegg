@@ -40,7 +40,15 @@ export async function attachmentToBlock(attachment: ComposerAttachment): Promise
     return { type: 'audio', name: attachment.name, data: attachment.data, mimeType: attachment.mediaType };
   }
   if (attachment.data && attachment.mediaType.startsWith('video/')) {
-    return { type: 'video', name: attachment.name, data: attachment.data, mimeType: attachment.mediaType };
+    return {
+      type: 'resource',
+      name: attachment.name,
+      resource: {
+        uri: attachment.path ?? `untitled:${attachment.name}`,
+        mimeType: attachment.mediaType,
+        blob: attachment.data,
+      },
+    };
   }
   if (attachment.text !== undefined) {
     return {
@@ -83,10 +91,13 @@ export async function attachmentToBlock(attachment: ComposerAttachment): Promise
     }
     if (attachment.mediaType.startsWith('video/')) {
       return {
-        type: 'video',
+        type: 'resource',
         name: attachment.name,
-        data: Buffer.from(bytes).toString('base64'),
-        mimeType: attachment.mediaType,
+        resource: {
+          uri: vscode.Uri.file(attachment.path).toString(),
+          mimeType: attachment.mediaType,
+          blob: Buffer.from(bytes).toString('base64'),
+        },
       };
     }
     if (isBinary(bytes)) {

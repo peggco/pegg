@@ -10,6 +10,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 val ACP_JSON: Json = Json {
@@ -18,6 +20,22 @@ val ACP_JSON: Json = Json {
     encodeDefaults = true
     classDiscriminator = "kind"
     isLenient = true
+}
+
+fun metaString(meta: JsonObject?, key: String): String? =
+    (meta?.get(key) as? JsonPrimitive)?.contentOrNull
+
+fun metaInt(meta: JsonObject?, key: String): Int? =
+    (meta?.get(key) as? JsonPrimitive)?.intOrNull
+
+fun metaBool(meta: JsonObject?, key: String): Boolean? =
+    (meta?.get(key) as? JsonPrimitive)?.booleanOrNull
+
+fun metaAttachments(meta: JsonObject?): List<AttachmentInfo>? {
+    val element = meta?.get("com.pegg/attachments") ?: return null
+    return runCatching {
+        ACP_JSON.decodeFromJsonElement<List<AttachmentInfo>>(element)
+    }.getOrNull()
 }
 
 @Serializable
@@ -97,39 +115,79 @@ data class Cost(val amount: Double, val currency: String? = null)
 
 @Serializable
 data class SessionUpdate(
+    @SerialName("_meta") val meta: JsonObject? = null,
     val sessionUpdate: String,
     val messageId: String? = null,
     val content: JsonElement? = null,
     val toolCallId: String? = null,
-    val toolName: String? = null,
     val title: String? = null,
+    val name: String? = null,
     val kind: String? = null,
     val status: String? = null,
     val locations: List<ToolCallLocation>? = null,
     val rawInput: JsonElement? = null,
     val rawOutput: JsonElement? = null,
     val entries: List<PlanEntry>? = null,
+    val availableCommands: List<SlashCommand>? = null,
+    val currentModeId: String? = null,
+    val configOptions: List<SessionConfigOption>? = null,
+    val updatedAt: String? = null,
     val used: Int? = null,
     val size: Int? = null,
     val cost: Cost? = null,
-    val mode: String? = null,
-    val provider: String? = null,
-    val model: String? = null,
-    val commands: List<SlashCommand>? = null,
-    val agentId: String? = null,
-    val agentName: String? = null,
+    val severity: String? = null,
+    val description: String? = null,
+    val compactionId: String? = null,
+    val summary: List<ContentBlock>? = null,
     val error: String? = null,
-    val contents: List<ToolCallContent>? = null,
-    val attachments: List<AttachmentInfo>? = null,
-    val runId: String? = null,
-    val runState: String? = null,
-    val baseSeq: Int? = null,
-    val seq: Int? = null,
-    val historyPage: Boolean = false,
+) {
+    val agentId: String? get() = metaString(meta, "com.pegg/agentId")
+    val agentName: String? get() = metaString(meta, "com.pegg/agentName")
+    val seq: Int? get() = metaInt(meta, "com.pegg/seq")
+    val baseSeq: Int? get() = metaInt(meta, "com.pegg/baseSeq")
+    val historyPage: Boolean get() = metaBool(meta, "com.pegg/historyPage") == true
+    val attachments: List<AttachmentInfo>? get() = metaAttachments(meta)
+    val metaError: String? get() = metaString(meta, "com.pegg/error")
+    val runId: String? get() = metaString(meta, "com.pegg/runId")
+    val runState: String? get() = metaString(meta, "com.pegg/runState")
+    val toolContents: List<ToolCallContent>? get() = (content as? JsonArray)?.let { array ->
+        runCatching {
+            ACP_JSON.decodeFromJsonElement<List<ToolCallContent>>(array)
+        }.getOrNull()
+    }
+}
+
+@Serializable
+data class SessionMode(
+    val id: String,
+    val name: String = "",
+    val description: String? = null,
 )
 
 @Serializable
+data class SessionModeState(
+    @SerialName("_meta") val meta: JsonObject? = null,
+    val currentModeId: String = "auto",
+    val availableModes: List<SessionMode> = emptyList(),
+)
+
+@Serializable
+data class SessionConfigOption(
+    @SerialName("_meta") val meta: JsonObject? = null,
+    val id: String,
+    val name: String = "",
+    val description: String? = null,
+    val category: String? = null,
+    val type: String = "select",
+    val currentValue: JsonElement? = null,
+    val options: JsonElement? = null,
+) {
+    val currentString: String? get() = (currentValue as? JsonPrimitive)?.contentOrNull
+}
+
+@Serializable
 data class InitializeResult(
+    @SerialName("_meta") val meta: JsonObject? = null,
     val protocolVersion: Int = 1,
     val agentCapabilities: AgentCapabilities? = null,
     val agentInfo: AgentInfo? = null,
@@ -137,10 +195,18 @@ data class InitializeResult(
 
 @Serializable
 data class AgentCapabilities(
+    @SerialName("_meta") val meta: JsonObject? = null,
     val loadSession: Boolean? = null,
     val promptCapabilities: PromptCapabilities? = null,
-    val pegg: PeggCapabilities? = null,
-)
+    val sessionCapabilities: JsonObject? = null,
+    val auth: JsonObject? = null,
+) {
+    val pegg: PeggCapabilities? get() = meta?.get("com.pegg/capabilities")?.let { element ->
+        runCatching {
+            ACP_JSON.decodeFromJsonElement(PeggCapabilities.serializer(), element)
+        }.getOrNull()
+    }
+}
 
 @Serializable
 data class PromptCapabilities(
@@ -159,6 +225,8 @@ data class PeggCapabilities(
     val diffs: Boolean? = null,
     val plan: Boolean? = null,
     val history: Boolean? = null,
+    val terminals: Boolean? = null,
+    val elicitation: Boolean? = null,
 )
 
 @Serializable
@@ -170,14 +238,29 @@ data class AgentInfo(
 
 @Serializable
 data class SessionNewResult(
+    @SerialName("_meta") val meta: JsonObject? = null,
     val sessionId: String,
-    val peggSessionId: String? = null,
-    val mode: String? = null,
-    val provider: String? = null,
-    val model: String? = null,
-    val permissionMode: String? = null,
-    val commands: List<SlashCommand>? = null,
-)
+    val modes: SessionModeState? = null,
+    val configOptions: List<SessionConfigOption>? = null,
+) {
+    val peggSessionId: String? get() = metaString(meta, "com.pegg/sessionId")
+    val permissionMode: String? get() = metaString(meta, "com.pegg/permissionMode")
+    val mode: String? get() = modes?.currentModeId
+    val provider: String? get() = null
+    val model: String? get() = configOptions?.firstOrNull { it.id == "model" }?.currentString
+}
+
+@Serializable
+data class SessionStateResult(
+    @SerialName("_meta") val meta: JsonObject? = null,
+    val modes: SessionModeState? = null,
+    val configOptions: List<SessionConfigOption>? = null,
+) {
+    val oldestSeq: Int? get() = metaInt(meta, "com.pegg/oldestSeq")
+    val hasMore: Boolean? get() = metaBool(meta, "com.pegg/hasMore")
+    val mode: String? get() = modes?.currentModeId
+    val model: String? get() = configOptions?.firstOrNull { it.id == "model" }?.currentString
+}
 
 @Serializable
 data class SessionUsage(
@@ -189,19 +272,28 @@ data class SessionUsage(
 
 @Serializable
 data class SessionListItem(
-    val id: String,
+    @SerialName("_meta") val meta: JsonObject? = null,
+    val sessionId: String,
+    val cwd: String = "",
     val title: String = "Untitled session",
-    val projectDir: String? = null,
-    val provider: String? = null,
-    val model: String? = null,
-    val mode: String? = null,
-    val usage: SessionUsage? = null,
-    val createdAt: String? = null,
     val updatedAt: String? = null,
-)
+) {
+    val id: String get() = sessionId
+    val projectDir: String? get() = cwd.ifBlank { null }
+    val provider: String? get() = metaString(meta, "com.pegg/provider")
+    val model: String? get() = metaString(meta, "com.pegg/model")
+    val mode: String? get() = metaString(meta, "com.pegg/mode")
+    val createdAt: String? get() = metaString(meta, "com.pegg/createdAt")
+    val usage: SessionUsage? get() = meta?.get("com.pegg/usage")?.let { element ->
+        runCatching {
+            ACP_JSON.decodeFromJsonElement(SessionUsage.serializer(), element)
+        }.getOrNull()
+    }
+}
 
 @Serializable
 data class SessionListResult(
+    @SerialName("_meta") val meta: JsonObject? = null,
     val sessions: List<SessionListItem> = emptyList(),
     val nextCursor: String? = null,
 )
@@ -241,8 +333,8 @@ data class PromptUsage(
 
 @Serializable
 data class PromptResult(
+    @SerialName("_meta") val meta: JsonObject? = null,
     val stopReason: String = "end_turn",
-    val usage: PromptUsage? = null,
 )
 
 @Serializable
@@ -279,10 +371,78 @@ data class PermissionToolCall(
 
 @Serializable
 data class PermissionParams(
+    @SerialName("_meta") val meta: JsonObject? = null,
     val sessionId: String? = null,
-    val question: String? = null,
     val toolCall: PermissionToolCall? = null,
     val options: List<PermissionOption> = emptyList(),
+) {
+    val question: String? get() = metaString(meta, "com.pegg/question")
+}
+
+@Serializable
+data class EnvVar(val name: String, val value: String)
+
+@Serializable
+data class TerminalCreateParams(
+    @SerialName("_meta") val meta: JsonObject? = null,
+    val sessionId: String? = null,
+    val command: String,
+    val args: List<String> = emptyList(),
+    val env: List<EnvVar> = emptyList(),
+    val cwd: String? = null,
+    val outputByteLimit: Int? = null,
+)
+
+@Serializable
+data class TerminalIdParams(
+    @SerialName("_meta") val meta: JsonObject? = null,
+    val sessionId: String? = null,
+    val terminalId: String,
+)
+
+@Serializable
+data class TerminalExitStatus(
+    @SerialName("_meta") val meta: JsonObject? = null,
+    val exitCode: Int? = null,
+    val signal: String? = null,
+)
+
+@Serializable
+data class ElicitationProperty(
+    val type: String = "string",
+    val title: String? = null,
+    val description: String? = null,
+    @SerialName("enum") val enumValues: List<String>? = null,
+    val items: ElicitationItems? = null,
+)
+
+@Serializable
+data class ElicitationItems(
+    val type: String = "string",
+    @SerialName("enum") val enumValues: List<String>? = null,
+)
+
+@Serializable
+data class ElicitationSchema(
+    @SerialName("_meta") val meta: JsonObject? = null,
+    val type: String = "object",
+    val title: String? = null,
+    val description: String? = null,
+    val properties: Map<String, ElicitationProperty> = emptyMap(),
+    val required: List<String> = emptyList(),
+)
+
+@Serializable
+data class ElicitationCreateParams(
+    @SerialName("_meta") val meta: JsonObject? = null,
+    val mode: String = "form",
+    val message: String = "",
+    val sessionId: String? = null,
+    val toolCallId: String? = null,
+    val requestId: JsonElement? = null,
+    val requestedSchema: ElicitationSchema? = null,
+    val elicitationId: String? = null,
+    val url: String? = null,
 )
 
 @Serializable

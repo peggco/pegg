@@ -99,28 +99,30 @@ func (s *Server) handleFollowEvent(acpSess *ACPSession, st *promptState, e live.
 		st.thoughtID = make(map[string]string)
 		st.oldFiles = make(map[string]string)
 		st.toolPending = make(map[string]map[string]bool)
-		s.notify(acpSess.ID, SessionUpdate{
+		s.notifyPegg(acpSess.ID, SessionUpdate{
 			SessionUpdate: "run_state_update",
-			RunID:         e.Run.ID,
-			RunState:      string(session.RunStateRunning),
-			BaseSeq:       e.Run.BaseSeq,
+			Meta: Meta{
+				"com.pegg/runId":    e.Run.ID,
+				"com.pegg/runState": string(session.RunStateRunning),
+				"com.pegg/baseSeq":  e.Run.BaseSeq,
+			},
 		})
 	case live.EventRunEvent:
 		s.handleAttachedRunEvent(st, acpSess, &e.Run, e.Journal)
 	case live.EventRunFinished:
 		status := ToolCallCompleted
 		switch e.State {
-		case session.RunStateCanceled:
-			status = ToolCallCancelled
-		case session.RunStateError:
+		case session.RunStateCanceled, session.RunStateError:
 			status = ToolCallFailed
 		}
 		s.settleAllTools(st, status)
-		s.notify(acpSess.ID, SessionUpdate{
+		s.notifyPegg(acpSess.ID, SessionUpdate{
 			SessionUpdate: "run_state_update",
-			RunID:         e.Run.ID,
-			RunState:      string(e.State),
-			Error:         e.Error,
+			Meta: Meta{
+				"com.pegg/runId":    e.Run.ID,
+				"com.pegg/runState": string(e.State),
+				"com.pegg/error":    e.Error,
+			},
 		})
 	}
 }
@@ -152,7 +154,7 @@ func (s *Server) settleAgentTools(st *promptState, agentID string, status ToolCa
 	for callID := range calls {
 		s.notify(st.sessionID, SessionUpdate{
 			SessionUpdate: "tool_call_update",
-			ToolCallID:    callID,
+			ToolCallID:    ToolCallId(callID),
 			Status:        string(status),
 		})
 	}
@@ -181,19 +183,22 @@ func (s *Server) handleAttachedRunEvent(st *promptState, acpSess *ACPSession, ru
 		if text == "" && len(atts) == 0 {
 			return
 		}
+		m := Meta{}
+		if len(atts) > 0 {
+			m["com.pegg/attachments"] = atts
+		}
 		s.notify(st.sessionID, SessionUpdate{
 			SessionUpdate: "user_message_chunk",
-			MessageID:     uuid.NewString(),
+			MessageID:     MessageId(uuid.NewString()),
 			Content:       &ContentBlock{Type: "text", Text: text},
-			Attachments:   atts,
+			Meta:          m,
 		})
 	case session.AgentEventStarted:
 		if ev.ParentAgentID != "" {
-			s.notify(st.sessionID, SessionUpdate{
+			s.notifyPegg(st.sessionID, SessionUpdate{
 				SessionUpdate: "subagent",
-				AgentID:       ev.AgentID,
-				AgentName:     ev.AgentName,
 				Status:        "running",
+				Meta:          Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName},
 			})
 		}
 	case session.AgentEventToken:
@@ -233,8 +238,8 @@ func (s *Server) handleAttachedRunEvent(st *promptState, acpSess *ACPSession, ru
 	case session.AgentEventUsage:
 		s.notify(st.sessionID, SessionUpdate{
 			SessionUpdate: "usage_update",
-			Used:          ev.Usage.TotalTokens,
-			Size:          200000,
+			Used:          uint64(ev.Usage.TotalTokens),
+			Size:          s.contextSize(),
 			Cost:          &Cost{Amount: ev.Usage.Cost, Currency: "USD"},
 		})
 	case session.AgentEventAsk:
@@ -263,14 +268,14 @@ func (s *Server) handleAttachedRunEvent(st *promptState, acpSess *ACPSession, ru
 		}()
 	case session.AgentEventError:
 		if ev.ToolError != "" {
-			s.notify(st.sessionID, SessionUpdate{SessionUpdate: "error", Error: ev.ToolError})
+			s.notifyNotice(st.sessionID, NoticeError, "Agent error", ev.ToolError)
 		}
 	case session.AgentEventErrorMessage:
 		if ev.ToolError != "" {
-			s.notify(st.sessionID, SessionUpdate{SessionUpdate: "agent_warning", Error: ev.ToolError})
+			s.notifyNotice(st.sessionID, NoticeWarning, "Agent warning", ev.ToolError)
 		}
 	case session.AgentEventErrorMessageFinish:
-		s.notify(st.sessionID, SessionUpdate{SessionUpdate: "agent_warning_clear"})
+		s.notifyPegg(st.sessionID, SessionUpdate{SessionUpdate: "agent_warning_clear"})
 	case session.AgentEventCompaction:
 		s.handleStreamEvent(st, acpSess, agent.StreamEvent{
 			Type: agent.StreamCompaction, AgentID: ev.AgentID, AgentName: ev.AgentName,

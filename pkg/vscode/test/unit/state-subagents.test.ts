@@ -12,23 +12,20 @@ describe('subagent and tool state', () => {
     let state = initialState();
     state = applyUpdate(state, {
       sessionUpdate: 'subagent',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
       status: 'running',
     });
     expect(state.items).toHaveLength(1);
 
     state = applyUpdate(state, {
       sessionUpdate: 'subagent',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
       status: 'running',
       title: 'find the auth code',
     });
     state = applyUpdate(state, {
       sessionUpdate: 'subagent',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
       status: 'finished',
       rawOutput: 'found it',
     });
@@ -49,8 +46,8 @@ describe('subagent and tool state', () => {
 
   it('keeps separate items for separate subagents', () => {
     let state = initialState();
-    state = applyUpdate(state, { sessionUpdate: 'subagent', agentId: 'a1', agentName: 'explorer', status: 'running' });
-    state = applyUpdate(state, { sessionUpdate: 'subagent', agentId: 'a2', agentName: 'planner', status: 'running' });
+    state = applyUpdate(state, { sessionUpdate: 'subagent', _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' }, status: 'running' });
+    state = applyUpdate(state, { sessionUpdate: 'subagent', _meta: { 'com.pegg/agentId': 'a2', 'com.pegg/agentName': 'planner' }, status: 'running' });
     expect(state.items).toHaveLength(2);
   });
 
@@ -59,12 +56,11 @@ describe('subagent and tool state', () => {
     state = applyUpdate(state, {
       sessionUpdate: 'tool_call',
       toolCallId: 't1',
-      toolName: 'read',
+      name: 'read',
       title: 'read: a.ts',
       kind: 'read',
       status: 'pending',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
     });
 
     const item = state.items[0];
@@ -80,8 +76,7 @@ describe('subagent and tool state', () => {
     const state = applyUpdate(initialState(), {
       sessionUpdate: 'agent_message_chunk',
       messageId: 'm1',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
       content: { type: 'text', text: 'hello' },
     });
     const item = state.items[0];
@@ -95,29 +90,27 @@ describe('subagent and tool state', () => {
 describe('filterConversation', () => {
   const make = () => {
     let state = initialState();
-    state = applyUpdate(state, { sessionUpdate: 'subagent', agentId: 'a1', agentName: 'explorer', status: 'running' });
+    state = applyUpdate(state, { sessionUpdate: 'subagent', _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' }, status: 'running' });
     state = applyUpdate(state, {
       sessionUpdate: 'agent_message_chunk',
       messageId: 'main-1',
-      agentId: 'main',
+      _meta: { 'com.pegg/agentId': 'main' },
       content: { type: 'text', text: 'main answer' },
     });
     state = applyUpdate(state, {
       sessionUpdate: 'agent_message_chunk',
       messageId: 'sub-1',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
       content: { type: 'text', text: 'sub answer' },
     });
     state = applyUpdate(state, {
       sessionUpdate: 'tool_call',
       toolCallId: 't1',
-      toolName: 'read',
+      name: 'read',
       title: 'read: a.ts',
       kind: 'read',
       status: 'pending',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
     });
     return state;
   };
@@ -148,20 +141,20 @@ describe('subagent leak safety net', () => {
     state = applyUpdate(state, {
       sessionUpdate: 'tool_call',
       toolCallId: 't1',
-      toolName: 'read',
+      name: 'read',
       title: 'read: a.ts',
       kind: 'read',
       status: 'pending',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentName': 'explorer' },
     });
     state = applyUpdate(state, {
       sessionUpdate: 'tool_call',
       toolCallId: 't2',
-      toolName: 'bash',
+      name: 'bash',
       title: 'bash: ls',
       kind: 'execute',
       status: 'pending',
-      agentName: 'orchestrator',
+      _meta: { 'com.pegg/agentName': 'orchestrator' },
     });
     const main = filterConversation(state.items, null, new Set());
     expect(main).toHaveLength(1);
@@ -174,15 +167,13 @@ describe('subagent task prompt', () => {
     let state = initialState();
     state = applyUpdate(state, {
       sessionUpdate: 'subagent',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
       status: 'running',
       title: 'Find the auth code',
     });
     state = applyUpdate(state, {
       sessionUpdate: 'subagent',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
       status: 'running',
       title: 'Find the auth code',
     });
@@ -197,19 +188,17 @@ describe('subagent task prompt', () => {
 
   it('shows the prompt in the subagent chat but not in the main chat', () => {
     let state = initialState();
-    state = applyUpdate(state, { sessionUpdate: 'subagent', agentId: 'a1', agentName: 'explorer', status: 'running' });
+    state = applyUpdate(state, { sessionUpdate: 'subagent', _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' }, status: 'running' });
     state = applyUpdate(state, {
       sessionUpdate: 'subagent',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
       status: 'running',
       title: 'Find the auth code',
     });
     state = applyUpdate(state, {
       sessionUpdate: 'agent_message_chunk',
       messageId: 'sub-1',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
       content: { type: 'text', text: 'found it' },
     });
 
@@ -225,8 +214,7 @@ describe('subagent task prompt', () => {
     state = appendUser(state, 'hello');
     state = applyUpdate(state, {
       sessionUpdate: 'subagent',
-      agentId: 'a1',
-      agentName: 'explorer',
+      _meta: { 'com.pegg/agentId': 'a1', 'com.pegg/agentName': 'explorer' },
       status: 'running',
       title: 'Find the auth code',
     });

@@ -1,7 +1,7 @@
 package reminders
 
 import (
-	"github.com/peggco/pegg/internal/builtin/reminders/tasks"
+	"github.com/peggco/pegg/internal/builtin/reminders/commentline"
 	"github.com/peggco/pegg/internal/builtin/reminders/todowrite"
 	"github.com/peggco/pegg/internal/builtin/reminders/usage"
 	"github.com/peggco/pegg/internal/core/event"
@@ -17,7 +17,7 @@ func Create(bus event.Bus) error {
 	if err := todowrite.New().Start(bus); err != nil {
 		return err
 	}
-	if err := tasks.New().Start(bus); err != nil {
+	if err := commentline.New().Start(bus); err != nil {
 		return err
 	}
 	return nil

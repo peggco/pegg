@@ -36,3 +36,46 @@ func TestNormID(t *testing.T) {
 		t.Fatalf("string id = %q", got)
 	}
 }
+
+func TestHandleFrameRoutesPeggUpdate(t *testing.T) {
+	var gotSession string
+	var gotUpdate json.RawMessage
+	c := New(Options{Callbacks: Callbacks{
+		OnUpdate: func(sessionID string, update json.RawMessage) {
+			gotSession = sessionID
+			gotUpdate = update
+		},
+	}})
+	c.handleFrame([]byte(`{"jsonrpc":"2.0","method":"_pegg/update","params":{"sessionId":"s1","update":{"sessionUpdate":"subagent","status":"running"}}}`))
+	if gotSession != "s1" {
+		t.Fatalf("session = %q", gotSession)
+	}
+	if !strings.Contains(string(gotUpdate), `"subagent"`) {
+		t.Fatalf("update = %s", gotUpdate)
+	}
+}
+
+func TestHandleFrameRoutesPeggNotification(t *testing.T) {
+	var gotMethod string
+	c := New(Options{Callbacks: Callbacks{
+		OnNotification: func(method string, params json.RawMessage) {
+			gotMethod = method
+		},
+	}})
+	c.handleFrame([]byte(`{"jsonrpc":"2.0","method":"_pegg/sessions_changed"}`))
+	if gotMethod != "_pegg/sessions_changed" {
+		t.Fatalf("method = %q", gotMethod)
+	}
+}
+
+func TestInitializeResultPeggCapabilities(t *testing.T) {
+	var res InitializeResult
+	raw := `{"protocolVersion":1,"agentCapabilities":{"_meta":{"com.pegg/capabilities":{"ask":true,"terminals":true}}}}`
+	if err := json.Unmarshal([]byte(raw), &res); err != nil {
+		t.Fatal(err)
+	}
+	caps := res.Pegg()
+	if caps == nil || !caps.Ask || !caps.Terminals {
+		t.Fatalf("caps = %+v", caps)
+	}
+}

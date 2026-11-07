@@ -15,25 +15,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/attach"
+	"github.com/peggco/pegg/internal/builtin/tools/shell"
 	"github.com/peggco/pegg/internal/llm"
 	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 )
 
 type SessionPromptParams struct {
+	Meta      Meta           `json:"_meta,omitempty"`
 	SessionId SessionId      `json:"sessionId"`
 	Prompt    []ContentBlock `json:"prompt"`
 }
 
 type SessionPromptResult struct {
+	Meta       Meta       `json:"_meta,omitempty"`
 	StopReason StopReason `json:"stopReason"`
-	Usage      *UsageInfo `json:"usage,omitempty"`
-}
-
-type UsageInfo struct {
-	Used int   `json:"used"`
-	Size int   `json:"size"`
-	Cost *Cost `json:"cost,omitempty"`
 }
 
 type promptState struct {
@@ -53,7 +49,7 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 
 	acpSess, ok := s.getSession(string(req.SessionId))
 	if !ok {
-		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "session not found"}
+		return nil, &RPCError{Code: ErrCodeResourceNotFound, Message: "session not found", Data: map[string]any{"sessionId": req.SessionId}}
 	}
 	input, attachments, err := s.preparePrompt(ctx, acpSess, req.Prompt)
 	if err != nil {
@@ -64,6 +60,13 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 	}
 
 	promptCtx, cancel := context.WithCancel(ctx)
+	if s.clientSupportsTerminal() {
+		promptCtx = shell.WithTerminalRunner(promptCtx, &acpTerminalRunner{
+			server:    s,
+			sessionID: string(req.SessionId),
+			cwd:       acpSess.Cwd,
+		})
+	}
 	if !acpSess.StartPrompt(promptCtx, cancel, id) {
 		cancel()
 		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "a prompt is already running for this session"}
@@ -162,8 +165,8 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 	if result != nil && result.Usage.TotalTokens > 0 {
 		s.notify(state.sessionID, SessionUpdate{
 			SessionUpdate: "usage_update",
-			Used:          result.Usage.TotalTokens,
-			Size:          200000,
+			Used:          uint64(result.Usage.TotalTokens),
+			Size:          s.contextSize(),
 			Cost:          &Cost{Amount: result.Usage.Cost, Currency: "USD"},
 		})
 	}
@@ -173,25 +176,17 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 		if promptCtx.Err() != nil {
 			stopReason = StopReasonCancelled
 		} else {
-			stopReason = StopReasonError
-			s.notify(state.sessionID, SessionUpdate{
-				SessionUpdate: "error",
-				Error:         runErr.Error(),
-			})
+			s.notifyNotice(state.sessionID, NoticeError, "Run failed", runErr.Error())
 		}
 	} else if result != nil && result.FinishReason == llm.FinishReasonLength {
 		stopReason = StopReasonMaxTokens
 	}
 
-	out := SessionPromptResult{StopReason: stopReason}
-	if result != nil {
-		out.Usage = &UsageInfo{
-			Used: result.Usage.TotalTokens,
-			Size: 200000,
-			Cost: &Cost{Amount: result.Usage.Cost, Currency: "USD"},
-		}
-	}
-	return out, nil
+	return SessionPromptResult{StopReason: stopReason}, nil
+}
+
+func (s *Server) contextSize() uint64 {
+	return 200000
 }
 
 func (s *Server) preparePrompt(ctx context.Context, acpSess *ACPSession, blocks []ContentBlock) (string, []llm.Attachment, error) {
@@ -209,16 +204,6 @@ func (s *Server) preparePrompt(ctx context.Context, acpSess *ACPSession, blocks 
 				continue
 			}
 			mediaType := defaultMime(b.MimeType, "image/png")
-			att, err := attach.FromBase64Media(blockFileName(b, attach.NameForMediaType(mediaType)), mediaType, b.Data)
-			if err != nil {
-				return "", nil, err
-			}
-			attachments = append(attachments, att)
-		case "video":
-			if strings.TrimSpace(b.Data) == "" {
-				continue
-			}
-			mediaType := defaultMime(b.MimeType, "video/mp4")
 			att, err := attach.FromBase64Media(blockFileName(b, attach.NameForMediaType(mediaType)), mediaType, b.Data)
 			if err != nil {
 				return "", nil, err
@@ -358,6 +343,10 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 	if agentID == "" {
 		agentID = "orchestrator"
 	}
+	meta := Meta{"com.pegg/agentId": agentID}
+	if agentName != "" {
+		meta["com.pegg/agentName"] = agentName
+	}
 
 	switch ev.Type {
 	case agent.StreamReasoning:
@@ -371,10 +360,9 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 		}
 		s.notify(st.sessionID, SessionUpdate{
 			SessionUpdate: "agent_thought_chunk",
-			MessageID:     id,
-			AgentID:       agentID,
-			AgentName:     agentName,
+			MessageID:     MessageId(id),
 			Content:       &ContentBlock{Type: "text", Text: ev.Reasoning},
+			Meta:          meta,
 		})
 	case agent.StreamToken:
 		if ev.Content == "" {
@@ -387,10 +375,9 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 		}
 		s.notify(st.sessionID, SessionUpdate{
 			SessionUpdate: "agent_message_chunk",
-			MessageID:     id,
-			AgentID:       agentID,
-			AgentName:     agentName,
+			MessageID:     MessageId(id),
 			Content:       &ContentBlock{Type: "text", Text: ev.Content},
+			Meta:          meta,
 		})
 	case agent.StreamToolCall:
 		if ev.ToolCall == nil {
@@ -407,23 +394,21 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 		}
 		s.notify(st.sessionID, SessionUpdate{
 			SessionUpdate: "tool_call",
-			ToolCallID:    call.ID,
-			ToolName:      call.Function.Name,
+			ToolCallID:    ToolCallId(call.ID),
 			Title:         toolTitle(call.Function.Name, args),
-			Kind:          string(toolKind(call.Function.Name)),
+			Name:          call.Function.Name,
+			Kind:          toolKind(call.Function.Name),
 			Status:        string(ToolCallPending),
 			RawInput:      args,
 			Locations:     toolLocations(acpSess.Cwd, args),
-			AgentID:       agentID,
-			AgentName:     agentName,
+			Meta:          meta,
 		})
 		if call.Function.Name == "todowrite" {
 			if entries, ok := planEntries(args); ok {
 				s.notify(st.sessionID, SessionUpdate{
 					SessionUpdate: "plan",
 					Entries:       entries,
-					AgentID:       agentID,
-					AgentName:     agentName,
+					Meta:          meta,
 				})
 			}
 		}
@@ -439,27 +424,35 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 			status = ToolCallFailed
 			errText = ev.ToolErr.Error()
 		}
+		m := Meta{"com.pegg/agentId": agentID}
+		if agentName != "" {
+			m["com.pegg/agentName"] = agentName
+		}
+		if errText != "" {
+			m["com.pegg/error"] = errText
+		}
+		if atts := fileAttachments(ev.ToolAttachments); len(atts) > 0 {
+			m["com.pegg/attachments"] = atts
+		}
 		update := SessionUpdate{
 			SessionUpdate: "tool_call_update",
-			ToolCallID:    call.ID,
-			ToolName:      call.Function.Name,
+			ToolCallID:    ToolCallId(call.ID),
+			Name:          call.Function.Name,
 			Status:        string(status),
 			RawOutput:     truncate(ev.ToolOutput, 128*1024),
-			Error:         errText,
-			Attachments:   fileAttachments(ev.ToolAttachments),
-			AgentID:       agentID,
-			AgentName:     agentName,
+			Meta:          m,
 		}
 		if status == ToolCallCompleted {
 			if path, ok := toolPath(args); ok && isEditTool(call.Function.Name) {
 				newContent, _ := os.ReadFile(absPath(acpSess.Cwd, path))
 				oldContent, hadOld := st.oldFiles[call.ID]
 				if hadOld || len(newContent) > 0 {
-					update.Contents = []ToolCallContent{{
+					old := truncate(oldContent, 2*1024*1024)
+					update.Content = []ToolCallContent{{
 						Type: "diff",
 						Diff: &Diff{
 							Path:    path,
-							OldText: truncate(oldContent, 2*1024*1024),
+							OldText: &old,
 							NewText: truncate(string(newContent), 2*1024*1024),
 						},
 					}}
@@ -469,16 +462,60 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 		}
 		s.notify(st.sessionID, update)
 	case agent.StreamCompaction:
-		s.notify(st.sessionID, SessionUpdate{
-			SessionUpdate: "agent_message_chunk",
-			MessageID:     uuid.NewString(),
-			AgentID:       agentID,
-			AgentName:     agentName,
-			Content: &ContentBlock{Type: "text",
-				Text: fmt.Sprintf("[Context compacted (%s) — %d messages, %d tokens]",
-					ev.Strategy, ev.Messages, ev.Tokens)},
-		})
+		s.emitCompaction(st.sessionID, meta, ev)
 	}
+}
+
+func (s *Server) emitCompaction(sessionID string, meta Meta, ev agent.StreamEvent) {
+	summary := fmt.Sprintf("[Context compacted (%s) — %d messages, %d tokens]", ev.Strategy, ev.Messages, ev.Tokens)
+	if s.clientSupportsCompaction() {
+		id := CompactionId("cmp-" + uuid.NewString())
+		s.notify(sessionID, SessionUpdate{
+			SessionUpdate: "compaction_update",
+			CompactionId:  id,
+			Status:        string(CompactionCompleted),
+			Summary:       []ContentBlock{{Type: "text", Text: summary}},
+			Meta:          meta,
+		})
+		return
+	}
+	s.notify(sessionID, SessionUpdate{
+		SessionUpdate: "agent_message_chunk",
+		MessageID:     MessageId(uuid.NewString()),
+		Content:       &ContentBlock{Type: "text", Text: summary},
+		Meta:          meta,
+	})
+}
+
+func (s *Server) clientSupportsCompaction() bool {
+	caps := s.clientCapabilities()
+	return caps != nil && caps.Session != nil && caps.Session.Compaction != nil
+}
+
+func (s *Server) clientSupportsNotices() bool {
+	caps := s.clientCapabilities()
+	return caps != nil && caps.Session != nil && caps.Session.Notices != nil
+}
+
+func (s *Server) notifyNotice(sessionID string, severity NoticeSeverity, title, description string) {
+	if s.clientSupportsNotices() {
+		s.notify(sessionID, SessionUpdate{
+			SessionUpdate: "notice",
+			Severity:      severity,
+			Title:         title,
+			Description:   description,
+		})
+		return
+	}
+	text := title
+	if description != "" {
+		text += ": " + description
+	}
+	s.notify(sessionID, SessionUpdate{
+		SessionUpdate: "agent_message_chunk",
+		MessageID:     MessageId(uuid.NewString()),
+		Content:       &ContentBlock{Type: "text", Text: text},
+	})
 }
 
 func extractPromptText(blocks []ContentBlock) string {
@@ -555,7 +592,7 @@ func toolKind(name string) ToolKind {
 	case "task", "taskstatus", "todowrite", "todoread":
 		return ToolKindThink
 	case "enterplanmode", "exitplanmode":
-		return ToolKindSwitch
+		return ToolKindSwitchMode
 	default:
 		return ToolKindOther
 	}
@@ -596,7 +633,11 @@ func toolLocations(cwd string, args map[string]any) []ToolCallLocation {
 	if v, ok := args["line"].(float64); ok {
 		line = int(v)
 	}
-	return []ToolCallLocation{{Path: absPath(cwd, p), Line: line}}
+	loc := ToolCallLocation{Path: absPath(cwd, p)}
+	if line > 0 {
+		loc.Line = &line
+	}
+	return []ToolCallLocation{loc}
 }
 
 func planEntries(args map[string]any) ([]PlanEntry, bool) {

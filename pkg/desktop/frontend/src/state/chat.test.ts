@@ -32,7 +32,7 @@ describe('chat reducer', () => {
     state = applyUpdate(state, {
       sessionUpdate: 'tool_call',
       toolCallId: 't1',
-      toolName: 'edit',
+      name: 'edit',
       title: 'Edit main.go',
       kind: 'edit',
       status: 'pending',
@@ -42,7 +42,7 @@ describe('chat reducer', () => {
       sessionUpdate: 'tool_call_update',
       toolCallId: 't1',
       status: 'completed',
-      contents: [{ type: 'diff', diff: { path: 'main.go', oldText: 'a', newText: 'b' } }],
+      content: [{ type: 'diff', diff: { path: 'main.go', oldText: 'a', newText: 'b' } }],
     });
     const item = state.items[0];
     expect(item.kind).toBe('tool');
@@ -71,7 +71,7 @@ describe('chat reducer', () => {
 
   it('queues and resolves permissions and questions', () => {
     let state = emptyChat();
-    state = addPermission(state, 'p1', { sessionId: 's', options: [], question: 'Allow?' });
+    state = addPermission(state, 'p1', { sessionId: 's', options: [], _meta: { 'com.pegg/question': 'Allow?' } });
     expect(state.permissions).toHaveLength(1);
     state = resolvePermission(state, 'p1');
     expect(state.permissions).toHaveLength(0);
@@ -89,15 +89,13 @@ describe('subagent routing', () => {
     let state = emptyChat();
     state = applyUpdate(state, {
       sessionUpdate: 'subagent',
-      agentId: 'sub-1',
-      agentName: 'Explorer',
+      _meta: { 'com.pegg/agentId': 'sub-1', 'com.pegg/agentName': 'Explorer' },
       title: 'Map the API',
       status: 'running',
     });
     state = applyUpdate(state, {
       sessionUpdate: 'agent_message_chunk',
-      agentId: 'sub-1',
-      agentName: 'Explorer',
+      _meta: { 'com.pegg/agentId': 'sub-1', 'com.pegg/agentName': 'Explorer' },
       content: { type: 'text', text: 'Looking around' },
     });
     expect(state.items).toHaveLength(1);
@@ -113,7 +111,7 @@ describe('tool completion reconciliation', () => {
     state = applyUpdate(state, {
       sessionUpdate: 'tool_call',
       toolCallId: 't1',
-      toolName: 'bash',
+      name: 'bash',
       status: 'pending',
     });
     state = applyUpdate(state, chunk('moved on'));
@@ -128,10 +126,10 @@ describe('tool completion reconciliation', () => {
     state = applyUpdate(state, {
       sessionUpdate: 'tool_call',
       toolCallId: 't1',
-      toolName: 'write',
+      name: 'write',
       status: 'pending',
     });
-    state = applyUpdate(state, { sessionUpdate: 'run_state_update', runState: 'finished' });
+    state = applyUpdate(state, { sessionUpdate: 'run_state_update', _meta: { 'com.pegg/runState': 'finished' } });
 
     const tool = state.items.find((item) => item.kind === 'tool');
     expect(tool?.kind).toBe('tool');
@@ -143,22 +141,20 @@ describe('tool completion reconciliation', () => {
     let state = emptyChat();
     state = applyUpdate(state, {
       sessionUpdate: 'subagent',
-      agentId: 'sub-1',
-      agentName: 'Developer',
+      _meta: { 'com.pegg/agentId': 'sub-1', 'com.pegg/agentName': 'Developer' },
       title: 'Edit files',
       status: 'running',
     });
     state = applyUpdate(state, {
       sessionUpdate: 'tool_call',
-      agentId: 'sub-1',
+      _meta: { 'com.pegg/agentId': 'sub-1' },
       toolCallId: 't2',
-      toolName: 'edit',
+      name: 'edit',
       status: 'pending',
     });
     state = applyUpdate(state, {
       sessionUpdate: 'subagent',
-      agentId: 'sub-1',
-      agentName: 'Developer',
+      _meta: { 'com.pegg/agentId': 'sub-1', 'com.pegg/agentName': 'Developer' },
       status: 'finished',
     });
 
@@ -176,7 +172,7 @@ describe('tool status precedence', () => {
     state = applyUpdate(state, {
       sessionUpdate: 'tool_call',
       toolCallId: 't1',
-      toolName: 'bash',
+      name: 'bash',
       status: 'pending',
     });
     state = applyUpdate(state, {
@@ -214,7 +210,7 @@ describe('user attachments', () => {
       sessionUpdate: 'user_message_chunk',
       messageId: 'm1',
       content: { type: 'text', text: '' },
-      attachments: [{ name: 'report.pdf', mediaType: 'application/pdf', type: 'file' }],
+      _meta: { 'com.pegg/attachments': [{ name: 'report.pdf', mediaType: 'application/pdf', type: 'file' }] },
     });
     expect(state.items).toHaveLength(1);
     expect(state.items[0]).toMatchObject({
@@ -244,9 +240,9 @@ describe('history window', () => {
       state = applyUpdate(state, {
         sessionUpdate: 'tool_call',
         toolCallId: `t-${seq}`,
-        toolName: 'read',
+        name: 'read',
         status: 'completed',
-        seq,
+        _meta: { 'com.pegg/seq': seq },
       });
       state = { ...state, historyOldestSeq: seq };
     }

@@ -2,6 +2,8 @@ package compaction
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/peggco/pegg/internal/agent"
@@ -15,11 +17,15 @@ type Middleware struct {
 	cfg *config.CompactionConfig
 	llm *llm.Manager
 
-	mu               sync.Mutex
-	needsCompact     bool
-	lastPromptTokens int
+	mu    sync.Mutex
+	needs map[string]compState
 
 	summarizer *summarizer
+}
+
+type compState struct {
+	needsCompact     bool
+	lastPromptTokens int
 }
 
 type Deps struct {
@@ -31,8 +37,59 @@ func New(deps Deps) *Middleware {
 	return &Middleware{
 		cfg:        deps.Config,
 		llm:        deps.LLM,
+		needs:      make(map[string]compState),
 		summarizer: newSummarizer(),
 	}
+}
+
+func compKey(ctx context.Context) string {
+	if a := agent.FromContext(ctx); a != nil && a.ID != "" {
+		return a.ID
+	}
+	return ""
+}
+
+func (m *Middleware) setNeeds(ctx context.Context, tokens int) {
+	key := compKey(ctx)
+	m.mu.Lock()
+	if m.needs == nil {
+		m.needs = make(map[string]compState)
+	}
+	m.needs[key] = compState{needsCompact: true, lastPromptTokens: tokens}
+	m.mu.Unlock()
+}
+
+func (m *Middleware) takeNeeds(ctx context.Context) compState {
+	key := compKey(ctx)
+	m.mu.Lock()
+	st := m.needs[key]
+	delete(m.needs, key)
+	m.mu.Unlock()
+	return st
+}
+
+func (m *Middleware) peekNeeds(ctx context.Context) compState {
+	key := compKey(ctx)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.needs[key]
+}
+
+func (m *Middleware) clearNeeds(ctx context.Context) {
+	key := compKey(ctx)
+	m.mu.Lock()
+	delete(m.needs, key)
+	m.mu.Unlock()
+}
+
+func (m *Middleware) AfterRun(ctx context.Context, _ string, _ *middleware.Result, _ error) error {
+	m.clearNeeds(ctx)
+	return nil
+}
+
+func (m *Middleware) OnError(ctx context.Context, _ error) error {
+	m.clearNeeds(ctx)
+	return nil
 }
 
 func (m *Middleware) hasStrategy(name string) bool {
@@ -74,27 +131,36 @@ func (m *Middleware) publish(ctx context.Context, topic string, evt Event) {
 	}
 }
 
+const DefaultContextWindow = 128000
+
+func (m *Middleware) contextWindow(a *agent.Agent) int {
+	if a == nil {
+		return DefaultContextWindow
+	}
+	if maxInput := a.Model.MaxInputTokens(); maxInput > 0 {
+		return maxInput
+	}
+	return DefaultContextWindow
+}
+
 func (m *Middleware) AfterLLM(ctx context.Context, req *llm.Request, resp *llm.Response) error {
 	if m.cfg == nil || !m.cfg.Enabled {
 		return nil
 	}
 
 	a := agent.FromContext(ctx)
-	if a == nil || a.Model.Config == nil {
+	if a == nil {
 		return nil
 	}
 
-	maxInput := a.Model.MaxInputTokens()
+	maxInput := m.contextWindow(a)
 	if maxInput <= 0 {
 		return nil
 	}
 
 	pct := float64(resp.Usage.PromptTokens) / float64(maxInput) * 100
 	if pct >= m.threshold() {
-		m.mu.Lock()
-		m.needsCompact = true
-		m.lastPromptTokens = resp.Usage.PromptTokens
-		m.mu.Unlock()
+		m.setNeeds(ctx, resp.Usage.PromptTokens)
 	}
 	return nil
 }
@@ -104,12 +170,9 @@ func (m *Middleware) BeforeLLM(ctx context.Context, req *llm.Request) error {
 		return nil
 	}
 
-	m.mu.Lock()
-	needs := m.needsCompact
-	promptTokens := m.lastPromptTokens
-	m.needsCompact = false
-	m.lastPromptTokens = 0
-	m.mu.Unlock()
+	st := m.takeNeeds(ctx)
+	needs := st.needsCompact
+	promptTokens := st.lastPromptTokens
 
 	if !needs {
 		if m.hasStrategy("tool-clearing") {
@@ -167,14 +230,17 @@ func (m *Middleware) compactSummarization(ctx context.Context, req *llm.Request,
 	}
 
 	a := agent.FromContext(ctx)
-	s := m.summarizer.get(m.cfg, m.llm, a)
-	if s == nil {
-		return nil
-	}
-
-	summary, err := m.summarizer.run(ctx, history)
+	s, err := m.summarizer.get(m.cfg, m.llm, a)
 	if err != nil {
 		return err
+	}
+
+	summary, err := m.summarizer.run(ctx, s, history)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(summary) == "" {
+		return fmt.Errorf("compaction: summarizer returned an empty summary")
 	}
 
 	systemMsg := history[0]
@@ -205,10 +271,7 @@ func (m *Middleware) compactSlidingWindow(ctx context.Context, req *llm.Request,
 	}
 
 	a := agent.FromContext(ctx)
-	maxInput := 0
-	if a != nil && a.Model.Config != nil {
-		maxInput = a.Model.MaxInputTokens()
-	}
+	maxInput := m.contextWindow(a)
 
 	keepCount := 0
 	if maxInput > 0 && promptTokens > 0 {
@@ -255,10 +318,10 @@ func (m *Middleware) compactSlidingWindow(ctx context.Context, req *llm.Request,
 
 func (m *Middleware) checkResumeOverflow(ctx context.Context, req *llm.Request) {
 	a := agent.FromContext(ctx)
-	if a == nil || a.Model.Config == nil {
+	if a == nil {
 		return
 	}
-	maxInput := a.Model.MaxInputTokens()
+	maxInput := m.contextWindow(a)
 	if maxInput <= 0 {
 		return
 	}
@@ -268,10 +331,7 @@ func (m *Middleware) checkResumeOverflow(ctx context.Context, req *llm.Request) 
 	}
 	pct := float64(est) / float64(maxInput) * 100
 	if pct >= m.threshold() {
-		m.mu.Lock()
-		m.needsCompact = true
-		m.lastPromptTokens = est
-		m.mu.Unlock()
+		m.setNeeds(ctx, est)
 	}
 }
 

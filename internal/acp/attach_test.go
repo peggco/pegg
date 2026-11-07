@@ -41,7 +41,8 @@ func TestSessionNewFollowsRunsFromOtherClients(t *testing.T) {
 		t.Fatal(err)
 	}
 	sr := result.(SessionNewResult)
-	if sr.PeggSessionId == "" {
+	peggID := peggSessionID(sr)
+	if peggID == "" {
 		t.Fatal("no pegg session id")
 	}
 
@@ -51,7 +52,7 @@ func TestSessionNewFollowsRunsFromOtherClients(t *testing.T) {
 	}
 	now := time.Now()
 	run := session.Run{
-		ID: "remote-run", SessionID: sr.PeggSessionId, State: session.RunStateRunning,
+		ID: "remote-run", SessionID: peggID, State: session.RunStateRunning,
 		OwnerInstance: "other", AgentID: "remote-agent", StartedAt: now, UpdatedAt: now,
 	}
 	if err := rs.CreateRun(run); err != nil {
@@ -163,7 +164,7 @@ func TestFollowEmitsToolCallAndCompletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sid := result.(SessionNewResult).PeggSessionId
+	sid := peggSessionID(result.(SessionNewResult))
 
 	rs, err := mgr.Runs()
 	if err != nil {
@@ -195,7 +196,7 @@ func TestFollowEmitsToolCallAndCompletion(t *testing.T) {
 			strings.Contains(all, `"toolCallId":"call-1"`) &&
 			strings.Contains(all, `"sessionUpdate":"tool_call_update"`) &&
 			strings.Contains(all, `"status":"completed"`) &&
-			strings.Contains(all, `"runState":"done"`) {
+			strings.Contains(all, `"com.pegg/runState":"done"`) {
 			return
 		}
 		if time.Now().After(deadline) {
@@ -229,7 +230,7 @@ func TestFollowSettlesUnfinishedTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sid := result.(SessionNewResult).PeggSessionId
+	sid := peggSessionID(result.(SessionNewResult))
 
 	rs, err := mgr.Runs()
 	if err != nil {

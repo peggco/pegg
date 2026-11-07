@@ -267,3 +267,23 @@ func mustFirstMessageID(t *testing.T, mgr *Manager, sessionID string) string {
 	}
 	return msgs[0].ID
 }
+
+func TestManagerCompactionTitleIsIdempotent(t *testing.T) {
+	mgr, _ := newTestManager(t)
+	src, _ := newSessionWithMessages(t, mgr, "Fix auth bug", 1)
+
+	child1, err := mgr.CompactSession(src.ID, []llm.Message{llm.SystemMessage("sum1")}, "summarization")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if child1.Title != "Fix auth bug (compacted)" {
+		t.Fatalf("child1 title = %q", child1.Title)
+	}
+	child2, err := mgr.CompactSession(child1.ID, []llm.Message{llm.SystemMessage("sum2")}, "summarization")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if child2.Title != "Fix auth bug (compacted)" {
+		t.Fatalf("child2 title = %q, want a single (compacted) suffix", child2.Title)
+	}
+}

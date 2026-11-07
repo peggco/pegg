@@ -58,6 +58,9 @@ func (m *mockStore) Delete(id string) error {
 func (m *mockStore) List(q query.Query) ([]session.Session, int, error) {
 	var out []session.Session
 	for _, s := range m.sessions {
+		if q.ExcludeEmpty && len(m.messages[s.ID]) == 0 {
+			continue
+		}
 		out = append(out, *s)
 	}
 	return out, len(out), nil
@@ -146,6 +149,29 @@ func newTestServer(t *testing.T) *Server {
 	s := New(cfg, bus, &logger.Logger{}, nil, sessMgr, nil, nil, nil)
 	s.newAgentFn = mockAgentFn()
 	return s
+}
+
+func initServer(t *testing.T, srv *Server) {
+	t.Helper()
+	if _, err := srv.handleInitialize(context.Background(), toJSON(t, InitializeParams{ProtocolVersion: 1})); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+}
+
+func peggSessionID(sr SessionNewResult) string {
+	if sr.Meta == nil {
+		return ""
+	}
+	id, _ := sr.Meta["com.pegg/sessionId"].(string)
+	return id
+}
+
+func updateMeta(u SessionUpdate, key string) string {
+	if u.Meta == nil {
+		return ""
+	}
+	v, _ := u.Meta[key].(string)
+	return v
 }
 
 type bufferTransport struct {

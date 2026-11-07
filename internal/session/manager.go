@@ -472,7 +472,7 @@ func (m *Manager) CompactSession(sourceID string, compactedMessages []llm.Messag
 	newSess := *src
 	newSess.ID = uuid.NewString()
 	newSess.CompactionParentID = src.ID
-	newSess.Title = src.Title + " (compacted)"
+	newSess.Title = compactedTitle(src.Title)
 	newSess.CreatedAt = now
 	newSess.UpdatedAt = now
 	newSess.Usage = llm.Usage{}

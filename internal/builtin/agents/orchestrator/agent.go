@@ -24,6 +24,7 @@ const (
 
 func newOrchestratorAgent(fs *vfs.VFS) (*agent.Agent, error) {
 	main := agent.New("orchestrator",
+		agent.WithDescription("Coordinator agent that delegates work to specialized subagents and tracks progress with todos. Rarely needed as a subagent_type; prefer the specialized agents directly."),
 		agent.WithSystemPromptFn(func(providerID, modelID string) string {
 			sys, err := generateOrchestratorPrompt(providerID, modelID)
 			if err != nil {

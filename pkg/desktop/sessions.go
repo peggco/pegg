@@ -77,6 +77,10 @@ func (a *App) ensureClient() (*acpclient.Client, error) {
 		ClientCapabilities: acpclient.ClientCapabilities{
 			FS:       &acpclient.FSCapabilities{ReadTextFile: true, WriteTextFile: false},
 			Terminal: true,
+			Session: &acpclient.ClientSessionCaps{
+				Compaction: &struct{}{},
+				Notices:    &struct{}{},
+			},
 		},
 	})
 	if err != nil {
@@ -98,10 +102,10 @@ func (a *App) ensureClient() (*acpclient.Client, error) {
 func (a *App) Capabilities() *acpclient.PeggCapabilities {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.initRes == nil || a.initRes.AgentCapabilities.Pegg == nil {
-		return &acpclient.PeggCapabilities{Ask: true, Permissions: true, Models: true, Commands: true, Attachments: true, Diffs: true, Plan: true, History: true}
+	if a.initRes == nil || a.initRes.Pegg() == nil {
+		return &acpclient.PeggCapabilities{Ask: true, Permissions: true, Models: true, Commands: true, Attachments: true, Diffs: true, Plan: true, History: true, Terminals: true, Elicitation: true}
 	}
-	return a.initRes.AgentCapabilities.Pegg
+	return a.initRes.Pegg()
 }
 
 func (a *App) enqueueUpdate(sessionID string, raw json.RawMessage) {
@@ -167,8 +171,10 @@ func (a *App) flushUpdates() {
 
 func (a *App) handleNotification(method string, params json.RawMessage) {
 	switch method {
-	case "pegg/sessions_changed":
+	case "_pegg/sessions_changed":
 		a.emit("sessions:changed", nil)
+	case "elicitation/complete":
+		a.emit("acp:elicitation-complete", json.RawMessage(params))
 	}
 }
 
@@ -179,11 +185,16 @@ func (a *App) handleServerRequest(id, method string, params json.RawMessage) {
 		a.pending[id] = pendingRequest{ID: id, Method: method}
 		a.sessionsMu.Unlock()
 		a.emit("acp:permission", map[string]any{"requestId": id, "params": json.RawMessage(params)})
-	case "pegg/ask":
+	case "_pegg/ask":
 		a.sessionsMu.Lock()
 		a.pending[id] = pendingRequest{ID: id, Method: method}
 		a.sessionsMu.Unlock()
 		a.emit("acp:ask", map[string]any{"requestId": id, "params": json.RawMessage(params)})
+	case "elicitation/create":
+		a.sessionsMu.Lock()
+		a.pending[id] = pendingRequest{ID: id, Method: method}
+		a.sessionsMu.Unlock()
+		a.emit("acp:elicitation", map[string]any{"requestId": id, "params": json.RawMessage(params)})
 	default:
 		a.mu.Lock()
 		c := a.client
@@ -225,7 +236,7 @@ func (a *App) RespondPermission(requestID, optionID string) error {
 func (a *App) RespondAsk(requestID string, answers map[string]string) error {
 	a.sessionsMu.Lock()
 	req, ok := a.pending[requestID]
-	if ok && req.Method == "pegg/ask" {
+	if ok && req.Method == "_pegg/ask" {
 		delete(a.pending, requestID)
 	}
 	a.sessionsMu.Unlock()
@@ -242,6 +253,32 @@ func (a *App) RespondAsk(requestID string, answers map[string]string) error {
 		return acpclient.ErrClosed
 	}
 	return c.Respond(requestID, map[string]any{"answers": answers})
+}
+
+func (a *App) RespondElicitation(requestID, action string, content map[string]any) error {
+	a.sessionsMu.Lock()
+	req, ok := a.pending[requestID]
+	if ok && req.Method == "elicitation/create" {
+		delete(a.pending, requestID)
+	}
+	a.sessionsMu.Unlock()
+	if !ok {
+		return errors.New("elicitation request is no longer active")
+	}
+	if action == "" {
+		action = "cancel"
+	}
+	a.mu.Lock()
+	c := a.client
+	a.mu.Unlock()
+	if c == nil {
+		return acpclient.ErrClosed
+	}
+	result := map[string]any{"action": action}
+	if content != nil {
+		result["content"] = content
+	}
+	return c.Respond(requestID, result)
 }
 
 func (a *App) clientOrErr() (*acpclient.Client, error) {
@@ -365,17 +402,18 @@ func (a *App) NewSession(req NewSessionRequest) (*SessionInfo, error) {
 	}
 	info := &SessionInfo{
 		ACPID:          res.SessionID,
-		PeggID:         res.PeggSessionID,
+		PeggID:         metaString(res.Meta, "com.pegg/sessionId"),
 		Cwd:            abs,
 		Title:          "New session",
-		Mode:           res.Mode,
-		Provider:       res.Provider,
-		Model:          res.Model,
-		PermissionMode: res.PermissionMode,
-		Commands:       res.Commands,
+		Mode:           modeFromState(res.Modes),
+		Model:          configValue(res.ConfigOptions, "model"),
+		PermissionMode: metaString(res.Meta, "com.pegg/permissionMode"),
 	}
 	if info.Mode == "" {
 		info.Mode = "auto"
+	}
+	if info.Model != "" {
+		info.Provider = a.providerForModel(client, info.Model)
 	}
 	if req.Mode != "" && req.Mode != info.Mode {
 		if err := a.setMode(client, info, req.Mode); err != nil {
@@ -430,8 +468,8 @@ func (a *App) LoadSession(req LoadSessionRequest) (*SessionInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	var history acpclient.SessionHistoryResult
-	_ = json.Unmarshal(raw, &history)
+	var state acpclient.SessionStateResult
+	_ = json.Unmarshal(raw, &state)
 	info := &SessionInfo{
 		ACPID:            req.PeggID,
 		PeggID:           req.PeggID,
@@ -440,8 +478,14 @@ func (a *App) LoadSession(req LoadSessionRequest) (*SessionInfo, error) {
 		Mode:             req.Mode,
 		Provider:         req.Provider,
 		Model:            req.Model,
-		HistoryOldestSeq: history.OldestSeq,
-		HistoryHasMore:   history.HasMore,
+		HistoryOldestSeq: metaInt(state.Meta, "com.pegg/oldestSeq"),
+		HistoryHasMore:   metaBool(state.Meta, "com.pegg/hasMore"),
+	}
+	if mode := modeFromState(state.Modes); mode != "" {
+		info.Mode = mode
+	}
+	if model := configValue(state.ConfigOptions, "model"); model != "" {
+		info.Model = model
 	}
 	if info.Title == "" {
 		info.Title = "Session"
@@ -452,51 +496,87 @@ func (a *App) LoadSession(req LoadSessionRequest) (*SessionInfo, error) {
 	return info, nil
 }
 
-func (a *App) ListSessions(cwd string, all bool) (acpclient.SessionListResult, error) {
+type SessionUsage struct {
+	PromptTokens     int     `json:"prompt_tokens,omitempty"`
+	CompletionTokens int     `json:"completion_tokens,omitempty"`
+	TotalTokens      int     `json:"total_tokens,omitempty"`
+	Cost             float64 `json:"cost,omitempty"`
+}
+
+type SessionListItem struct {
+	ID         string       `json:"id"`
+	Title      string       `json:"title"`
+	ProjectDir string       `json:"projectDir,omitempty"`
+	Provider   string       `json:"provider,omitempty"`
+	Model      string       `json:"model,omitempty"`
+	Mode       string       `json:"mode,omitempty"`
+	Usage      SessionUsage `json:"usage,omitempty"`
+	CreatedAt  string       `json:"createdAt"`
+	UpdatedAt  string       `json:"updatedAt"`
+}
+
+type SessionListResult struct {
+	Sessions   []SessionListItem `json:"sessions"`
+	NextCursor string            `json:"nextCursor,omitempty"`
+}
+
+func (a *App) ListSessions(cwd string, all bool) (SessionListResult, error) {
 	a.logf("session/list requested all=%v cwd=%s", all, cwd)
+	return a.listSessions(cwd, all, "")
+}
+
+func (a *App) LoadSessionsPage(cwd string, all bool, cursor string) (SessionListResult, error) {
+	return a.listSessions(cwd, all, cursor)
+}
+
+func (a *App) listSessions(cwd string, all bool, cursor string) (SessionListResult, error) {
 	client, err := a.ensureClient()
 	if err != nil {
-		return acpclient.SessionListResult{}, err
+		return SessionListResult{}, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	params := acpclient.SessionListParams{All: all, Limit: 200}
+	params := acpclient.SessionListParams{Cursor: cursor}
 	if !all {
 		params.Cwd = cwd
 	}
 	raw, err := client.Request(ctx, "session/list", params)
 	if err != nil {
-		return acpclient.SessionListResult{}, err
+		return SessionListResult{}, err
 	}
 	var res acpclient.SessionListResult
 	if err := json.Unmarshal(raw, &res); err != nil {
-		return res, err
+		return SessionListResult{}, err
 	}
-	a.logf("session/list all=%v cwd=%s -> %d sessions", all, cwd, len(res.Sessions))
-	return res, nil
+	out := SessionListResult{
+		Sessions:   make([]SessionListItem, 0, len(res.Sessions)),
+		NextCursor: res.NextCursor,
+	}
+	for _, item := range res.Sessions {
+		out.Sessions = append(out.Sessions, desktopSessionItem(item))
+	}
+	a.logf("session/list all=%v cwd=%s -> %d sessions", all, cwd, len(out.Sessions))
+	return out, nil
 }
 
-func (a *App) LoadSessionsPage(cwd string, all bool, offset, limit int) (acpclient.SessionListResult, error) {
-	client, err := a.ensureClient()
-	if err != nil {
-		return acpclient.SessionListResult{}, err
+func desktopSessionItem(item acpclient.SessionInfo) SessionListItem {
+	usage := SessionUsage{}
+	if raw, ok := item.Meta["com.pegg/usage"]; ok && raw != nil {
+		if data, err := json.Marshal(raw); err == nil {
+			_ = json.Unmarshal(data, &usage)
+		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if limit <= 0 || limit > 200 {
-		limit = 30
+	return SessionListItem{
+		ID:         item.SessionID,
+		Title:      item.Title,
+		ProjectDir: item.Cwd,
+		Provider:   metaString(item.Meta, "com.pegg/provider"),
+		Model:      metaString(item.Meta, "com.pegg/model"),
+		Mode:       metaString(item.Meta, "com.pegg/mode"),
+		Usage:      usage,
+		CreatedAt:  metaString(item.Meta, "com.pegg/createdAt"),
+		UpdatedAt:  item.UpdatedAt,
 	}
-	raw, err := client.Request(ctx, "session/list", acpclient.SessionListParams{
-		Cwd: cwd, All: all, Offset: offset, Limit: limit,
-	})
-	if err != nil {
-		return acpclient.SessionListResult{}, err
-	}
-	var res acpclient.SessionListResult
-	if err := json.Unmarshal(raw, &res); err != nil {
-		return acpclient.SessionListResult{}, err
-	}
-	return res, nil
 }
 
 type LoadHistoryRequest struct {
@@ -514,13 +594,17 @@ func (a *App) LoadHistory(req LoadHistoryRequest) (acpclient.SessionHistoryResul
 	if strings.TrimSpace(req.SessionID) == "" {
 		return acpclient.SessionHistoryResult{}, errors.New("session id is required")
 	}
+	sessionID := req.SessionID
+	if info, err := a.resolveSession(req.SessionID); err == nil && info.PeggID != "" {
+		sessionID = info.PeggID
+	}
 	if req.Limit <= 0 || req.Limit > 200 {
 		req.Limit = 50
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	raw, err := client.Request(ctx, "session/history", acpclient.SessionHistoryParams{
-		SessionID: req.SessionID, Cwd: req.Cwd, BeforeSeq: req.BeforeSeq, Limit: req.Limit,
+	raw, err := client.Request(ctx, "_pegg/session/history", acpclient.SessionHistoryParams{
+		SessionID: sessionID, Cwd: req.Cwd, BeforeSeq: req.BeforeSeq, Limit: req.Limit,
 	})
 	if err != nil {
 		return acpclient.SessionHistoryResult{}, err
@@ -596,8 +680,6 @@ func promptBlocks(text string, atts []PromptAttachment) []acpclient.ContentBlock
 			blocks = append(blocks, acpclient.ContentBlock{Type: "image", Name: att.Name, Data: att.Data, MimeType: att.MediaType})
 		case strings.HasPrefix(att.MediaType, "audio/") && att.Data != "":
 			blocks = append(blocks, acpclient.ContentBlock{Type: "audio", Name: att.Name, Data: att.Data, MimeType: att.MediaType})
-		case strings.HasPrefix(att.MediaType, "video/") && att.Data != "":
-			blocks = append(blocks, acpclient.ContentBlock{Type: "video", Name: att.Name, Data: att.Data, MimeType: att.MediaType})
 		case att.Data != "":
 			blocks = append(blocks, acpclient.ContentBlock{
 				Type: "resource",
@@ -625,6 +707,81 @@ func fileURI(path, name string) string {
 		return "file://" + path
 	}
 	return "file://" + name
+}
+
+func metaString(meta acpclient.Meta, key string) string {
+	if meta == nil {
+		return ""
+	}
+	if v, ok := meta[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func metaInt(meta acpclient.Meta, key string) int {
+	if meta == nil {
+		return 0
+	}
+	switch v := meta[key].(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case json.Number:
+		n, _ := v.Int64()
+		return int(n)
+	}
+	return 0
+}
+
+func metaBool(meta acpclient.Meta, key string) bool {
+	if meta == nil {
+		return false
+	}
+	v, _ := meta[key].(bool)
+	return v
+}
+
+func modeFromState(state *acpclient.SessionModeState) string {
+	if state == nil {
+		return ""
+	}
+	return state.CurrentModeID
+}
+
+func configValue(options []acpclient.SessionConfigOption, id string) string {
+	for _, option := range options {
+		if option.ID != id {
+			continue
+		}
+		if value, ok := option.CurrentValue.(string); ok {
+			return value
+		}
+	}
+	return ""
+}
+
+func (a *App) providerForModel(client *acpclient.Client, model string) string {
+	if model == "" {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	raw, err := client.Request(ctx, "_pegg/models", map[string]string{})
+	if err != nil {
+		return ""
+	}
+	var res acpclient.ModelListResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return ""
+	}
+	for _, entry := range res.Models {
+		if entry.Model.ID == model {
+			return entry.Provider
+		}
+	}
+	return ""
 }
 
 func (a *App) Cancel(sessionID string) error {
@@ -674,7 +831,7 @@ func (a *App) setModel(client *acpclient.Client, info *SessionInfo, provider, mo
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	if _, err := client.Request(ctx, "session/set_model", acpclient.SessionSetModelParams{
+	if _, err := client.Request(ctx, "_pegg/session/set_model", acpclient.SessionSetModelParams{
 		SessionID:       info.ACPID,
 		Provider:        provider,
 		Model:           model,
@@ -735,7 +892,7 @@ func (a *App) ListModels(provider string) (acpclient.ModelListResult, error) {
 	if provider != "" {
 		params["provider"] = provider
 	}
-	raw, err := client.Request(ctx, "pegg/models", params)
+	raw, err := client.Request(ctx, "_pegg/models", params)
 	if err != nil {
 		return acpclient.ModelListResult{}, err
 	}
@@ -757,7 +914,7 @@ func (a *App) RenameSession(sessionID, title string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if _, err := client.Request(ctx, "session/rename", acpclient.SessionRenameParams{SessionID: info.PeggID, Title: title}); err != nil {
+	if _, err := client.Request(ctx, "_pegg/session/rename", acpclient.SessionRenameParams{SessionID: info.PeggID, Title: title}); err != nil {
 		return err
 	}
 	info.Title = title
@@ -798,7 +955,7 @@ func (a *App) ForkSession(sessionID, messageID string, userMessageIndex int) (ac
 		index := userMessageIndex
 		params.UserMessageIndex = &index
 	}
-	raw, err := client.Request(ctx, "session/fork", params)
+	raw, err := client.Request(ctx, "_pegg/session/fork", params)
 	if err != nil {
 		return acpclient.SessionForkResult{}, err
 	}
@@ -825,7 +982,7 @@ func (a *App) RevertSession(sessionID, messageID string, userMessageIndex int) (
 		index := userMessageIndex
 		params.UserMessageIndex = &index
 	}
-	raw, err := client.Request(ctx, "session/revert", params)
+	raw, err := client.Request(ctx, "_pegg/session/revert", params)
 	if err != nil {
 		return acpclient.SessionRevertResult{}, err
 	}
@@ -843,7 +1000,7 @@ func (a *App) RecordStart() error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_, err = client.Request(ctx, "stt/record/start", map[string]any{})
+	_, err = client.Request(ctx, "_pegg/stt/record/start", map[string]any{})
 	return err
 }
 
@@ -854,7 +1011,7 @@ func (a *App) RecordStop() (acpclient.STTResult, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	raw, err := client.Request(ctx, "stt/record/stop", map[string]any{})
+	raw, err := client.Request(ctx, "_pegg/stt/record/stop", map[string]any{})
 	if err != nil {
 		return acpclient.STTResult{}, err
 	}

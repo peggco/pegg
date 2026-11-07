@@ -51,6 +51,8 @@ type Query struct {
 	SearchColumns []string
 	Sort          []Sort
 	Page          Page
+
+	ExcludeEmpty bool
 }
 
 const (
@@ -70,6 +72,7 @@ type Builder struct {
 	allowed       map[string]struct{}
 	defaultSort   []Sort
 	selectColumns []string
+	emptyFilter   string
 }
 
 var tableNameRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -89,6 +92,11 @@ func (b *Builder) SelectColumns(columns ...string) *Builder {
 
 func (b *Builder) DefaultSort(column string, dir Direction) *Builder {
 	b.defaultSort = append(b.defaultSort, Sort{Column: column, Dir: dir})
+	return b
+}
+
+func (b *Builder) ExcludeEmptyWhen(predicate string) *Builder {
+	b.emptyFilter = predicate
 	return b
 }
 
@@ -113,6 +121,10 @@ func (b *Builder) Build(q Query) (Built, error) {
 			args = append(args, term)
 		}
 		where = append(where, "("+strings.Join(parts, " OR ")+")")
+	}
+
+	if q.ExcludeEmpty && b.emptyFilter != "" {
+		where = append(where, b.emptyFilter)
 	}
 
 	whereSQL := ""

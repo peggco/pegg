@@ -117,7 +117,7 @@ Response:
 
 ## ACP
 
-ACP clients can call the JSON-RPC method `stt/transcribe` with the same base64
+ACP clients can call the JSON-RPC method `_pegg/stt/transcribe` with the same base64
 audio fields. ACP prompts may also include an `audio` content block; Pegg
 transcribes it when the prompt has no text block.
 

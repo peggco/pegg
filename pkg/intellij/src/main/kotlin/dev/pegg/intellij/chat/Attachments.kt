@@ -88,8 +88,15 @@ object Attachments {
                     ContentBlock("image", data = data, mimeType = attachment.mediaType, name = attachment.name)
                 attachment.mediaType.startsWith("audio/") ->
                     ContentBlock("audio", data = data, mimeType = attachment.mediaType, name = attachment.name)
-                attachment.mediaType.startsWith("video/") ->
-                    ContentBlock("video", data = data, mimeType = attachment.mediaType, name = attachment.name)
+                attachment.mediaType.startsWith("video/") -> ContentBlock(
+                    type = "resource",
+                    name = attachment.name,
+                    resource = EmbeddedResource(
+                        uri = attachment.path ?: "untitled:${attachment.name}",
+                        mimeType = attachment.mediaType,
+                        blob = data,
+                    ),
+                )
                 else -> ContentBlock(
                     type = "resource",
                     name = attachment.name,
@@ -136,8 +143,15 @@ object Attachments {
                 ContentBlock("image", data = base64(bytes), mimeType = attachment.mediaType, name = attachment.name)
             attachment.mediaType.startsWith("audio/") ->
                 ContentBlock("audio", data = base64(bytes), mimeType = attachment.mediaType, name = attachment.name)
-            attachment.mediaType.startsWith("video/") ->
-                ContentBlock("video", data = base64(bytes), mimeType = attachment.mediaType, name = attachment.name)
+            attachment.mediaType.startsWith("video/") -> ContentBlock(
+                type = "resource",
+                name = attachment.name,
+                resource = EmbeddedResource(
+                    uri = File(path).toURI().toString(),
+                    mimeType = attachment.mediaType,
+                    blob = base64(bytes),
+                ),
+            )
             isBinary(bytes) -> ContentBlock(
                 type = "resource",
                 name = attachment.name,
