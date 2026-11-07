@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Empty sessions (no messages yet) are hidden from the sessions tree and resume
+  picker, so clients that open a session eagerly no longer leave blank entries.
 - Full ACP v1 client rework: session modes, model and config-option pickers,
   session list, load, resume, delete, and close, plus the standard
   `session/set_model` and `session/set_config_option` methods.

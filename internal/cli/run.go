@@ -350,6 +350,7 @@ func (c *CLI) selectSession() (string, error) {
 			Filters: []query.Filter{{Column: "project_dir", Operator: query.OpEqual, Value: dir},
 				session.MainSessionsFilter(),
 				{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""}},
+			ExcludeEmpty: true,
 		}
 		sessions, total, err := c.sessions.List(q)
 		if err != nil {

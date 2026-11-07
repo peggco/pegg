@@ -14,6 +14,8 @@
 
 ### Fixed
 
+- Empty sessions (no messages yet) are hidden from the sessions tab, so clients
+  that open a session eagerly no longer leave blank entries.
 - Model and mode pickers now populate from the session `models` field and
   `configOptions`, so they are available immediately after a session starts.
 

@@ -213,6 +213,11 @@ Lists persisted sessions with opaque cursor pagination. `SessionInfo` uses
 `com.pegg/provider`, `com.pegg/model`, `com.pegg/mode`, `com.pegg/usage`,
 `com.pegg/createdAt`).
 
+Sessions with no messages are excluded from the listing. A session created by
+`session/new` stays hidden until the first prompt records a message, so clients
+that open a session eagerly (for example while probing the agent) do not leave
+empty `ACP Session` entries in the list.
+
 ```json
 {
   "sessions": [

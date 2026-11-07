@@ -88,6 +88,7 @@ func (e *Engine) ListSessions(page, size int) ([]Session, int, error) {
 			session.MainSessionsFilter(),
 			{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""},
 		},
+		ExcludeEmpty: true,
 	})
 }
 
@@ -107,8 +108,9 @@ func (e *Engine) AppendMessage(id string, msg Message) (*SessionMessage, error) 
 
 func sessionListQuery(projectDir string) query.Query {
 	q := query.Query{
-		Page: query.Page{Number: 1, Size: 20},
-		Sort: []query.Sort{{Column: "updated_at", Dir: query.Desc}},
+		Page:         query.Page{Number: 1, Size: 20},
+		Sort:         []query.Sort{{Column: "updated_at", Dir: query.Desc}},
+		ExcludeEmpty: true,
 	}
 	filters := []query.Filter{
 		session.MainSessionsFilter(),

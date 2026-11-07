@@ -168,4 +168,8 @@ HTTP API yet.
 
 - Sessions are scoped to a project directory; use `--all` (CLI) to see everything.
 - Run `pegg doctor` or check the status bar to see cumulative cost per session.
-- ACP sessions created with `session/new` appear in listings titled `ACP Session`.
+- ACP sessions created with `session/new` appear in listings titled `ACP Session`
+  once the first message is recorded. Sessions with no messages are hidden from
+  every listing (CLI, TUI, connect, HTTP, SDK, and ACP `session/list`) so clients
+  that open a session eagerly while probing an agent do not leave empty entries
+  behind.

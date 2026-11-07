@@ -197,6 +197,9 @@ func TestSessionTabLoadClosesModal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
+	if _, err := mgr.AppendMessage(sess.ID, llm.UserMessage("hi")); err != nil {
+		t.Fatalf("append message: %v", err)
+	}
 
 	s := New(Deps{Sessions: mgr})
 	closed := false

@@ -131,6 +131,7 @@ func (s *JSONStore) List(q query.Query) ([]Session, int, error) {
 		return nil, 0, err
 	}
 	var all []Session
+	nonEmpty := make(map[string]bool)
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
@@ -143,6 +144,19 @@ func (s *JSONStore) List(q query.Query) ([]Session, int, error) {
 			return nil, 0, err
 		}
 		all = append(all, f.Session)
+		if len(f.Messages) > 0 {
+			nonEmpty[f.Session.ID] = true
+		}
+	}
+
+	if q.ExcludeEmpty {
+		kept := make([]Session, 0, len(all))
+		for _, sess := range all {
+			if nonEmpty[sess.ID] {
+				kept = append(kept, sess)
+			}
+		}
+		all = kept
 	}
 
 	filtered, err := filterSessions(all, q)

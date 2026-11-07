@@ -491,6 +491,13 @@ func (s *Server) handleSessionClose(ctx context.Context, params json.RawMessage)
 	if err := json.Unmarshal(params, &req); err != nil {
 		return nil, &RPCError{Code: ErrCodeInvalidParams, Message: "invalid session/close params"}
 	}
+	if acpSess, ok := s.getSession(string(req.SessionId)); ok && acpSess != nil && acpSess.PeggSessionID != "" {
+		if msgs, err := s.sessions.Messages(acpSess.PeggSessionID); err == nil && len(msgs) == 0 {
+			if err := s.sessions.Delete(acpSess.PeggSessionID); err != nil {
+				s.log.Fdebug("acp: delete empty session %s: %v", acpSess.PeggSessionID, err)
+			}
+		}
+	}
 	s.removeSession(string(req.SessionId))
 	return map[string]any{}, nil
 }
@@ -597,9 +604,10 @@ func (s *Server) handleSessionList(ctx context.Context, params json.RawMessage) 
 		filters = append(filters, query.Filter{Column: "project_dir", Operator: query.OpEqual, Value: req.Cwd})
 	}
 	q := query.Query{
-		Page:    query.Page{Number: offset/size + 1, Size: size},
-		Sort:    []query.Sort{{Column: "updated_at", Dir: query.Desc}},
-		Filters: filters,
+		Page:         query.Page{Number: offset/size + 1, Size: size},
+		Sort:         []query.Sort{{Column: "updated_at", Dir: query.Desc}},
+		Filters:      filters,
+		ExcludeEmpty: true,
 	}
 
 	sessions, total, err := s.sessions.List(q)

@@ -141,3 +141,44 @@ func TestBuildSelectColumns(t *testing.T) {
 		t.Errorf("SelectSQL:\n got %q\nwant %q", built.SelectSQL, want)
 	}
 }
+
+func TestBuildExcludeEmpty(t *testing.T) {
+	const pred = "EXISTS (SELECT 1 FROM child WHERE child.parent_id = parent.id)"
+	b := NewBuilder("parent", "id").ExcludeEmptyWhen(pred)
+
+	t.Run("applied when requested", func(t *testing.T) {
+		built, err := b.Build(Query{ExcludeEmpty: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantSelect := "SELECT * FROM parent WHERE " + pred + " LIMIT ? OFFSET ?"
+		if built.SelectSQL != wantSelect {
+			t.Errorf("SelectSQL:\n got %q\nwant %q", built.SelectSQL, wantSelect)
+		}
+		wantCount := "SELECT COUNT(*) FROM parent WHERE " + pred
+		if built.CountSQL != wantCount {
+			t.Errorf("CountSQL:\n got %q\nwant %q", built.CountSQL, wantCount)
+		}
+	})
+
+	t.Run("omitted by default", func(t *testing.T) {
+		built, err := b.Build(Query{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "SELECT * FROM parent LIMIT ? OFFSET ?"; built.SelectSQL != want {
+			t.Errorf("SelectSQL:\n got %q\nwant %q", built.SelectSQL, want)
+		}
+	})
+
+	t.Run("ignored without a predicate", func(t *testing.T) {
+		plain := NewBuilder("parent", "id")
+		built, err := plain.Build(Query{ExcludeEmpty: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "SELECT * FROM parent LIMIT ? OFFSET ?"; built.SelectSQL != want {
+			t.Errorf("SelectSQL:\n got %q\nwant %q", built.SelectSQL, want)
+		}
+	})
+}

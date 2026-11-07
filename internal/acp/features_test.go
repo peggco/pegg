@@ -340,6 +340,9 @@ func TestSessionListMetadata(t *testing.T) {
 	if peggSessionID(created) == "" {
 		t.Fatal("expected pegg session id")
 	}
+	if _, err := srv.sessions.AppendMessage(peggSessionID(created), llm.UserMessage("hi")); err != nil {
+		t.Fatalf("append message: %v", err)
+	}
 	lr, err := srv.handleSessionList(ctx, toJSON(t, SessionListParams{Cwd: "/tmp/project"}))
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -353,6 +356,37 @@ func TestSessionListMetadata(t *testing.T) {
 	}
 	if items[0].Meta["com.pegg/mode"] != string(agent.ModeAuto) {
 		t.Fatalf("mode = %v", items[0].Meta["com.pegg/mode"])
+	}
+}
+
+func TestSessionListHidesEmptySessions(t *testing.T) {
+	srv := newTestServer(t)
+	ctx := context.Background()
+
+	res, err := srv.handleSessionNew(ctx, toJSON(t, SessionNewParams{Cwd: "/tmp/project"}))
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	created := res.(SessionNewResult)
+	peggID := peggSessionID(created)
+
+	lr, err := srv.handleSessionList(ctx, toJSON(t, SessionListParams{Cwd: "/tmp/project"}))
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if got := len(lr.(SessionListResult).Sessions); got != 0 {
+		t.Fatalf("empty session should be hidden, got %d", got)
+	}
+
+	if _, err := srv.sessions.AppendMessage(peggID, llm.UserMessage("hi")); err != nil {
+		t.Fatalf("append message: %v", err)
+	}
+	lr, err = srv.handleSessionList(ctx, toJSON(t, SessionListParams{Cwd: "/tmp/project"}))
+	if err != nil {
+		t.Fatalf("list after message: %v", err)
+	}
+	if got := len(lr.(SessionListResult).Sessions); got != 1 {
+		t.Fatalf("session with a message should be listed, got %d", got)
 	}
 }
 

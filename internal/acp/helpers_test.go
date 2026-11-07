@@ -58,6 +58,9 @@ func (m *mockStore) Delete(id string) error {
 func (m *mockStore) List(q query.Query) ([]session.Session, int, error) {
 	var out []session.Session
 	for _, s := range m.sessions {
+		if q.ExcludeEmpty && len(m.messages[s.ID]) == 0 {
+			continue
+		}
 		out = append(out, *s)
 	}
 	return out, len(out), nil

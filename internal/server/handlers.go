@@ -378,6 +378,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 			session.MainSessionsFilter(),
 			{Column: "compaction_parent_id", Operator: query.OpEqual, Value: ""},
 		},
+		ExcludeEmpty: true,
 	}
 
 	sessions, total, err := s.sessions.List(q)
