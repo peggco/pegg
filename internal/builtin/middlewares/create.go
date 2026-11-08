@@ -22,6 +22,9 @@ func Create(fs *vfs.VFS, deps Deps) {
 	middlewares.Register("loop-detector", NewLoopDetector())
 	middlewares.Register("redaction", NewRedaction())
 	middlewares.Register("retry", NewRetry())
+	if stall := stallFromConfig(deps.Config); stall != nil {
+		middlewares.Register("stall", stall)
+	}
 	var permCfg *config.PermissionConfig
 	if deps.Config != nil {
 		permCfg = deps.Config.Permission
@@ -43,4 +46,19 @@ func Create(fs *vfs.VFS, deps Deps) {
 		Config: compCfg,
 		LLM:    deps.LLM,
 	}))
+}
+
+func stallFromConfig(cfg *config.Config) *Stall {
+	var sc *config.StallConfig
+	if cfg != nil {
+		sc = cfg.Stall
+	}
+	if sc != nil && !sc.EnabledValue() {
+		return nil
+	}
+	opts := []StallOption{WithStallTimeout(sc.TimeoutValue())}
+	if sc != nil {
+		opts = append(opts, WithStallMaxRetries(sc.MaxRetries))
+	}
+	return NewStall(opts...)
 }

@@ -21,6 +21,22 @@ func TestDefaultConfigHasOpenCodeZen(t *testing.T) {
 	}
 }
 
+func TestDefaultConfigHasStallEnabled(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Stall == nil {
+		t.Fatal("default config should include stall settings")
+	}
+	if !cfg.Stall.EnabledValue() {
+		t.Fatal("stall should be enabled by default")
+	}
+	if cfg.Stall.TimeoutSecs != DefaultStallTimeoutSecs {
+		t.Fatalf("stall timeout = %d, want %d", cfg.Stall.TimeoutSecs, DefaultStallTimeoutSecs)
+	}
+	if cfg.Stall.MaxRetries != 0 {
+		t.Fatalf("stall max_retries = %d, want 0", cfg.Stall.MaxRetries)
+	}
+}
+
 func TestUpsertProviderAdds(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 

@@ -222,6 +222,27 @@ chain first — the compacted view — and scrolling up walks back through earli
 re-checked against the loaded history, so sliding-window and tool-clearing also apply
 to resumed sessions.
 
+### `stall`
+
+Recovers from provider requests that go silent — no error, no response, no stream
+chunks. When no chunk arrives for `timeout_secs`, Pegg cancels the attempt and
+re-issues the exact same request at the same point in the run loop. A successful
+retry is silent: no error, warning, or duplicate output is shown.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Master toggle for stall detection |
+| `timeout_secs` | int | `10` | Idle window in seconds before the request is retried |
+| `max_retries` | int | `0` | Retries after the first attempt. `0` means unlimited, matching the `retry` middleware |
+
+!!! note
+
+    The idle window is measured between stream chunks. A reasoning model that
+    pauses longer than `timeout_secs` between chunks will be treated as stalled;
+    raise the value if you use such a model. Once any content, reasoning, or tool
+    call has been delivered, Pegg does not retry — it returns an error instead of
+    duplicating partial output.
+
 ### `smart_router`
 
 Selects the best model per agent and task instead of using one model for everything.
