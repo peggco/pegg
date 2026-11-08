@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	json "github.com/goccy/go-json"
 )
@@ -203,6 +204,30 @@ type CompactionConfig struct {
 	SummarizerModel    string   `json:"summarizer_model,omitempty"`
 }
 
+type StallConfig struct {
+	Enabled     *bool `json:"enabled,omitempty"`
+	TimeoutSecs int   `json:"timeout_secs,omitempty"`
+	MaxRetries  int   `json:"max_retries"`
+}
+
+const DefaultStallTimeoutSecs = 10
+
+func boolPtr(v bool) *bool { return &v }
+
+func (s *StallConfig) EnabledValue() bool {
+	if s == nil || s.Enabled == nil {
+		return true
+	}
+	return *s.Enabled
+}
+
+func (s *StallConfig) TimeoutValue() time.Duration {
+	if s == nil || s.TimeoutSecs <= 0 {
+		return DefaultStallTimeoutSecs * time.Second
+	}
+	return time.Duration(s.TimeoutSecs) * time.Second
+}
+
 type RouterAgentConfig struct {
 	Default    []string            `json:"default,omitempty"`
 	Difficulty map[string][]string `json:"difficulty,omitempty"`
@@ -310,6 +335,7 @@ type Config struct {
 	Language        string                          `json:"language,omitempty"`
 	Permission      *PermissionConfig               `json:"permission,omitempty"`
 	Compaction      *CompactionConfig               `json:"compaction,omitempty"`
+	Stall           *StallConfig                    `json:"stall,omitempty"`
 	AgentDefaults   map[string]AgentModelDefault    `json:"agent_defaults,omitempty"`
 	SmartRouter     *SmartRouterConfig              `json:"smart_router,omitempty"`
 	Memory          *MemoryConfig                   `json:"memory,omitempty"`
@@ -390,6 +416,11 @@ func DefaultConfig() *Config {
 			Threshold:          80,
 			MaxMessages:        50,
 			MaxToolOutputChars: 4000,
+		},
+		Stall: &StallConfig{
+			Enabled:     boolPtr(true),
+			TimeoutSecs: DefaultStallTimeoutSecs,
+			MaxRetries:  0,
 		},
 		SmartRouter: &SmartRouterConfig{
 			Enabled: false,

@@ -55,7 +55,7 @@ flowchart TB
 
     subgraph MW["Middleware chain"]
         direction LR
-        LD["loop-detector"] --> RETRY["retry"] --> PERM["permission"] --> COMP["compaction"] --> RED["redaction"]
+        LD["loop-detector"] --> RETRY["retry"] --> STALL["stall"] --> PERM["permission"] --> COMP["compaction"] --> RED["redaction"]
     end
 
     subgraph CAP["Tools & capabilities"]
@@ -295,7 +295,8 @@ invocations (an onion model). The orchestrator's default chain is shown below;
 flowchart LR
     In["Request"] --> LD["loop-detector"]
     LD --> RT["retry"]
-    RT --> PM["permission"]
+    RT --> ST["stall"]
+    ST --> PM["permission"]
     PM --> CP["compaction"]
     CP --> RD["redaction"]
     RD --> Call["LLM / Tool call"]
@@ -306,6 +307,7 @@ flowchart LR
 |---|---|
 | `loop-detector` | Detects repeated tool calls and breaks loops |
 | `retry` | Retries transient provider failures with backoff |
+| `stall` | Detects silent provider requests and re-issues the same request without surfacing an error |
 | `permission` | Gates sensitive tools (five modes, LLM judge, allow store) |
 | `compaction` | Summarises or trims history near the context limit |
 | `redaction` | Strips secrets (API keys, JWTs) before they reach the model |

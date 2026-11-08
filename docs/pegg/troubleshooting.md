@@ -168,6 +168,27 @@ uses the same config and session database as the CLI.
     backoff. If the run keeps failing, wait for the rate limit to reset, switch to
     another provider, or lower concurrency.
 
+??? question "A provider request hangs with no response and no error"
+
+    Pegg's `stall` middleware watches the stream for silence. If no chunk arrives
+    for `stall.timeout_secs` (default `10`), it cancels the attempt and re-issues
+    the same request at the same point in the run loop. A successful retry is
+    silent. Tune the window or disable the middleware in `pegg.json`:
+
+    ```json
+    {
+      "stall": {
+        "enabled": true,
+        "timeout_secs": 10,
+        "max_retries": 0
+      }
+    }
+    ```
+
+    `max_retries: 0` retries indefinitely. If content has already been streamed,
+    Pegg does not retry — it returns an error instead of duplicating partial
+    output.
+
 ??? question "`Model does not support image/audio attachments`"
 
     The selected model's metadata does not list that input modality (image, audio, or
