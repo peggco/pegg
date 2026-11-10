@@ -214,7 +214,7 @@ failures, and fixes them. Long-running processes stay in the background.
 **Plans before it acts.** Build, Plan, and Auto modes let the agent explore and
 strategize before it touches a file. Approval gates stay on every change.
 
-**Delegates to specialists.** The orchestrator spawns explorer, planner, and
+**Delegates to specialists.** The orchestrator spawns explorer and
 developer subagents that run concurrently, persist across turns, and can be
 resumed by name.
 
@@ -256,7 +256,7 @@ The VFS is rooted at the workspace, respects `.gitignore` and `.peggignore`, and
 refuses out-of-bounds paths.
 
 **Protected config**  
-`.pegg/` is off-limits to the developer agent. Planners only write plans;
+`.pegg/` is off-limits to the developer agent. The orchestrator writes plans;
 explorers are read-only.
 
 **Emergency stop**  

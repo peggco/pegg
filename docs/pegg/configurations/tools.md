@@ -263,14 +263,14 @@ See [Subagents](../features/subagents.md) for the full workflow.
 | `task` | `name`, `subagent_type`, `prompt`, `task_id[]` (optional), `background` (optional) | Spawn a subagent, or resume a finished one by reusing the same `name` |
 | `taskstatus` | `agent_names[]` (optional) | Report status: `pending`, `running`, `completed`, `failed`, `interrupted` |
 
-Registered agent types for `task`: `orchestrator`, `explorer`, `planner`, and
+Registered agent types for `task`: `orchestrator`, `explorer`, and
 `developer`.
 
 ## Memory
 
 The memory tools query the [markdown-based memory system](../features/memory.md).
-They are registered when memory is enabled and available to the orchestrator,
-planner, and developer agents.
+They are registered when memory is enabled and available to the orchestrator
+and developer agents.
 
 ### `mem-search`
 
@@ -299,7 +299,6 @@ IDs appear in `mem-search` results, in the memory panel, and in the memory index
 | Agent | Tools |
 |---|---|
 | `orchestrator` | All file tools, `sendfile`, `askuserquestion`, `bash`, `task`, `taskstatus`, `todoread`, `todowrite`, `webfetch`, `websearch`, `searchskill`, `loadskill`, `enterplanmode`, `exitplanmode`, `mem-search`, `mem-read` |
-| `planner` | File tools write-scoped to `.pegg/plans`, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite`, `mem-search`, `mem-read` |
 | `developer` | All file tools, `sendfile`, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite`, `mem-search`, `mem-read` |
 | `explorer` | `glob`, `grep`, `list`, `read`, `bash`, `webfetch`, `websearch` |
 

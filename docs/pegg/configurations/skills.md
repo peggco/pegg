@@ -59,7 +59,7 @@ If both define the same skill name, `~/.pegg/skills/` wins. Only immediate
 subdirectories are scanned, and each must contain a parseable `SKILL.md`; invalid
 skills are skipped silently.
 
-The four built-in skills are **materialized** into `~/.pegg/skills/` on first
+The built-in skills are **materialized** into `~/.pegg/skills/` on first
 run. Existing directories are never overwritten, so you can edit the built-ins in
 place.
 
@@ -148,6 +148,11 @@ report candidate references so the agent can retry without guessing.
 
     Orchestrate a large, parallelizable change: explore, plan, delegate to
     subagents, verify, and report.
+
+- [:lucide-workflow:{ .lg } **`/orchestrate`**](../features/commands.md#orchestrate)
+
+    The general plan-first contract for large projects: explore, write the plan
+    yourself, create todos, delegate, verify, and report.
 
 - [:lucide-git-pull-request:{ .lg } **`/review`**](../features/commands.md#review)
 

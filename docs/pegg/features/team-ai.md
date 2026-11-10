@@ -66,7 +66,7 @@ models, the router falls back to the LLM model list.
 ### Defaults
 
 - **Agent defaults** — default and fallback model for `orchestrator`,
-  `developer`, `explorer` and `planner`.
+  `developer` and `explorer`.
 - **Smart router** — enable it, choose a decision model, and pick preferred,
   vision and per-difficulty models. The model pickers are multi-select over all
   enabled LLM models.

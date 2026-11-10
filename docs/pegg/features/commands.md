@@ -6,9 +6,10 @@ icon: lucide/square-terminal
 
 Pegg's slash commands are implemented as **skills**: type `/name` in the input
 and Pegg issues a `loadskill` tool call, so the skill's instructions arrive as a
-tool result (or run as a background subagent for `context: fork` skills). Four
-commands are built in — `/init`, `/batch`, `/review`, and `/rule` — and you can
-[add your own](../configurations/skills.md#creating-your-own) with a `SKILL.md` file.
+tool result (or run as a background subagent for `context: fork` skills). The
+built-in commands are `/init`, `/batch`, `/orchestrate`, `/review`, `/rule`, and
+`/skillify` — and you can [add your own](../configurations/skills.md#creating-your-own)
+with a `SKILL.md` file.
 
 In the TUI and the [VS Code extension](../usage/vscode.md), type `/` in the input to
 open the picker and filter by name. The same token works in the CLI
@@ -57,7 +58,7 @@ The workflow:
 1. **Decompose** the task into independent chunks that can be parallelized.
 2. **Explore** the codebase to map the affected areas.
 3. **Plan** by writing a plan file under `.pegg/plans/<feature-name>.md`.
-4. **Delegate** chunks to explorer, planner, and developer subagents via the
+4. **Delegate** chunks to explorer and developer subagents via the
    `task` tool, running them concurrently.
 5. **Verify** the results before accepting them.
 6. **Report** the outcome, including what changed and what remains.
@@ -73,6 +74,31 @@ Supporting rules the batch command applies:
 
 The lifecycle tools — `task` and `taskstatus` — back the whole flow. See
 [Subagents](subagents.md).
+
+## `/orchestrate`
+
+The full orchestration contract for large, multi-step projects: understand, plan,
+delegate, verify, and report. Load it when a request spans many files or
+subsystems and needs a written plan rather than a quick edit.
+
+The workflow:
+
+1. **Understand** the request and resolve ambiguity with the user.
+2. **Explore** the codebase, delegating to `explorer` subagents.
+3. **Plan** by writing `.pegg/plans/<feature-name>.md` yourself (use plan mode
+   for large work), then create a dependency-aware todo hierarchy.
+4. **Delegate** independent tasks to `developer` subagents, in parallel where
+   the dependency graph allows.
+5. **Verify** each result before marking it done; re-delegate failures to the
+   same subagent with specific feedback.
+6. **Report** with a summary, key decisions, the execution strategy, the plan
+   path, and a todo status table (`Todo ID`, `Title`, `Description`, `Status`,
+   `Priority`, `Depends On`, `Parallelizable Tasks`).
+
+Unlike `/batch` (a bulk change decomposed into many independent work units),
+`/orchestrate` is the general plan-first contract for any large project. It
+replaces the former planner subagent: the orchestrator writes the plan and todo
+hierarchy itself.
 
 ## `/review`
 

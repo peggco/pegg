@@ -91,25 +91,29 @@ func PlanModeReminder(exitMode PlanExitMode) reminder.Reminder {
 			prompt.ListItem("Use AskUserQuestion tool to clarify ambiguities in the user request up front."),
 		).
 		Heading(3, "Phase 2: Planning").
-		Paragraph("**Goal:** Come up with an approach to solve the problem identified in phase 1 by launching a Plan subagent.").
-		Paragraph("In the agent prompt:").
+		Paragraph("**Goal:** Turn the findings from Phase 1 into a concrete implementation plan that you write yourself. Do not delegate planning to a subagent.").
+		Paragraph("Write the plan incrementally to `.pegg/plans/<feature-name>.md`, following the planning methodology:").
 		List(
-			"Provide any background context that may help the agent with their task without prescribing the exact design itself",
-			"Request a detailed plan",
+			"Design units with clear boundaries and one responsibility per file",
+			"Right-size tasks so each ends with an independently testable deliverable",
+			"Use bite-sized steps: write the failing test, confirm it fails, implement the minimum, confirm it passes, commit",
+			"Include the exact files, interfaces, code, and verification commands — no placeholders",
+			"Self-review the plan against the request and fix gaps inline",
 		).
 		Heading(3, "Phase 3: Synthesis").
-		Paragraph("**Goal:** Synthesize the perspectives from Phase 2, and ensure that it aligns with the user's intentions by asking them questions.").
+		Paragraph("**Goal:** Ensure the plan aligns with the user's intentions by reviewing it with them.").
 		OrderedList(
-			prompt.ListItem("Collect all agent responses"),
-			prompt.ListItem("Each agent will return an implementation plan along with a list of critical files that should be read. You should keep these in mind and read them before you start implementing the plan"),
-			prompt.ListItem("Use AskUserQuestion to ask the users questions about trade offs."),
+			prompt.ListItem("Re-read the plan file with fresh eyes and check it against the original request"),
+			prompt.ListItem("Use AskUserQuestion to ask about trade-offs, scope, and any requirement the plan does not yet cover"),
+			prompt.ListItem("Revise the plan file with the answers before presenting it"),
 		).
 		Heading(3, "Phase 4: Final Plan").
 		Paragraph("Once you have all the information you need, ensure that the plan file has been updated with your synthesized recommendation including:").
 		List(
 			"Recommended approach with rationale",
-			"Key insights from different perspectives",
+			"Key insights from exploration and the user's answers",
 			"Critical files that need modification",
+			"Task breakdown with dependencies and verification steps",
 		)
 
 	switch exitMode {

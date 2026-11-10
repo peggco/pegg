@@ -35,7 +35,7 @@ language servers — all inside a sandboxed workspace.
 
 - [:lucide-heart-handshake:{ .lg } **Subagents and parallel work**](features/subagents.md)
 
-    The orchestrator delegates to explorer, planner, and developer subagents, which
+    The orchestrator delegates to explorer and developer subagents, which
     run concurrently, persist their state, and can be resumed with follow-up messages.
 
 - [:lucide-bell:{ .lg } **Reminders**](features/reminders.md)

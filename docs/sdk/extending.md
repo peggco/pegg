@@ -94,7 +94,7 @@ eng.RegisterAgent(func() (*sdk.Agent, error) {
 })
 ```
 
-The built-in agent types are `orchestrator`, `explorer`, `planner`, and `developer`,
+The built-in agent types are `orchestrator`, `explorer`, and `developer`,
 and are what `Chat` and the `task` tool run. The `sdk.Agent` type exposes all
 its fields and run methods, but note that a fully wired agent also needs a populated
 tool registry and an event bus; the built-in agents come pre-wired through the
