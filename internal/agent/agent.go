@@ -369,6 +369,13 @@ func (a *Agent) clearDisplayNotifications() {
 }
 
 func (a *Agent) Continue(ctx context.Context, history []llm.Message) (*RunResult, error) {
+	return a.ContinueStream(ctx, history, func(StreamEvent) error { return nil })
+}
+
+func (a *Agent) ContinueStream(ctx context.Context, history []llm.Message, handler StreamHandler) (*RunResult, error) {
+	if handler == nil {
+		handler = func(StreamEvent) error { return nil }
+	}
 	if !a.HasPendingNotifications() {
 		return nil, nil
 	}
@@ -384,8 +391,9 @@ func (a *Agent) Continue(ctx context.Context, history []llm.Message) (*RunResult
 	}
 
 	ctx = WithAgent(ctx, a)
-	state := &runState{agent: a, maxTokens: a.maxOutputTokens()}
+	state := &runState{agent: a, stream: handler, maxTokens: a.maxOutputTokens()}
 	ctx = WithHistory(ctx, &state.history)
+	ctx = WithStream(ctx, handler)
 	a.debugf("agent %q continued run", a.Name)
 	a.publish(TopicAgentStarted, AgentStarted{
 		AgentID:         a.ID,

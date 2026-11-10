@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	json "github.com/goccy/go-json"
 
@@ -39,6 +40,9 @@ type promptState struct {
 	oldFiles  map[string]string
 
 	toolPending map[string]map[string]bool
+
+	taskNames map[string]string
+	started   map[string]time.Time
 }
 
 func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage, id any) (any, error) {
@@ -185,7 +189,11 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 		stopReason = StopReasonMaxTokens
 	}
 
-	return SessionPromptResult{StopReason: stopReason}, nil
+	resultOut := SessionPromptResult{StopReason: stopReason}
+	if lease != nil {
+		resultOut.Meta = Meta{"com.pegg/runId": lease.ID()}
+	}
+	return resultOut, nil
 }
 
 func (s *Server) contextSize() uint64 {

@@ -166,9 +166,11 @@ type Server struct {
 
 	responseHook func(id any, body json.RawMessage) error
 
-	active map[string]*ACPSession
-	agents map[string]string
-	mu     sync.RWMutex
+	active        map[string]*ACPSession
+	agents        map[string]string
+	taskNames     map[string]string
+	subagentStart map[string]time.Time
+	mu            sync.RWMutex
 
 	clientCaps  *ClientCapabilities
 	initialized bool
@@ -196,18 +198,20 @@ func New(
 	liveHub *live.Hub,
 ) *Server {
 	s := &Server{
-		cfg:         cfg,
-		bus:         bus,
-		log:         log,
-		sessions:    sessions,
-		llmMgr:      llmMgr,
-		fs:          fs,
-		runs:        runs,
-		live:        liveHub,
-		active:      make(map[string]*ACPSession),
-		agents:      make(map[string]string),
-		pendingAsks: make(map[string]*pendingAsk),
-		closed:      make(chan struct{}),
+		cfg:           cfg,
+		bus:           bus,
+		log:           log,
+		sessions:      sessions,
+		llmMgr:        llmMgr,
+		fs:            fs,
+		runs:          runs,
+		live:          liveHub,
+		active:        make(map[string]*ACPSession),
+		agents:        make(map[string]string),
+		taskNames:     make(map[string]string),
+		subagentStart: make(map[string]time.Time),
+		pendingAsks:   make(map[string]*pendingAsk),
+		closed:        make(chan struct{}),
 	}
 	s.client = NewClient(s.sendRaw)
 	s.newAgentFn = s.newOrchestratorAgent

@@ -78,14 +78,22 @@ func (s *Server) handleAgentStarted(ev agent.AgentStarted) {
 	if ok {
 		s.agents[ev.AgentID] = sessionID
 	}
+	if ev.DisplayName != "" {
+		s.taskNames[ev.AgentID] = ev.DisplayName
+	}
+	s.subagentStart[ev.AgentID] = time.Now()
 	s.mu.Unlock()
 	if !ok {
 		return
 	}
+	meta := Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName}
+	if ev.DisplayName != "" {
+		meta["com.pegg/taskName"] = ev.DisplayName
+	}
 	s.notifyPegg(sessionID, SessionUpdate{
 		SessionUpdate: "subagent",
 		Status:        "running",
-		Meta:          Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName},
+		Meta:          meta,
 	})
 }
 

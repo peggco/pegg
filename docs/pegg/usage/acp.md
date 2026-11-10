@@ -267,6 +267,10 @@ Pegg extras on standard updates live in `_meta` with `com.pegg/` keys:
 `com.pegg/agentId`, `com.pegg/agentName`, `com.pegg/seq`, `com.pegg/baseSeq`,
 `com.pegg/historyPage`, `com.pegg/attachments` (an array of
 `{ name, mediaType, type, size, path }` descriptors), and `com.pegg/error`.
+Task/subagent updates also carry `com.pegg/taskName` (the unique `task` name) and
+`com.pegg/durationMs`; finished subagents add `com.pegg/usage` (`{ used, size, cost }`).
+The `session/prompt` result includes `_meta["com.pegg/runId"]` so clients can ignore
+a stale prompt completion when a background continuation run is active.
 
 ### `_pegg/update`
 

@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"path/filepath"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -201,10 +202,43 @@ func (s *Server) handleAttachedRunEvent(st *promptState, acpSess *ACPSession, ru
 		})
 	case session.AgentEventStarted:
 		if ev.ParentAgentID != "" {
+			if st.taskNames == nil {
+				st.taskNames = make(map[string]string)
+				st.started = make(map[string]time.Time)
+			}
+			if ev.DisplayName != "" {
+				st.taskNames[ev.AgentID] = ev.DisplayName
+			}
+			st.started[ev.AgentID] = time.Now()
+			meta := Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName}
+			if ev.DisplayName != "" {
+				meta["com.pegg/taskName"] = ev.DisplayName
+			}
 			s.notifyPegg(st.sessionID, SessionUpdate{
 				SessionUpdate: "subagent",
 				Status:        "running",
-				Meta:          Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName},
+				Meta:          meta,
+			})
+		}
+	case session.AgentEventFinished:
+		if ev.ParentAgentID != "" {
+			meta := Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName}
+			if name := st.taskNames[ev.AgentID]; name != "" {
+				meta["com.pegg/taskName"] = name
+			}
+			if ev.Usage.TotalTokens > 0 || ev.Usage.Cost > 0 {
+				meta["com.pegg/usage"] = map[string]any{"used": ev.Usage.TotalTokens, "cost": ev.Usage.Cost}
+			}
+			if start, ok := st.started[ev.AgentID]; ok && !start.IsZero() {
+				meta["com.pegg/durationMs"] = time.Since(start).Milliseconds()
+			}
+			delete(st.taskNames, ev.AgentID)
+			delete(st.started, ev.AgentID)
+			s.notifyPegg(st.sessionID, SessionUpdate{
+				SessionUpdate: "subagent",
+				Status:        "finished",
+				RawOutput:     truncate(ev.Output, 64*1024),
+				Meta:          meta,
 			})
 		}
 	case session.AgentEventToken:
@@ -219,8 +253,30 @@ func (s *Server) handleAttachedRunEvent(st *promptState, acpSess *ACPSession, ru
 			})
 		}
 	case session.AgentEventMessage:
+		streamed := st.textIDs[ev.AgentID] != ""
+		thoughtStreamed := st.thoughtID[ev.AgentID] != ""
 		delete(st.textIDs, ev.AgentID)
 		delete(st.thoughtID, ev.AgentID)
+		if !thoughtStreamed {
+			if reasoning, ok := ev.Message.Reasoning.(string); ok && reasoning != "" {
+				s.notify(st.sessionID, SessionUpdate{
+					SessionUpdate: "agent_thought_chunk",
+					MessageID:     MessageId(uuid.NewString()),
+					Content:       &ContentBlock{Type: "text", Text: reasoning},
+					Meta:          Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName},
+				})
+			}
+		}
+		if !streamed {
+			if text := llm.MessageText(ev.Message); text != "" {
+				s.notify(st.sessionID, SessionUpdate{
+					SessionUpdate: "agent_message_chunk",
+					MessageID:     MessageId(uuid.NewString()),
+					Content:       &ContentBlock{Type: "text", Text: text},
+					Meta:          Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName},
+				})
+			}
+		}
 		if len(ev.Message.ToolCalls) == 0 {
 			s.settleAgentTools(st, ev.AgentID, ToolCallCompleted)
 		}
@@ -273,6 +329,26 @@ func (s *Server) handleAttachedRunEvent(st *promptState, acpSess *ACPSession, ru
 			_ = s.runs.Answer(runID, answers)
 		}()
 	case session.AgentEventError:
+		if ev.ParentAgentID != "" {
+			message := ev.ToolError
+			if message == "" {
+				message = "subagent failed"
+			}
+			meta := Meta{"com.pegg/agentId": ev.AgentID, "com.pegg/agentName": ev.AgentName, "com.pegg/error": message}
+			if name := st.taskNames[ev.AgentID]; name != "" {
+				meta["com.pegg/taskName"] = name
+			}
+			if start, ok := st.started[ev.AgentID]; ok && !start.IsZero() {
+				meta["com.pegg/durationMs"] = time.Since(start).Milliseconds()
+			}
+			delete(st.taskNames, ev.AgentID)
+			delete(st.started, ev.AgentID)
+			s.notifyPegg(st.sessionID, SessionUpdate{
+				SessionUpdate: "subagent",
+				Status:        "error",
+				Meta:          meta,
+			})
+		}
 		if ev.ToolError != "" {
 			s.notifyNotice(st.sessionID, NoticeError, "Agent error", ev.ToolError)
 		}
