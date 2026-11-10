@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/peggco/pegg/internal/agent/wake"
 	"github.com/peggco/pegg/internal/builtin"
 	_ "github.com/peggco/pegg/internal/builtin/agents"
 	_ "github.com/peggco/pegg/internal/builtin/lsps"
@@ -34,7 +35,6 @@ import (
 	_ "github.com/peggco/pegg/internal/stt/providers"
 	"github.com/peggco/pegg/internal/utils/query"
 	"github.com/peggco/pegg/internal/vfs"
-	"github.com/peggco/pegg/internal/wake"
 )
 
 func Run(args []string) error {
