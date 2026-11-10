@@ -18,6 +18,22 @@ export interface UsageState {
   cost?: number;
 }
 
+export type TaskStatus = 'running' | 'finished' | 'error' | 'background' | 'unknown';
+
+export interface TaskState {
+  name: string;
+  type?: string;
+  prompt: string;
+  background: boolean;
+  agentId?: string;
+  status: TaskStatus;
+  activity?: string;
+  output?: string;
+  error?: string;
+  usage?: UsageState;
+  durationMs?: number;
+}
+
 export interface ToolState {
   id: string;
   name?: string;
@@ -32,6 +48,7 @@ export interface ToolState {
   files?: AttachmentInfo[];
   agentId?: string;
   agentName?: string;
+  task?: TaskState;
 }
 
 export type ChatItem = (
@@ -56,6 +73,7 @@ export type ChatItem = (
       task?: string;
       output?: string;
       error?: string;
+      linkedTaskId?: string;
       createdAt: number;
     }
   | { kind: 'notice'; id: string; text: string; level: 'info' | 'warn' | 'error'; createdAt: number }
@@ -195,6 +213,178 @@ function applyConfigOptions(state: ChatState, options: SessionConfigOption[] | u
   }
 }
 
+function metaUsage(meta: Meta | undefined): UsageState | undefined {
+  const value = meta?.['com.pegg/usage'];
+  if (!value || typeof value !== 'object') return undefined;
+  const rec = value as Record<string, unknown>;
+  if (typeof rec.used !== 'number') return undefined;
+  return {
+    used: rec.used,
+    size: typeof rec.size === 'number' ? rec.size : 0,
+    cost: typeof rec.cost === 'number' ? rec.cost : undefined,
+  };
+}
+
+function taskInfoFromInput(input: unknown): Pick<TaskState, 'name' | 'type' | 'prompt' | 'background'> | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const rec = input as Record<string, unknown>;
+  const name = typeof rec.name === 'string' ? rec.name : typeof rec.description === 'string' ? rec.description : '';
+  if (!name) return undefined;
+  return {
+    name,
+    type: typeof rec.subagent_type === 'string' ? rec.subagent_type : undefined,
+    prompt: typeof rec.prompt === 'string' ? rec.prompt : '',
+    background: rec.background === true,
+  };
+}
+
+function isTaskTool(tool: ToolState): boolean {
+  const name = (tool.name ?? '').toLowerCase();
+  if (name === 'task') return true;
+  return (tool.title ?? '').toLowerCase().startsWith('task:');
+}
+
+function isTaskBackgroundStart(output: string): boolean {
+  const out = output.trim();
+  if (out.startsWith('Started subagent in background:') || out.startsWith('Started subagent in backgro')) return true;
+  return out.startsWith('Resumed subagent ') && (out.includes(' in background') || out.endsWith('backgro…'));
+}
+
+function taskResponseFromOutput(output: string): string {
+  const marker = '\nResponse:\n';
+  const i = output.indexOf(marker);
+  if (i >= 0) return output.slice(i + marker.length).trim();
+  return output.trim();
+}
+
+function taskFailureDetail(output: string): string | undefined {
+  const out = output.trim();
+  if (!out.startsWith('Subagent ')) return undefined;
+  const marker = ' failed: ';
+  const i = out.indexOf(marker);
+  if (i < 0) return undefined;
+  return out.slice(i + marker.length).trim();
+}
+
+function activityFromUpdate(update: SessionUpdate): string | undefined {
+  const title = update.title?.trim();
+  if (title) return title;
+  const name = update.name?.trim();
+  return name || undefined;
+}
+
+function findUnlinkedTask(state: ChatState, name: string): Extract<ChatItem, { kind: 'tool' }> | undefined {
+  for (let i = state.items.length - 1; i >= 0; i -= 1) {
+    const item = state.items[i];
+    if (item.kind !== 'tool' || !item.tool.task) continue;
+    if (item.tool.task.name !== name || item.tool.task.agentId) continue;
+    return item;
+  }
+  return undefined;
+}
+
+function findSubagentTask(
+  state: ChatState,
+  agentId: string,
+  name: string | undefined,
+): Extract<ChatItem, { kind: 'tool' }> | undefined {
+  for (let i = state.items.length - 1; i >= 0; i -= 1) {
+    const item = state.items[i];
+    if (item.kind !== 'tool' || !item.tool.task) continue;
+    if (item.tool.task.agentId === agentId) return item;
+  }
+  return name ? findUnlinkedTask(state, name) : undefined;
+}
+
+function enrichTaskTool(tool: ToolState, update: SessionUpdate, meta: Meta | undefined, metaError?: string): void {
+  if (!isTaskTool(tool)) return;
+  if (!tool.task) {
+    const info = taskInfoFromInput(tool.input);
+    if (!info) return;
+    tool.task = { ...info, status: 'running' };
+  }
+  const task = tool.task;
+  const duration = metaNumber(meta, 'com.pegg/durationMs');
+  if (duration !== undefined) task.durationMs = duration;
+  const usage = metaUsage(meta);
+  if (usage) task.usage = usage;
+  if (metaError) {
+    task.status = 'error';
+    task.error = metaError;
+  }
+  if (update.rawOutput === undefined) return;
+  const raw = String(update.rawOutput ?? '');
+  if (isTaskBackgroundStart(raw)) {
+    task.background = true;
+    if (task.status !== 'finished' && task.status !== 'error') {
+      task.status = 'running';
+      task.output = undefined;
+    }
+    return;
+  }
+  const detail = taskFailureDetail(raw);
+  if (detail) {
+    task.status = 'error';
+    task.error = detail;
+    task.output = undefined;
+    return;
+  }
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('Error: ')) {
+    task.status = 'error';
+    task.error = trimmed.slice(7).trim();
+    task.output = undefined;
+    return;
+  }
+  if (task.agentId && task.status === 'running') {
+    if (trimmed) task.output = taskResponseFromOutput(raw);
+    return;
+  }
+  if (!trimmed) {
+    if (!task.agentId) task.status = task.background ? 'background' : 'unknown';
+    return;
+  }
+  task.status = 'finished';
+  task.output = taskResponseFromOutput(raw);
+}
+
+function finalizeRestoredTask(tool: ToolState): void {
+  const task = tool.task;
+  if (!task) return;
+  task.agentId = undefined;
+  if (tool.error) {
+    task.status = 'error';
+    task.error = tool.error;
+    return;
+  }
+  const raw = typeof tool.output === 'string' ? tool.output : '';
+  const detail = taskFailureDetail(raw);
+  if (detail) {
+    task.status = 'error';
+    task.error = detail;
+    task.output = undefined;
+    return;
+  }
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('Error: ')) {
+    task.status = 'error';
+    task.error = trimmed.slice(7).trim();
+    task.output = undefined;
+    return;
+  }
+  if (task.background && isTaskBackgroundStart(raw)) {
+    task.status = 'background';
+    task.output = undefined;
+    return;
+  }
+  if (!trimmed) {
+    task.status = task.background ? 'background' : 'unknown';
+    return;
+  }
+  task.status = 'finished';
+  task.output = taskResponseFromOutput(raw);
+}
+
 export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState {
   const state = { ...input, items: [...input.items], plan: [...input.plan] };
   const now = Date.now();
@@ -304,6 +494,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
         }
         const diff = toolContents(update.content)?.find((c) => c.type === 'diff' && c.diff)?.diff;
         if (diff) existing.tool.diff = diff;
+        enrichTaskTool(existing.tool, update, meta, metaError);
       } else {
         const diff = toolContents(update.content)?.find((c) => c.type === 'diff' && c.diff)?.diff;
         state.items.push({
@@ -327,6 +518,18 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
             agentName,
           },
         });
+        const created = state.items[state.items.length - 1];
+        if (created.kind === 'tool') enrichTaskTool(created.tool, update, meta, metaError);
+      }
+      const taskOwner = state.items.find((item) => item.kind === 'tool' && item.id === id) as
+        | Extract<ChatItem, { kind: 'tool' }>
+        | undefined;
+      if (agentId && !(taskOwner?.tool.task)) {
+        const linked = state.items.find(
+          (item) => item.kind === 'tool' && item.tool.task?.agentId === agentId && item.tool.task.status === 'running',
+        ) as Extract<ChatItem, { kind: 'tool' }> | undefined;
+        const activity = activityFromUpdate(update);
+        if (linked && activity) linked.tool.task!.activity = activity;
       }
       return state;
     }
@@ -335,32 +538,57 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       if (!subagentId) return state;
       const status: 'running' | 'finished' | 'error' =
         update.status === 'finished' ? 'finished' : update.status === 'error' ? 'error' : 'running';
+      const taskName = metaString(meta, 'com.pegg/taskName');
+      const linked = findSubagentTask(state, subagentId, taskName);
+      const linkedTaskId = linked?.id;
       const existing = state.items.find(
         (item) => item.kind === 'subagent' && item.agentId === subagentId,
       ) as Extract<ChatItem, { kind: 'subagent' }> | undefined;
       if (existing) {
         existing.status = status;
         if (agentName) existing.agentName = agentName;
+        if (taskName) existing.task = existing.task || update.title;
         if (update.title) {
           existing.task = update.title;
           pushSubagentPrompt(state, subagentId, update.title, now);
         }
         if (update.rawOutput !== undefined) existing.output = String(update.rawOutput ?? '');
         if (metaError) existing.error = metaError;
-        return state;
+        if (linkedTaskId) existing.linkedTaskId = linkedTaskId;
+      } else {
+        state.items.push({
+          kind: 'subagent',
+          id: `subagent-${subagentId}`,
+          agentId: subagentId,
+          agentName,
+          status,
+          task: update.title,
+          output: update.rawOutput === undefined ? undefined : String(update.rawOutput ?? ''),
+          error: metaError,
+          linkedTaskId,
+          createdAt: now,
+        });
+        if (update.title) pushSubagentPrompt(state, subagentId, update.title, now);
       }
-      state.items.push({
-        kind: 'subagent',
-        id: `subagent-${subagentId}`,
-        agentId: subagentId,
-        agentName,
-        status,
-        task: update.title,
-        output: update.rawOutput === undefined ? undefined : String(update.rawOutput ?? ''),
-        error: metaError,
-        createdAt: now,
-      });
-      if (update.title) pushSubagentPrompt(state, subagentId, update.title, now);
+      if (linked?.tool.task) {
+        const task = linked.tool.task;
+        task.agentId = subagentId;
+        const usage = metaUsage(meta);
+        const duration = metaNumber(meta, 'com.pegg/durationMs');
+        if (usage) task.usage = usage;
+        if (duration !== undefined) task.durationMs = duration;
+        if (status === 'finished') {
+          task.status = 'finished';
+          task.output = String(update.rawOutput ?? '');
+          task.activity = undefined;
+        } else if (status === 'error') {
+          task.status = 'error';
+          task.error = metaError || 'subagent failed';
+          task.activity = undefined;
+        } else {
+          task.status = 'running';
+        }
+      }
       return state;
     }
     case 'plan':
@@ -515,6 +743,9 @@ export function clearConversation(state: ChatState): ChatState {
 export function applyHistory(state: ChatState, updates: SessionUpdate[]): ChatState {
   let history: ChatState = { ...state, items: [], plan: [], pending: [], composerAttachments: [] };
   for (const update of updates) history = applyUpdate(history, update);
+  for (const item of history.items) {
+    if (item.kind === 'tool' && item.tool.task) finalizeRestoredTask(item.tool);
+  }
   return {
     ...state,
     items: [...history.items, ...state.items],
@@ -570,7 +801,7 @@ export function filterConversation(
       if (item.kind === 'subagent') return false;
       return owner === agentId;
     }
-    if (item.kind === 'subagent') return true;
+    if (item.kind === 'subagent') return !item.linkedTaskId;
     if (subagentOwned) return false;
     return true;
   });

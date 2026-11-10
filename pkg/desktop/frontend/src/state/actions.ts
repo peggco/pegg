@@ -22,6 +22,7 @@ import {
   applyUpdates,
   attachmentType,
   emptyChat,
+  finalizeRestoredTasks,
   pruneChat,
   resolveAsk,
   resolvePermission,
@@ -629,7 +630,11 @@ export function handleUpdates(sessionId: string, updates: SessionUpdate[]): void
         { ...c, items: [], plan: [], permissions: [], asks: [], subagents: {} },
         history,
       );
-      next = { ...next, items: [...temp.items, ...next.items], counter: Math.max(next.counter, temp.counter) };
+      next = {
+        ...next,
+        items: [...finalizeRestoredTasks(temp.items), ...next.items],
+        counter: Math.max(next.counter, temp.counter),
+      };
     }
     if (!history.length && next.stickToBottom) next = pruneChat(next);
     if (updates.some((u) => u.sessionUpdate === 'agent_message_chunk' || u.sessionUpdate === 'user_message_chunk')) {

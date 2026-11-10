@@ -34,6 +34,7 @@ import (
 	_ "github.com/peggco/pegg/internal/stt/providers"
 	"github.com/peggco/pegg/internal/utils/query"
 	"github.com/peggco/pegg/internal/vfs"
+	"github.com/peggco/pegg/internal/wake"
 )
 
 func Run(args []string) error {
@@ -134,6 +135,12 @@ func Run(args []string) error {
 	defer runCoord.Stop()
 	liveHub := live.New(runCoord, sess, bus, log)
 	defer liveHub.Close()
+
+	waker := wake.New(wake.Deps{Bus: bus, Runs: runCoord, Sessions: sess, Log: log})
+	if err := waker.Start(); err != nil {
+		return fmt.Errorf("bootstrap: init subagent waker: %w", err)
+	}
+	defer waker.Stop()
 
 	sched, err := schedule.New(schedule.Deps{
 		Config:   cfg,

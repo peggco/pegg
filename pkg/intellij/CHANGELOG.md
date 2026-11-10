@@ -4,6 +4,13 @@
 
 ### Added
 
+- Unified **TASK** card for `task` calls: subagent name/type, prompt, background
+  badge, live activity, final response, usage/duration, and an in-place transcript
+  while running; fork subagents keep the standalone subagent card.
+- Background subagent completions now stream into the chat as a continuation run
+  (the orchestrator wakes automatically) instead of appearing only after a reload.
+- Restored sessions render the persisted TASK result from the `task` tool message.
+
 - Full ACP v1 client rework: session modes, model and config-option pickers,
   session list, load, resume, delete, and close, plus the standard
   `session/set_model` and `session/set_config_option` methods.
@@ -14,6 +21,11 @@
 
 ### Fixed
 
+- TASK cards now flip from running to done as soon as their background subagent
+  finishes, without reloading the session.
+- TASK cards no longer scroll internally: long prompts and results collapse with
+  a `…` hint, expanding grows the card and reveals more (still capped, never
+  unbounded), like the TUI.
 - Empty sessions (no messages yet) are hidden from the sessions tab, so clients
   that open a session eagerly no longer leave blank entries.
 - Model and mode pickers now populate from the session `models` field and

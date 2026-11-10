@@ -5,6 +5,7 @@ import {
   type ChatState,
   type PendingPermission,
   type PendingQuestion,
+  type TaskState,
   type ToolState,
 } from '../state';
 import type { AttachmentInfo } from '../types';
@@ -1258,10 +1259,19 @@ function ItemView({
     );
   }
   if (item.kind === 'subagent') {
+    if (item.linkedTaskId) return null;
     return <SubagentCard item={item} onOpen={() => onOpenSubagent?.(item.agentId, item.agentName)} />;
   }
   if (item.kind === 'tool') {
-    if (item.tool.name === 'task') return null;
+    if (item.tool.task) {
+      const task = item.tool.task;
+      return (
+        <TaskCard
+          tool={item.tool}
+          onOpen={task.agentId ? () => onOpenSubagent?.(task.agentId as string, task.name) : undefined}
+        />
+      );
+    }
     return <ToolCard tool={item.tool} />;
   }
   if (item.kind === 'error') return <div className="notice error">{item.text}</div>;
@@ -1296,6 +1306,135 @@ function SubagentCard({
       {item.error && <div className="subagent-error">{stripAnsi(item.error)}</div>}
     </div>
   );
+}
+
+function useClampOverflow(expanded: boolean, text: string) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState(false);
+  useLayoutEffect(() => {
+    if (expanded) return;
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => setOverflow(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [expanded, text]);
+  return { ref, overflow };
+}
+
+const TASK_PROMPT_LINES = 4;
+const TASK_OUTPUT_LINES = 7;
+const TASK_EXPANDED_LINES = 60;
+
+function TaskCard({ tool, onOpen }: { tool: ToolState; onOpen?: () => void }) {
+  const task = tool.task;
+  const [expanded, setExpanded] = useState(false);
+  const prompt = task?.prompt ?? '';
+  const promptClamp = useClampOverflow(expanded, prompt);
+  if (!task) return null;
+  const running = task.status === 'running';
+  const output = stripAnsi(task.output ?? '');
+  const error = stripAnsi(task.error ?? tool.error ?? '');
+  const outputTruncated = output.split('\n').length > TASK_OUTPUT_LINES;
+  const errorTruncated = error.split('\n').length > TASK_OUTPUT_LINES;
+  const showsOutput = !running && task.status !== 'error' && task.status !== 'background' && task.status !== 'unknown';
+  const bodyTruncated = task.status === 'error' ? errorTruncated : showsOutput && outputTruncated;
+  const canExpand = promptClamp.overflow || bodyTruncated;
+  const visibleOutput = cappedLines(output, expanded ? TASK_EXPANDED_LINES : TASK_OUTPUT_LINES, expanded);
+  const visibleError = cappedLines(error, expanded ? TASK_EXPANDED_LINES : TASK_OUTPUT_LINES, expanded);
+  return (
+    <article className={`task-card status-${task.status}${expanded ? ' expanded' : ''}`}>
+      <div className="task-head">
+        <span className="task-badge">TASK</span>
+        <span className="task-name">{task.name}</span>
+        {task.type ? <span className="task-type">· {task.type}</span> : null}
+        {task.background ? <span className="task-bg">background</span> : null}
+        <span className="task-spacer" />
+        <span className={`task-dot status-${task.status}`} />
+        <span className="task-status">{taskStatusText(task)}</span>
+      </div>
+      {task.prompt ? (
+        <div
+          ref={promptClamp.ref}
+          className="task-prompt"
+          style={expanded ? undefined : { WebkitLineClamp: TASK_PROMPT_LINES }}
+        >
+          {task.prompt}
+        </div>
+      ) : null}
+      {!expanded && promptClamp.overflow ? (
+        <button className="task-more" onClick={() => setExpanded(true)} title="Expand">
+          …
+        </button>
+      ) : null}
+      <div className="task-sep" />
+      <div className="task-body">
+        {running ? (
+          <div className="task-activity">
+            <span className="spinner" />
+            <span>{task.activity || 'starting subagent…'}</span>
+          </div>
+        ) : task.status === 'error' ? (
+          <pre className="task-error">{visibleError || 'subagent failed'}</pre>
+        ) : task.status === 'background' ? (
+          <div className="task-note">Background subagent — result was not recorded in this session.</div>
+        ) : task.status === 'unknown' ? (
+          <div className="task-note">no result recorded</div>
+        ) : (
+          <pre className="task-output">{visibleOutput}</pre>
+        )}
+      </div>
+      {!expanded && bodyTruncated ? (
+        <button className="task-more" onClick={() => setExpanded(true)} title="Expand">
+          …
+        </button>
+      ) : null}
+      <div className="task-footer">
+        <span className="task-usage">{task.usage ? `${formatTokenCount(task.usage.used)} tokens` : ''}</span>
+        {expanded ? (
+          <button className="task-action" onClick={() => setExpanded(false)}>
+            Collapse
+          </button>
+        ) : running && onOpen ? (
+          <button className="task-action" onClick={onOpen}>
+            History
+          </button>
+        ) : canExpand ? (
+          <button className="task-action" onClick={() => setExpanded(true)}>
+            Expand
+          </button>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function taskStatusText(task: TaskState): string {
+  if (task.status === 'running') return 'running';
+  if (task.status === 'error') return 'failed';
+  if (task.status === 'background') return 'background';
+  if (task.status === 'unknown') return 'no result';
+  if (task.durationMs && task.durationMs > 0) return `done · ${formatMs(task.durationMs)}`;
+  return 'done';
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function formatTokenCount(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
+function cappedLines(text: string, limit: number, mark: boolean): string {
+  const all = text.split('\n');
+  if (all.length <= limit) return text;
+  const shown = all.slice(0, limit).join('\n');
+  return mark ? `${shown}\n…` : shown;
 }
 
 function ToolCard({ tool }: { tool: ToolState }) {

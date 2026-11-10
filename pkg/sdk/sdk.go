@@ -23,6 +23,7 @@ import (
 	"github.com/peggco/pegg/internal/schedule"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/vfs"
+	"github.com/peggco/pegg/internal/wake"
 
 	_ "github.com/peggco/pegg/internal/decision/providers"
 	_ "github.com/peggco/pegg/internal/llm/drivers"
@@ -59,6 +60,7 @@ type Engine struct {
 	rec              *session.Recorder
 	runs             *runpkg.Coordinator
 	live             *live.Hub
+	waker            *wake.Waker
 	sched            *schedule.Manager
 	stopSessionWatch func()
 	fs               *VFS
@@ -160,6 +162,11 @@ func (e *Engine) init() error {
 	e.runs.StartMaintenance()
 	e.live = live.New(e.runs, e.sessions, e.bus, e.log)
 
+	e.waker = wake.New(wake.Deps{Bus: e.bus, Runs: e.runs, Sessions: e.sessions, Log: e.log})
+	if err := e.waker.Start(); err != nil {
+		return fmt.Errorf("sdk: start subagent waker: %w", err)
+	}
+
 	fsOpts := vfs.Options{Log: e.log}
 	if path, err := vfs.SnapshotPathIn(e.configDir(), e.workspaceRoot()); err == nil {
 		fsOpts.SnapshotPath = path
@@ -206,6 +213,9 @@ func (e *Engine) init() error {
 func (e *Engine) cleanup() {
 	if e == nil {
 		return
+	}
+	if e.waker != nil {
+		e.waker.Stop()
 	}
 	if e.live != nil {
 		e.live.Close()

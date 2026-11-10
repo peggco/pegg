@@ -54,7 +54,9 @@ terminal, or explicitly with `pegg tui`.
 ### Interrupting the agent
 
 While a run is active, pressing ++esc++ once shows *Press Esc to interrupt*.
-Pressing ++esc++ again within **2 seconds** cancels the run and all subagents.
+Pressing ++esc++ again within **2 seconds** cancels the run and any foreground
+subagents. Background subagents are not tied to the run context: they keep working,
+and their task cards stay in the running state until they finish.
 Pressing it once and waiting lets the run continue.
 
 When the attachment bar has focus, ++esc++ returns focus to the input. While
@@ -175,7 +177,8 @@ input modality.
 | Assistant message | Rendered markdown (headings, lists, quotes, inline styles) |
 | Thinking | Collapsible; animated while active, raw reasoning when expanded |
 | Tool call | Card with name, enriched target (`read:path`, `bash:cmd`, ...), duration, expandable output |
-| Subagent | Card with status, live activity line, output preview, usage, and a **History** action |
+| Task | Boxed card with subagent name, type, prompt, status, live activity, output preview, usage, and a **History** action |
+| Subagent | Card for fork-launched subagents: status, live activity line, output preview, usage, and a **History** action |
 | Error | Bold red `✖ error: ...` |
 
 ### Selecting and copying text
@@ -213,6 +216,15 @@ text.
 - **FILES** — one box per file delivered by `sendfile`, with name, size and path.
   Click a box to open the file with the OS default handler; ++enter++ on the item
   copies the absolute paths.
+- **TASK** — one card per `task` call: subagent name, type, prompt, a `background`
+  badge, live activity while running, a response preview with expand, and a usage
+  footer. Click **History** while it runs to open the subagent transcript; the
+  transcript keeps updating after the main agent finishes. Task cards for background
+  subagents stay running after the main agent stops and close with the subagent's
+  result. That response is written back to the task tool message, so restored
+  sessions show it too. When a background subagent finishes, the orchestrator
+  continues automatically — no new message is needed — and the continuation streams
+  into the same chat.
 
 Fenced code in assistant messages is syntax-highlighted for Go, TypeScript,
 JavaScript, Python, Rust, Bash, C/C++, Ruby, PHP, Swift, Kotlin, Scala, Elixir,
@@ -230,9 +242,10 @@ Haskell, CSS, HTML, JSON, YAML, Markdown, SQL, R, Lua, and Dart.
 
 ## Subagents
 
-Running and finished subagents appear as cards in the main transcript. Select a
-running subagent and press ++enter++, or click **History**, to open its live
-transcript. Press ++esc++ or click the back header to return. See
+`task` calls appear as **TASK** cards in the main transcript. While the subagent is
+running, select the card and press ++enter++, or click **History**, to open its live
+transcript. Press ++esc++ or click the back header to return. Fork-launched
+subagents (which have no `task` call) still use the standalone subagent card. See
 [Subagents](../features/subagents.md).
 
 ## Settings

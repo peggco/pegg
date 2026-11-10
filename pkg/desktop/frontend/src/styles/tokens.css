@@ -46,4 +46,8 @@
   --pg-warning: #f59e0b;
   --pg-danger: #ef4444;
   --pg-thinking: #38bdf8;
+  --pg-running: #38bdf8;
+  --pg-reasoning: #38bdf8;
+  --pg-subagent: #38bdf8;
+  --pg-user-bg: #1a1a1a;
 }

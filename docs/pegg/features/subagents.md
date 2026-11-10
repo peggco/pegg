@@ -84,10 +84,14 @@ single message.
 
 - Subagents inherit the parent's **provider**, **model**, and **event bus** — they
   stream into the same transcript.
-- In the TUI, each subagent is a card with a live activity line, an output preview,
-  usage, and a **History** view of its full transcript.
-- In VS Code, subagent tool activity and reasoning stream into the same chat with
-  the subagent name attached; tool cards expose file locations and command output.
+- In the TUI, each `task` call is one **TASK** card with a live activity line, an
+  output preview, usage, and a **History** view of the full transcript. Forked
+  subagents (no `task` call) keep the standalone subagent card.
+- VS Code, IntelliJ, and desktop use the same **TASK** card as the TUI: name,
+  subagent type, prompt, `background` badge, live activity, response preview,
+  usage/duration, and a **History** view while running. Task-launched subagents
+  do not get a second subagent card; fork-launched subagents keep it. The final
+  response is persisted in the `task` tool message, so restored sessions show it.
 - The `task_id` field links a subagent to todo items, so progress is trackable via
   the todo tools.
 
@@ -125,6 +129,21 @@ Key details:
   results directly as the tool output.
 - The parent does not need to poll or wait — the reminder arrives automatically when
   the subagent finishes.
+- In the TUI, the **TASK** card stays in the running state after the orchestrator
+  finishes or is stopped; the background subagent is not tied to the orchestrator's
+  context. When it completes, the reminder wakes the orchestrator and the card closes
+  with the result. The subagent's History stays live while it runs, even after the
+  main run has finished.
+- The final response is written back to the `task` tool message, so restored sessions
+  show the background subagent's result instead of only the start confirmation.
+- Wake-up is handled by the core, not by an individual surface. A process-wide waker
+  claims a continuation run for the parent session and calls `Continue` with the
+  persisted history, so the reminder is injected as a system message. This applies
+  to the TUI, interactive CLI, `pegg serve`/ACP clients (VS Code, IntelliJ, desktop),
+  HTTP/connect, and the SDK.
+- ACP clients receive the continuation as a normal streamed run (`run_state_update`
+  plus message/thought chunks). No new prompt is required from the editor client;
+  the shared TASK card updates live and closes when the subagent finishes.
 
 ## Checking subagent status
 

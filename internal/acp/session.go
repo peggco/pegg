@@ -389,10 +389,18 @@ func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Messa
 			if atts := fileAttachments(session.AttachmentsOf(msg)); len(atts) > 0 {
 				m["com.pegg/attachments"] = atts
 			}
+			status := ToolCallCompleted
+			if strings.HasPrefix(strings.TrimSpace(out), "Error: ") || strings.Contains(out, " failed: ") {
+				status = ToolCallFailed
+				m["com.pegg/error"] = out
+			}
+			if msg.Duration > 0 {
+				m["com.pegg/durationMs"] = msg.Duration.Milliseconds()
+			}
 			s.notify(sessionID, SessionUpdate{
 				SessionUpdate: "tool_call_update",
 				ToolCallID:    ToolCallId(msg.ToolCallID),
-				Status:        string(ToolCallCompleted),
+				Status:        string(status),
 				RawOutput:     truncate(out, 64*1024),
 				Meta:          m,
 			})

@@ -41,6 +41,11 @@ const (
 	fullRepaintFreq = 1 * time.Second
 )
 
+type taskLink struct {
+	item         *components.ChatItem
+	transcriptID string
+}
+
 type App struct {
 	bus     event.Bus
 	deps    settings.Deps
@@ -60,6 +65,7 @@ type App struct {
 	main             *agentTranscript
 	subs             map[string]*agentTranscript
 	subItemByID      map[string]*components.ChatItem
+	taskByAgent      map[string]*taskLink
 	runtimes         map[string]*sessionRuntime
 	agentSessions    map[string]string
 	handlingAttached bool
@@ -278,6 +284,7 @@ func Run(bus event.Bus, deps settings.Deps) error {
 		screen:      s,
 		subs:        make(map[string]*agentTranscript),
 		subItemByID: make(map[string]*components.ChatItem),
+		taskByAgent: make(map[string]*taskLink),
 		ctx:         ctx,
 		cancel:      cancel,
 		mode:        agent.ModeAuto,
@@ -1004,7 +1011,14 @@ func (a *App) loadSessionIntoChatLocked() {
 		msgs = msgs[len(msgs)-initialChatMessages:]
 	}
 	items := messagesToItems(msgs)
+	items = a.mergeLiveTaskItemsLocked(items)
 	a.main.items = items
+	a.main.toolByID = make(map[string]*components.ChatItem, len(items))
+	for _, it := range items {
+		if it.Kind == components.ItemTool && it.ID != "" {
+			a.main.toolByID[it.ID] = it
+		}
+	}
 	a.loadedFloor = seqFloor(msgs)
 	hasMore := len(a.session.info.Messages) > len(msgs)
 	if a.session.info.CompactionParentID != "" {
@@ -1024,6 +1038,41 @@ func (a *App) loadSessionIntoChatLocked() {
 	if rt := a.runtimes[a.session.info.ID]; rt != nil {
 		rt.history = a.history
 	}
+}
+
+func (a *App) mergeLiveTaskItemsLocked(items []*components.ChatItem) []*components.ChatItem {
+	if a.main == nil || len(a.taskByAgent) == 0 {
+		return items
+	}
+	live := make(map[string]*components.ChatItem, len(a.taskByAgent))
+	for _, link := range a.taskByAgent {
+		if link == nil || link.item == nil || link.transcriptID != a.main.id {
+			continue
+		}
+		if link.item.ToolDone || link.item.ToolErr != "" {
+			continue
+		}
+		live[link.item.ID] = link.item
+	}
+	if len(live) == 0 {
+		return items
+	}
+	seen := make(map[string]bool, len(live))
+	for i, it := range items {
+		if it.Kind != components.ItemTool {
+			continue
+		}
+		if l, ok := live[it.ID]; ok {
+			items[i] = l
+			seen[it.ID] = true
+		}
+	}
+	for id, l := range live {
+		if !seen[id] {
+			items = append(items, l)
+		}
+	}
+	return items
 }
 
 func (a *App) seedHistoryFromSessionLocked() {

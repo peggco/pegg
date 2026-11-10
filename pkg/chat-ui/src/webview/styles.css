@@ -1478,3 +1478,143 @@ button {
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
 }
+
+.task-card {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--vscode-editorWidget-background, transparent);
+}
+.task-card.status-error {
+  border-color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
+}
+.task-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 11px;
+}
+.task-badge {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vscode-terminal-ansiCyan, var(--vscode-textLink-foreground));
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.task-name {
+  font-weight: 600;
+  color: var(--vscode-terminal-ansiCyan, var(--vscode-foreground));
+}
+.task-type,
+.task-status {
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+}
+.task-bg {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 999px;
+  padding: 0 5px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vscode-descriptionForeground);
+}
+.task-spacer {
+  flex: 1;
+}
+.task-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--vscode-descriptionForeground);
+}
+.task-dot.status-running {
+  background: var(--vscode-progressBar-background, var(--vscode-textLink-foreground));
+  animation: subagent-pulse 1.4s ease-in-out infinite;
+}
+.task-dot.status-finished {
+  background: var(--vscode-testing-iconPassed, var(--vscode-terminal-ansiGreen));
+}
+.task-dot.status-error {
+  background: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
+}
+.task-prompt {
+  padding: 0 8px 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 15px;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.task-card.expanded .task-prompt {
+  -webkit-line-clamp: unset;
+}
+.task-more {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0 8px 6px;
+  text-align: left;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+}
+.task-sep {
+  height: 1px;
+  background: var(--vscode-panel-border);
+}
+.task-body {
+  padding: 6px 8px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.task-output,
+.task-error {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.task-error {
+  color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
+}
+.task-note {
+  color: var(--vscode-descriptionForeground);
+}
+.task-activity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.task-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--vscode-panel-border);
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+.task-usage {
+  color: var(--vscode-terminal-ansiCyan, var(--vscode-descriptionForeground));
+}
+.task-action {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 10px;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+}

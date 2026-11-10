@@ -674,6 +674,37 @@ func TestRegistry_LoadInterruptsRunning(t *testing.T) {
 	}
 }
 
+func TestRegistry_ResumeAfterReloadNotifiesNewParent(t *testing.T) {
+	oldParent := agent.New("old-parent", agent.WithBus(testBus))
+	r := newRegistry()
+	sa, err := r.spawn("resume-reload-1", "sub-agent", nil, true, oldParent)
+	if err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
+	r.start(sa)
+	r.finish(sa, "first", nil)
+
+	loaded := newRegistry()
+	if err := loaded.init(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	newParent := agent.New("new-parent", agent.WithBus(testBus))
+	resumed, err := loaded.resume("resume-reload-1", newParent)
+	if err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if resumed.ParentAgentID != newParent.ID {
+		t.Fatalf("resumed parent = %q, want %q", resumed.ParentAgentID, newParent.ID)
+	}
+
+	loaded.start(resumed)
+	loaded.finish(resumed, "second", nil)
+
+	if !newParent.HasPendingNotifications() {
+		t.Fatal("resumed background subagent must notify its current parent after reload")
+	}
+}
+
 func TestAgentOutput(t *testing.T) {
 	if got := agentOutput(&agent.RunResult{Output: "final answer"}, nil); got != "final answer" {
 		t.Errorf("expected final output, got %q", got)
@@ -840,5 +871,34 @@ func TestSubAgentTool_PanicDoesNotHang(t *testing.T) {
 	}
 	if sa.Status != StatusFailed {
 		t.Fatalf("status = %q, want failed", sa.Status)
+	}
+}
+
+func TestRegistry_WaitStarted(t *testing.T) {
+	r := newRegistry()
+	sa, err := r.spawn("wait-1", "sub-agent", nil, true, nil)
+	if err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
+	r.setAgentID("wait-1", "agent-wait-1")
+
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		r.onStarted("agent-wait-1")
+	}()
+
+	if !r.waitStarted(sa, time.Second) {
+		t.Fatal("waitStarted timed out")
+	}
+	if !r.waitStarted(sa, 0) {
+		t.Fatal("waitStarted should be immediately true after the started event")
+	}
+
+	pending, err := r.spawn("wait-2", "sub-agent", nil, true, nil)
+	if err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
+	if r.waitStarted(pending, 20*time.Millisecond) {
+		t.Fatal("waitStarted should time out before the started event")
 	}
 }

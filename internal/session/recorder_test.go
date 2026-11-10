@@ -881,3 +881,256 @@ func TestRecorderPersistsPartialStreamingMessage(t *testing.T) {
 		t.Fatalf("partial assistant after interruption = %+v", msgs[1])
 	}
 }
+
+func TestRecorderKeepsRunForLateSubagentEvents(t *testing.T) {
+	_, rec, _ := newTestRecorder(t)
+	rec.mu.Lock()
+	rec.runByAgent["main"] = "run-1"
+	rec.runByAgent["sub"] = "run-1"
+	rec.parentByAgent["sub"] = "main"
+	rec.runSession["run-1"] = "sess-1"
+	rec.runAgent["run-1"] = "main"
+	rec.mu.Unlock()
+
+	rec.handleRunFinished(RunFinished{RunID: "run-1"})
+
+	rec.mu.Lock()
+	finished := rec.finishedRuns["run-1"]
+	subRun := rec.runByAgent["sub"]
+	mainRun := rec.runByAgent["main"]
+	rec.mu.Unlock()
+	if !finished {
+		t.Fatal("run should be marked finished")
+	}
+	if subRun != "run-1" {
+		t.Fatal("live subagent mapping must survive the parent run")
+	}
+	if mainRun != "run-1" {
+		t.Fatal("main mapping must survive while the subagent is live")
+	}
+
+	rec.handleFinished(agent.AgentFinished{AgentID: "sub", Output: "done"})
+
+	rec.mu.Lock()
+	_, subStill := rec.runByAgent["sub"]
+	_, mainStill := rec.runByAgent["main"]
+	_, sessStill := rec.runSession["run-1"]
+	finishedStill := rec.finishedRuns["run-1"]
+	rec.mu.Unlock()
+	if subStill {
+		t.Fatal("subagent mapping leaked after finish")
+	}
+	if mainStill {
+		t.Fatal("main mapping leaked after the last subagent finished")
+	}
+	if sessStill {
+		t.Fatal("run session leaked after the last subagent finished")
+	}
+	if finishedStill {
+		t.Fatal("finished run marker leaked")
+	}
+}
+
+func TestRecorderKeepsRunForPendingBackgroundTask(t *testing.T) {
+	_, rec, _ := newTestRecorder(t)
+	rec.mu.Lock()
+	rec.runByAgent["main"] = "run-2"
+	rec.runSession["run-2"] = "sess-2"
+	rec.runAgent["run-2"] = "main"
+	rec.pendingTasks["main"] = []pendingTask{{
+		parentAgentID: "main",
+		runID:         "run-2",
+		callID:        "call-2",
+		name:          "bg-task",
+		background:    true,
+	}}
+	rec.mu.Unlock()
+
+	rec.handleRunFinished(RunFinished{RunID: "run-2"})
+
+	rec.mu.Lock()
+	mainRun := rec.runByAgent["main"]
+	finished := rec.finishedRuns["run-2"]
+	rec.mu.Unlock()
+	if mainRun != "run-2" {
+		t.Fatal("run must stay open while a background task has not started yet")
+	}
+	if !finished {
+		t.Fatal("run should be marked finished")
+	}
+}
+
+func publishBackgroundTask(t *testing.T, bus event.Bus, parentID, name string) {
+	t.Helper()
+	args := fmt.Sprintf(`{"name":%q,"subagent_type":"explorer","prompt":"do it","background":true}`, name)
+	bus.Publish(agent.TopicAgentToolCall, agent.AgentToolCall{
+		AgentID: parentID,
+		Call: llm.ToolCall{
+			ID:       "call-bg",
+			Function: llm.Function{Name: "task", Arguments: args},
+		},
+	})
+	bus.Publish(agent.TopicAgentStarted, agent.AgentStarted{
+		AgentID: "sub-bg", AgentName: "explorer", DisplayName: name, ParentAgentID: parentID,
+		Model: llm.Model{ID: "m"}, Provider: stubProvider{name: "p"},
+	})
+}
+
+func findToolMessage(t *testing.T, mgr *Manager, sessID, callID string) *Message {
+	t.Helper()
+	msgs, err := mgr.Messages(sessID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == llm.RoleTool && msgs[i].ToolCallID == callID {
+			return &msgs[i]
+		}
+	}
+	return nil
+}
+
+func TestRecorderPersistsBackgroundTaskResult(t *testing.T) {
+	mgr, rec, bus := newTestRecorder(t)
+	parent := "orchestrator-1"
+	publishStarted(bus, parent, "orchestrator", "p", "m")
+	bus.Publish(agent.TopicAgentInput, agent.AgentInput{AgentID: parent, Input: "delegate"})
+	publishBackgroundTask(t, bus, parent, "bg-task")
+	bus.Publish(agent.TopicAgentToolResult, agent.AgentToolResult{
+		AgentID: parent, CallID: "call-bg", ToolName: "task",
+		Output: "Started subagent in background: bg-task\n",
+	})
+	bus.Publish(agent.TopicAgentFinished, agent.AgentFinished{AgentID: "sub-bg", Output: "final answer"})
+
+	sessID, ok := rec.sessionID(parent)
+	if !ok {
+		t.Fatal("parent session missing")
+	}
+	msg := findToolMessage(t, mgr, sessID, "call-bg")
+	if msg == nil {
+		t.Fatal("task tool message missing")
+	}
+	if msg.Content != "final answer" {
+		t.Fatalf("tool content = %v, want final answer", msg.Content)
+	}
+}
+
+func TestRecorderPersistsBackgroundTaskResultBeforeToolResult(t *testing.T) {
+	mgr, rec, bus := newTestRecorder(t)
+	parent := "orchestrator-2"
+	publishStarted(bus, parent, "orchestrator", "p", "m")
+	bus.Publish(agent.TopicAgentInput, agent.AgentInput{AgentID: parent, Input: "delegate"})
+	publishBackgroundTask(t, bus, parent, "bg-task")
+	bus.Publish(agent.TopicAgentFinished, agent.AgentFinished{AgentID: "sub-bg", Output: "early answer"})
+	bus.Publish(agent.TopicAgentToolResult, agent.AgentToolResult{
+		AgentID: parent, CallID: "call-bg", ToolName: "task",
+		Output: "Started subagent in background: bg-task\n",
+	})
+
+	sessID, ok := rec.sessionID(parent)
+	if !ok {
+		t.Fatal("parent session missing")
+	}
+	msg := findToolMessage(t, mgr, sessID, "call-bg")
+	if msg == nil {
+		t.Fatal("task tool message missing")
+	}
+	if msg.Content != "early answer" {
+		t.Fatalf("tool content = %v, want early answer", msg.Content)
+	}
+}
+
+func TestRecorderPersistsBackgroundTaskError(t *testing.T) {
+	mgr, rec, bus := newTestRecorder(t)
+	parent := "orchestrator-3"
+	publishStarted(bus, parent, "orchestrator", "p", "m")
+	bus.Publish(agent.TopicAgentInput, agent.AgentInput{AgentID: parent, Input: "delegate"})
+	publishBackgroundTask(t, bus, parent, "bg-task")
+	bus.Publish(agent.TopicAgentToolResult, agent.AgentToolResult{
+		AgentID: parent, CallID: "call-bg", ToolName: "task",
+		Output: "Started subagent in background: bg-task\n",
+	})
+	bus.Publish(agent.TopicAgentError, agent.AgentError{AgentID: "sub-bg", Err: fmt.Errorf("boom")})
+
+	sessID, ok := rec.sessionID(parent)
+	if !ok {
+		t.Fatal("parent session missing")
+	}
+	msg := findToolMessage(t, mgr, sessID, "call-bg")
+	if msg == nil {
+		t.Fatal("task tool message missing")
+	}
+	if msg.Content != "Error: boom" {
+		t.Fatalf("tool content = %v, want Error: boom", msg.Content)
+	}
+}
+
+func TestRecorderKeepsRunForLateNotification(t *testing.T) {
+	_, rec, _ := newTestRecorder(t)
+	rec.mu.Lock()
+	rec.runByAgent["main"] = "run-3"
+	rec.runByAgent["sub"] = "run-3"
+	rec.parentByAgent["sub"] = "main"
+	rec.runSession["run-3"] = "sess-3"
+	rec.runAgent["run-3"] = "main"
+	rec.taskByAgent["sub"] = pendingTask{
+		parentAgentID: "main", runID: "run-3", callID: "call-3", name: "bg", background: true,
+	}
+	rec.mu.Unlock()
+
+	rec.handleRunFinished(RunFinished{RunID: "run-3"})
+	rec.handleFinished(agent.AgentFinished{AgentID: "sub", Output: "done"})
+
+	rec.mu.Lock()
+	_, kept := rec.runByAgent["main"]
+	rec.mu.Unlock()
+	if !kept {
+		t.Fatal("run cleared before the subagent notification was journaled")
+	}
+
+	rec.handleSubAgentNotification(agent.SubAgentNotification{
+		ParentAgentID: "main", SubAgentName: "bg", Output: "done",
+	})
+
+	rec.mu.Lock()
+	_, still := rec.runByAgent["main"]
+	rec.mu.Unlock()
+	if still {
+		t.Fatal("run not cleared after the notification")
+	}
+}
+
+func TestRecorderJournalsLateSubAgentNotice(t *testing.T) {
+	_, rec, _ := newTestRecorder(t)
+	rec.mu.Lock()
+	rec.runByAgent["main"] = "run-4"
+	rec.runByAgent["sub"] = "run-4"
+	rec.parentByAgent["sub"] = "main"
+	rec.runSession["run-4"] = "sess-4"
+	rec.runAgent["run-4"] = "main"
+	rec.taskByAgent["sub"] = pendingTask{
+		parentAgentID: "main", runID: "run-4", callID: "call-4", name: "bg", background: true,
+	}
+	rec.mu.Unlock()
+
+	rec.handleRunFinished(RunFinished{RunID: "run-4"})
+	rec.handleFinished(agent.AgentFinished{AgentID: "sub", Output: "done"})
+	rec.handleSubAgentNotification(agent.SubAgentNotification{
+		ParentAgentID: "main", SubAgentName: "bg", Output: "done",
+	})
+	rec.flushEvents()
+
+	if rec.runs == nil {
+		t.Fatal("run store not configured")
+	}
+	events, err := rec.runs.RunEvents("run-4", 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range events {
+		if e.Type == AgentEventSubAgentNotice {
+			return
+		}
+	}
+	t.Fatalf("late subagent notice was not journaled: %+v", events)
+}

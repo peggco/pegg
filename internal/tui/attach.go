@@ -382,14 +382,6 @@ func (a *App) handleAttachedEvent(e session.RunEvent, mainAgentID string) {
 		a.onErrorMessage(agent.ErrorMessage{AgentID: ev.AgentID, AgentName: ev.AgentName, Message: ev.ToolError})
 	case session.AgentEventErrorMessageFinish:
 		a.onErrorMessageFinished(agent.ErrorMessageFinished{AgentID: ev.AgentID, AgentName: ev.AgentName})
-	case session.AgentEventSubAgentNotice:
-		a.onSubAgentNotification(agent.SubAgentNotification{
-			ParentAgentID: ev.ParentAgentID,
-			SubAgentName:  ev.SubAgentName,
-			TaskIDs:       ev.TaskIDs,
-			Output:        ev.SubAgentOut,
-			Err:           ev.SubAgentErr,
-		})
 	case session.AgentEventCompaction:
 		a.onCompactionFinished(compaction.Event{
 			AgentID:   ev.AgentID,

@@ -16,6 +16,22 @@ export interface UsageState {
   cost?: number;
 }
 
+export type TaskStatus = 'running' | 'finished' | 'error' | 'background' | 'unknown';
+
+export interface TaskState {
+  name: string;
+  type?: string;
+  prompt: string;
+  background: boolean;
+  agentId?: string;
+  status: TaskStatus;
+  activity?: string;
+  output?: string;
+  error?: string;
+  usage?: UsageState;
+  durationMs?: number;
+}
+
 export interface ToolState {
   id: string;
   name?: string;
@@ -30,6 +46,7 @@ export interface ToolState {
   files?: AttachmentInfo[];
   agentId?: string;
   agentName?: string;
+  task?: TaskState;
 }
 
 function mergeFiles(
@@ -68,6 +85,7 @@ export type ChatItem = (
       task?: string;
       output?: string;
       error?: string;
+      linkedTaskId?: string;
       createdAt: number;
     }
   | { kind: 'notice'; id: string; text: string; level: 'info' | 'warn' | 'error'; createdAt: number }
@@ -81,6 +99,7 @@ export interface SubagentRun {
   task?: string;
   output?: string;
   error?: string;
+  linkedTaskId?: string;
   items: ChatItem[];
   counter: number;
 }
@@ -206,6 +225,161 @@ function normalizeStatus(status: string | undefined): ToolState['status'] | unde
     default:
       return undefined;
   }
+}
+
+function peggUsage(update: SessionUpdate): UsageState | undefined {
+  const value = peggMeta(update, 'usage');
+  if (!value || typeof value !== 'object') return undefined;
+  const rec = value as Record<string, unknown>;
+  if (typeof rec.used !== 'number') return undefined;
+  return {
+    used: rec.used,
+    size: typeof rec.size === 'number' ? rec.size : 0,
+    cost: typeof rec.cost === 'number' ? rec.cost : undefined,
+  };
+}
+
+function taskInfo(input: unknown): Pick<TaskState, 'name' | 'type' | 'prompt' | 'background'> | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const rec = input as Record<string, unknown>;
+  const name = typeof rec.name === 'string' ? rec.name : typeof rec.description === 'string' ? rec.description : '';
+  if (!name) return undefined;
+  return {
+    name,
+    type: typeof rec.subagent_type === 'string' ? rec.subagent_type : undefined,
+    prompt: typeof rec.prompt === 'string' ? rec.prompt : '',
+    background: rec.background === true,
+  };
+}
+
+function isTaskTool(tool: ToolState): boolean {
+  const name = (tool.name ?? '').toLowerCase();
+  return name === 'task' || (tool.title ?? '').toLowerCase().startsWith('task:');
+}
+
+function isBackgroundStart(output: string): boolean {
+  const out = output.trim();
+  if (out.startsWith('Started subagent in background:') || out.startsWith('Started subagent in backgro')) return true;
+  return out.startsWith('Resumed subagent ') && (out.includes(' in background') || out.endsWith('backgro…'));
+}
+
+function taskResponse(output: string): string {
+  const marker = '\nResponse:\n';
+  const i = output.indexOf(marker);
+  return i >= 0 ? output.slice(i + marker.length).trim() : output.trim();
+}
+
+function taskFailure(output: string): string | undefined {
+  const out = output.trim();
+  if (!out.startsWith('Subagent ')) return undefined;
+  const i = out.indexOf(' failed: ');
+  return i >= 0 ? out.slice(i + ' failed: '.length).trim() : undefined;
+}
+
+function enrichTask(tool: ToolState, update: SessionUpdate): ToolState {
+  if (!isTaskTool(tool)) return tool;
+  let task = tool.task;
+  if (!task) {
+    const info = taskInfo(tool.input);
+    if (!info) return tool;
+    task = { ...info, status: 'running' };
+  }
+  const duration = peggNumber(update, 'durationMs');
+  if (duration !== undefined) task.durationMs = duration;
+  const usage = peggUsage(update);
+  if (usage) task.usage = usage;
+  const metaError = peggString(update, 'error');
+  if (metaError) {
+    task.status = 'error';
+    task.error = metaError;
+  }
+  if (update.rawOutput === undefined) return { ...tool, task };
+  const raw = String(update.rawOutput ?? '');
+  if (isBackgroundStart(raw)) {
+    task.background = true;
+    if (task.status !== 'finished' && task.status !== 'error') {
+      task.status = 'running';
+      task.output = undefined;
+    }
+    return { ...tool, task };
+  }
+  const detail = taskFailure(raw);
+  const trimmed = raw.trim();
+  if (detail) {
+    task.status = 'error';
+    task.error = detail;
+    task.output = undefined;
+  } else if (trimmed.startsWith('Error: ')) {
+    task.status = 'error';
+    task.error = trimmed.slice(7).trim();
+    task.output = undefined;
+  } else if (task.agentId && task.status === 'running') {
+    if (trimmed) task.output = taskResponse(raw);
+  } else if (!trimmed) {
+    if (!task.agentId) task.status = task.background ? 'background' : 'unknown';
+  } else {
+    task.status = 'finished';
+    task.output = taskResponse(raw);
+  }
+  return { ...tool, task };
+}
+
+function findTaskTool(items: ChatItem[], name: string): Extract<ChatItem, { kind: 'tool' }> | undefined {
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const item = items[i];
+    if (item.kind !== 'tool' || !item.tool.task) continue;
+    if (item.tool.task.name !== name || item.tool.task.agentId) continue;
+    return item;
+  }
+  return undefined;
+}
+
+function findSubagentTask(
+  items: ChatItem[],
+  agentId: string,
+  name: string | undefined,
+): Extract<ChatItem, { kind: 'tool' }> | undefined {
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const item = items[i];
+    if (item.kind !== 'tool' || !item.tool.task) continue;
+    if (item.tool.task.agentId === agentId) return item;
+  }
+  return name ? findTaskTool(items, name) : undefined;
+}
+
+function activityFrom(update: SessionUpdate): string | undefined {
+  return update.title?.trim() || update.name?.trim() || undefined;
+}
+
+export function finalizeRestoredTasks(items: ChatItem[]): ChatItem[] {
+  return items.map((item) => {
+    if (item.kind !== 'tool' || !item.tool.task) return item;
+    const task = { ...item.tool.task, agentId: undefined };
+    const raw = typeof item.tool.output === 'string' ? item.tool.output : '';
+    const trimmed = raw.trim();
+    const detail = taskFailure(raw);
+    if (item.tool.error) {
+      task.status = 'error';
+      task.error = item.tool.error;
+    } else if (detail) {
+      task.status = 'error';
+      task.error = detail;
+      task.output = undefined;
+    } else if (trimmed.startsWith('Error: ')) {
+      task.status = 'error';
+      task.error = trimmed.slice(7).trim();
+      task.output = undefined;
+    } else if (task.background && isBackgroundStart(raw)) {
+      task.status = 'background';
+      task.output = undefined;
+    } else if (!trimmed) {
+      task.status = task.background ? 'background' : 'unknown';
+    } else {
+      task.status = 'finished';
+      task.output = taskResponse(raw);
+    }
+    return { ...item, tool: { ...item.tool, task } };
+  });
 }
 
 function isTerminalStatus(status: ToolState['status']): boolean {
@@ -360,13 +534,14 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       const id = update.toolCallId || nextId(state, 'tool');
       const idx = findIndex(state.items, id, 'tool');
       const status = normalizeStatus(update.status);
+      let tool: ToolState;
       if (idx >= 0) {
         const item = state.items[idx] as Extract<ChatItem, { kind: 'tool' }>;
         let nextStatus = status || item.tool.status;
         if (isTerminalStatus(item.tool.status) && (!status || !isTerminalStatus(status))) {
           nextStatus = item.tool.status;
         }
-        const tool: ToolState = {
+        tool = {
           ...item.tool,
           title: update.title || item.tool.title,
           kind: inferToolKind(update.kind, update.title || item.tool.title, item.tool.kind),
@@ -384,16 +559,13 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
         if (attachments?.length) tool.files = mergeFiles(tool.files, attachments);
         const diff = toolContents(update).find((c) => c.type === 'diff' && c.diff)?.diff;
         if (diff) tool.diff = diff;
+        tool = enrichTask(tool, update);
         replaceItem(idx, { ...item, tool });
       } else {
         const error = peggString(update, 'error');
         const attachments = peggAttachments(update);
-        pushItem({
-          kind: 'tool',
-          id,
-          createdAt: now,
-          seq,
-          tool: {
+        tool = enrichTask(
+          {
             id,
             name: update.name,
             title: update.title || update.name || 'Tool call',
@@ -408,7 +580,30 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
             agentId,
             agentName,
           },
-        });
+          update,
+        );
+        pushItem({ kind: 'tool', id, createdAt: now, seq, tool });
+      }
+      if (!isTaskTool(tool) && agentId) {
+        const activity = activityFrom(update);
+        if (activity) {
+          const linkedIdx = state.items.findIndex(
+            (item) =>
+              item.kind === 'tool' &&
+              item.tool.task?.agentId === agentId &&
+              item.tool.task?.status === 'running',
+          );
+          if (linkedIdx >= 0) {
+            const linked = state.items[linkedIdx] as Extract<ChatItem, { kind: 'tool' }>;
+            const task = linked.tool.task;
+            if (task) {
+              replaceItem(linkedIdx, {
+                ...linked,
+                tool: { ...linked.tool, task: { ...task, activity } },
+              });
+            }
+          }
+        }
       }
       return state;
     }
@@ -417,6 +612,8 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
       if (!subId) return state;
       const subName = peggString(update, 'agentName');
       const subError = peggString(update, 'error');
+      const taskName = peggString(update, 'taskName');
+      const linked = findSubagentTask(state.items, subId, taskName);
       const status: 'running' | 'finished' | 'error' =
         update.status === 'finished' ? 'finished' : update.status === 'error' ? 'error' : 'running';
       const existingRun = state.subagents[subId];
@@ -430,6 +627,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
             task: update.title || existingRun.task,
             output: update.rawOutput !== undefined ? String(update.rawOutput ?? '') : existingRun.output,
             error: subError || existingRun.error,
+            linkedTaskId: linked?.id ?? existingRun.linkedTaskId,
             items: settleStatus ? settleTools(existingRun.items, settleStatus) : existingRun.items,
           }
         : {
@@ -439,6 +637,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
             task: update.title,
             output: update.rawOutput === undefined ? undefined : String(update.rawOutput ?? ''),
             error: subError,
+            linkedTaskId: linked?.id,
             items: [],
             counter: 0,
           };
@@ -453,6 +652,7 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           task: update.title || item.task,
           output: update.rawOutput !== undefined ? String(update.rawOutput ?? '') : item.output,
           error: subError || item.error,
+          linkedTaskId: linked?.id ?? item.linkedTaskId,
         });
       } else {
         pushItem({
@@ -464,8 +664,35 @@ export function applyUpdate(input: ChatState, update: SessionUpdate): ChatState 
           task: update.title,
           output: update.rawOutput === undefined ? undefined : String(update.rawOutput ?? ''),
           error: subError,
+          linkedTaskId: linked?.id,
           createdAt: now,
         });
+      }
+      if (linked) {
+        const linkedIdx = state.items.findIndex((item) => item.id === linked.id);
+        if (linkedIdx >= 0) {
+          const item = state.items[linkedIdx] as Extract<ChatItem, { kind: 'tool' }>;
+          const task = item.tool.task;
+          if (task) {
+            const next = { ...task, agentId: subId };
+            const usage = peggUsage(update);
+            if (usage) next.usage = usage;
+            const duration = peggNumber(update, 'durationMs');
+            if (duration !== undefined) next.durationMs = duration;
+            if (status === 'finished') {
+              next.status = 'finished';
+              next.output = String(update.rawOutput ?? '');
+              next.activity = undefined;
+            } else if (status === 'error') {
+              next.status = 'error';
+              next.error = subError || 'subagent failed';
+              next.activity = undefined;
+            } else {
+              next.status = 'running';
+            }
+            replaceItem(linkedIdx, { ...item, tool: { ...item.tool, task: next } });
+          }
+        }
       }
       return state;
     }

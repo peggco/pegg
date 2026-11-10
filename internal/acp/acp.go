@@ -38,6 +38,8 @@ type ACPSession struct {
 
 	attachCancel context.CancelFunc
 	attachRunID  string
+	promptRunID  string
+	ownRuns      map[string]bool
 }
 
 func (s *ACPSession) SetCancel(cancel context.CancelFunc, reqID any) {
@@ -68,6 +70,34 @@ func (s *ACPSession) ClearPrompt() {
 	defer s.mu.Unlock()
 	s.ctx = nil
 	s.running = false
+}
+
+func (s *ACPSession) SetPromptRun(runID string) {
+	if runID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.promptRunID = runID
+	if s.ownRuns == nil {
+		s.ownRuns = make(map[string]bool)
+	}
+	s.ownRuns[runID] = true
+}
+
+func (s *ACPSession) IsOwnRun(runID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return runID != "" && s.ownRuns[runID]
+}
+
+func (s *ACPSession) ForgetOwnRun(runID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.ownRuns, runID)
+	if s.promptRunID == runID {
+		s.promptRunID = ""
+	}
 }
 
 func (s *ACPSession) PromptContext() (context.Context, bool) {
@@ -136,9 +166,11 @@ type Server struct {
 
 	responseHook func(id any, body json.RawMessage) error
 
-	active map[string]*ACPSession
-	agents map[string]string
-	mu     sync.RWMutex
+	active        map[string]*ACPSession
+	agents        map[string]string
+	taskNames     map[string]string
+	subagentStart map[string]time.Time
+	mu            sync.RWMutex
 
 	clientCaps  *ClientCapabilities
 	initialized bool
@@ -166,18 +198,20 @@ func New(
 	liveHub *live.Hub,
 ) *Server {
 	s := &Server{
-		cfg:         cfg,
-		bus:         bus,
-		log:         log,
-		sessions:    sessions,
-		llmMgr:      llmMgr,
-		fs:          fs,
-		runs:        runs,
-		live:        liveHub,
-		active:      make(map[string]*ACPSession),
-		agents:      make(map[string]string),
-		pendingAsks: make(map[string]*pendingAsk),
-		closed:      make(chan struct{}),
+		cfg:           cfg,
+		bus:           bus,
+		log:           log,
+		sessions:      sessions,
+		llmMgr:        llmMgr,
+		fs:            fs,
+		runs:          runs,
+		live:          liveHub,
+		active:        make(map[string]*ACPSession),
+		agents:        make(map[string]string),
+		taskNames:     make(map[string]string),
+		subagentStart: make(map[string]time.Time),
+		pendingAsks:   make(map[string]*pendingAsk),
+		closed:        make(chan struct{}),
 	}
 	s.client = NewClient(s.sendRaw)
 	s.newAgentFn = s.newOrchestratorAgent

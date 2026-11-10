@@ -1095,7 +1095,7 @@ func TestContinueWithoutNotifications(t *testing.T) {
 
 func TestContinueProcessesPendingNotification(t *testing.T) {
 	a, prov := newTestAgent(t)
-	prov.responses = []mockResponse{{content: "handled"}}
+	prov.streams = [][]llm.StreamChunk{{{Content: "handled"}, {IsDone: true, FinishReason: llm.FinishReasonStop}}}
 	a.QueueNotification(reminder.New("subagent", "background work done", "agent", "bg-1"))
 
 	res, err := a.Continue(context.Background(), []llm.Message{llm.UserMessage("prev")})

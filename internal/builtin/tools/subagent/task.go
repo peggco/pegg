@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	json "github.com/goccy/go-json"
 
@@ -190,6 +191,9 @@ func subAgentTool() tool.Tool {
 				if params.Background {
 					parent.AttachReminder(backgroundReminder(params.Name))
 					go runSafely(sa, runAgent, context.Background())
+					if parent.Bus != nil {
+						store.waitStarted(sa, 2*time.Second)
+					}
 					return fmt.Sprintf("Resumed subagent %q in background with existing context.\n", params.Name), nil
 				}
 

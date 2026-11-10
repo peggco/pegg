@@ -105,7 +105,10 @@ class AcpClientIntegrationTest {
                         60_000,
                     ),
                 )
-                assertTrue(sessions.sessions.any { it.id == newSession.peggSessionId })
+                assertTrue(
+                    sessions.sessions.none { it.id == newSession.peggSessionId },
+                    "sessions without messages stay hidden until the first prompt",
+                )
             }
         } finally {
             runBlocking {

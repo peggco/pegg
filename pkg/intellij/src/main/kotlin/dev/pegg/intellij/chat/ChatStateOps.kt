@@ -8,12 +8,17 @@ import dev.pegg.intellij.acp.PendingInteraction
 import dev.pegg.intellij.acp.PlanEntry
 import dev.pegg.intellij.acp.PromptResult
 import dev.pegg.intellij.acp.SessionUpdate
+import dev.pegg.intellij.acp.TaskState
 import dev.pegg.intellij.acp.ToolState
 import dev.pegg.intellij.acp.UsageState
 import dev.pegg.intellij.acp.elementString
 import dev.pegg.intellij.acp.textOf
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 object ChatStateOps {
 
@@ -47,7 +52,14 @@ object ChatStateOps {
         val history = initialState()
         history.counter = input.counter
         for (update in updates) applyUpdate(history, update)
-        input.items.addAll(0, history.items)
+        val finalized = history.items.map { item ->
+            if (item is ChatItem.Tool && item.tool.task != null) {
+                item.copy(tool = finalizeRestoredTask(item.tool))
+            } else {
+                item
+            }
+        }
+        input.items.addAll(0, finalized)
         input.counter = maxOf(input.counter, history.counter)
         return input
     }
@@ -239,42 +251,36 @@ object ChatStateOps {
 
     private fun applyTool(state: ChatState, update: SessionUpdate, now: Long) {
         val id = update.toolCallId ?: nextId(state, "tool")
-        val toolName = update.name?.lowercase()
-        val taskTitle = update.title?.startsWith("task:", ignoreCase = true) == true
-        if (toolName == "task" || taskTitle) {
-            state.items.removeAll { it.id == id }
-            return
-        }
         val diff = update.toolContents?.firstOrNull { it.type == "diff" && it.diff != null }?.diff
         val error = update.metaError ?: update.error
         val index = state.items.indexOfFirst { it.id == id && it is ChatItem.Tool }
+        val tool: ToolState
         if (index >= 0) {
             val item = state.items[index] as ChatItem.Tool
             val old = item.tool
             val newTitle = update.title ?: old.title
-            val newTool = old.copy(
-                name = update.name ?: old.name,
-                title = newTitle,
-                kind = inferToolKind(update.kind, newTitle, old.kind),
-                status = normalizeStatus(update.status) ?: old.status,
-                input = nonNull(update.rawInput) ?: old.input,
-                output = nonNull(update.rawOutput) ?: old.output,
-                error = error ?: old.error,
-                locations = update.locations ?: old.locations,
-                diff = diff ?: old.diff,
-                files = mergeFiles(old.files, update.attachments),
-                agentId = update.agentId ?: old.agentId,
-                agentName = update.agentName ?: old.agentName,
+            tool = enrichTask(
+                old.copy(
+                    name = update.name ?: old.name,
+                    title = newTitle,
+                    kind = inferToolKind(update.kind, newTitle, old.kind),
+                    status = normalizeStatus(update.status) ?: old.status,
+                    input = nonNull(update.rawInput) ?: old.input,
+                    output = nonNull(update.rawOutput) ?: old.output,
+                    error = error ?: old.error,
+                    locations = update.locations ?: old.locations,
+                    diff = diff ?: old.diff,
+                    files = mergeFiles(old.files, update.attachments),
+                    agentId = update.agentId ?: old.agentId,
+                    agentName = update.agentName ?: old.agentName,
+                ),
+                update,
             )
-            state.items[index] = item.copy(tool = newTool)
-            return
-        }
-        val title = update.title ?: update.toolCallId ?: "Tool"
-        state.items.add(
-            ChatItem.Tool(
-                id = id,
-                createdAt = now,
-                tool = ToolState(
+            state.items[index] = item.copy(tool = tool)
+        } else {
+            val title = update.title ?: update.toolCallId ?: "Tool"
+            tool = enrichTask(
+                ToolState(
                     id = id,
                     name = update.name,
                     title = title,
@@ -289,8 +295,23 @@ object ChatStateOps {
                     agentId = update.agentId,
                     agentName = update.agentName,
                 ),
-            ),
-        )
+                update,
+            )
+            state.items.add(ChatItem.Tool(id = id, createdAt = now, tool = tool))
+        }
+        val activity = update.title ?: update.name
+        if (!isTaskTool(tool) && !update.agentId.isNullOrEmpty() && !activity.isNullOrBlank()) {
+            val linkedIndex = state.items.indexOfFirst {
+                it is ChatItem.Tool && it.tool.task?.agentId == update.agentId && it.tool.task?.status == "running"
+            }
+            if (linkedIndex >= 0) {
+                val linked = state.items[linkedIndex] as ChatItem.Tool
+                val task = linked.tool.task
+                if (task != null) {
+                    state.items[linkedIndex] = linked.copy(tool = linked.tool.copy(task = task.copy(activity = activity)))
+                }
+            }
+        }
     }
 
     private fun applySubagent(state: ChatState, update: SessionUpdate, now: Long) {
@@ -300,6 +321,8 @@ object ChatStateOps {
             "error" -> "error"
             else -> "running"
         }
+        val taskName = update.taskName
+        val linked = findSubagentTask(state, agentId, taskName)
         val index = state.items.indexOfFirst { it is ChatItem.Subagent && it.agentId == agentId }
         if (index >= 0) {
             val item = state.items[index] as ChatItem.Subagent
@@ -309,6 +332,7 @@ object ChatStateOps {
                 task = update.title ?: item.task,
                 output = if (nonNull(update.rawOutput) != null) elementString(update.rawOutput) else item.output,
                 error = update.metaError ?: item.error,
+                linkedTaskId = linked?.id ?: item.linkedTaskId,
             )
         } else {
             state.items.add(
@@ -320,11 +344,160 @@ object ChatStateOps {
                     task = update.title,
                     output = if (nonNull(update.rawOutput) != null) elementString(update.rawOutput) else null,
                     error = update.metaError,
+                    linkedTaskId = linked?.id,
                     createdAt = now,
                 ),
             )
         }
+        if (linked != null) {
+            val linkedIndex = state.items.indexOfFirst { it.id == linked.id }
+            val item = state.items[linkedIndex] as ChatItem.Tool
+            var task: TaskState = item.tool.task ?: return
+            task = task.copy(agentId = agentId)
+            val usage = update.metaUsage
+            if (usage != null) task = task.copy(usage = usage)
+            val duration = update.durationMs
+            if (duration != null) task = task.copy(durationMs = duration)
+            task = when (status) {
+                "finished" -> task.copy(
+                    status = "finished",
+                    output = if (update.rawOutput != null) elementString(update.rawOutput) else "",
+                    activity = null,
+                )
+                "error" -> task.copy(status = "error", error = update.metaError ?: "subagent failed", activity = null)
+                else -> task.copy(status = "running")
+            }
+            state.items[linkedIndex] = item.copy(tool = item.tool.copy(task = task))
+        }
         if (!update.title.isNullOrBlank()) pushSubagentPrompt(state, agentId, update.title, now)
+    }
+
+    private data class TaskInfo(val name: String, val type: String?, val prompt: String, val background: Boolean)
+
+    private fun isTaskTool(tool: ToolState): Boolean {
+        val name = tool.name?.lowercase() ?: ""
+        return name == "task" || tool.title.lowercase().startsWith("task:")
+    }
+
+    private fun taskInfo(input: JsonElement?): TaskInfo? {
+        val obj = input as? JsonObject ?: return null
+        val name = (obj["name"] as? JsonPrimitive)?.contentOrNull
+            ?: (obj["description"] as? JsonPrimitive)?.contentOrNull
+            ?: return null
+        return TaskInfo(
+            name = name,
+            type = (obj["subagent_type"] as? JsonPrimitive)?.contentOrNull,
+            prompt = (obj["prompt"] as? JsonPrimitive)?.contentOrNull ?: "",
+            background = (obj["background"] as? JsonPrimitive)?.booleanOrNull == true,
+        )
+    }
+
+    private fun isBackgroundStart(output: String): Boolean {
+        val out = output.trim()
+        if (out.startsWith("Started subagent in background:") || out.startsWith("Started subagent in backgro")) return true
+        return out.startsWith("Resumed subagent ") && (out.contains(" in background") || out.endsWith("backgro…"))
+    }
+
+    private fun taskResponse(output: String): String {
+        val marker = "\nResponse:\n"
+        val i = output.indexOf(marker)
+        return if (i >= 0) output.substring(i + marker.length).trim() else output.trim()
+    }
+
+    private fun taskFailure(output: String): String? {
+        val out = output.trim()
+        if (!out.startsWith("Subagent ")) return null
+        val i = out.indexOf(" failed: ")
+        if (i < 0) return null
+        return out.substring(i + " failed: ".length).trim()
+    }
+
+    private fun enrichTask(tool: ToolState, update: SessionUpdate): ToolState {
+        if (!isTaskTool(tool)) return tool
+        val info = taskInfo(tool.input)
+        var task: TaskState = tool.task ?: TaskState(
+            name = info?.name ?: return tool,
+            type = info?.type,
+            prompt = info?.prompt ?: "",
+            background = info?.background == true,
+            status = "running",
+        )
+        val duration = update.durationMs
+        if (duration != null) task = task.copy(durationMs = duration)
+        val usage = update.metaUsage
+        if (usage != null) task = task.copy(usage = usage)
+        if (update.metaError != null) task = task.copy(status = "error", error = update.metaError)
+        val raw = update.rawOutput?.let { elementString(it) } ?: return tool.copy(task = task)
+        if (isBackgroundStart(raw)) {
+            task = task.copy(background = true)
+            if (task.status != "finished" && task.status != "error") {
+                task = task.copy(status = "running", output = null)
+            }
+            return tool.copy(task = task)
+        }
+        val failure = taskFailure(raw)
+        val trimmed = raw.trim()
+        task = when {
+            failure != null -> task.copy(status = "error", error = failure, output = null)
+            trimmed.startsWith("Error: ") -> task.copy(
+                status = "error",
+                error = trimmed.removePrefix("Error: ").trim(),
+                output = null,
+            )
+            task.agentId != null && task.status == "running" -> if (trimmed.isNotEmpty()) {
+                task.copy(output = taskResponse(raw))
+            } else {
+                task
+            }
+            trimmed.isEmpty() -> if (task.agentId == null) {
+                task.copy(status = if (task.background) "background" else "unknown")
+            } else {
+                task
+            }
+            else -> task.copy(status = "finished", output = taskResponse(raw))
+        }
+        return tool.copy(task = task)
+    }
+
+    private fun findSubagentTask(state: ChatState, agentId: String, name: String?): ChatItem.Tool? {
+        for (i in state.items.indices.reversed()) {
+            val item = state.items[i]
+            if (item is ChatItem.Tool && item.tool.task?.agentId == agentId) {
+                return item
+            }
+        }
+        return if (name != null) findTaskTool(state, name) else null
+    }
+
+    private fun findTaskTool(state: ChatState, name: String): ChatItem.Tool? {
+        for (i in state.items.indices.reversed()) {
+            val item = state.items[i]
+            if (item is ChatItem.Tool && item.tool.task?.name == name && item.tool.task?.agentId == null) {
+                return item
+            }
+        }
+        return null
+    }
+
+    private fun finalizeRestoredTask(tool: ToolState): ToolState {
+        val task = tool.task ?: return tool
+        var next = task.copy(agentId = null)
+        if (tool.error != null) return tool.copy(task = next.copy(status = "error", error = tool.error))
+        val raw = if (tool.output == null) "" else elementString(tool.output)
+        val failure = taskFailure(raw)
+        val trimmed = raw.trim()
+        next = when {
+            failure != null -> next.copy(status = "error", error = failure, output = null)
+            trimmed.startsWith("Error: ") -> next.copy(
+                status = "error",
+                error = trimmed.removePrefix("Error: ").trim(),
+                output = null,
+            )
+            next.background && isBackgroundStart(raw) -> next.copy(status = "background", output = null)
+            trimmed.isEmpty() -> next.copy(status = if (next.background) "background" else "unknown")
+            else -> next.copy(status = "finished", output = taskResponse(raw))
+        }
+        return tool.copy(task = next)
     }
 
     private fun pushSubagentPrompt(state: ChatState, agentId: String, text: String, now: Long) {

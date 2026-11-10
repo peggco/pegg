@@ -57,7 +57,7 @@
   padding: 26px 24px 22px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .thread-loading {
@@ -359,5 +359,5 @@
 }
 
 .thread-item {
-  padding-bottom: 18px;
+  padding-bottom: 0;
 }

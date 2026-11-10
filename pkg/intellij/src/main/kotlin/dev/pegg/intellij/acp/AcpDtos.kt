@@ -12,6 +12,8 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 val ACP_JSON: Json = Json {
@@ -150,6 +152,17 @@ data class SessionUpdate(
     val metaError: String? get() = metaString(meta, "com.pegg/error")
     val runId: String? get() = metaString(meta, "com.pegg/runId")
     val runState: String? get() = metaString(meta, "com.pegg/runState")
+    val taskName: String? get() = metaString(meta, "com.pegg/taskName")
+    val durationMs: Long? get() = (meta?.get("com.pegg/durationMs") as? JsonPrimitive)?.longOrNull
+    val metaUsage: UsageState? get() = runCatching {
+        (meta?.get("com.pegg/usage") as? JsonObject)?.let { obj ->
+            UsageState(
+                used = (obj["used"] as? JsonPrimitive)?.intOrNull ?: 0,
+                size = (obj["size"] as? JsonPrimitive)?.intOrNull ?: 0,
+                cost = (obj["cost"] as? JsonPrimitive)?.doubleOrNull,
+            )
+        }
+    }.getOrNull()
     val toolContents: List<ToolCallContent>? get() = (content as? JsonArray)?.let { array ->
         runCatching {
             ACP_JSON.decodeFromJsonElement<List<ToolCallContent>>(array)
@@ -456,6 +469,21 @@ data class UsageState(
 )
 
 @Serializable
+data class TaskState(
+    val name: String,
+    val type: String? = null,
+    val prompt: String = "",
+    val background: Boolean = false,
+    val agentId: String? = null,
+    val status: String = "running",
+    val activity: String? = null,
+    val output: String? = null,
+    val error: String? = null,
+    val usage: UsageState? = null,
+    val durationMs: Long? = null,
+)
+
+@Serializable
 data class ToolState(
     val id: String,
     val name: String? = null,
@@ -470,6 +498,7 @@ data class ToolState(
     val files: List<AttachmentInfo>? = null,
     val agentId: String? = null,
     val agentName: String? = null,
+    val task: TaskState? = null,
 )
 
 @Serializable
@@ -526,6 +555,7 @@ sealed class ChatItem {
         val task: String? = null,
         val output: String? = null,
         val error: String? = null,
+        val linkedTaskId: String? = null,
         override val createdAt: Long,
     ) : ChatItem()
 
