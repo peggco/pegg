@@ -164,7 +164,14 @@ func (a *App) onAgentInput(e agent.AgentInput) {
 	it := &components.ChatItem{Kind: components.ItemUser, ID: e.AgentID, Text: text, Attachments: e.Attachments}
 	a.appendItem(t, it)
 	if e.AgentID != a.agent.ID {
-		if sub := a.subItemByID[e.AgentID]; sub != nil {
+		if linked := a.taskByAgent[e.AgentID]; linked != nil {
+			if linked.item.ToolTaskPrompt == "" {
+				linked.item.ToolTaskPrompt = text
+				if a.viewID == linked.transcriptID {
+					a.chat.InvalidateItemPtr(linked.item)
+				}
+			}
+		} else if sub := a.subItemByID[e.AgentID]; sub != nil {
 			sub.SubagentTask = text
 			if a.viewID == a.agent.ID {
 				a.chat.InvalidateItemPtr(sub)
@@ -193,6 +200,12 @@ func (a *App) onAgentStarted(e agent.AgentStarted) {
 	if a.main == nil {
 		a.main = newTranscript(a.agent.ID, i18n.T("chat.orchestrator"))
 	}
+	if a.linkTaskItemLocked(e) {
+		if a.viewID == a.agent.ID {
+			a.requestRedraw()
+		}
+		return
+	}
 	sub := &components.ChatItem{
 		Kind:           components.ItemSubagent,
 		ID:             e.AgentID,
@@ -205,6 +218,39 @@ func (a *App) onAgentStarted(e agent.AgentStarted) {
 	if a.viewID == a.agent.ID {
 		a.requestRedraw()
 	}
+}
+
+func (a *App) linkTaskItemLocked(e agent.AgentStarted) bool {
+	if e.DisplayName == "" {
+		return false
+	}
+	parent := a.main
+	if e.ParentAgentID != "" && (a.agent == nil || e.ParentAgentID != a.agent.ID) {
+		parent = a.subs[e.ParentAgentID]
+	}
+	if parent == nil {
+		return false
+	}
+	for i := len(parent.items) - 1; i >= 0; i-- {
+		it := parent.items[i]
+		if it.Kind != components.ItemTool || it.ToolTaskName != e.DisplayName {
+			continue
+		}
+		if it.ToolTaskAgentID != "" || it.ToolDone || it.ToolErr != "" {
+			continue
+		}
+		it.ToolTaskAgentID = e.AgentID
+		it.ToolTaskStatus = "running"
+		it.TaskStartedAt = time.Now()
+		it.Activity = ""
+		a.ensureRuntimeMapsLocked()
+		a.taskByAgent[e.AgentID] = &taskLink{item: it, transcriptID: parent.id}
+		if a.viewID == parent.id {
+			a.chat.InvalidateItemPtr(it)
+		}
+		return true
+	}
+	return false
 }
 
 func (a *App) onAgentToken(e agent.AgentToken) {
@@ -272,7 +318,12 @@ func (a *App) onAgentToolCall(e agent.AgentToolCall) {
 	t := a.transcriptFor(e.AgentID, e.AgentName)
 	a.addToolItem(t, e.Call, e.AgentID)
 	if e.AgentID != a.agent.ID {
-		if sub := a.subItemByID[e.AgentID]; sub != nil {
+		if linked := a.taskByAgent[e.AgentID]; linked != nil {
+			linked.item.Activity = formatActivity(e.Call)
+			if a.viewID == linked.transcriptID {
+				a.chat.InvalidateItemPtr(linked.item)
+			}
+		} else if sub := a.subItemByID[e.AgentID]; sub != nil {
 			sub.SubagentActivity = formatActivity(e.Call)
 			if a.viewID == a.agent.ID {
 				a.chat.InvalidateItemPtr(sub)
@@ -369,6 +420,38 @@ func (a *App) onAgentToolResult(e agent.AgentToolResult) {
 		t.toolByID[e.CallID] = it
 		a.appendItem(t, it)
 	}
+	if it.ToolTaskName != "" {
+		switch {
+		case it.ToolTaskStatus == "finished" || it.ToolTaskStatus == "error":
+		case e.Err != nil:
+			it.ToolErr = e.Err.Error()
+			it.ToolTaskStatus = "error"
+			it.ToolDone = true
+			it.Duration = e.Duration
+		case it.ToolTaskBackground || isTaskBackgroundStart(e.Output):
+			it.ToolTaskBackground = true
+			it.ToolTaskStatus = "running"
+			it.ToolDone = false
+			it.ToolOutput = ""
+			it.ToolErr = ""
+			it.Duration = e.Duration
+		case it.ToolTaskAgentID != "":
+			it.Duration = e.Duration
+		default:
+			it.ToolOutput = taskResponseFromOutput(e.Output)
+			it.ToolTaskStatus = "finished"
+			it.ToolDone = true
+			it.Duration = e.Duration
+		}
+		if files := fileAttachmentsOf(e.Attachments); len(files) > 0 {
+			it.Attachments = files
+		}
+		if a.viewID == t.id {
+			a.chat.InvalidateItemPtr(it)
+			a.requestRedraw()
+		}
+		return
+	}
 	if e.Err != nil {
 		it.ToolErr = e.Err.Error()
 	} else {
@@ -409,7 +492,20 @@ func (a *App) onAgentFinished(e agent.AgentFinished) {
 		}
 		return
 	}
-	if sub := a.subItemByID[e.AgentID]; sub != nil {
+	if linked := a.taskByAgent[e.AgentID]; linked != nil {
+		linked.item.ToolTaskStatus = "finished"
+		linked.item.ToolOutput = e.Output
+		linked.item.ToolErr = ""
+		linked.item.ToolDone = true
+		linked.item.ToolTaskUsage = e.Usage
+		linked.item.Activity = ""
+		if !linked.item.TaskStartedAt.IsZero() {
+			linked.item.Duration = time.Since(linked.item.TaskStartedAt)
+		}
+		if a.viewID == linked.transcriptID {
+			a.chat.InvalidateItemPtr(linked.item)
+		}
+	} else if sub := a.subItemByID[e.AgentID]; sub != nil {
 		sub.SubagentStatus = "finished"
 		sub.SubagentOutput = e.Output
 		sub.SubagentActivity = ""
@@ -447,7 +543,19 @@ func (a *App) onAgentError(e agent.AgentError) {
 		}
 		return
 	}
-	if sub := a.subItemByID[e.AgentID]; sub != nil {
+	if linked := a.taskByAgent[e.AgentID]; linked != nil {
+		linked.item.ToolTaskStatus = "error"
+		linked.item.ToolErr = e.Err.Error()
+		linked.item.ToolOutput = ""
+		linked.item.ToolDone = true
+		linked.item.Activity = ""
+		if !linked.item.TaskStartedAt.IsZero() {
+			linked.item.Duration = time.Since(linked.item.TaskStartedAt)
+		}
+		if a.viewID == linked.transcriptID {
+			a.chat.InvalidateItemPtr(linked.item)
+		}
+	} else if sub := a.subItemByID[e.AgentID]; sub != nil {
 		sub.SubagentStatus = "error"
 		sub.SubagentActivity = ""
 		sub.SubagentOutput = e.Err.Error()
@@ -628,6 +736,14 @@ func (a *App) onAgentUsage(e agent.AgentUsage) {
 		a.requestRedraw()
 		return
 	}
+	if linked := a.taskByAgent[e.AgentID]; linked != nil {
+		linked.item.ToolTaskUsage = e.Usage
+		if a.viewID == linked.transcriptID {
+			a.chat.InvalidateItemPtr(linked.item)
+			a.requestRedraw()
+		}
+		return
+	}
 	if sub := a.subItemByID[e.AgentID]; sub != nil {
 		sub.SubagentUsage = e.Usage
 		if a.viewID == a.agent.ID {
@@ -767,6 +883,11 @@ func (a *App) addToolItem(t *agentTranscript, call llm.ToolCall, agentID string)
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.Path != "" {
 			it.ToolName = "list:" + p.Path
+		}
+	case "task":
+		if enrichTaskToolItem(it) {
+			it.Activity = ""
+			it.ToolTaskStatus = "running"
 		}
 	case "sendfile":
 		var p struct {
@@ -1114,6 +1235,14 @@ func (a *App) activateItem(it *components.ChatItem) {
 	a.chatMu.Lock()
 	switch it.Kind {
 	case components.ItemThinking, components.ItemTool:
+		if it.Kind == components.ItemTool && it.ToolTaskStatus == "running" && it.ToolTaskAgentID != "" {
+			if t := a.subs[it.ToolTaskAgentID]; t != nil {
+				a.showTranscript(t)
+				a.chat.SetBack(true)
+				a.chatMu.Unlock()
+				return
+			}
+		}
 		if paths := fileItemPaths(it); len(paths) > 0 {
 			a.chatMu.Unlock()
 			a.copyText(strings.Join(paths, "\n"))
@@ -1523,6 +1652,7 @@ func messagesToItems(msgs []session.Message) []*components.ChatItem {
 	for _, it := range out {
 		if it.Kind == components.ItemTool {
 			it.ToolDone = true
+			finalizeRestoredTaskItem(it)
 		}
 	}
 
@@ -1637,6 +1767,8 @@ func enrichToolItem(it *components.ChatItem) {
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.Path != "" {
 			it.ToolName = "list:" + p.Path
 		}
+	case "task":
+		enrichTaskToolItem(it)
 	case "sendfile":
 		var p struct {
 			Files []string `json:"files"`
@@ -1649,6 +1781,92 @@ func enrichToolItem(it *components.ChatItem) {
 			}
 		}
 	}
+}
+
+type taskArgs struct {
+	Name         string   `json:"name"`
+	SubagentType string   `json:"subagent_type"`
+	Prompt       string   `json:"prompt"`
+	TaskIDs      []string `json:"task_id"`
+	Background   bool     `json:"background"`
+}
+
+func enrichTaskToolItem(it *components.ChatItem) bool {
+	var p taskArgs
+	if err := json.Unmarshal([]byte(it.ToolArgs), &p); err != nil {
+		return false
+	}
+	if strings.TrimSpace(p.Name) == "" {
+		return false
+	}
+	it.ToolTaskName = p.Name
+	it.ToolTaskType = p.SubagentType
+	it.ToolTaskPrompt = p.Prompt
+	it.ToolTaskBackground = p.Background
+	it.ToolName = "task:" + p.Name
+	return true
+}
+
+func isTaskBackgroundStart(output string) bool {
+	out := strings.TrimSpace(output)
+	if strings.HasPrefix(out, "Started subagent in background:") {
+		return true
+	}
+	return strings.HasPrefix(out, "Resumed subagent ") && strings.Contains(out, " in background")
+}
+
+func taskResponseFromOutput(output string) string {
+	const marker = "\nResponse:\n"
+	if i := strings.Index(output, marker); i >= 0 {
+		return strings.TrimSpace(output[i+len(marker):])
+	}
+	return strings.TrimSpace(output)
+}
+
+func taskFailureDetail(output string) (string, bool) {
+	out := strings.TrimSpace(output)
+	if !strings.HasPrefix(out, "Subagent ") {
+		return "", false
+	}
+	const marker = " failed: "
+	i := strings.Index(out, marker)
+	if i < 0 {
+		return "", false
+	}
+	return strings.TrimSpace(out[i+len(marker):]), true
+}
+
+func finalizeRestoredTaskItem(it *components.ChatItem) {
+	if it.ToolTaskName == "" {
+		return
+	}
+	it.ToolTaskAgentID = ""
+	if it.ToolErr != "" {
+		it.ToolTaskStatus = "error"
+		return
+	}
+	raw := it.ToolOutput
+	if detail, ok := taskFailureDetail(raw); ok {
+		it.ToolTaskStatus = "error"
+		it.ToolErr = detail
+		it.ToolOutput = ""
+		return
+	}
+	if it.ToolTaskBackground && isTaskBackgroundStart(raw) {
+		it.ToolTaskStatus = "background"
+		it.ToolOutput = ""
+		return
+	}
+	if strings.TrimSpace(raw) == "" {
+		if it.ToolTaskBackground {
+			it.ToolTaskStatus = "background"
+		} else {
+			it.ToolTaskStatus = "unknown"
+		}
+		return
+	}
+	it.ToolTaskStatus = "finished"
+	it.ToolOutput = taskResponseFromOutput(raw)
 }
 
 func messageContent(m llm.Message) string {

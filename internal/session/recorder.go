@@ -48,6 +48,10 @@ type Recorder struct {
 	runSession    map[string]string
 	runAgent      map[string]string
 	parentByAgent map[string]string
+	finishedRuns  map[string]bool
+	pendingTasks  map[string][]pendingTask
+	taskByAgent   map[string]pendingTask
+	taskFinal     map[string]string
 
 	evMu      sync.Mutex
 	events    []RunEvent
@@ -67,6 +71,14 @@ type pendingMessage struct {
 	chunks    int
 }
 
+type pendingTask struct {
+	parentAgentID string
+	runID         string
+	callID        string
+	name          string
+	background    bool
+}
+
 func NewRecorder(mgr *Manager, log *logger.Logger) *Recorder {
 	return &Recorder{
 		mgr:           mgr,
@@ -78,6 +90,10 @@ func NewRecorder(mgr *Manager, log *logger.Logger) *Recorder {
 		runSession:    make(map[string]string),
 		runAgent:      make(map[string]string),
 		parentByAgent: make(map[string]string),
+		finishedRuns:  make(map[string]bool),
+		pendingTasks:  make(map[string][]pendingTask),
+		taskByAgent:   make(map[string]pendingTask),
+		taskFinal:     make(map[string]string),
 	}
 }
 
@@ -191,6 +207,12 @@ func (r *Recorder) Stop(bus event.Bus) error {
 		r.flushStop = nil
 	}
 	r.flushEvents()
+	r.mu.Lock()
+	r.finishedRuns = make(map[string]bool)
+	r.pendingTasks = make(map[string][]pendingTask)
+	r.taskByAgent = make(map[string]pendingTask)
+	r.taskFinal = make(map[string]string)
+	r.mu.Unlock()
 	return firstErr
 }
 
@@ -233,6 +255,7 @@ func (r *Recorder) handleResume(e SessionResume) {
 
 func (r *Recorder) handleStarted(e agent.AgentStarted) {
 	r.mapAgentRun(e.AgentID, e.ParentAgentID)
+	r.bindTaskCall(e.AgentID, e.ParentAgentID, e.DisplayName)
 	r.recordRunEvent(e.AgentID, AgentEventStarted, map[string]any{
 		"agent_id":         e.AgentID,
 		"agent_name":       e.AgentName,
@@ -582,6 +605,8 @@ func (r *Recorder) handleError(e agent.AgentError) {
 	if id, ok := r.sessionID(e.AgentID); ok {
 		r.finalizePending(e.AgentID, id, nil)
 	}
+	r.finishTask(e.AgentID, "", msg)
+	r.releaseSubagent(e.AgentID)
 	r.clearAgent(e.AgentID)
 }
 
@@ -684,9 +709,15 @@ func (r *Recorder) handleToolResult(e agent.AgentToolResult) {
 		"duration_ms": e.Duration.Milliseconds(),
 	})
 	if id, ok := r.sessionID(e.AgentID); ok {
-		msg := llm.ToolMessage(e.Output, e.CallID)
+		output := e.Output
+		if e.ToolName == "task" {
+			if final, ready := r.takeTaskFinal(e.CallID); ready {
+				output = final
+			}
+		}
+		msg := llm.ToolMessage(output, e.CallID)
 		if len(e.Attachments) > 0 {
-			msg.Content = llm.ContentWithAttachments(e.Output, e.Attachments)
+			msg.Content = llm.ContentWithAttachments(output, e.Attachments)
 		}
 		if _, err := r.mgr.AppendMessageWithDuration(id, msg, e.Duration); err != nil {
 			r.log.Fdebug("session recorder: append tool result: %v", err)
@@ -707,6 +738,8 @@ func (r *Recorder) handleFinished(e agent.AgentFinished) {
 			r.log.Fdebug("session recorder: accumulate usage: %v", err)
 		}
 	}
+	r.finishTask(e.AgentID, e.Output, "")
+	r.releaseSubagent(e.AgentID)
 	r.clearAgent(e.AgentID)
 }
 
@@ -787,6 +820,151 @@ func (r *Recorder) mapAgentRun(agentID, parentAgentID string) {
 	}
 }
 
+func (r *Recorder) noteTaskCall(parentAgentID string, call llm.ToolCall) {
+	var args struct {
+		Name       string `json:"name"`
+		Background bool   `json:"background"`
+	}
+	if json.Unmarshal([]byte(call.Function.Arguments), &args) != nil || args.Name == "" {
+		return
+	}
+	r.mu.Lock()
+	r.pendingTasks[parentAgentID] = append(r.pendingTasks[parentAgentID], pendingTask{
+		parentAgentID: parentAgentID,
+		runID:         r.runByAgent[parentAgentID],
+		callID:        call.ID,
+		name:          args.Name,
+		background:    args.Background,
+	})
+	r.mu.Unlock()
+}
+
+func (r *Recorder) bindTaskCall(agentID, parentAgentID, name string) {
+	if agentID == "" || parentAgentID == "" || name == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	list := r.pendingTasks[parentAgentID]
+	for i := len(list) - 1; i >= 0; i-- {
+		if list[i].name != name {
+			continue
+		}
+		r.taskByAgent[agentID] = list[i]
+		list = append(list[:i], list[i+1:]...)
+		if len(list) == 0 {
+			delete(r.pendingTasks, parentAgentID)
+		} else {
+			r.pendingTasks[parentAgentID] = list
+		}
+		return
+	}
+}
+
+func (r *Recorder) finishTask(agentID, output, errMsg string) {
+	r.mu.Lock()
+	task, ok := r.taskByAgent[agentID]
+	if ok {
+		delete(r.taskByAgent, agentID)
+	}
+	r.mu.Unlock()
+	if ok && task.background {
+		r.persistTaskResult(task, output, errMsg)
+	}
+}
+
+func (r *Recorder) persistTaskResult(task pendingTask, output, errMsg string) {
+	if task.callID == "" {
+		return
+	}
+	content := output
+	if errMsg != "" {
+		content = "Error: " + errMsg
+	}
+	sessID := r.sessionIDForAgent(task.parentAgentID)
+	if sessID != "" {
+		if msgs, err := r.mgr.Messages(sessID); err == nil {
+			for i := len(msgs) - 1; i >= 0; i-- {
+				m := msgs[i]
+				if m.Role != llm.RoleTool || m.ToolCallID != task.callID {
+					continue
+				}
+				m.Content = content
+				if err := r.mgr.UpdateMessage(m); err != nil {
+					r.log.Fdebug("session recorder: persist task result: %v", err)
+				}
+				return
+			}
+		}
+	}
+	r.mu.Lock()
+	r.taskFinal[task.callID] = content
+	r.mu.Unlock()
+}
+
+func (r *Recorder) takeTaskFinal(callID string) (string, bool) {
+	if callID == "" {
+		return "", false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	content, ok := r.taskFinal[callID]
+	if ok {
+		delete(r.taskFinal, callID)
+	}
+	return content, ok
+}
+
+func (r *Recorder) releaseSubagent(agentID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.parentByAgent[agentID] == "" {
+		return
+	}
+	runID := r.runByAgent[agentID]
+	delete(r.runByAgent, agentID)
+	delete(r.parentByAgent, agentID)
+	if runID == "" || !r.finishedRuns[runID] {
+		return
+	}
+	if !r.hasLiveSubagentsLocked(runID) && !r.hasPendingBackgroundTasksLocked(runID) {
+		r.clearRunLocked(runID)
+	}
+}
+
+func (r *Recorder) hasLiveSubagentsLocked(runID string) bool {
+	for agentID, rid := range r.runByAgent {
+		if rid == runID && r.parentByAgent[agentID] != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Recorder) hasPendingBackgroundTasksLocked(runID string) bool {
+	for _, list := range r.pendingTasks {
+		for _, task := range list {
+			if task.runID == runID && task.background {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (r *Recorder) clearRunLocked(runID string) {
+	for agentID, rid := range r.runByAgent {
+		if rid != runID {
+			continue
+		}
+		delete(r.runByAgent, agentID)
+		delete(r.parentByAgent, agentID)
+	}
+	delete(r.runSession, runID)
+	delete(r.runAgent, runID)
+	delete(r.finishedRuns, runID)
+}
+
 func (r *Recorder) handleRunStarted(e RunStarted) {
 	if e.RunID == "" || e.AgentID == "" {
 		return
@@ -801,14 +979,10 @@ func (r *Recorder) handleRunStarted(e RunStarted) {
 func (r *Recorder) handleRunFinished(e RunFinished) {
 	r.flushEvents()
 	r.mu.Lock()
-	for agentID, runID := range r.runByAgent {
-		if runID == e.RunID {
-			delete(r.runByAgent, agentID)
-			delete(r.parentByAgent, agentID)
-		}
+	r.finishedRuns[e.RunID] = true
+	if !r.hasLiveSubagentsLocked(e.RunID) && !r.hasPendingBackgroundTasksLocked(e.RunID) {
+		r.clearRunLocked(e.RunID)
 	}
-	delete(r.runSession, e.RunID)
-	delete(r.runAgent, e.RunID)
 	r.mu.Unlock()
 }
 
@@ -819,6 +993,9 @@ func (r *Recorder) handleToolCall(e agent.AgentToolCall) {
 		"args":      e.Call.Function.Arguments,
 		"call":      e.Call,
 	})
+	if e.Call.Function.Name == "task" {
+		r.noteTaskCall(e.AgentID, e.Call)
+	}
 }
 
 func (r *Recorder) handleUsage(e agent.AgentUsage) {

@@ -19,6 +19,9 @@ func (a *App) ensureRuntimeMapsLocked() {
 	if a.subItemByID == nil {
 		a.subItemByID = make(map[string]*components.ChatItem)
 	}
+	if a.taskByAgent == nil {
+		a.taskByAgent = make(map[string]*taskLink)
+	}
 }
 
 func (a *App) newAgentLocked() *agent.Agent {
@@ -112,6 +115,7 @@ func (a *App) resetTranscriptsLocked() {
 	a.main = nil
 	a.subs = make(map[string]*agentTranscript)
 	a.subItemByID = make(map[string]*components.ChatItem)
+	a.taskByAgent = make(map[string]*taskLink)
 	a.loadedFloor = 0
 	a.chat.Clear()
 }

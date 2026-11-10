@@ -74,6 +74,7 @@ func newChatApp(t *testing.T, a *agent.Agent) (*App, event.Bus) {
 		screen:      newTestScreen(t),
 		subs:        make(map[string]*agentTranscript),
 		subItemByID: make(map[string]*components.ChatItem),
+		taskByAgent: make(map[string]*taskLink),
 		ctx:         ctx,
 		cancel:      cancel,
 	}

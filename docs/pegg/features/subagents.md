@@ -84,8 +84,9 @@ single message.
 
 - Subagents inherit the parent's **provider**, **model**, and **event bus** — they
   stream into the same transcript.
-- In the TUI, each subagent is a card with a live activity line, an output preview,
-  usage, and a **History** view of its full transcript.
+- In the TUI, each `task` call is one **TASK** card with a live activity line, an
+  output preview, usage, and a **History** view of the full transcript. Forked
+  subagents (no `task` call) keep the standalone subagent card.
 - In VS Code, subagent tool activity and reasoning stream into the same chat with
   the subagent name attached; tool cards expose file locations and command output.
 - The `task_id` field links a subagent to todo items, so progress is trackable via
@@ -125,6 +126,13 @@ Key details:
   results directly as the tool output.
 - The parent does not need to poll or wait — the reminder arrives automatically when
   the subagent finishes.
+- In the TUI, the **TASK** card stays in the running state after the orchestrator
+  finishes or is stopped; the background subagent is not tied to the orchestrator's
+  context. When it completes, the reminder wakes the orchestrator and the card closes
+  with the result. The subagent's History stays live while it runs, even after the
+  main run has finished.
+- The final response is written back to the `task` tool message, so restored sessions
+  show the background subagent's result instead of only the start confirmation.
 
 ## Checking subagent status
 

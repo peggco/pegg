@@ -46,6 +46,8 @@ type SubAgent struct {
 	sessionID string
 	agentID   string
 	done      chan struct{}
+	started   chan struct{}
+	startedOK bool
 	finished  bool
 }
 
@@ -329,8 +331,40 @@ func IsSubagentSession(sessionID string) bool {
 }
 
 func (r *registry) onStarted(agentID string) {
-	if sa := r.byAgentID(agentID); sa != nil {
-		r.start(sa)
+	sa := r.byAgentID(agentID)
+	if sa == nil {
+		return
+	}
+	r.start(sa)
+	r.mu.Lock()
+	if sa.started != nil && !sa.startedOK {
+		sa.startedOK = true
+		close(sa.started)
+	}
+	r.mu.Unlock()
+}
+
+func (r *registry) waitStarted(sa *SubAgent, timeout time.Duration) bool {
+	if sa == nil {
+		return false
+	}
+	r.mu.Lock()
+	ch := sa.started
+	started := sa.startedOK
+	r.mu.Unlock()
+	if started {
+		return true
+	}
+	if ch == nil || timeout <= 0 {
+		return false
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-ch:
+		return true
+	case <-timer.C:
+		return false
 	}
 }
 
@@ -370,6 +404,7 @@ func (r *registry) spawn(name, agentType string, taskIDs []string, background bo
 		CreatedAt:     now,
 		UpdatedAt:     now,
 		done:          make(chan struct{}),
+		started:       make(chan struct{}),
 		sessionID:     sessionID,
 	}
 	r.mu.Lock()
@@ -400,9 +435,15 @@ func (r *registry) resume(name string, parent *agent.Agent) (*SubAgent, error) {
 		r.mu.Unlock()
 		return nil, fmt.Errorf("subagent: %q is still running", name)
 	}
+	if parent != nil {
+		r.parents[parent.ID] = parent
+		sa.ParentAgentID = parent.ID
+	}
 	sa.finished = false
 	sa.Status = StatusPending
 	sa.done = make(chan struct{})
+	sa.started = make(chan struct{})
+	sa.startedOK = false
 	sa.UpdatedAt = time.Now()
 	r.mu.Unlock()
 

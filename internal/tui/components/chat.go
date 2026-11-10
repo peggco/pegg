@@ -49,6 +49,15 @@ type ChatItem struct {
 	WriteContent string
 	Activity     string
 
+	ToolTaskName       string
+	ToolTaskType       string
+	ToolTaskPrompt     string
+	ToolTaskBackground bool
+	ToolTaskAgentID    string
+	ToolTaskStatus     string
+	ToolTaskUsage      llm.Usage
+	TaskStartedAt      time.Time
+
 	AgentID          string
 	SubagentName     string
 	SubagentStatus   string
@@ -753,11 +762,11 @@ func (c *Chat) rebuildFlat(width int) {
 				Start:   total,
 				End:     total + len(lines),
 			})
-			if it.Kind == ItemSubagent && it.AgentID != "" {
+			if id := c.historyAgentID(it); id != "" {
 				if c.historyButtons == nil {
 					c.historyButtons = make(map[int]string)
 				}
-				c.historyButtons[total] = it.AgentID
+				c.historyButtons[total] = id
 			}
 			if boxes := c.fileBoxesFor(it, width); len(boxes) > 0 {
 				if c.fileButtons == nil {
@@ -791,6 +800,16 @@ func (c *Chat) isLiveItem(it *ChatItem) bool {
 		return c.isActiveThinking(it)
 	}
 	return false
+}
+
+func (c *Chat) historyAgentID(it *ChatItem) string {
+	if it.Kind == ItemSubagent && it.AgentID != "" {
+		return it.AgentID
+	}
+	if it.Kind == ItemTool && it.ToolTaskAgentID != "" && it.ToolTaskStatus == "running" {
+		return it.ToolTaskAgentID
+	}
+	return ""
 }
 
 func (c *Chat) itemLines(it *ChatItem, width int) []Line {
@@ -1004,6 +1023,10 @@ func (c *Chat) isActiveThinking(it *ChatItem) bool {
 
 func (c *Chat) toolLines(it *ChatItem, width int) []Line {
 	th := styles.Current()
+
+	if it.ToolTaskName != "" {
+		return c.taskCardLines(it, width)
+	}
 
 	isEdit := strings.HasPrefix(it.ToolName, "edit:") || it.ToolName == "edit"
 	isWrite := strings.HasPrefix(it.ToolName, "write:") || it.ToolName == "write"
@@ -2247,6 +2270,248 @@ func (c *Chat) askCardLines(it *ChatItem, width int) []Line {
 	}
 	bot = append(bot, Cell{R: '╯', S: border})
 	lines = append(lines, bot)
+
+	return lines
+}
+
+func (c *Chat) taskCardLines(it *ChatItem, width int) []Line {
+	th := styles.Current()
+	if width < 12 {
+		return nil
+	}
+
+	border := th.Base().Foreground(th.Border).Background(th.Background)
+	accent := th.Base().Foreground(th.Accent).Background(th.Background)
+	dim := th.Base().Foreground(th.TextDim).Background(th.Background)
+	muted := th.Base().Foreground(th.Muted).Background(th.Background)
+	fore := th.Base().Foreground(th.Foreground).Background(th.Background)
+	success := th.Base().Foreground(th.Success).Background(th.Background)
+	errStyle := th.Base().Foreground(th.Error).Background(th.Background)
+	runStyle := th.Base().Foreground(lerpColor(th.Running, th.Accent, glowT(c.now))).Bold(true).Background(th.Background)
+
+	status := it.ToolTaskStatus
+	if status == "" {
+		status = "running"
+	}
+
+	duration := i18n.T("chat.status.finished")
+	if it.Duration > 0 {
+		duration = formatDuration(it.Duration)
+	}
+
+	var statusText string
+	var statusStyle tcell.Style
+	switch status {
+	case "running":
+		statusText = " " + string(spinnerAt(c.now)) + " " + i18n.T("chat.status.running")
+		statusStyle = runStyle
+	case "error":
+		duration = i18n.T("chat.status.error")
+		if it.Duration > 0 {
+			duration = formatDuration(it.Duration)
+		}
+		statusText = " ✖ " + duration
+		statusStyle = errStyle.Bold(true)
+	case "finished":
+		statusText = " ✓ " + duration
+		statusStyle = success.Bold(true)
+	case "background":
+		statusStyle = muted.Bold(true)
+	default:
+		statusStyle = muted
+	}
+
+	textCells := func(s string, st tcell.Style) Line {
+		var l Line
+		for _, r := range s {
+			l = append(l, Cell{R: r, S: st})
+		}
+		return l
+	}
+
+	top := Line{{R: '╭', S: border}, {R: '─', S: border}}
+	for _, r := range i18n.T("chat.card.task") {
+		top = append(top, Cell{R: r, S: accent})
+	}
+	label := it.ToolTaskName
+	if label == "" {
+		label = it.ToolName
+	}
+	for _, r := range label {
+		top = append(top, Cell{R: r, S: fore.Bold(true)})
+	}
+	labelW := top.Width()
+	if it.ToolTaskType != "" {
+		for _, r := range " · " + it.ToolTaskType {
+			top = append(top, Cell{R: r, S: muted})
+		}
+	}
+	if it.ToolTaskBackground {
+		for _, r := range " · " + i18n.T("chat.task.background") {
+			top = append(top, Cell{R: r, S: muted})
+		}
+	}
+
+	maxTop := width - 1 - DisplayWidth(statusText)
+	if maxTop < labelW+2 {
+		statusText = ""
+		maxTop = width - 2
+	}
+	if top.Width() > maxTop {
+		top = TruncateLine(top, maxTop)
+	}
+	if statusText != "" {
+		for top.Width() < width-1-DisplayWidth(statusText) {
+			top = append(top, Cell{R: ' ', S: th.Base()})
+		}
+		for _, r := range statusText {
+			top = append(top, Cell{R: r, S: statusStyle})
+		}
+	}
+	for top.Width() < width-1 {
+		top = append(top, Cell{R: '─', S: border})
+	}
+	top = append(top, Cell{R: '╮', S: border})
+	lines := []Line{top}
+
+	row := func(cells Line) Line {
+		l := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
+		maxContent := width - 3
+		if maxContent < 1 {
+			maxContent = 1
+		}
+		if len(cells) > 0 {
+			if cells.Width() > maxContent {
+				cells = TruncateLine(cells, maxContent)
+			}
+			l = append(l, cells...)
+		}
+		for l.Width() < width-1 {
+			l = append(l, Cell{R: ' ', S: th.Base()})
+		}
+		l = append(l, Cell{R: '│', S: border})
+		return l
+	}
+
+	truncated := false
+
+	if p := strings.TrimSpace(it.ToolTaskPrompt); p != "" {
+		promptLines := WrapText(p, fore, width-4)
+		const maxPromptLines = 4
+		if !it.Expanded && len(promptLines) > maxPromptLines {
+			truncated = true
+			remaining := len(promptLines) - maxPromptLines
+			promptLines = promptLines[:maxPromptLines]
+			for _, ln := range promptLines {
+				lines = append(lines, row(ln))
+			}
+			lines = append(lines, row(textCells(i18n.Tf("chat.tool.moreLines", remaining), dim)))
+		} else {
+			for _, ln := range promptLines {
+				lines = append(lines, row(ln))
+			}
+		}
+	}
+
+	lines = append(lines, cardSep(border, width))
+
+	switch status {
+	case "running":
+		if it.Activity != "" {
+			act := Line{{R: spinnerAt(c.now), S: runStyle}, {R: ' ', S: th.Base()}}
+			act = append(act, textCells(it.Activity, dim)...)
+			lines = append(lines, row(act))
+		} else {
+			lines = append(lines, row(textCells(i18n.T("chat.task.starting"), dim)))
+		}
+	case "finished":
+		out := strings.TrimSpace(it.ToolOutput)
+		if out == "" {
+			out = i18n.T("chat.bash.noOutput")
+		}
+		rawLines := strings.Split(out, "\n")
+		const maxTaskOutputLines = 15
+		hasMore := len(rawLines) > maxTaskOutputLines
+		shown := rawLines
+		if hasMore && !it.Expanded {
+			shown = rawLines[:maxTaskOutputLines]
+			truncated = true
+		}
+		for _, ln := range shown {
+			lines = append(lines, row(textCells(ln, dim)))
+		}
+		if truncated {
+			lines = append(lines, row(textCells(i18n.Tf("chat.tool.moreLines", len(rawLines)-maxTaskOutputLines), dim)))
+		}
+		if it.Expanded && hasMore {
+			lines = append(lines, row(textCells(i18n.Tf("chat.tool.showingAll", len(rawLines)), dim)))
+		}
+	case "error":
+		errLines := WrapText(it.ToolErr, errStyle, width-4)
+		const maxTaskErrorLines = 15
+		hasMore := len(errLines) > maxTaskErrorLines
+		shown := errLines
+		if hasMore && !it.Expanded {
+			shown = errLines[:maxTaskErrorLines]
+			truncated = true
+		}
+		for _, ln := range shown {
+			lines = append(lines, row(ln))
+		}
+		if truncated {
+			lines = append(lines, row(textCells(i18n.Tf("chat.tool.moreLines", len(errLines)-maxTaskErrorLines), dim)))
+		}
+		if it.Expanded && hasMore {
+			lines = append(lines, row(textCells(i18n.Tf("chat.tool.showingAll", len(errLines)), dim)))
+		}
+	case "background":
+		lines = append(lines, row(textCells(i18n.T("chat.task.backgroundNote"), dim)))
+	default:
+		lines = append(lines, row(textCells(i18n.T("chat.task.noResult"), dim)))
+	}
+
+	footer := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
+	var leftCells Line
+	if it.ToolTaskUsage.TotalTokens > 0 {
+		leftCells = textCells(llm.FormatContextUsage(it.ToolTaskUsage, 0), accent)
+	}
+	right := ""
+	if status == "running" && it.ToolTaskAgentID != "" {
+		right = i18n.T("chat.history")
+	} else if truncated {
+		right = i18n.T("common.expand")
+		if it.Expanded {
+			right = i18n.T("common.collapse")
+		}
+	}
+	avail := width - 3
+	if avail < 0 {
+		avail = 0
+	}
+	if DisplayWidth(right) > avail {
+		right = ""
+	}
+	if right != "" && leftCells.Width()+DisplayWidth(right) > avail {
+		leftCells = TruncateLine(leftCells, max(avail-DisplayWidth(right), 0))
+	}
+	footer = append(footer, leftCells...)
+	if right != "" {
+		for footer.Width() < width-1-DisplayWidth(right) {
+			footer = append(footer, Cell{R: ' ', S: th.Base()})
+		}
+		for _, r := range right {
+			footer = append(footer, Cell{R: r, S: dim})
+		}
+	}
+	for footer.Width() < width-1 {
+		footer = append(footer, Cell{R: ' ', S: th.Base()})
+	}
+	footer = append(footer, Cell{R: '│', S: border})
+	if len(leftCells) > 0 || right != "" {
+		lines = append(lines, cardSep(border, width))
+		lines = append(lines, footer)
+	}
+	lines = append(lines, bottomEdge(border, width))
 
 	return lines
 }

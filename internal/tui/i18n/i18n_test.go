@@ -82,3 +82,16 @@ func TestOnChangeFires(t *testing.T) {
 		t.Errorf("onChange got %q, want %q", got, Turkish)
 	}
 }
+
+func TestCatalogsHaveSameKeys(t *testing.T) {
+	for key := range en {
+		if _, ok := tr[key]; !ok {
+			t.Errorf("tr is missing key %q", key)
+		}
+	}
+	for key := range tr {
+		if _, ok := en[key]; !ok {
+			t.Errorf("en is missing key %q", key)
+		}
+	}
+}
