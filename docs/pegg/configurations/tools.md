@@ -176,9 +176,11 @@ file from disk, and remote connect clients stream it on demand through the
 
 ## Todos
 
-Todos persist in `.pegg/todos.json` in the project directory. Statuses are
-`pending`, `in_progress`, `completed`, and `cancelled`; priorities are `high`,
-`medium`, and `low`.
+Todos persist per session in `.pegg/todos/<session-id>.json` in the project
+directory. Statuses are `pending`, `in_progress`, `completed`, and `cancelled`;
+priorities are `high`, `medium`, and `low`. Todos are stored, returned, and
+displayed in the order they were submitted to the most recent `todowrite`, so
+every client shows the same order.
 
 ### `todoread`
 

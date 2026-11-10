@@ -1346,79 +1346,23 @@ func (c *Chat) todoCardLines(it *ChatItem, width int) []Line {
 	top = append(top, Cell{R: '╮', S: border})
 	lines = append(lines, top)
 
-	type todoItem struct {
-		status string
-		title  string
-		desc   string
-		deps   string
+	if strings.HasPrefix(strings.TrimSpace(it.ToolOutput), "No todos.") {
+		row := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
+		for _, r := range "No todos." {
+			row = append(row, Cell{R: r, S: dim})
+		}
+		for row.Width() < width-1 {
+			row = append(row, Cell{R: ' ', S: th.Base()})
+		}
+		row = append(row, Cell{R: '│', S: border})
+		lines = append(lines, row)
+		sep := cardSep(border, width)
+		lines = append(lines, sep)
+		lines = append(lines, cardFooter(border, dim, th.Base(), width, i18n.Tf("chat.todo.completed", 0, 0)))
+		return lines
 	}
-	var todos []todoItem
 
-	textLines := strings.Split(it.ToolOutput, "\n")
-	for _, l := range textLines {
-		trimmed := strings.TrimSpace(l)
-		if trimmed == "" {
-			continue
-		}
-		if strings.HasPrefix(trimmed, "Todos:") {
-			continue
-		}
-		if strings.HasPrefix(trimmed, "No todos.") {
-			row := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
-			for _, r := range "No todos." {
-				row = append(row, Cell{R: r, S: dim})
-			}
-			for row.Width() < width-1 {
-				row = append(row, Cell{R: ' ', S: th.Base()})
-			}
-			row = append(row, Cell{R: '│', S: border})
-			lines = append(lines, row)
-			sep := cardSep(border, width)
-			lines = append(lines, sep)
-			lines = append(lines, cardFooter(border, dim, th.Base(), width, i18n.Tf("chat.todo.completed", 0, 0)))
-			return lines
-		}
-
-		status := ""
-		rest := trimmed
-		switch {
-		case strings.HasPrefix(trimmed, "[x]"):
-			status = "completed"
-			rest = strings.TrimSpace(trimmed[3:])
-		case strings.HasPrefix(trimmed, "[~]"):
-			status = "in_progress"
-			rest = strings.TrimSpace(trimmed[3:])
-		case strings.HasPrefix(trimmed, "[-]"):
-			status = "cancelled"
-			rest = strings.TrimSpace(trimmed[3:])
-		case strings.HasPrefix(trimmed, "[ ]"):
-			status = "pending"
-			rest = strings.TrimSpace(trimmed[3:])
-		default:
-			if strings.HasPrefix(trimmed, "   ") && len(todos) > 0 {
-				cur := &todos[len(todos)-1]
-				if strings.Contains(trimmed, "depends on:") {
-					cur.deps = strings.TrimSpace(strings.TrimPrefix(trimmed, "  depends on:"))
-				} else {
-					cur.desc = strings.TrimSpace(trimmed)
-				}
-			}
-			continue
-		}
-
-		var ti todoItem
-		ti.status = status
-
-		if idx := strings.Index(rest, "]"); idx >= 0 {
-			ti.title = strings.TrimSpace(rest[idx+1:])
-		} else {
-			ti.title = rest
-		}
-		if pIdx := strings.LastIndex(ti.title, "(priority:"); pIdx >= 0 {
-			ti.title = strings.TrimSpace(ti.title[:pIdx])
-		}
-		todos = append(todos, ti)
-	}
+	todos := parseTodoItems(it.ToolOutput)
 
 	for _, t := range todos {
 		row := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
@@ -1508,6 +1452,62 @@ func (c *Chat) todoCardLines(it *ChatItem, width int) []Line {
 	lines = append(lines, bottomEdge(border, width))
 
 	return lines
+}
+
+type todoItem struct {
+	status string
+	title  string
+	desc   string
+	deps   string
+}
+
+func parseTodoItems(output string) []todoItem {
+	var todos []todoItem
+	for _, line := range strings.Split(output, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "Todos:") || strings.HasPrefix(trimmed, "No todos.") {
+			continue
+		}
+
+		status := ""
+		rest := trimmed
+		switch {
+		case strings.HasPrefix(trimmed, "[x]"):
+			status = "completed"
+			rest = strings.TrimSpace(trimmed[3:])
+		case strings.HasPrefix(trimmed, "[~]"):
+			status = "in_progress"
+			rest = strings.TrimSpace(trimmed[3:])
+		case strings.HasPrefix(trimmed, "[-]"):
+			status = "cancelled"
+			rest = strings.TrimSpace(trimmed[3:])
+		case strings.HasPrefix(trimmed, "[ ]"):
+			status = "pending"
+			rest = strings.TrimSpace(trimmed[3:])
+		default:
+			if strings.HasPrefix(line, "   ") && len(todos) > 0 {
+				cur := &todos[len(todos)-1]
+				if strings.HasPrefix(trimmed, "depends on:") {
+					cur.deps = strings.TrimSpace(strings.TrimPrefix(trimmed, "depends on:"))
+				} else {
+					cur.desc = trimmed
+				}
+			}
+			continue
+		}
+
+		ti := todoItem{status: status}
+		if idx := strings.Index(rest, "]"); idx >= 0 {
+			ti.title = strings.TrimSpace(rest[idx+1:])
+		} else {
+			ti.title = rest
+		}
+		if pIdx := strings.LastIndex(ti.title, "(priority:"); pIdx >= 0 {
+			ti.title = strings.TrimSpace(ti.title[:pIdx])
+		}
+		todos = append(todos, ti)
+	}
+	return todos
 }
 
 func cardSep(border tcell.Style, width int) Line {

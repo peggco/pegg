@@ -520,3 +520,34 @@ func TestSubagentCardsFullWidthAfterHistory(t *testing.T) {
 		}
 	}
 }
+
+func TestParseTodoItemsPreservesOrderAndFields(t *testing.T) {
+	output := "" +
+		"[x] [todo-3] third (priority: high)\n" +
+		"   third description\n" +
+		"[~] [todo-1] first (priority: medium)\n" +
+		"   first description\n" +
+		"   depends on: todo-3, todo-2\n" +
+		"[ ] [todo-2] second (priority: low)\n"
+
+	items := parseTodoItems(output)
+	if len(items) != 3 {
+		t.Fatalf("items = %d, want 3", len(items))
+	}
+	wantTitles := []string{"third", "first", "second"}
+	wantStatus := []string{"completed", "in_progress", "pending"}
+	for i := range items {
+		if items[i].title != wantTitles[i] {
+			t.Errorf("item %d title = %q, want %q", i, items[i].title, wantTitles[i])
+		}
+		if items[i].status != wantStatus[i] {
+			t.Errorf("item %d status = %q, want %q", i, items[i].status, wantStatus[i])
+		}
+	}
+	if items[0].desc != "third description" {
+		t.Errorf("item 0 desc = %q, want %q", items[0].desc, "third description")
+	}
+	if items[1].deps != "todo-3, todo-2" {
+		t.Errorf("item 1 deps = %q, want %q", items[1].deps, "todo-3, todo-2")
+	}
+}

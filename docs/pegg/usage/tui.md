@@ -211,7 +211,8 @@ text.
 - **DIFF** — unified diff for `edit` calls with added/removed highlighting and a
   `+N -M` summary.
 - **WRITE** — syntax-highlighted file content for `write` calls.
-- **TODO** — parsed todo list with status icons and an `N / M completed` footer.
+- **TODO** — parsed todo list in submission order, with status icons,
+  descriptions, dependencies, and an `N / M completed` footer.
 - **ASK** — question/answer pairs collected from the user.
 - **FILES** — one box per file delivered by `sendfile`, with name, size and path.
   Click a box to open the file with the OS default handler; ++enter++ on the item
