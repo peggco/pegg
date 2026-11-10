@@ -8,6 +8,7 @@ import { useT } from '../lib/i18n';
 import type { ChatItem } from '../state/chat';
 import { ToolCard } from './ToolViews';
 import { AskCard, PermissionCard, PlanCard, SubagentCard } from './Cards';
+import { TaskCard } from './TaskCard';
 
 export function Thread() {
   const mainItems = useStore((s) => s.chat.items);
@@ -289,8 +290,18 @@ function Item({
     case 'reasoning':
       return <Reasoning item={item} />;
     case 'tool':
+      if (item.tool.task) {
+        const task = item.tool.task;
+        return (
+          <TaskCard
+            tool={item.tool}
+            onOpen={task.agentId ? () => onOpenSubagent(task.agentId as string) : undefined}
+          />
+        );
+      }
       return <ToolCard tool={item.tool} />;
     case 'subagent':
+      if (item.linkedTaskId) return null;
       return <SubagentCard item={item} onOpen={() => onOpenSubagent(item.agentId)} />;
     case 'notice':
       return (

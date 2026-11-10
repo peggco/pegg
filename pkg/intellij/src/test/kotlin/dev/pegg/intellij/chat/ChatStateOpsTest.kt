@@ -267,16 +267,170 @@ class ChatStateOpsTest {
     }
 
     @Test
-    fun `hides orchestrator task tool calls`() {
-        val byName = ChatStateOps.applyUpdate(ChatStateOps.initialState(), update("tool_call") {
-            copy(toolCallId = "t1", name = "task", title = "task: explorer", kind = "think", status = "pending")
+    fun `creates a task card from task tool calls`() {
+        val state = ChatStateOps.applyUpdate(ChatStateOps.initialState(), update("tool_call") {
+            copy(
+                toolCallId = "t1",
+                name = "task",
+                title = "task: explore-api",
+                kind = "think",
+                status = "pending",
+                rawInput = buildJsonObject {
+                    put("name", "explore-api")
+                    put("subagent_type", "explorer")
+                    put("prompt", "Map it")
+                    put("background", true)
+                },
+            )
         })
-        assertTrue(byName.items.isEmpty())
+        val item = state.items.single() as ChatItem.Tool
+        assertEquals("explore-api", item.tool.task?.name)
+        assertEquals("explorer", item.tool.task?.type)
+        assertEquals("Map it", item.tool.task?.prompt)
+        assertTrue(item.tool.task?.background == true)
+        assertEquals("running", item.tool.task?.status)
+    }
 
-        val byTitle = ChatStateOps.applyUpdate(ChatStateOps.initialState(), update("tool_call") {
-            copy(toolCallId = "t2", title = "task: explorer", kind = "think", status = "pending")
+    @Test
+    fun `links task cards to subagents and restores task results`() {
+        var state = ChatStateOps.applyUpdate(ChatStateOps.initialState(), update("tool_call") {
+            copy(
+                toolCallId = "t1",
+                name = "task",
+                title = "task: explore-api",
+                rawInput = buildJsonObject {
+                    put("name", "explore-api")
+                    put("subagent_type", "explorer")
+                    put("prompt", "Map it")
+                },
+            )
         })
-        assertTrue(byTitle.items.isEmpty())
+        state = ChatStateOps.applyUpdate(state, update("subagent") {
+            copy(
+                status = "finished",
+                title = "Map it",
+                rawOutput = JsonPrimitive("final answer"),
+                meta = meta(
+                    "com.pegg/agentId" to JsonPrimitive("a1"),
+                    "com.pegg/agentName" to JsonPrimitive("explorer"),
+                    "com.pegg/taskName" to JsonPrimitive("explore-api"),
+                ),
+            )
+        })
+        val tool = state.items.filterIsInstance<ChatItem.Tool>().single()
+        assertEquals("a1", tool.tool.task?.agentId)
+        assertEquals("finished", tool.tool.task?.status)
+        assertEquals("final answer", tool.tool.task?.output)
+        val sub = state.items.filterIsInstance<ChatItem.Subagent>().single()
+        assertEquals("t1", sub.linkedTaskId)
+
+        val restored = ChatStateOps.applyHistory(
+            ChatStateOps.initialState(),
+            listOf(
+                update("tool_call") {
+                    copy(
+                        toolCallId = "t2",
+                        name = "task",
+                        title = "task: restore",
+                        rawInput = buildJsonObject {
+                            put("name", "restore")
+                            put("background", true)
+                        },
+                    )
+                },
+                update("tool_call_update") {
+                    copy(toolCallId = "t2", status = "completed", rawOutput = JsonPrimitive("final answer"))
+                },
+            ),
+        )
+        val restoredTool = restored.items.filterIsInstance<ChatItem.Tool>().single()
+        assertEquals("finished", restoredTool.tool.task?.status)
+        assertEquals("final answer", restoredTool.tool.task?.output)
+        assertNull(restoredTool.tool.task?.agentId)
+    }
+
+    @Test
+    fun `finishes a linked task card when the subagent result has no task name`() {
+        var state = ChatStateOps.applyUpdate(ChatStateOps.initialState(), update("tool_call") {
+            copy(
+                toolCallId = "t1",
+                name = "task",
+                title = "task: explore-api",
+                kind = "think",
+                status = "pending",
+                rawInput = buildJsonObject {
+                    put("name", "explore-api")
+                    put("subagent_type", "explorer")
+                    put("prompt", "Map it")
+                    put("background", true)
+                },
+            )
+        })
+        state = ChatStateOps.applyUpdate(state, update("subagent") {
+            copy(
+                status = "running",
+                meta = meta(
+                    "com.pegg/agentId" to JsonPrimitive("sub-1"),
+                    "com.pegg/agentName" to JsonPrimitive("explorer"),
+                    "com.pegg/taskName" to JsonPrimitive("explore-api"),
+                ),
+            )
+        })
+        var card = state.items.filterIsInstance<ChatItem.Tool>().single()
+        assertEquals("sub-1", card.tool.task?.agentId)
+        assertEquals("running", card.tool.task?.status)
+
+        state = ChatStateOps.applyUpdate(state, update("subagent") {
+            copy(
+                status = "finished",
+                rawOutput = JsonPrimitive("final answer"),
+                meta = meta("com.pegg/agentId" to JsonPrimitive("sub-1")),
+            )
+        })
+        card = state.items.filterIsInstance<ChatItem.Tool>().single()
+        assertEquals("finished", card.tool.task?.status)
+        assertTrue(card.tool.task?.output?.contains("final answer") == true)
+    }
+
+    @Test
+    fun `errors a linked task card when the subagent result has no task name`() {
+        var state = ChatStateOps.applyUpdate(ChatStateOps.initialState(), update("tool_call") {
+            copy(
+                toolCallId = "t1",
+                name = "task",
+                title = "task: explore-api",
+                kind = "think",
+                status = "pending",
+                rawInput = buildJsonObject {
+                    put("name", "explore-api")
+                    put("subagent_type", "explorer")
+                    put("prompt", "Map it")
+                    put("background", true)
+                },
+            )
+        })
+        state = ChatStateOps.applyUpdate(state, update("subagent") {
+            copy(
+                status = "running",
+                meta = meta(
+                    "com.pegg/agentId" to JsonPrimitive("sub-1"),
+                    "com.pegg/agentName" to JsonPrimitive("explorer"),
+                    "com.pegg/taskName" to JsonPrimitive("explore-api"),
+                ),
+            )
+        })
+        state = ChatStateOps.applyUpdate(state, update("subagent") {
+            copy(
+                status = "error",
+                meta = meta(
+                    "com.pegg/agentId" to JsonPrimitive("sub-1"),
+                    "com.pegg/error" to JsonPrimitive("boom"),
+                ),
+            )
+        })
+        val card = state.items.filterIsInstance<ChatItem.Tool>().single()
+        assertEquals("error", card.tool.task?.status)
+        assertEquals("boom", card.tool.task?.error)
     }
 
     @Test

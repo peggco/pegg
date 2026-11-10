@@ -5,6 +5,7 @@ import {
   appendUser,
   applyUpdate,
   emptyChat,
+  finalizeRestoredTasks,
   pruneChat,
   resolveAsk,
   resolvePermission,
@@ -250,5 +251,145 @@ describe('history window', () => {
     expect(pruned.items).toHaveLength(160);
     expect(pruned.items[0].seq).toBe(41);
     expect(pruned.historyOldestSeq).toBe(41);
+  });
+});
+
+
+describe('desktop task cards', () => {
+  const taskCall = (background = false): SessionUpdate => ({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'task-1',
+    name: 'task',
+    title: 'task: explore-api',
+    kind: 'think',
+    status: 'pending',
+    rawInput: { name: 'explore-api', subagent_type: 'explorer', prompt: 'Map it', background },
+  });
+
+  it('creates a task from the call arguments', () => {
+    const state = applyUpdate(emptyChat(), taskCall(true));
+    const item = state.items[0];
+    expect(item.kind).toBe('tool');
+    if (item.kind !== 'tool') return;
+    expect(item.tool.task).toMatchObject({
+      name: 'explore-api',
+      type: 'explorer',
+      prompt: 'Map it',
+      background: true,
+      status: 'running',
+    });
+  });
+
+  it('links the task to the subagent and hides the duplicate card', () => {
+    let state = applyUpdate(emptyChat(), taskCall(false));
+    state = applyUpdate(state, {
+      sessionUpdate: 'subagent',
+      _meta: {
+        'com.pegg/agentId': 'sub-1',
+        'com.pegg/agentName': 'explorer',
+        'com.pegg/taskName': 'explore-api',
+      },
+      status: 'finished',
+      rawOutput: 'final answer',
+    });
+    const tool = state.items.find((item) => item.kind === 'tool');
+    const sub = state.items.find((item) => item.kind === 'subagent');
+    expect(tool?.kind === 'tool' ? tool.tool.task?.agentId : undefined).toBe('sub-1');
+    expect(tool?.kind === 'tool' ? tool.tool.task?.status : undefined).toBe('finished');
+    expect(tool?.kind === 'tool' ? tool.tool.task?.output : undefined).toBe('final answer');
+    expect(sub?.kind === 'subagent' ? sub.linkedTaskId : undefined).toBe('task-1');
+    expect(state.subagents['sub-1']?.linkedTaskId).toBe('task-1');
+  });
+
+  it('finishes a linked task when the subagent completes without a task name', () => {
+    let state = applyUpdate(emptyChat(), taskCall(true));
+    state = applyUpdate(state, {
+      sessionUpdate: 'subagent',
+      _meta: {
+        'com.pegg/agentId': 'sub-1',
+        'com.pegg/agentName': 'explorer',
+        'com.pegg/taskName': 'explore-api',
+      },
+      status: 'running',
+    });
+    let item = state.items.find((entry) => entry.kind === 'tool');
+    expect(item?.kind === 'tool' ? item.tool.task?.agentId : undefined).toBe('sub-1');
+    expect(item?.kind === 'tool' ? item.tool.task?.status : undefined).toBe('running');
+
+    state = applyUpdate(state, {
+      sessionUpdate: 'subagent',
+      _meta: {
+        'com.pegg/agentId': 'sub-1',
+        'com.pegg/agentName': 'explorer',
+      },
+      status: 'finished',
+      rawOutput: 'final answer',
+    });
+    item = state.items.find((entry) => entry.kind === 'tool');
+    expect(item?.kind === 'tool' ? item.tool.task?.status : undefined).toBe('finished');
+    expect(item?.kind === 'tool' ? item.tool.task?.output : undefined).toBe('final answer');
+  });
+
+  it('marks a linked task as failed when its subagent errors', () => {
+    let state = applyUpdate(emptyChat(), taskCall(true));
+    state = applyUpdate(state, {
+      sessionUpdate: 'subagent',
+      _meta: {
+        'com.pegg/agentId': 'sub-1',
+        'com.pegg/agentName': 'explorer',
+        'com.pegg/taskName': 'explore-api',
+      },
+      status: 'running',
+    });
+    state = applyUpdate(state, {
+      sessionUpdate: 'subagent',
+      _meta: {
+        'com.pegg/agentId': 'sub-1',
+        'com.pegg/agentName': 'explorer',
+        'com.pegg/error': 'boom',
+      },
+      status: 'error',
+    });
+    const item = state.items.find((entry) => entry.kind === 'tool');
+    expect(item?.kind === 'tool' ? item.tool.task?.status : undefined).toBe('error');
+    expect(item?.kind === 'tool' ? item.tool.task?.error : undefined).toBe('boom');
+  });
+
+  it('keeps a background task running after the start result', () => {
+    let state = applyUpdate(emptyChat(), taskCall(true));
+    state = applyUpdate(state, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'task-1',
+      status: 'completed',
+      rawOutput: 'Started subagent in background: explore-api\n',
+    });
+    const item = state.items[0];
+    if (item.kind !== 'tool') throw new Error('task missing');
+    expect(item.tool.task?.status).toBe('running');
+    expect(item.tool.task?.output).toBeUndefined();
+  });
+
+  it('restores finished, background, and failed tasks', () => {
+    const finished = finalizeRestoredTasks([
+      {
+        kind: 'tool',
+        id: 'task-1',
+        createdAt: 0,
+        tool: {
+          id: 'task-1',
+          name: 'task',
+          title: 'task: x',
+          status: 'completed',
+          input: { name: 'x', subagent_type: 'explorer', prompt: 'p' },
+          task: { name: 'x', prompt: 'p', background: false, status: 'running' },
+          output: 'Subagent "x" finished.\nResponse:\nanswer\n',
+        },
+      },
+    ]);
+    const tool = finished[0];
+    if (tool.kind !== 'tool') throw new Error('task missing');
+    expect(tool.tool.task?.status).toBe('finished');
+    expect(tool.tool.task?.output).toBe('answer');
+    expect(tool.tool.task?.agentId).toBeUndefined();
   });
 });

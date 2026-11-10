@@ -32,8 +32,14 @@ func (p *fakeProvider) Chat(_ context.Context, req *llm.Request) (*llm.Response,
 		Message: &llm.Message{Role: llm.RoleAssistant, Content: "done"},
 	}}}, nil
 }
-func (p *fakeProvider) ChatStream(context.Context, *llm.Request, llm.StreamHandler) error {
-	return nil
+func (p *fakeProvider) ChatStream(_ context.Context, req *llm.Request, handler llm.StreamHandler) error {
+	p.mu.Lock()
+	p.requests = append(p.requests, req)
+	p.mu.Unlock()
+	if err := handler(llm.StreamChunk{Content: "done"}); err != nil {
+		return err
+	}
+	return handler(llm.StreamChunk{IsDone: true, FinishReason: llm.FinishReasonStop})
 }
 func (p *fakeProvider) ListModels(context.Context) ([]llm.Model, error) { return nil, nil }
 

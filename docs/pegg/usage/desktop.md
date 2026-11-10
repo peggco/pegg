@@ -106,6 +106,7 @@ Tool output follows the terminal UI's hierarchy instead of dumping everything:
 - Bash renders as a terminal with the command, output, and a status indicator. Long output is truncated with a show-all control.
 - Writes render syntax-highlighted content, truncated for large files with an expand control.
 - Edits render a GitHub-style line-numbered diff with hunk headers, additions/deletions, and a show-all control for large diffs.
+- `task` calls render as a single **TASK** card: name, subagent type, prompt, `background` badge, live activity, response preview, usage/duration, and an **Open history** action while running. The raw `task` tool row and the duplicate subagent card are no longer shown for task-launched subagents; fork subagents keep the standalone subagent card. Background continuations stream into the same thread when the subagent finishes.
 
 ## Releases
 

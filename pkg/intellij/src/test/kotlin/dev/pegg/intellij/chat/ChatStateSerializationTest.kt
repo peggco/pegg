@@ -53,7 +53,7 @@ class ChatStateSerializationTest {
                     ),
                     3,
                 ),
-                ChatItem.Subagent("subagent-a1", "a1", "explorer", "finished", "find", "found", null, 4),
+                ChatItem.Subagent("subagent-a1", "a1", "explorer", "finished", "find", "found", null, null, 4),
                 ChatItem.Reasoning("r-1", "thinking", 5),
                 ChatItem.Notice("n-1", "note", "warn", 6),
                 ChatItem.Error("e-1", "boom", 7),

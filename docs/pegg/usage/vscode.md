@@ -79,6 +79,9 @@ The sidebar chat supports:
 - Collapsible reasoning, merged into a single block while streaming.
 - Tool cards with command output, expandable input, copy, file locations, and
   edit diffs.
+- A single **TASK** card per `task` call: subagent name/type, prompt, background
+  badge, live activity, response preview, usage/duration, and **History** while
+  running. Fork-launched subagents keep the standalone subagent card.
 - Plan/todo updates, subagent activity, token usage, and USD cost.
 - Permission and `askuserquestion` prompts rendered inline.
 - Auto-scroll that follows the run only while you are at the bottom.

@@ -63,7 +63,7 @@ export function SubagentCard({
         <Sparkles size={14} />
         <span>{item.agentName || 'Subagent'}</span>
         <span className="subagent-status">
-          {item.status === 'running' ? 'working…' : item.status === 'error' ? 'failed' : 'finished'}
+          {item.status === 'running' ? t('task.running') : item.status === 'error' ? t('task.failure') : t('task.done')}
         </span>
         <span className="subagent-open">{t('common.openHistory')}</span>
       </div>
