@@ -133,6 +133,13 @@ Key details:
   main run has finished.
 - The final response is written back to the `task` tool message, so restored sessions
   show the background subagent's result instead of only the start confirmation.
+- Wake-up is handled by the core, not by an individual surface. A process-wide waker
+  claims a continuation run for the parent session and calls `Continue` with the
+  persisted history, so the reminder is injected as a system message. This applies
+  to the TUI, interactive CLI, `pegg serve`/ACP clients (VS Code, IntelliJ, desktop),
+  HTTP/connect, and the SDK.
+- ACP clients receive the continuation as a normal streamed run (`run_state_update`
+  plus message/thought chunks). No new prompt is required from the editor client.
 
 ## Checking subagent status
 

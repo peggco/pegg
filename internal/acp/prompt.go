@@ -120,6 +120,9 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 			}
 			return nil, &RPCError{Code: ErrCodeInternal, Message: claimErr.Error()}
 		}
+		if lease != nil {
+			acpSess.SetPromptRun(lease.ID())
+		}
 	}
 
 	state := &promptState{

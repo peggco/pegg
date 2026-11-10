@@ -413,21 +413,6 @@ func (c *CLI) runChatLoop(ctx context.Context, orch *agent.Agent, renderer *runR
 		close(lines)
 	}()
 
-	wake := make(chan struct{}, 1)
-	onNotification := func(e agent.SubAgentNotification) {
-		if e.ParentAgentID != orch.ID {
-			return
-		}
-		select {
-		case wake <- struct{}{}:
-		default:
-		}
-	}
-	if err := c.bus.Subscribe(agent.TopicSubAgentNotification, onNotification); err != nil {
-		return fmt.Errorf("cli: subscribe subagent notification: %w", err)
-	}
-	defer c.bus.Unsubscribe(agent.TopicSubAgentNotification, onNotification)
-
 	for {
 		if tty {
 			renderer.prompt()
@@ -455,34 +440,6 @@ func (c *CLI) runChatLoop(ctx context.Context, orch *agent.Agent, renderer *runR
 				}
 				return err
 			}
-		case <-wake:
-			if tty {
-				renderer.write("\n")
-			}
-			lease, lerr := c.claimRun(ctx, sess, orch, orch.Provider, orch.Model)
-			if lerr != nil {
-				return lerr
-			}
-			var (
-				result *agent.RunResult
-				err    error
-			)
-			if lease != nil {
-				result, err = orch.Continue(lease.Context(), history)
-				if err == nil {
-					lease.Finish(session.RunStateDone, "")
-				} else {
-					lease.Finish(session.RunStateError, err.Error())
-				}
-			} else {
-				result, err = orch.Continue(ctx, history)
-			}
-			if err != nil {
-				return fmt.Errorf("orchestrator: %w", err)
-			}
-			if result != nil {
-				history = result.History
-			}
 		case <-ctx.Done():
 			return nil
 		}
@@ -492,6 +449,15 @@ func (c *CLI) runChatLoop(ctx context.Context, orch *agent.Agent, renderer *runR
 func (c *CLI) runChatAgent(ctx context.Context, orch *agent.Agent, line string, history []llm.Message, sess *session.Session) ([]llm.Message, error) {
 	if sess != nil {
 		orch.SetSessionID(sess.ID)
+		if c.sessions != nil {
+			if msgs, merr := c.sessions.Messages(sess.ID); merr == nil && len(msgs) > 0 {
+				h := make([]llm.Message, 0, len(msgs)+1)
+				if orch.SystemPrompt != "" {
+					h = append(h, llm.SystemMessage(orch.SystemPrompt))
+				}
+				history = append(h, session.MessagesToLLM(msgs)...)
+			}
+		}
 	}
 	lease, err := c.claimRun(ctx, sess, orch, orch.Provider, orch.Model)
 	if err != nil {

@@ -52,6 +52,7 @@ type Recorder struct {
 	pendingTasks  map[string][]pendingTask
 	taskByAgent   map[string]pendingTask
 	taskFinal     map[string]string
+	awaiting      map[string]int
 
 	evMu      sync.Mutex
 	events    []RunEvent
@@ -94,6 +95,7 @@ func NewRecorder(mgr *Manager, log *logger.Logger) *Recorder {
 		pendingTasks:  make(map[string][]pendingTask),
 		taskByAgent:   make(map[string]pendingTask),
 		taskFinal:     make(map[string]string),
+		awaiting:      make(map[string]int),
 	}
 }
 
@@ -766,6 +768,11 @@ func (r *Recorder) handleCompaction(e compaction.Event) {
 
 	r.mu.Lock()
 	info.sessionID = newSess.ID
+	for runID, agentID := range r.runAgent {
+		if agentID == e.AgentID {
+			r.runSession[runID] = newSess.ID
+		}
+	}
 	rootID := r.rootSessionIDLocked(e.AgentID)
 	if rootID == "" {
 		rootID = newSess.ID
@@ -866,6 +873,9 @@ func (r *Recorder) finishTask(agentID, output, errMsg string) {
 	task, ok := r.taskByAgent[agentID]
 	if ok {
 		delete(r.taskByAgent, agentID)
+		if task.background && task.runID != "" {
+			r.awaiting[task.runID]++
+		}
 	}
 	r.mu.Unlock()
 	if ok && task.background {
@@ -924,12 +934,7 @@ func (r *Recorder) releaseSubagent(agentID string) {
 	runID := r.runByAgent[agentID]
 	delete(r.runByAgent, agentID)
 	delete(r.parentByAgent, agentID)
-	if runID == "" || !r.finishedRuns[runID] {
-		return
-	}
-	if !r.hasLiveSubagentsLocked(runID) && !r.hasPendingBackgroundTasksLocked(runID) {
-		r.clearRunLocked(runID)
-	}
+	r.maybeClearRunLocked(runID)
 }
 
 func (r *Recorder) hasLiveSubagentsLocked(runID string) bool {
@@ -963,6 +968,20 @@ func (r *Recorder) clearRunLocked(runID string) {
 	delete(r.runSession, runID)
 	delete(r.runAgent, runID)
 	delete(r.finishedRuns, runID)
+	delete(r.awaiting, runID)
+}
+
+func (r *Recorder) maybeClearRunLocked(runID string) {
+	if runID == "" || !r.finishedRuns[runID] {
+		return
+	}
+	if r.hasLiveSubagentsLocked(runID) || r.hasPendingBackgroundTasksLocked(runID) {
+		return
+	}
+	if r.awaiting[runID] > 0 {
+		return
+	}
+	r.clearRunLocked(runID)
 }
 
 func (r *Recorder) handleRunStarted(e RunStarted) {
@@ -980,9 +999,7 @@ func (r *Recorder) handleRunFinished(e RunFinished) {
 	r.flushEvents()
 	r.mu.Lock()
 	r.finishedRuns[e.RunID] = true
-	if !r.hasLiveSubagentsLocked(e.RunID) && !r.hasPendingBackgroundTasksLocked(e.RunID) {
-		r.clearRunLocked(e.RunID)
-	}
+	r.maybeClearRunLocked(e.RunID)
 	r.mu.Unlock()
 }
 
@@ -1042,6 +1059,15 @@ func (r *Recorder) handleSubAgentNotification(e agent.SubAgentNotification) {
 		"output":          e.Output,
 		"error":           e.Err,
 	})
+	r.mu.Lock()
+	runID := r.runByAgent[e.ParentAgentID]
+	if runID != "" {
+		if r.awaiting[runID] > 0 {
+			r.awaiting[runID]--
+		}
+		r.maybeClearRunLocked(runID)
+	}
+	r.mu.Unlock()
 }
 
 func (r *Recorder) recordRunEvent(agentID, eventType string, data map[string]any) {

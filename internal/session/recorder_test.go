@@ -1064,3 +1064,73 @@ func TestRecorderPersistsBackgroundTaskError(t *testing.T) {
 		t.Fatalf("tool content = %v, want Error: boom", msg.Content)
 	}
 }
+
+func TestRecorderKeepsRunForLateNotification(t *testing.T) {
+	_, rec, _ := newTestRecorder(t)
+	rec.mu.Lock()
+	rec.runByAgent["main"] = "run-3"
+	rec.runByAgent["sub"] = "run-3"
+	rec.parentByAgent["sub"] = "main"
+	rec.runSession["run-3"] = "sess-3"
+	rec.runAgent["run-3"] = "main"
+	rec.taskByAgent["sub"] = pendingTask{
+		parentAgentID: "main", runID: "run-3", callID: "call-3", name: "bg", background: true,
+	}
+	rec.mu.Unlock()
+
+	rec.handleRunFinished(RunFinished{RunID: "run-3"})
+	rec.handleFinished(agent.AgentFinished{AgentID: "sub", Output: "done"})
+
+	rec.mu.Lock()
+	_, kept := rec.runByAgent["main"]
+	rec.mu.Unlock()
+	if !kept {
+		t.Fatal("run cleared before the subagent notification was journaled")
+	}
+
+	rec.handleSubAgentNotification(agent.SubAgentNotification{
+		ParentAgentID: "main", SubAgentName: "bg", Output: "done",
+	})
+
+	rec.mu.Lock()
+	_, still := rec.runByAgent["main"]
+	rec.mu.Unlock()
+	if still {
+		t.Fatal("run not cleared after the notification")
+	}
+}
+
+func TestRecorderJournalsLateSubAgentNotice(t *testing.T) {
+	_, rec, _ := newTestRecorder(t)
+	rec.mu.Lock()
+	rec.runByAgent["main"] = "run-4"
+	rec.runByAgent["sub"] = "run-4"
+	rec.parentByAgent["sub"] = "main"
+	rec.runSession["run-4"] = "sess-4"
+	rec.runAgent["run-4"] = "main"
+	rec.taskByAgent["sub"] = pendingTask{
+		parentAgentID: "main", runID: "run-4", callID: "call-4", name: "bg", background: true,
+	}
+	rec.mu.Unlock()
+
+	rec.handleRunFinished(RunFinished{RunID: "run-4"})
+	rec.handleFinished(agent.AgentFinished{AgentID: "sub", Output: "done"})
+	rec.handleSubAgentNotification(agent.SubAgentNotification{
+		ParentAgentID: "main", SubAgentName: "bg", Output: "done",
+	})
+	rec.flushEvents()
+
+	if rec.runs == nil {
+		t.Fatal("run store not configured")
+	}
+	events, err := rec.runs.RunEvents("run-4", 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range events {
+		if e.Type == AgentEventSubAgentNotice {
+			return
+		}
+	}
+	t.Fatalf("late subagent notice was not journaled: %+v", events)
+}

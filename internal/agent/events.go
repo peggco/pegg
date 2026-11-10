@@ -134,6 +134,8 @@ type ErrorMessageFinished struct {
 
 type SubAgentNotification struct {
 	ParentAgentID string
+	Parent        *Agent
+	SessionID     string
 	SubAgentName  string
 	TaskIDs       []string
 	Output        string

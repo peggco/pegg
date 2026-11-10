@@ -497,14 +497,15 @@ func (r *registry) finish(sa *SubAgent, output string, err error) {
 	close(sa.done)
 
 	var (
-		notify  bool
-		parent  *agent.Agent
-		rem     reminder.Reminder
-		detach  bool
-		msgName = sa.Name
-		msgIDs  = append([]string(nil), sa.TaskIDs...)
-		msgOut  = output
-		msgErr  = ""
+		notify    bool
+		parent    *agent.Agent
+		rem       reminder.Reminder
+		detach    bool
+		msgName   = sa.Name
+		msgIDs    = append([]string(nil), sa.TaskIDs...)
+		msgOut    = output
+		msgErr    = ""
+		msgSessID = sa.sessionID
 	)
 	if err != nil {
 		msgErr = err.Error()
@@ -513,6 +514,9 @@ func (r *registry) finish(sa *SubAgent, output string, err error) {
 		if p, ok := r.parents[sa.ParentAgentID]; ok {
 			parent = p
 			notify = true
+			if msgSessID == "" {
+				msgSessID = r.agentSessions[sa.ParentAgentID]
+			}
 			if err != nil {
 				rem = reminder.SubAgentFailed(sa.Name, sa.TaskIDs, err.Error())
 			} else {
@@ -530,8 +534,14 @@ func (r *registry) finish(sa *SubAgent, output string, err error) {
 			parent.DetachReminder()
 		}
 		if parent.Bus != nil {
+			sessionID := msgSessID
+			if sessionID == "" {
+				sessionID = parent.SessionID()
+			}
 			n := agent.SubAgentNotification{
 				ParentAgentID: parentAgentID,
+				Parent:        parent,
+				SessionID:     sessionID,
 				SubAgentName:  msgName,
 				TaskIDs:       msgIDs,
 				Output:        msgOut,

@@ -38,6 +38,8 @@ type ACPSession struct {
 
 	attachCancel context.CancelFunc
 	attachRunID  string
+	promptRunID  string
+	ownRuns      map[string]bool
 }
 
 func (s *ACPSession) SetCancel(cancel context.CancelFunc, reqID any) {
@@ -68,6 +70,34 @@ func (s *ACPSession) ClearPrompt() {
 	defer s.mu.Unlock()
 	s.ctx = nil
 	s.running = false
+}
+
+func (s *ACPSession) SetPromptRun(runID string) {
+	if runID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.promptRunID = runID
+	if s.ownRuns == nil {
+		s.ownRuns = make(map[string]bool)
+	}
+	s.ownRuns[runID] = true
+}
+
+func (s *ACPSession) IsOwnRun(runID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return runID != "" && s.ownRuns[runID]
+}
+
+func (s *ACPSession) ForgetOwnRun(runID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.ownRuns, runID)
+	if s.promptRunID == runID {
+		s.promptRunID = ""
+	}
 }
 
 func (s *ACPSession) PromptContext() (context.Context, bool) {

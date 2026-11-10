@@ -222,7 +222,9 @@ text.
   transcript keeps updating after the main agent finishes. Task cards for background
   subagents stay running after the main agent stops and close with the subagent's
   result. That response is written back to the task tool message, so restored
-  sessions show it too.
+  sessions show it too. When a background subagent finishes, the orchestrator
+  continues automatically — no new message is needed — and the continuation streams
+  into the same chat.
 
 Fenced code in assistant messages is syntax-highlighted for Go, TypeScript,
 JavaScript, Python, Rust, Bash, C/C++, Ruby, PHP, Swift, Kotlin, Scala, Elixir,

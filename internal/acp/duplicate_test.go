@@ -118,3 +118,83 @@ func TestFastLocalPromptDoesNotReplayIntoTheSameClient(t *testing.T) {
 		t.Fatalf("assistant text = %q, want %q (duplicate replay)", got, want)
 	}
 }
+
+func TestFollowDeliversLocalNonPromptRun(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	store, err := session.NewSQLiteStoreAt(filepath.Join(t.TempDir(), "sessions.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	bus := event.New()
+	log := logger.New(logger.LevelError)
+	mgr := session.NewManager(store, bus, log)
+	rec := session.NewRecorder(mgr, log)
+	if err := rec.Start(bus); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = rec.Stop(bus) })
+	coord := runpkg.New(mgr, bus, log)
+	t.Cleanup(coord.Stop)
+	hub := live.New(coord, mgr, bus, log)
+	t.Cleanup(hub.Close)
+
+	srv := New(config.DefaultConfig(), bus, log, nil, mgr, nil, coord, hub)
+	tr := newBufferTransport()
+	srv.transport = tr
+	srv.newAgentFn = func() (*agent.Agent, error) {
+		a := agent.New("orchestrator",
+			agent.WithModel(llm.Model{ID: "mock-model"}),
+			agent.WithProvider(&duplicateProvider{}),
+		)
+		a.Bus = bus
+		return a, nil
+	}
+
+	result, err := srv.handleSessionNew(context.Background(), toJSON(t, SessionNewParams{Cwd: t.TempDir()}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	acpID := string(result.(SessionNewResult).SessionId)
+
+	srv.mu.RLock()
+	acpSess := srv.active[acpID]
+	srv.mu.RUnlock()
+	if acpSess == nil || acpSess.Agent == nil {
+		t.Fatal("acp session missing")
+	}
+
+	lease, err := coord.Claim(context.Background(), runpkg.ClaimRequest{
+		SessionID: acpSess.PeggSessionID,
+		AgentID:   acpSess.Agent.ID,
+		AgentName: acpSess.Agent.Name,
+		Provider:  "duplicate-test",
+		Model:     "mock-model",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus.Publish(agent.TopicAgentStarted, agent.AgentStarted{
+		AgentID: acpSess.Agent.ID, AgentName: acpSess.Agent.Name, Model: llm.Model{ID: "mock-model"},
+	})
+	bus.Publish(agent.TopicAgentToken, agent.AgentToken{
+		AgentID: acpSess.Agent.ID, AgentName: acpSess.Agent.Name, Content: "woken continuation",
+	})
+	bus.Publish(agent.TopicAgentFinished, agent.AgentFinished{
+		AgentID: acpSess.Agent.ID, AgentName: acpSess.Agent.Name, Output: "woken continuation",
+	})
+	lease.Finish(session.RunStateDone, "")
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		tr.mu.Lock()
+		raws := append([]string(nil), tr.sends...)
+		tr.mu.Unlock()
+		if strings.Contains(strings.Join(raws, "\n"), "woken continuation") {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("local continuation run was not delivered to the ACP client")
+}

@@ -483,3 +483,13 @@ func TestMessagesToItemsRestoresBackgroundTaskWithResult(t *testing.T) {
 		t.Fatal("background badge should be preserved")
 	}
 }
+
+func TestMessagesToItemsRestoresTruncatedBackgroundStart(t *testing.T) {
+	it := restoredTaskItem(t, []session.Message{
+		taskCallMessage(true),
+		{ID: "m2", Seq: 2, Role: llm.RoleTool, ToolCallID: "tc-1", Content: "Started subagent in backgro…"},
+	})
+	if it.ToolTaskStatus != "background" || it.ToolOutput != "" {
+		t.Fatalf("status = %q output = %q", it.ToolTaskStatus, it.ToolOutput)
+	}
+}

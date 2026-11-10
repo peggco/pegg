@@ -112,7 +112,6 @@ func (a *App) subscribeChat(bus event.Bus) error {
 		{session.TopicSessionDeleted, a.onSessionDeleted},
 		{agent.TopicAgentAsk, a.onAgentAsk},
 		{agent.TopicAgentAskAnswer, a.onAgentAskAnswer},
-		{agent.TopicSubAgentNotification, a.onSubAgentNotification},
 		{compaction.TopicCompactionFinished, a.onCompactionFinished},
 	}
 	for _, s := range subs {
@@ -145,7 +144,6 @@ func (a *App) unsubscribeChat(bus event.Bus) {
 		{session.TopicSessionDeleted, a.onSessionDeleted},
 		{agent.TopicAgentAsk, a.onAgentAsk},
 		{agent.TopicAgentAskAnswer, a.onAgentAskAnswer},
-		{agent.TopicSubAgentNotification, a.onSubAgentNotification},
 		{compaction.TopicCompactionFinished, a.onCompactionFinished},
 	}
 	for _, s := range subs {
@@ -1142,15 +1140,11 @@ func (a *App) finishAgentRun(rt *sessionRuntime, lease *runpkg.Lease, cancel con
 		a.agentLease = nil
 		a.agentCancel = nil
 	}
-	live := rt == nil || a.runtimes[rt.id] == rt
 	a.chatMu.Unlock()
 	if lease != nil {
 		lease.Finish(session.RunStateDone, "")
 	}
 	cancel()
-	if live && rt != nil && rt.agent != nil && rt.agent.HasPendingNotifications() {
-		go a.continueRuntime(rt)
-	}
 }
 
 func (a *App) completeAgentRun(rt *sessionRuntime, result *agent.RunResult) {
@@ -1174,61 +1168,6 @@ func (a *App) completeAgentRun(rt *sessionRuntime, result *agent.RunResult) {
 	if current {
 		a.requestRedraw()
 	}
-}
-
-func (a *App) continueAgent() {
-	a.chatMu.Lock()
-	sid := a.currentSessionIDLocked()
-	rt := a.runtimes[sid]
-	if rt == nil {
-		a.chatMu.Unlock()
-		return
-	}
-	a.chatMu.Unlock()
-	a.continueRuntime(rt)
-}
-
-func (a *App) continueRuntime(rt *sessionRuntime) {
-	a.chatMu.Lock()
-	if rt.running || rt.cancel != nil {
-		a.chatMu.Unlock()
-		return
-	}
-	current := a.session != nil && a.session.info.ID == rt.id
-	a.chatMu.Unlock()
-
-	ctx, cancel := context.WithCancel(a.ctx)
-	lease, ctx, cancel, history, err := a.prepareRuntimeRun(ctx, cancel, rt, nil)
-	if err != nil {
-		cancel()
-		if current {
-			a.showError(err.Error())
-		}
-		return
-	}
-	defer a.finishAgentRun(rt, lease, cancel)
-
-	var result *agent.RunResult
-	if a.deps.Runs != nil {
-		result, _ = a.deps.Runs.Continue(ctx, lease, rt.agent, history)
-	} else {
-		result, _ = rt.agent.Continue(ctx, history)
-	}
-	a.completeAgentRun(rt, result)
-}
-
-func (a *App) onSubAgentNotification(e agent.SubAgentNotification) {
-	a.chatMu.Lock()
-	if a.agent == nil || e.ParentAgentID != a.agent.ID || !a.acceptAgentEventLocked(e.ParentAgentID, "") {
-		a.chatMu.Unlock()
-		return
-	}
-	if a.running || a.agentCancel != nil {
-		a.chatMu.Unlock()
-		return
-	}
-	a.chatMu.Unlock()
-	go a.continueAgent()
 }
 
 func (a *App) activateItem(it *components.ChatItem) {
@@ -1809,10 +1748,13 @@ func enrichTaskToolItem(it *components.ChatItem) bool {
 
 func isTaskBackgroundStart(output string) bool {
 	out := strings.TrimSpace(output)
-	if strings.HasPrefix(out, "Started subagent in background:") {
+	if strings.HasPrefix(out, "Started subagent in background:") || strings.HasPrefix(out, "Started subagent in backgro") {
 		return true
 	}
-	return strings.HasPrefix(out, "Resumed subagent ") && strings.Contains(out, " in background")
+	if strings.HasPrefix(out, "Resumed subagent ") {
+		return strings.Contains(out, " in background") || strings.HasSuffix(out, "backgro…")
+	}
+	return false
 }
 
 func taskResponseFromOutput(output string) string {

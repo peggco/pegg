@@ -66,11 +66,11 @@ func (s *Server) startSessionFollow(acpSess *ACPSession) {
 	if s.live == nil || acpSess == nil || acpSess.PeggSessionID == "" {
 		return
 	}
-	snapshot, since, err := s.live.SnapshotSession(acpSess.PeggSessionID, false)
+	snapshot, since, err := s.live.SnapshotSession(acpSess.PeggSessionID, true)
 	if err != nil {
 		return
 	}
-	sub := s.live.SubscribeSession(acpSess.PeggSessionID, false, since)
+	sub := s.live.SubscribeSession(acpSess.PeggSessionID, true, since)
 	acpSess.SetAttach(func() { sub.Close() }, "")
 	go s.consumeFollow(acpSess, snapshot, sub)
 }
@@ -93,6 +93,12 @@ func (s *Server) consumeFollow(acpSess *ACPSession, snapshot []live.Event, sub *
 }
 
 func (s *Server) handleFollowEvent(acpSess *ACPSession, st *promptState, e live.Event) {
+	if acpSess.IsOwnRun(e.Run.ID) {
+		if e.Type == live.EventRunFinished {
+			acpSess.ForgetOwnRun(e.Run.ID)
+		}
+		return
+	}
 	switch e.Type {
 	case live.EventRunStarted:
 		st.textIDs = make(map[string]string)
