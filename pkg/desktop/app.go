@@ -349,6 +349,9 @@ func (a *App) SavePrefs(p prefs.Prefs) (prefs.Prefs, error) {
 		if p.Direction != "" {
 			cur.Direction = p.Direction
 		}
+		if p.ChatHistoryMode != "" {
+			cur.ChatHistoryMode = p.ChatHistoryMode
+		}
 	})
 	return a.prefs.Get(), err
 }

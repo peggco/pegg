@@ -51,6 +51,7 @@ export function App() {
   const appAttrs = {
     'data-sidebar-mode': prefs.sidebarMode,
     'data-layout': prefs.layoutMode,
+    'data-chat-history': prefs.chatHistoryMode,
     dir: prefs.direction,
   };
 

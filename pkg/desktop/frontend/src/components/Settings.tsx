@@ -45,7 +45,7 @@ import {
 } from './SettingsPanels';
 import { TeamPanel } from './TeamPanel';
 import { Card, Field, OptionCard, OptionGrid, PageHead, Range, Segmented } from './SettingsUI';
-import { DirectionPreview, LayoutPreview, SidebarModePreview } from './AppearancePreviews';
+import { ChatHistoryPreview, DirectionPreview, LayoutPreview, SidebarModePreview } from './AppearancePreviews';
 
 type Tab =
   | 'general'
@@ -303,6 +303,24 @@ function AppearancePanel() {
             onClick={() => void savePrefs({ direction: 'rtl' })}
           >
             <DirectionPreview direction="rtl" />
+          </OptionCard>
+        </OptionGrid>
+      </Card>
+      <Card title="Chat history">
+        <OptionGrid columns={2}>
+          <OptionCard
+            selected={prefs.chatHistoryMode === 'detailed'}
+            label="Detailed"
+            onClick={() => void savePrefs({ chatHistoryMode: 'detailed' })}
+          >
+            <ChatHistoryPreview mode="detailed" />
+          </OptionCard>
+          <OptionCard
+            selected={prefs.chatHistoryMode === 'compact'}
+            label="Compact"
+            onClick={() => void savePrefs({ chatHistoryMode: 'compact' })}
+          >
+            <ChatHistoryPreview mode="compact" />
           </OptionCard>
         </OptionGrid>
       </Card>

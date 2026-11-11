@@ -1388,6 +1388,7 @@ export namespace prefs {
 	    sidebarMode: string;
 	    layoutMode: string;
 	    direction: string;
+	    chatHistoryMode: string;
 	    lastSession: string;
 	    window: Window;
 	
@@ -1410,6 +1411,7 @@ export namespace prefs {
 	        this.sidebarMode = source["sidebarMode"];
 	        this.layoutMode = source["layoutMode"];
 	        this.direction = source["direction"];
+	        this.chatHistoryMode = source["chatHistoryMode"];
 	        this.lastSession = source["lastSession"];
 	        this.window = this.convertValues(source["window"], Window);
 	    }

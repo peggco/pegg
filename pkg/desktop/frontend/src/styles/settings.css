@@ -1108,3 +1108,12 @@
 .option-preview .thumb-shadow {
   fill: color-mix(in srgb, #000 28%, transparent);
 }
+
+.option-preview .thumb-bubble {
+  fill: color-mix(in srgb, var(--pg-text) 14%, transparent);
+}
+
+.option-preview .thumb-summary {
+  fill: color-mix(in srgb, var(--pg-text) 7%, transparent);
+  stroke: var(--pg-border);
+}

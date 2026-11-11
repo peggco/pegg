@@ -200,6 +200,17 @@ const en: Record<string, string> = {
   'thread.restoring': 'Restoring session…',
   'thread.empty': 'Send a message to start this session.',
   'thread.scrollToBottom': 'Jump to latest',
+  'chat.ranCommand': 'Ran {count} command',
+  'chat.ranCommands': 'Ran {count} commands',
+  'chat.readFile': 'read {count} file',
+  'chat.readFiles': 'read {count} files',
+  'chat.editedFile': 'edited {count} file',
+  'chat.editedFiles': 'edited {count} files',
+  'chat.ranSearch': 'ran {count} search',
+  'chat.ranSearches': 'ran {count} searches',
+  'chat.fetchedPage': 'fetched {count} page',
+  'chat.fetchedPages': 'fetched {count} pages',
+  'chat.activityThoughts': '{count} thoughts',
 };
 
 const tr: Record<string, string> = {
@@ -395,6 +406,17 @@ const tr: Record<string, string> = {
   'thread.restoring': 'Oturum geri yükleniyor…',
   'thread.empty': 'Bu oturumu başlatmak için bir mesaj gönderin.',
   'thread.scrollToBottom': 'En alta git',
+  'chat.ranCommand': '{count} komut çalıştırdı',
+  'chat.ranCommands': '{count} komut çalıştırdı',
+  'chat.readFile': '{count} dosya okudu',
+  'chat.readFiles': '{count} dosya okudu',
+  'chat.editedFile': '{count} dosyayı düzenledi',
+  'chat.editedFiles': '{count} dosyayı düzenledi',
+  'chat.ranSearch': '{count} arama yaptı',
+  'chat.ranSearches': '{count} arama yaptı',
+  'chat.fetchedPage': '{count} sayfa getirdi',
+  'chat.fetchedPages': '{count} sayfa getirdi',
+  'chat.activityThoughts': '{count} düşünce',
 };
 
 const catalogs: Record<Lang, Record<string, string>> = { en, tr };

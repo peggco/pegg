@@ -361,3 +361,138 @@
 .thread-item {
   padding-bottom: 0;
 }
+
+.activity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.activity-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 2px;
+  color: var(--pg-text-2);
+  font-size: 13px;
+  text-align: start;
+}
+
+.activity-head:hover {
+  color: var(--pg-text);
+}
+
+.activity-head-icon {
+  display: inline-flex;
+  color: var(--pg-muted);
+}
+
+.activity-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-time {
+  font-size: 11px;
+  color: var(--pg-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.activity-chevron {
+  color: var(--pg-muted);
+  transition: transform var(--pg-fast);
+}
+
+.activity.open .activity-chevron {
+  transform: rotate(90deg);
+}
+
+.activity-rows {
+  display: flex;
+  flex-direction: column;
+  margin-inline-start: 6px;
+  padding-inline-start: 10px;
+  border-inline-start: 1px solid color-mix(in srgb, var(--pg-border) 70%, transparent);
+}
+
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border-radius: var(--pg-radius-sm);
+  color: var(--pg-text-2);
+  font-size: 12.5px;
+  text-align: start;
+}
+
+.activity-row:hover {
+  background: var(--pg-hover);
+  color: var(--pg-text);
+}
+
+.activity-row-icon {
+  display: inline-flex;
+  justify-content: center;
+  width: 16px;
+  color: var(--pg-muted);
+  flex: none;
+}
+
+.activity-row-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--pg-font-mono);
+}
+
+.activity-row.reasoning .activity-row-text {
+  font-style: italic;
+}
+
+.activity-row-time {
+  font-size: 10.5px;
+  color: var(--pg-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.activity-row-chevron {
+  color: var(--pg-muted);
+  transition: transform var(--pg-fast);
+  flex: none;
+}
+
+.activity-row-chevron.open {
+  transform: rotate(90deg);
+}
+
+.activity-detail {
+  padding: 2px 0 8px 24px;
+}
+
+.activity-detail .tool-card {
+  margin: 0;
+}
+
+.activity-detail .tool-card > .tool-head,
+.activity-detail .terminal-head,
+.activity-detail .tool-mini {
+  display: none;
+}
+
+.activity-detail-reasoning {
+  padding: 2px 8px 8px;
+  color: var(--pg-text-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}

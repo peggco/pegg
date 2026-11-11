@@ -191,6 +191,7 @@ export interface Recent {
 export type SidebarMode = 'sidebar' | 'inset' | 'floating';
 export type LayoutMode = 'default' | 'compact' | 'full';
 export type Direction = 'ltr' | 'rtl';
+export type ChatHistoryMode = 'detailed' | 'compact';
 
 export interface Prefs {
   theme: string;
@@ -206,6 +207,7 @@ export interface Prefs {
   sidebarMode: SidebarMode;
   layoutMode: LayoutMode;
   direction: Direction;
+  chatHistoryMode: ChatHistoryMode;
   lastSession: string;
   window: WindowPrefs;
 }

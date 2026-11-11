@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react';
-import type { Direction, LayoutMode, SidebarMode } from '../types';
+import type { ChatHistoryMode, Direction, LayoutMode, SidebarMode } from '../types';
 
 function Frame({ children }: { children: ReactNode }) {
   const clip = useId().replace(/:/g, '');
@@ -138,6 +138,33 @@ export function DirectionPreview({ direction }: { direction: Direction }) {
       <rect className="thumb-line" x="46" y="28" width="62" height="2" rx="1" />
       <rect className="thumb-line" x="46" y="34" width="46" height="2" rx="1" />
       <rect className="thumb-line" x="46" y="40" width="54" height="2" rx="1" />
+    </Frame>
+  );
+}
+
+export function ChatHistoryPreview({ mode }: { mode: ChatHistoryMode }) {
+  if (mode === 'compact') {
+    return (
+      <Frame>
+        <rect className="thumb-bubble" x="76" y="8" width="44" height="12" rx="6" />
+        <rect className="thumb-summary" x="8" y="28" width="112" height="13" rx="4" />
+        <rect className="thumb-line" x="14" y="33" width="52" height="3" rx="1.5" />
+        <rect className="thumb-line" x="104" y="33" width="6" height="3" rx="1.5" />
+        <rect className="thumb-line" x="8" y="50" width="86" height="3" rx="1.5" />
+        <rect className="thumb-line" x="8" y="58" width="74" height="3" rx="1.5" />
+        <rect className="thumb-line" x="8" y="66" width="92" height="3" rx="1.5" />
+      </Frame>
+    );
+  }
+  return (
+    <Frame>
+      <rect className="thumb-bubble" x="76" y="8" width="44" height="12" rx="6" />
+      <rect className="thumb-card" x="8" y="27" width="112" height="13" rx="3" />
+      <rect className="thumb-line" x="14" y="32" width="48" height="3" rx="1.5" />
+      <rect className="thumb-card" x="8" y="44" width="112" height="13" rx="3" />
+      <rect className="thumb-line" x="14" y="49" width="64" height="3" rx="1.5" />
+      <rect className="thumb-line" x="8" y="64" width="80" height="3" rx="1.5" />
+      <rect className="thumb-line" x="8" y="71" width="66" height="3" rx="1.5" />
     </Frame>
   );
 }

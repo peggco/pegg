@@ -19,6 +19,21 @@ func TestDefaults(t *testing.T) {
 	if p.SidebarMode != "sidebar" || p.LayoutMode != "default" || p.Direction != "ltr" {
 		t.Fatalf("default layout prefs = %q/%q/%q", p.SidebarMode, p.LayoutMode, p.Direction)
 	}
+	if p.ChatHistoryMode != "detailed" {
+		t.Fatalf("default chat history mode = %q", p.ChatHistoryMode)
+	}
+}
+
+func TestMergeChatHistoryMode(t *testing.T) {
+	if got := merge(Prefs{}).ChatHistoryMode; got != "detailed" {
+		t.Fatalf("missing chat history mode = %q", got)
+	}
+	if got := merge(Prefs{ChatHistoryMode: "compact"}).ChatHistoryMode; got != "compact" {
+		t.Fatalf("valid chat history mode = %q", got)
+	}
+	if got := merge(Prefs{ChatHistoryMode: "bogus"}).ChatHistoryMode; got != "detailed" {
+		t.Fatalf("invalid chat history mode = %q", got)
+	}
 }
 
 func TestMergeTheme(t *testing.T) {

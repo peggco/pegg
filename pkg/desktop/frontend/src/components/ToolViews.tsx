@@ -27,7 +27,7 @@ function StatusMark({ status }: { status: string }) {
   return <span className={`status-dot ${status}`} title={status} />;
 }
 
-function ToolIcon({ kind }: { kind?: string }) {
+export function ToolIcon({ kind }: { kind?: string }) {
   switch (kind) {
     case 'execute':
       return <Terminal size={13} />;
@@ -77,7 +77,7 @@ function writeContent(tool: ToolState): string {
   return outputText(tool.output);
 }
 
-function bashCommand(tool: ToolState): string {
+export function bashCommand(tool: ToolState): string {
   const record = inputRecord(tool.input);
   if (typeof record.command === 'string' && record.command.trim()) return record.command.trim();
   const title = (tool.title ?? '').replace(/^bash:?\s*/i, '');

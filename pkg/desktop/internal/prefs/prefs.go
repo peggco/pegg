@@ -45,21 +45,23 @@ type Prefs struct {
 	SidebarMode      string   `json:"sidebarMode"`
 	LayoutMode       string   `json:"layoutMode"`
 	Direction        string   `json:"direction"`
+	ChatHistoryMode  string   `json:"chatHistoryMode"`
 	LastSession      string   `json:"lastSession"`
 	Window           Window   `json:"window"`
 }
 
 func Defaults() Prefs {
 	return Prefs{
-		Theme:        "dark",
-		ThemeMode:    ThemeModeAuto,
-		AutoDownload: true,
-		SendOnEnter:  true,
-		FontScale:    1,
-		SidebarWidth: DefaultSidebarWidth,
-		SidebarMode:  "sidebar",
-		LayoutMode:   "default",
-		Direction:    "ltr",
+		Theme:           "dark",
+		ThemeMode:       ThemeModeAuto,
+		AutoDownload:    true,
+		SendOnEnter:     true,
+		FontScale:       1,
+		SidebarWidth:    DefaultSidebarWidth,
+		SidebarMode:     "sidebar",
+		LayoutMode:      "default",
+		Direction:       "ltr",
+		ChatHistoryMode: "detailed",
 	}
 }
 
@@ -121,6 +123,7 @@ func merge(data Prefs) Prefs {
 	data.SidebarMode = normalizeSidebarMode(data.SidebarMode)
 	data.LayoutMode = normalizeLayoutMode(data.LayoutMode)
 	data.Direction = normalizeDirection(data.Direction)
+	data.ChatHistoryMode = normalizeChatHistoryMode(data.ChatHistoryMode)
 	return data
 }
 
@@ -159,6 +162,13 @@ func normalizeDirection(direction string) string {
 		return "rtl"
 	}
 	return "ltr"
+}
+
+func normalizeChatHistoryMode(mode string) string {
+	if mode == "compact" {
+		return "compact"
+	}
+	return "detailed"
 }
 
 func (s *Store) Get() Prefs {
