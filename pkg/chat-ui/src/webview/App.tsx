@@ -1445,6 +1445,7 @@ function ToolCard({ tool }: { tool: ToolState }) {
   const output = stripAnsi(tool.output === undefined ? '' : pretty(tool.output));
   const hasOutput = isBash && output.length > 0;
   const failed = Boolean(tool.error);
+  const running = tool.status === 'in_progress';
   const longOutput = hasOutput && output.split('\n').length > 9;
   const canExpand = failed || longOutput;
 
@@ -1509,7 +1510,7 @@ function ToolCard({ tool }: { tool: ToolState }) {
         <div className="tool-error-preview">{stripAnsi(tool.error ?? '').split('\n')[0]}</div>
       )}
 
-      {hasOutput && (!longOutput || open) && (
+      {hasOutput && (running || !longOutput || open) && (
         <div className="tool-output-wrap">
           <pre className="tool-output expanded">{output}</pre>
         </div>

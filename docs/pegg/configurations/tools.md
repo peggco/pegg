@@ -97,7 +97,8 @@ Search file contents with Go regular expressions. Binary files are skipped.
 ### `bash`
 
 Execute a shell command with `sh -c`. stdout and stderr are captured and the exit
-code is included in the output.
+code is included in the output. While the command runs, stdout/stderr chunks stream
+to connected clients; the final tool result is unchanged.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

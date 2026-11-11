@@ -257,17 +257,17 @@ func TestCardsHideExpandWhenComplete(t *testing.T) {
 	styles.Set("dark")
 	c := NewChat()
 
-	write := &ChatItem{Kind: ItemTool, ToolName: "write:a.go", WriteContent: "a\nb\n", ToolOutput: "ok"}
+	write := &ChatItem{Kind: ItemTool, ToolName: "write:a.go", WriteContent: "a\nb\n", ToolOutput: "ok", ToolDone: true}
 	if strings.Contains(flattenLines(c.writeCardLines(write, 80)), "Expand") {
 		t.Error("complete write card should not offer expand")
 	}
 
-	edit := &ChatItem{Kind: ItemTool, ToolName: "edit:a.go", Diff: ComputeDiff("a\nb\n", "a\nc\n"), ToolOutput: "ok"}
+	edit := &ChatItem{Kind: ItemTool, ToolName: "edit:a.go", Diff: ComputeDiff("a\nb\n", "a\nc\n"), ToolOutput: "ok", ToolDone: true}
 	if strings.Contains(flattenLines(c.editCardLines(edit, 80)), "Expand") {
 		t.Error("complete diff card should not offer expand")
 	}
 
-	bash := &ChatItem{Kind: ItemTool, ToolName: "bash:echo hi", ToolOutput: "hi", Duration: 0}
+	bash := &ChatItem{Kind: ItemTool, ToolName: "bash:echo hi", ToolOutput: "hi", Duration: 0, ToolDone: true}
 	if strings.Contains(flattenLines(c.bashCardLines(bash, 80)), "Expand") {
 		t.Error("complete bash card should not offer expand")
 	}
@@ -283,17 +283,17 @@ func TestCardsShowExpandWhenTruncated(t *testing.T) {
 		sb.WriteString("line\n")
 	}
 
-	write := &ChatItem{Kind: ItemTool, ToolName: "write:a.go", WriteContent: sb.String(), ToolOutput: "ok"}
+	write := &ChatItem{Kind: ItemTool, ToolName: "write:a.go", WriteContent: sb.String(), ToolOutput: "ok", ToolDone: true}
 	if !strings.Contains(flattenLines(c.writeCardLines(write, 80)), "Expand") {
 		t.Error("truncated write card should offer expand")
 	}
 
-	edit := &ChatItem{Kind: ItemTool, ToolName: "edit:a.go", Diff: ComputeDiff("", sb.String()), ToolOutput: "ok"}
+	edit := &ChatItem{Kind: ItemTool, ToolName: "edit:a.go", Diff: ComputeDiff("", sb.String()), ToolOutput: "ok", ToolDone: true}
 	if !strings.Contains(flattenLines(c.editCardLines(edit, 80)), "Expand") {
 		t.Error("truncated diff card should offer expand")
 	}
 
-	bash := &ChatItem{Kind: ItemTool, ToolName: "bash:seq 40", ToolOutput: sb.String()}
+	bash := &ChatItem{Kind: ItemTool, ToolName: "bash:seq 40", ToolOutput: sb.String(), ToolDone: true}
 	if !strings.Contains(flattenLines(c.bashCardLines(bash, 80)), "Expand") {
 		t.Error("truncated bash card should offer expand")
 	}

@@ -1,9 +1,12 @@
 package shell
 
 import (
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	agenttool "github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/vfs"
 )
 
@@ -112,6 +115,39 @@ func TestBashToolTimeout(t *testing.T) {
 	}
 	if !contains(t, out, "timed out after 1s") {
 		t.Errorf("expected timeout message, got:\n%s", out)
+	}
+}
+
+func TestBashToolStreamsOutput(t *testing.T) {
+	fs := setupTestFS(t)
+	tool := bashTool(fs)
+
+	var mu sync.Mutex
+	var chunks []string
+	sink := agenttool.NewOutputSink(func(stream, chunk string) {
+		mu.Lock()
+		chunks = append(chunks, stream+":"+chunk)
+		mu.Unlock()
+	})
+	ctx := agenttool.WithOutputSink(t.Context(), sink)
+
+	out, err := tool.Execute(ctx, `{"command": "echo one; echo two >&2", "description": "stream output"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sink.Close()
+
+	if !contains(t, out, "Exit code: 0") {
+		t.Errorf("expected final exit code, got:\n%s", out)
+	}
+	mu.Lock()
+	streamed := strings.Join(chunks, "")
+	mu.Unlock()
+	if !strings.Contains(streamed, "stdout:one") {
+		t.Errorf("missing streamed stdout, got:\n%s", streamed)
+	}
+	if !strings.Contains(streamed, "stderr:two") {
+		t.Errorf("missing streamed stderr, got:\n%s", streamed)
 	}
 }
 

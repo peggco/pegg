@@ -87,6 +87,8 @@ The build is driven by a small Makefile...
 
 - Tool calls are shown as `tool [agent] name(args...)`; results are truncated to 500
   characters.
+- Bash stdout/stderr streams live while the command runs; the exit code is printed
+  when it completes.
 - `--show-thinking` prints the model's raw reasoning; otherwise a `Thinking...`
   spinner is shown on a TTY.
 - `--show-subagent` prints subagent content instead of a `Subagent <name>` line.

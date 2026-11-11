@@ -24,6 +24,8 @@
   chat history, with a matching `sendfile` tool.
 - Skill hub support: browse, search, and install skills from the composer.
 - Lazy-loaded long session history with a "load earlier messages" control.
+- Bash tool cards stream stdout/stderr live while the command runs and stay
+  expanded until it completes.
 
 ## 0.2.3
 

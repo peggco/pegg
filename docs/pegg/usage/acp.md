@@ -252,7 +252,7 @@ The server pushes spec-compliant `session/update` notifications:
 | `agent_message_chunk` | Streaming assistant text |
 | `agent_thought_chunk` | Streaming model reasoning |
 | `tool_call` | A tool call starts (`toolCallId`, `title`, `name`, `kind`, `status`, `rawInput`, `locations`) |
-| `tool_call_update` | A tool call completes or fails (`status`, `rawOutput`, optional `content` diff) |
+| `tool_call_update` | A tool call updates: `in_progress` with partial `rawOutput` while bash runs, then `completed`/`failed` with the final output (`status`, `rawOutput`, optional `content` diff) |
 | `plan` | A `todowrite` call updates the plan (`entries`) |
 | `available_commands_update` | Skills/commands available for the session (`availableCommands`) |
 | `current_mode_update` | Mode changed (`currentModeId`) |

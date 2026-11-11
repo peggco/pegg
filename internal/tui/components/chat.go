@@ -43,6 +43,7 @@ type ChatItem struct {
 	ToolName     string
 	ToolArgs     string
 	ToolOutput   string
+	ToolPartial  string
 	ToolErr      string
 	ToolDone     bool
 	Diff         []DiffHunk
@@ -1034,7 +1035,7 @@ func (c *Chat) toolLines(it *ChatItem, width int) []Line {
 	isBash := strings.HasPrefix(it.ToolName, "bash:") || it.ToolName == "bash"
 	isAsk := it.ToolName == "askuserquestion"
 	isSendFile := it.ToolName == "sendfile" || strings.HasPrefix(it.ToolName, "sendfile:")
-	isRunning := !it.ToolDone && it.ToolErr == "" && it.ToolOutput == ""
+	isRunning := !it.ToolDone && it.ToolErr == ""
 
 	if isRunning {
 		if isBash {
@@ -1556,7 +1557,7 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 	dim := th.Base().Foreground(th.TextDim).Background(th.Background)
 	muted := th.Base().Foreground(th.Muted).Background(th.Background)
 	success := th.Base().Foreground(th.Success).Background(th.Background)
-	running := !it.ToolDone && it.ToolErr == "" && it.ToolOutput == ""
+	running := !it.ToolDone && it.ToolErr == ""
 
 	var lines []Line
 
@@ -1614,37 +1615,28 @@ func (c *Chat) bashCardLines(it *ChatItem, width int) []Line {
 	lines = append(lines, sep)
 
 	if running {
-		dots := int(c.now/(300*time.Millisecond)) % 4
-		row := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
-		msg := i18n.T("chat.status.running") + strings.Repeat(".", dots)
-		for _, r := range msg {
-			row = append(row, Cell{R: r, S: dim})
+		if partial := strings.TrimRight(it.ToolPartial, "\n"); partial != "" {
+			partialLines := strings.Split(partial, "\n")
+			const maxPartialLines = 8
+			if len(partialLines) > maxPartialLines {
+				partialLines = partialLines[len(partialLines)-maxPartialLines:]
+			}
+			for _, line := range partialLines {
+				prow := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
+				for _, r := range line {
+					if prow.Width() >= width-2 {
+						break
+					}
+					prow = append(prow, Cell{R: r, S: dim})
+				}
+				for prow.Width() < width-1 {
+					prow = append(prow, Cell{R: ' ', S: th.Base()})
+				}
+				prow = append(prow, Cell{R: '│', S: border})
+				lines = append(lines, prow)
+			}
 		}
-		if glowT(c.now) >= 0.5 {
-			row = append(row, Cell{R: '▌', S: accent})
-		}
-		for row.Width() < width-1 {
-			row = append(row, Cell{R: ' ', S: th.Base()})
-		}
-		row = append(row, Cell{R: '│', S: border})
-		lines = append(lines, row)
-
-		sepRun := Line{{R: '├', S: border}}
-		for i := 0; i < width-2; i++ {
-			sepRun = append(sepRun, Cell{R: '─', S: border})
-		}
-		sepRun = append(sepRun, Cell{R: '┤', S: border})
-		lines = append(lines, sepRun)
-
-		footer := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
-		for _, r := range i18n.T("chat.status.running") {
-			footer = append(footer, Cell{R: r, S: muted})
-		}
-		for footer.Width() < width-1 {
-			footer = append(footer, Cell{R: ' ', S: th.Base()})
-		}
-		footer = append(footer, Cell{R: '│', S: border})
-		lines = append(lines, footer)
+		lines = append(lines, bottomEdge(border, width))
 		return lines
 	}
 

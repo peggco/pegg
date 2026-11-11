@@ -12,6 +12,7 @@ const (
 	TopicAgentMessage         = "agent.message"
 	TopicAgentToken           = "agent.token"
 	TopicAgentToolCall        = "agent.tool.call"
+	TopicAgentToolOutput      = "agent.tool.output"
 	TopicAgentToolResult      = "agent.tool.result"
 	TopicAgentUsage           = "agent.usage"
 	TopicAgentFinished        = "agent.finished"
@@ -62,6 +63,16 @@ type AgentToolCall struct {
 	AgentName string
 	Model     llm.Model
 	Call      llm.ToolCall
+}
+
+type AgentToolOutput struct {
+	AgentID   string
+	AgentName string
+	Model     llm.Model
+	CallID    string
+	ToolName  string
+	Stream    string
+	Chunk     string
 }
 
 type AgentToolResult struct {

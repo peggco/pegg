@@ -755,6 +755,7 @@ type runRenderer struct {
 	chatMode     bool
 	mainID       string
 	states       map[string]*runAgentState
+	streamed     map[string]bool
 
 	thinkingCount int
 	subRunning    map[string]bool
@@ -775,6 +776,7 @@ func newRunRenderer(out io.Writer, in io.Reader, mainID string, showThinking, sh
 		showSubagent: showSubagent,
 		mainID:       mainID,
 		states:       make(map[string]*runAgentState),
+		streamed:     make(map[string]bool),
 		subRunning:   make(map[string]bool),
 	}
 }
@@ -801,6 +803,7 @@ func (r *runRenderer) subscribe(bus event.Bus) error {
 		{agent.TopicAgentToken, r.onToken},
 		{agent.TopicAgentMessage, r.onMessage},
 		{agent.TopicAgentToolCall, r.onToolCall},
+		{agent.TopicAgentToolOutput, r.onToolOutput},
 		{agent.TopicAgentToolResult, r.onToolResult},
 		{agent.TopicAgentFinished, r.onFinished},
 		{agent.TopicAgentError, r.onError},
@@ -825,6 +828,7 @@ func (r *runRenderer) unsubscribe(bus event.Bus) {
 		{agent.TopicAgentToken, r.onToken},
 		{agent.TopicAgentMessage, r.onMessage},
 		{agent.TopicAgentToolCall, r.onToolCall},
+		{agent.TopicAgentToolOutput, r.onToolOutput},
 		{agent.TopicAgentToolResult, r.onToolResult},
 		{agent.TopicAgentFinished, r.onFinished},
 		{agent.TopicAgentError, r.onError},
@@ -1148,14 +1152,37 @@ func (r *runRenderer) onToolCall(e agent.AgentToolCall) {
 	r.write("%s %s%s\n", r.green("tool"), r.agentTag(e.AgentID, e.AgentName), formatToolCall(e.Call))
 }
 
+func (r *runRenderer) onToolOutput(e agent.AgentToolOutput) {
+	if e.AgentID != r.mainID && !r.showSubagent {
+		return
+	}
+	if e.Chunk == "" {
+		return
+	}
+	r.mu.Lock()
+	r.streamed[e.CallID] = true
+	r.mu.Unlock()
+	r.write("%s", e.Chunk)
+}
+
 func (r *runRenderer) onToolResult(e agent.AgentToolResult) {
 	if e.AgentID != r.mainID && !r.showSubagent {
 		return
 	}
 	st := r.state(e.AgentID)
 	r.closeThinking(st)
+	r.mu.Lock()
+	streamed := r.streamed[e.CallID]
+	delete(r.streamed, e.CallID)
+	r.mu.Unlock()
 	if e.Err != nil {
 		r.write("%s %s%s: %s\n", r.red("error"), r.agentTag(e.AgentID, e.AgentName), e.ToolName, truncate(e.Output, 500))
+		return
+	}
+	if streamed {
+		if code, ok := exitCodeFromOutput(e.Output); ok {
+			r.write("\n%s %s%s: exit code %d\n", r.dim("result"), r.agentTag(e.AgentID, e.AgentName), e.ToolName, code)
+		}
 		return
 	}
 	out := truncate(e.Output, 500)
@@ -1163,6 +1190,19 @@ func (r *runRenderer) onToolResult(e agent.AgentToolResult) {
 		out = "(no output)"
 	}
 	r.write("%s %s%s: %s\n", r.dim("result"), r.agentTag(e.AgentID, e.AgentName), e.ToolName, out)
+}
+
+func exitCodeFromOutput(out string) (int, bool) {
+	line, _, _ := strings.Cut(out, "\n")
+	const prefix = "Exit code: "
+	if !strings.HasPrefix(line, prefix) {
+		return 0, false
+	}
+	var code int
+	if _, err := fmt.Sscanf(strings.TrimSpace(line[len(prefix):]), "%d", &code); err != nil {
+		return 0, false
+	}
+	return code, true
 }
 
 func (r *runRenderer) onFinished(e agent.AgentFinished) {

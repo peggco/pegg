@@ -6,6 +6,8 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/peggco/pegg/internal/agent/tool"
 )
 
 type TerminalOutputResult struct {
@@ -136,13 +138,41 @@ func (r *acpTerminalRunner) RunTerminal(ctx context.Context, command string, tim
 		done <- st
 	}()
 
-	var exit *TerminalExitStatus
-	select {
-	case exit = <-done:
-	case <-waitCtx.Done():
-		_ = r.server.TerminalKill(context.Background(), r.sessionID, termID)
-		exit = <-done
+	writer := tool.OutputWriter(ctx, "stdout")
+	emitted := 0
+	stream := func() {
+		res, err := r.server.TerminalOutput(context.Background(), r.sessionID, termID)
+		if err != nil || res == nil {
+			return
+		}
+		if res.Truncated {
+			emitted = 0
+		}
+		if len(res.Output) <= emitted {
+			return
+		}
+		_, _ = writer.Write([]byte(res.Output[emitted:]))
+		emitted = len(res.Output)
 	}
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	var exit *TerminalExitStatus
+	finished := false
+	for !finished {
+		select {
+		case exit = <-done:
+			finished = true
+		case <-ticker.C:
+			stream()
+		case <-waitCtx.Done():
+			_ = r.server.TerminalKill(context.Background(), r.sessionID, termID)
+			exit = <-done
+			finished = true
+		}
+	}
+	stream()
 
 	out, err := r.server.TerminalOutput(context.Background(), r.sessionID, termID)
 	if err != nil {

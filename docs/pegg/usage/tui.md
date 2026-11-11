@@ -209,8 +209,8 @@ text.
 
 ### Specialized tool cards
 
-- **BASH** — command header, syntax-highlighted output (30 lines collapsed),
-  `exit code` footer.
+- **BASH** — command header, live stdout/stderr while the command runs,
+  syntax-highlighted output (30 lines collapsed), `exit code` footer.
 - **DIFF** — unified diff for `edit` calls with added/removed highlighting and a
   `+N -M` summary.
 - **WRITE** — syntax-highlighted file content for `write` calls.

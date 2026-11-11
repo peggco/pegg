@@ -52,6 +52,10 @@ type ChatEvent struct {
 	Content         string
 	Reasoning       string
 	ToolCall        *ToolCall
+	ToolCallID      string
+	ToolName        string
+	ToolStream      string
+	ToolChunk       string
 	ToolOutput      string
 	ToolErr         error
 	ToolAttachments []Attachment
@@ -67,6 +71,7 @@ const (
 	EventToken      ChatEventType = "token"
 	EventReasoning  ChatEventType = "reasoning"
 	EventToolCall   ChatEventType = "tool_call"
+	EventToolOutput ChatEventType = "tool_output"
 	EventToolResult ChatEventType = "tool_result"
 	EventCompaction ChatEventType = "compaction"
 	EventDone       ChatEventType = "done"
@@ -251,6 +256,10 @@ func mapStreamEvent(ev agent.StreamEvent) ChatEvent {
 		Model:           ev.Model,
 		Content:         ev.Content,
 		Reasoning:       ev.Reasoning,
+		ToolCallID:      ev.ToolCallID,
+		ToolName:        ev.ToolName,
+		ToolStream:      ev.ToolStream,
+		ToolChunk:       ev.ToolChunk,
 		ToolOutput:      ev.ToolOutput,
 		ToolErr:         ev.ToolErr,
 		ToolAttachments: ev.ToolAttachments,

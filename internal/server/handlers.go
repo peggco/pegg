@@ -237,6 +237,9 @@ func (s *Server) handleRunStream(w http.ResponseWriter, ctx context.Context, lea
 					sseEvent.ToolName = ev.ToolCall.Function.Name
 				}
 				sseEvent.ToolOutput = ev.ToolOutput
+			case agent.StreamToolOutput:
+				sseEvent.ToolName = ev.ToolName
+				sseEvent.ToolOutput = ev.ToolChunk
 			case agent.StreamCompaction:
 				sseEvent.Strategy = ev.Strategy
 				sseEvent.Messages = ev.Messages

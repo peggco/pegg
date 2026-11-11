@@ -59,6 +59,7 @@ type Agent struct {
 	displayNotifications []reminder.Reminder
 	attachedReminder     *reminder.Reminder
 	notificationsMu      sync.Mutex
+	streamMu             sync.Mutex
 
 	modeMu         sync.RWMutex
 	mode           Mode

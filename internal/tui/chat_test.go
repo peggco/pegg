@@ -12,6 +12,7 @@ import (
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/llm"
@@ -568,6 +569,63 @@ func TestMultiSubagentAppState(t *testing.T) {
 	}
 }
 
+func TestAgentToolOutputAppendsPartial(t *testing.T) {
+	orch := agent.New("orchestrator")
+	a := &App{
+		agent: orch, chat: components.NewChat(), ctx: context.Background(),
+		subs: map[string]*agentTranscript{}, subItemByID: map[string]*components.ChatItem{},
+		mode: agent.ModeAuto, viewID: orch.ID,
+	}
+	a.main = newTranscript(orch.ID, "orchestrator")
+	a.chat.SetItems(a.main.items)
+
+	a.onAgentStarted(agent.AgentStarted{AgentID: orch.ID, AgentName: "orchestrator"})
+	a.onAgentToolCall(agent.AgentToolCall{
+		AgentID: orch.ID, AgentName: "orchestrator",
+		Call: llm.ToolCall{ID: "c1", Function: llm.Function{Name: "bash", Arguments: `{"command":"echo hi"}`}},
+	})
+	a.onAgentToolOutput(agent.AgentToolOutput{
+		AgentID: orch.ID, AgentName: "orchestrator", CallID: "c1", ToolName: "bash", Chunk: "hi\n",
+	})
+
+	it, ok := a.main.toolByID["c1"]
+	if !ok {
+		t.Fatal("tool item missing")
+	}
+	if it.ToolPartial != "hi\n" {
+		t.Fatalf("ToolPartial = %q, want %q", it.ToolPartial, "hi\n")
+	}
+	if it.ToolDone {
+		t.Fatal("tool should still be running after a chunk")
+	}
+}
+
+func TestAgentToolOutputAppendsWhileFollowing(t *testing.T) {
+	orch := agent.New("orchestrator")
+	a := &App{
+		agent: orch, chat: components.NewChat(), ctx: context.Background(),
+		subs: map[string]*agentTranscript{}, subItemByID: map[string]*components.ChatItem{},
+		mode: agent.ModeAuto, viewID: orch.ID,
+		agentSessions:   map[string]string{orch.ID: "s1"},
+		session:         &activeSession{info: settings.SessionInfo{ID: "s1"}, viewID: "s1"},
+		attachCancel:    func() {},
+		followSessionID: "s1",
+	}
+	a.main = newTranscript(orch.ID, "orchestrator")
+	it := &components.ChatItem{Kind: components.ItemTool, ID: "c1", ToolName: "bash:ping"}
+	a.main.toolByID["c1"] = it
+	a.chat.AppendItem(it)
+	a.main.items = a.chat.Items()
+
+	a.onAgentToolOutput(agent.AgentToolOutput{
+		AgentID: orch.ID, AgentName: "orchestrator", CallID: "c1", ToolName: "bash", Chunk: "first\n",
+	})
+
+	if it.ToolPartial != "first\n" {
+		t.Fatalf("ToolPartial = %q, want %q", it.ToolPartial, "first\n")
+	}
+}
+
 func TestMultiSubagentConcurrentEvents(t *testing.T) {
 	styles.RegisterDefaults()
 	styles.Set("dark")
@@ -611,5 +669,73 @@ func TestMultiSubagentConcurrentEvents(t *testing.T) {
 	}
 	if subs != 2 {
 		t.Fatalf("subagent items = %d, want 2", subs)
+	}
+}
+
+type liveBashProvider struct{ step int }
+
+func (p *liveBashProvider) Name() string { return "mock" }
+func (p *liveBashProvider) Chat(ctx context.Context, req *llm.Request) (*llm.Response, error) {
+	return &llm.Response{Choices: []llm.Choice{{Message: &llm.Message{Role: llm.RoleAssistant, Content: "done"}}}}, nil
+}
+func (p *liveBashProvider) ChatStream(ctx context.Context, req *llm.Request, handler llm.StreamHandler) error {
+	p.step++
+	if p.step == 1 {
+		_ = handler(llm.StreamChunk{ToolCalls: []llm.ToolCall{{
+			Index: 0, ID: "c1", Type: "function",
+			Function: llm.Function{Name: "bash", Arguments: `{"command":"ping"}`},
+		}}})
+		return handler(llm.StreamChunk{FinishReason: llm.FinishReasonToolCalls, IsDone: true})
+	}
+	_ = handler(llm.StreamChunk{Content: "done"})
+	return handler(llm.StreamChunk{FinishReason: llm.FinishReasonStop, IsDone: true})
+}
+func (p *liveBashProvider) ListModels(ctx context.Context) ([]llm.Model, error) { return nil, nil }
+
+func TestTUIDrawsLiveBashOutput(t *testing.T) {
+	bash := tool.NewSpec("bash", "", nil, func(ctx context.Context, args string) (string, error) {
+		_, _ = tool.OutputWriter(ctx, "stdout").Write([]byte("first\n"))
+		time.Sleep(400 * time.Millisecond)
+		return "Exit code: 0\n", nil
+	})
+	orch := agent.New("orch",
+		agent.WithProvider(&liveBashProvider{}),
+		agent.WithModel(llm.Model{ID: "m"}),
+		agent.WithTool(bash),
+	)
+	app, bus := newChatApp(t, orch)
+	orch.Bus = bus
+
+	go func() {
+		_, _ = orch.RunStream(context.Background(), "go", func(agent.StreamEvent) error { return nil })
+	}()
+
+	waitFor(t, 250*time.Millisecond, func() bool {
+		app.chatMu.Lock()
+		defer app.chatMu.Unlock()
+		if app.main == nil {
+			return false
+		}
+		it := app.main.toolByID["c1"]
+		return it != nil && strings.Contains(it.ToolPartial, "first")
+	})
+
+	app.draw()
+	sim := app.screen.(tcell.SimulationScreen)
+	cells, w, h := sim.GetContents()
+	var b strings.Builder
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			c := cells[y*w+x]
+			if len(c.Runes) > 0 {
+				b.WriteRune(c.Runes[0])
+			} else {
+				b.WriteRune(' ')
+			}
+		}
+		b.WriteByte('\n')
+	}
+	if !strings.Contains(b.String(), "first") {
+		t.Fatalf("screen does not show live bash output:\n%s", b.String())
 	}
 }
