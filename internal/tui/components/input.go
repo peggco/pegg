@@ -709,6 +709,8 @@ func (in *Input) InsertText(text string) {
 	if text == "" {
 		return
 	}
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
 	in.saveUndo()
 	if in.anchor != nil {
 		in.deleteSelection()
@@ -732,11 +734,6 @@ func (in *Input) InsertText(text string) {
 		in.col = len([]rune(part))
 	}
 
-	current := []rune(in.lines[in.row])
-	if in.col < len(current) && !isSpace(current[in.col]) {
-		current = append(current[:in.col], append([]rune{' '}, current[in.col:]...)...)
-		in.lines[in.row] = string(current)
-	}
 	in.ensureCursorVisible()
 }
 

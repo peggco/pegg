@@ -157,8 +157,11 @@ There is no system-clipboard integration; pasting uses the terminal's bracketed
 paste. When you paste:
 
 - A single line that is an existing file path is attached as a file.
-- In a multi-line paste, every line that is an existing file path is attached.
-- Text longer than 100 characters is inserted as a collapsible **long text** chip.
+- A multi-line paste is attached only when every non-empty line is an existing
+  file path; otherwise the text is inserted verbatim.
+- Multi-line text keeps its newlines, blank lines, and tabs exactly as pasted.
+- Text longer than 100 characters is inserted as a collapsible **long text** chip
+  (the full text, including line breaks, is sent).
 
 Attachments appear in the attachment bar with type icons (image, audio, video,
 file) and pagination dots. Focus the bar with ++shift+tab++, navigate with

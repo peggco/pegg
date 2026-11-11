@@ -837,3 +837,24 @@ func TestPasteShortTextKeepsNewlines(t *testing.T) {
 		t.Fatalf("input value = %q, want %q", got, "a\nb")
 	}
 }
+
+func TestAppendPasteKeyPreservesNewlinesAndTabs(t *testing.T) {
+	var buf strings.Builder
+	appendPasteKey(&buf, tcell.NewEventKey(tcell.KeyRune, 'a', tcell.ModNone))
+	appendPasteKey(&buf, tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone))
+	appendPasteKey(&buf, tcell.NewEventKey(tcell.KeyCtrlJ, 0, tcell.ModCtrl))
+	appendPasteKey(&buf, tcell.NewEventKey(tcell.KeyRune, 'b', tcell.ModNone))
+	appendPasteKey(&buf, tcell.NewEventKey(tcell.KeyTab, 0, tcell.ModNone))
+	if got, want := buf.String(), "a\r\nb\t"; got != want {
+		t.Fatalf("paste buffer = %q, want %q", got, want)
+	}
+}
+
+func TestHandleFilePastePreservesNewlines(t *testing.T) {
+	p := home.New()
+	a := &App{home: p, screen: newTestScreen(t)}
+	a.handleFilePaste("first\r\n\r\nsecond\nthird")
+	if got, want := p.Input().Value(), "first\n\nsecond\nthird"; got != want {
+		t.Fatalf("input value = %q, want %q", got, want)
+	}
+}

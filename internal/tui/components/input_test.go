@@ -911,8 +911,17 @@ func TestInputInsertTextAtCursor(t *testing.T) {
 	in.MoveLeft()
 	in.MoveLeft()
 	in.InsertText("there\nfriend")
-	if got := in.Value(); got != "hello there\nfriend world" {
+	if got := in.Value(); got != "hello there\nfriendworld" {
 		t.Fatalf("value = %q", got)
+	}
+}
+
+func TestInputInsertTextPreservesCRLF(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.InsertText("a\r\nb\rc")
+	if got := in.Value(); got != "a\nb\nc" {
+		t.Fatalf("value = %q, want %q", got, "a\nb\nc")
 	}
 }
 

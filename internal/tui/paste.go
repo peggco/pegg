@@ -21,34 +21,50 @@ func resolvePastedPaths(text string) []string {
 		return nil
 	}
 
-	var out []string
-	seen := make(map[string]bool)
-	add := func(candidate string) {
-		path := normalizePastedPath(candidate)
-		if path == "" || seen[path] {
-			return
+	if !strings.ContainsAny(text, "\r\n") {
+		if path := existingFilePath(text); path != "" {
+			return []string{path}
 		}
-		info, err := os.Stat(path)
-		if err != nil || info.IsDir() {
-			return
+		return resolveAllPastedPaths(splitPastedPaths(text))
+	}
+
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) != "" {
+			lines = append(lines, line)
+		}
+	}
+	return resolveAllPastedPaths(lines)
+}
+
+func existingFilePath(raw string) string {
+	path := normalizePastedPath(raw)
+	if path == "" {
+		return ""
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return ""
+	}
+	return path
+}
+
+func resolveAllPastedPaths(candidates []string) []string {
+	if len(candidates) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(candidates))
+	seen := make(map[string]bool, len(candidates))
+	for _, candidate := range candidates {
+		path := existingFilePath(candidate)
+		if path == "" {
+			return nil
+		}
+		if seen[path] {
+			continue
 		}
 		seen[path] = true
 		out = append(out, path)
-	}
-
-	if strings.ContainsAny(text, "\r\n") {
-		for _, line := range strings.Split(text, "\n") {
-			add(line)
-		}
-	} else {
-		add(text)
-	}
-	if len(out) > 0 {
-		return out
-	}
-
-	for _, token := range splitPastedPaths(text) {
-		add(token)
 	}
 	return out
 }

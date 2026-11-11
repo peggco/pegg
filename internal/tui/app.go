@@ -513,9 +513,7 @@ func (a *App) loop() error {
 			}
 		case *tcell.EventKey:
 			if a.pasteActive {
-				if r := e.Rune(); r != 0 {
-					a.pasteBuffer.WriteRune(r)
-				}
+				appendPasteKey(&a.pasteBuffer, e)
 				continue
 			}
 			if a.handleKey(e) {
@@ -1184,6 +1182,19 @@ func (a *App) drawLocked() {
 	a.screen.Show()
 }
 
+func appendPasteKey(buf *strings.Builder, e *tcell.EventKey) {
+	switch e.Key() {
+	case tcell.KeyRune:
+		buf.WriteRune(e.Rune())
+	case tcell.KeyEnter:
+		buf.WriteByte('\r')
+	case tcell.KeyCtrlJ:
+		buf.WriteByte('\n')
+	case tcell.KeyTab:
+		buf.WriteByte('\t')
+	}
+}
+
 func (a *App) handleFilePaste(text string) {
 	if a.home != nil && a.home.AskOpen() {
 		a.chatMu.Lock()
@@ -1195,7 +1206,6 @@ func (a *App) handleFilePaste(text string) {
 
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
-	text = strings.TrimSpace(text)
 	if text == "" {
 		a.attachClipboardImage()
 		return
