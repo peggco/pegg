@@ -11,6 +11,8 @@ import {
 import type { AttachmentInfo } from '../types';
 import { renderMarkdown } from './markdown';
 import { host } from './host';
+import { DiffView } from './DiffView';
+import { WriteView } from './WriteView';
 
 interface StateMessage {
   type: 'state';
@@ -1570,6 +1572,8 @@ function ToolCard({ tool }: { tool: ToolState }) {
   const name = (tool.name ?? '').toLowerCase();
   const isBash = name === 'bash' || tool.kind === 'execute' || /^bash\b/i.test(tool.title);
   if (isBash) return <BashToolCard tool={tool} />;
+  const isWrite = /\bwrite\b/i.test(`${tool.name ?? ''} ${tool.title}`);
+  const writeText = isWrite ? writeContent(tool) : '';
   const hasDiff = Boolean(tool.diff);
   const output = stripAnsi(tool.output === undefined ? '' : pretty(tool.output));
   const hasOutput = isBash && output.length > 0;
@@ -1577,6 +1581,7 @@ function ToolCard({ tool }: { tool: ToolState }) {
   const running = tool.status === 'in_progress';
   const longOutput = hasOutput && output.split('\n').length > 9;
   const canExpand = failed || longOutput;
+  const compact = !canExpand && !hasDiff && !isWrite;
 
   const head = (
     <>
@@ -1591,7 +1596,7 @@ function ToolCard({ tool }: { tool: ToolState }) {
   );
 
   return (
-    <div className={`tool-card status-${tool.status}${canExpand ? '' : ' compact'}`}>
+    <div className={`tool-card status-${tool.status}${compact ? ' compact' : ''}`}>
       {canExpand ? (
         <button className="tool-head" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
           {head}
@@ -1645,6 +1650,9 @@ function ToolCard({ tool }: { tool: ToolState }) {
         </div>
       )}
 
+      {isWrite && writeText ? <WriteView path={toolPath(tool)} content={writeText} /> : null}
+      {!isWrite && tool.diff ? <DiffView diff={tool.diff} /> : null}
+
       {(hasDiff || (open && hasOutput)) && (
         <div className="tool-buttons">
           {tool.locations?.map((location, index) => (
@@ -1661,7 +1669,7 @@ function ToolCard({ tool }: { tool: ToolState }) {
               Copy output
             </button>
           )}
-          {tool.diff && (
+          {!isWrite && tool.diff && (
             <button
               className="mini-button"
               onClick={() =>
@@ -1680,6 +1688,29 @@ function ToolCard({ tool }: { tool: ToolState }) {
       )}
     </div>
   );
+}
+
+function toolPath(tool: ToolState): string {
+  const input = tool.input;
+  if (input && typeof input === 'object' && 'path' in input) {
+    const path = (input as { path?: unknown }).path;
+    if (typeof path === 'string') return path;
+  }
+  if (tool.diff?.path) return tool.diff.path;
+  return tool.locations?.[0]?.path ?? '';
+}
+
+function writeContent(tool: ToolState): string {
+  const input = tool.input;
+  if (input && typeof input === 'object') {
+    const record = input as Record<string, unknown>;
+    for (const key of ['content', 'text', 'newText', 'new_string', 'newString']) {
+      const value = record[key];
+      if (typeof value === 'string') return value;
+    }
+  }
+  if (tool.diff?.newText) return tool.diff.newText;
+  return typeof tool.output === 'string' ? tool.output : '';
 }
 
 function PermissionCard({ pending }: { pending: PendingPermission }) {

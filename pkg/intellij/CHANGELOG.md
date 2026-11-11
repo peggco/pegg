@@ -4,6 +4,10 @@
 
 ### Added
 
+- Write tool cards now render syntax-highlighted code (as in the desktop app)
+  instead of a diff; edit tool cards render a syntax-highlighted inline
+  GitHub-style diff with line numbers, hunks, and add/remove highlighting,
+  themed to the IDE. **View diff** still opens the native editor diff for edits.
 - Unified **TASK** card for `task` calls: subagent name/type, prompt, background
   badge, live activity, final response, usage/duration, and an in-place transcript
   while running; fork subagents keep the standalone subagent card.

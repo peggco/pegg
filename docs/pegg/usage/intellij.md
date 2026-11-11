@@ -59,8 +59,11 @@ The Pegg tool window has two tabs:
 
 The chat tab is the same shared `pkg/chat-ui` renderer as the VS Code extension, rendered with JCEF. It
 supports streaming markdown, syntax highlighting, reasoning, tool cards with
-output and diffs (bash uses a terminal-style card with live output and an
-exit-code footer), unified **TASK** cards with live activity, a response preview,
+output and syntax-highlighted code for write calls (edit calls render a
+syntax-highlighted inline GitHub-style diff with a path header, `+adds/−dels`
+stat, dual line-number gutters, hunks, and add/remove highlighting, themed to the
+IDE, plus a **View diff** action); bash uses a terminal-style card with live output and
+an exit-code footer. Unified **TASK** cards with live activity, a response preview,
 usage/duration and an in-place transcript while running, fork-subagent cards, plan
 updates, usage and cost, permission cards, and ask-user forms.
 
