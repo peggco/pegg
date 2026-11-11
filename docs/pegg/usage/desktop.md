@@ -67,8 +67,8 @@ Settings → Appearance also controls the shell:
 
 ### Chat history
 
-- **Detailed** (default) renders every reasoning block and tool card inline, matching the previous behavior.
-- **Compact** groups consecutive reasoning and tool calls behind a single activity summary such as `Ran 9 commands · read 3 files`, with a timestamp. Expanding the summary shows one-line reasoning/tool rows; expanding a row opens its full tool card (terminal output, diff, written code, or command output).
+- **Compact** (default) groups consecutive reasoning and tool calls behind a single activity summary such as `Ran 9 commands · read 3 files`, with a timestamp. Expanding the summary shows one-line reasoning/tool rows; expanding a row opens its full tool card (terminal output, diff, written code, or command output).
+- **Detailed** renders every reasoning block and tool card inline, matching the previous behavior.
 
 Assistant replies and user messages stay visible in both modes. Task and subagent cards remain standalone and full. Switching modes applies immediately and the choice is stored with the desktop preferences.
 

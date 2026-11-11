@@ -61,7 +61,7 @@ func Defaults() Prefs {
 		SidebarMode:     "sidebar",
 		LayoutMode:      "default",
 		Direction:       "ltr",
-		ChatHistoryMode: "detailed",
+		ChatHistoryMode: "compact",
 	}
 }
 
@@ -165,10 +165,10 @@ func normalizeDirection(direction string) string {
 }
 
 func normalizeChatHistoryMode(mode string) string {
-	if mode == "compact" {
-		return "compact"
+	if mode == "detailed" {
+		return "detailed"
 	}
-	return "detailed"
+	return "compact"
 }
 
 func (s *Store) Get() Prefs {

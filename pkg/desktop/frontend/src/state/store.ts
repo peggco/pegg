@@ -66,7 +66,7 @@ const initialPrefs: Prefs = {
   sidebarMode: 'sidebar',
   layoutMode: 'default',
   direction: 'ltr',
-  chatHistoryMode: 'detailed',
+  chatHistoryMode: 'compact',
   lastSession: '',
   window: {},
 };
