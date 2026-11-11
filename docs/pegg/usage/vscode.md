@@ -78,7 +78,8 @@ The sidebar chat supports:
 - Streaming markdown with syntax highlighting.
 - Collapsible reasoning, merged into a single block while streaming.
 - Tool cards with command output, expandable input, copy, file locations, and
-  edit diffs.
+  edit diffs. Bash uses a terminal-style card with a `$ command` header, live
+  output tail, and an exit-code footer.
 - A single **TASK** card per `task` call: subagent name/type, prompt, background
   badge, live activity, response preview, usage/duration, and **History** while
   running. Fork-launched subagents keep the standalone subagent card.

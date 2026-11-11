@@ -590,6 +590,202 @@ button {
   margin-top: 4px;
 }
 
+.bash-card {
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--vscode-editorWidget-background, transparent);
+  font-size: 11px;
+}
+
+.bash-card.failed {
+  border-color: var(--vscode-testing-iconFailed);
+}
+
+.bash-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: var(--vscode-editorWidget-background, transparent);
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  color: var(--vscode-descriptionForeground);
+}
+
+.bash-dots {
+  display: inline-flex;
+  gap: 3px;
+  flex: none;
+}
+
+.bash-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.bash-dots i:nth-child(1) {
+  background: var(--vscode-testing-iconFailed);
+}
+
+.bash-dots i:nth-child(2) {
+  background: var(--vscode-editorWarning-foreground);
+}
+
+.bash-dots i:nth-child(3) {
+  background: var(--vscode-testing-iconPassed);
+}
+
+.bash-icon {
+  flex: none;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10px;
+  color: var(--vscode-terminal-ansiGreen, var(--vscode-testing-iconPassed));
+}
+
+.bash-title {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-foreground);
+}
+
+.bash-agent {
+  font-size: 9px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.bash-spacer {
+  flex: 1;
+}
+
+.bash-status {
+  font-size: 10px;
+}
+
+.bash-status.running {
+  color: var(--vscode-progressBar-background, var(--vscode-terminal-ansiCyan));
+}
+
+.bash-status.failed {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.bash-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--vscode-descriptionForeground);
+}
+
+.bash-dot.in_progress {
+  background: var(--vscode-progressBar-background, var(--vscode-terminal-ansiCyan));
+  animation: bash-pulse 1.2s ease-in-out infinite;
+}
+
+.bash-dot.completed {
+  background: var(--vscode-testing-iconPassed);
+}
+
+.bash-dot.failed {
+  background: var(--vscode-testing-iconFailed);
+}
+
+.bash-dot.cancelled {
+  background: var(--vscode-descriptionForeground);
+}
+
+@keyframes bash-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.bash-body {
+  padding: 8px 10px;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--vscode-textCodeBlock-background);
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.bash-cmd {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bash-prompt {
+  flex: none;
+  user-select: none;
+  color: var(--vscode-terminal-ansiGreen, var(--vscode-testing-iconPassed));
+}
+
+.bash-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bash-stderr {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.bash-muted {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+.bash-error {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.bash-more {
+  margin-top: 6px;
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.bash-more:hover {
+  color: var(--vscode-foreground);
+}
+
+.bash-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  background: var(--vscode-editorWidget-background, transparent);
+}
+
+.bash-exit {
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+.bash-exit.ok {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.bash-exit.bad {
+  color: var(--vscode-testing-iconFailed);
+}
+
 .tool-files {
   display: flex;
   flex-direction: column;

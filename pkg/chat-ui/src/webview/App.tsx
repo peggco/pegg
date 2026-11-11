@@ -1437,10 +1437,139 @@ function cappedLines(text: string, limit: number, mark: boolean): string {
   return mark ? `${shown}\n…` : shown;
 }
 
+interface BashLine {
+  text: string;
+  kind: 'stdout' | 'stderr';
+}
+
+interface BashOutput {
+  lines: BashLine[];
+  exitCode?: number;
+}
+
+function bashCommand(tool: ToolState): string {
+  const input = tool.input;
+  if (input && typeof input === 'object' && 'command' in input) {
+    const command = (input as { command?: unknown }).command;
+    if (typeof command === 'string' && command.trim()) return command.trim();
+  }
+  const title = (tool.title || '').replace(/^bash\s*:\s*/i, '').trim();
+  if (title && title.toLowerCase() !== 'bash') return title;
+  return tool.name || 'bash';
+}
+
+function parseBashOutput(output: string): BashOutput {
+  const lines: BashLine[] = [];
+  let section: 'stdout' | 'stderr' = 'stdout';
+  let exitCode: number | undefined;
+  for (const line of output.split('\n')) {
+    const exit = line.match(/^Exit code:\s*(-?\d+)\s*$/);
+    if (exit) {
+      exitCode = Number(exit[1]);
+      continue;
+    }
+    if (/^stdout:\s*$/.test(line)) {
+      section = 'stdout';
+      continue;
+    }
+    if (/^stderr:\s*$/.test(line)) {
+      section = 'stderr';
+      continue;
+    }
+    lines.push({ text: line, kind: section });
+  }
+  while (lines.length && lines[lines.length - 1].text === '') lines.pop();
+  return { lines, exitCode };
+}
+
+function BashToolCard({ tool }: { tool: ToolState }) {
+  const [expanded, setExpanded] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const command = bashCommand(tool);
+  const output = stripAnsi(tool.output === undefined ? '' : pretty(tool.output));
+  const parsed = parseBashOutput(output);
+  const running = tool.status === 'in_progress';
+  const failed =
+    tool.status === 'failed' || Boolean(tool.error) || (parsed.exitCode !== undefined && parsed.exitCode !== 0);
+  const statusClass = failed ? 'failed' : running ? 'in_progress' : tool.status;
+  const limit = 24;
+  const truncated = !running && parsed.lines.length > limit;
+  const visible = running
+    ? parsed.lines.slice(-limit)
+    : expanded
+      ? parsed.lines
+      : parsed.lines.slice(0, limit);
+
+  useEffect(() => {
+    if (!running || !bodyRef.current) return;
+    bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [running, output]);
+
+  return (
+    <div className={`bash-card${failed ? ' failed' : ''}`}>
+      <div className="bash-head">
+        <span className="bash-dots" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="bash-icon" aria-hidden="true">
+          &gt;_
+        </span>
+        <span className="bash-title">bash</span>
+        {tool.agentName && tool.agentName !== 'orchestrator' ? (
+          <span className="bash-agent">{tool.agentName}</span>
+        ) : null}
+        <span className="bash-spacer" />
+        {running ? <span className="bash-status running">running</span> : null}
+        {failed ? <span className="bash-status failed">failed</span> : null}
+        <span className={`bash-dot ${statusClass}`} title={statusClass} />
+      </div>
+      <div className="bash-body" ref={bodyRef}>
+        <div className="bash-cmd">
+          <span className="bash-prompt">$</span>
+          <span>{command}</span>
+        </div>
+        {parsed.lines.length === 0 && !tool.error ? (
+          <div className="bash-line bash-muted">No output</div>
+        ) : null}
+        {visible.map((line, index) => (
+          <div className={`bash-line${line.kind === 'stderr' ? ' bash-stderr' : ''}`} key={index}>
+            {line.text || '\u00a0'}
+          </div>
+        ))}
+        {tool.error ? <div className="bash-line bash-error">{stripAnsi(tool.error)}</div> : null}
+        {truncated ? (
+          <button className="bash-more" onClick={() => setExpanded(true)}>
+            Show all {parsed.lines.length} lines
+          </button>
+        ) : null}
+        {expanded && parsed.lines.length > limit ? (
+          <button className="bash-more" onClick={() => setExpanded(false)}>
+            Collapse
+          </button>
+        ) : null}
+      </div>
+      <div className="bash-footer">
+        {parsed.exitCode !== undefined ? (
+          <span className={`bash-exit ${parsed.exitCode === 0 ? 'ok' : 'bad'}`}>exit {parsed.exitCode}</span>
+        ) : null}
+        <span className="bash-spacer" />
+        {output ? (
+          <button className="mini-button" onClick={() => host.postMessage({ type: 'copyText', text: output })}>
+            Copy output
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function ToolCard({ tool }: { tool: ToolState }) {
   const [open, setOpen] = useState(false);
   const name = (tool.name ?? '').toLowerCase();
   const isBash = name === 'bash' || tool.kind === 'execute' || /^bash\b/i.test(tool.title);
+  if (isBash) return <BashToolCard tool={tool} />;
   const hasDiff = Boolean(tool.diff);
   const output = stripAnsi(tool.output === undefined ? '' : pretty(tool.output));
   const hasOutput = isBash && output.length > 0;

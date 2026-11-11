@@ -20,6 +20,8 @@
 - Lazy-loaded long session history with a "load earlier messages" control.
 - Bash tool cards stream stdout/stderr live while the command runs and stay
   expanded until it completes.
+- Bash tool cards are now terminal-style: traffic-light header, `$ command`
+  prompt, live tail while running, exit-code footer, and a copy action.
 
 ### Fixed
 
