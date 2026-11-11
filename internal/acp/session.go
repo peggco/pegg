@@ -318,6 +318,39 @@ func paginateHistory(msgs []session.Message, before, limit int) ([]session.Messa
 	return filtered[start:], filtered[start].Seq, true
 }
 
+func historyToolContent(cwd string, call llm.ToolCall, args map[string]any) ([]ToolCallContent, []ToolCallLocation) {
+	if !isEditTool(call.Function.Name) {
+		return nil, nil
+	}
+	path, ok := toolPath(args)
+	if !ok {
+		return nil, nil
+	}
+	var oldText *string
+	var newText string
+	if call.Function.Name == "edit" {
+		old := stringArg(args, "oldString", "old_string")
+		newText = stringArg(args, "newString", "new_string")
+		if old != "" || newText != "" {
+			oldText = &old
+		}
+	} else {
+		newText = stringArg(args, "content", "text")
+	}
+	if newText == "" && oldText == nil {
+		return nil, nil
+	}
+	content := []ToolCallContent{{
+		Type: "diff",
+		Diff: &Diff{
+			Path:    path,
+			OldText: oldText,
+			NewText: truncate(newText, 2*1024*1024),
+		},
+	}}
+	return content, []ToolCallLocation{{Path: absPath(cwd, path)}}
+}
+
 func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Message, historyPage bool) {
 	for _, msg := range msgs {
 		updateType := "agent_message_chunk"
@@ -365,6 +398,10 @@ func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Messa
 		}
 		for _, call := range msg.ToolCalls {
 			callArgs := parseArgs(call.Function.Arguments)
+			content, locations := historyToolContent(cwd, call, callArgs)
+			if len(locations) == 0 {
+				locations = toolLocations(cwd, callArgs)
+			}
 			s.notify(sessionID, SessionUpdate{
 				SessionUpdate: "tool_call",
 				ToolCallID:    ToolCallId(call.ID),
@@ -373,7 +410,8 @@ func (s *Server) emitHistoryMessages(sessionID, cwd string, msgs []session.Messa
 				Kind:          toolKind(call.Function.Name),
 				Status:        string(ToolCallCompleted),
 				RawInput:      callArgs,
-				Locations:     toolLocations(cwd, callArgs),
+				Locations:     locations,
+				Content:       content,
 				Meta:          meta,
 			})
 		}

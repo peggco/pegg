@@ -28,6 +28,7 @@
   expanded until it completes.
 - Bash tool cards are now terminal-style: traffic-light header, `$ command`
   prompt, live tail while running, exit-code footer, and a copy action.
+- Restored edit tool cards now show their diff again after reloading a session.
 
 ## 0.2.3
 

@@ -27,6 +27,7 @@
 
 - TASK cards now flip from running to done as soon as their background subagent
   finishes, without reloading the session.
+- Restored edit tool cards now show their diff again after reloading a session.
 - TASK cards no longer scroll internally: long prompts and results collapse with
   a `…` hint, expanding grows the card and reveals more (still capped, never
   unbounded), like the TUI.
