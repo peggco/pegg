@@ -483,6 +483,10 @@
     box-shadow: none;
   }
 
+  .sidebar-resize {
+    display: none;
+  }
+
   .settings-tabs {
     width: 132px;
   }

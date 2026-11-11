@@ -198,6 +198,7 @@ export interface Prefs {
   sendOnEnter: boolean;
   fontScale: number;
   sidebarCollapsed: boolean;
+  sidebarWidth: number;
   lastSession: string;
   window: WindowPrefs;
 }

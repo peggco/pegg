@@ -365,6 +365,9 @@ func (a *App) SavePrefsOnly(p prefs.Prefs) prefs.Prefs {
 			cur.FontScale = p.FontScale
 		}
 		cur.SidebarCollapsed = p.SidebarCollapsed
+		if p.SidebarWidth > 0 {
+			cur.SidebarWidth = p.SidebarWidth
+		}
 	})
 	return a.prefs.Get()
 }

@@ -11,6 +11,7 @@ import type {
   Theme,
 } from '../types';
 import { emptyChat, type ChatState } from './chat';
+import { SIDEBAR_DEFAULT_WIDTH } from '../lib/sidebar';
 
 export interface Toast {
   id: string;
@@ -62,6 +63,7 @@ const initialPrefs: Prefs = {
   sendOnEnter: true,
   fontScale: 1,
   sidebarCollapsed: false,
+  sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
   lastSession: '',
   window: {},
 };

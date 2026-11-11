@@ -14,6 +14,7 @@ import type {
   Theme,
 } from '../types';
 import { resolveTheme, applyTheme } from '../lib/theme';
+import { clampSidebarWidth } from '../lib/sidebar';
 import {
   addAsk,
   addNotice,
@@ -757,10 +758,20 @@ export function togglePalette(open?: boolean): void {
   store.set((s) => ({ paletteOpen: open ?? !s.paletteOpen }));
 }
 
-export function toggleSidebar(): void {
-  const collapsed = !store.get().sidebarCollapsed;
+export function setSidebarCollapsed(collapsed: boolean): void {
+  if (store.get().sidebarCollapsed === collapsed) return;
   store.set({ sidebarCollapsed: collapsed });
   void savePrefs({ sidebarCollapsed: collapsed });
+}
+
+export function toggleSidebar(): void {
+  setSidebarCollapsed(!store.get().sidebarCollapsed);
+}
+
+export function saveSidebarWidth(width: number): void {
+  const clamped = clampSidebarWidth(width);
+  if (store.get().prefs.sidebarWidth === clamped) return;
+  void savePrefs({ sidebarWidth: clamped });
 }
 
 export function focusComposer(): void {

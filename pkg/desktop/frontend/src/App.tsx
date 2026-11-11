@@ -23,10 +23,10 @@ import {
   respondPermission,
   setBinaryProgress,
   setServerStatus,
+  setSidebarCollapsed,
   startNewChat,
   togglePalette,
   toggleSettings,
-  toggleSidebar,
 } from './state/actions';
 import { store, useStore } from './state/store';
 import { CommandPalette } from './components/CommandPalette';
@@ -168,13 +168,18 @@ export function App() {
       {showTitlebar ? <TitleBar /> : null}
       <StatusBanner />
       <div className="shell">
+        {sidebarCollapsed ? (
+          <button
+            className="sidebar-rail"
+            title="Show sidebar"
+            aria-label="Show sidebar"
+            onClick={() => setSidebarCollapsed(false)}
+          >
+            <PanelLeft size={14} />
+          </button>
+        ) : null}
         <Sidebar />
         <main className="main">
-          {sidebarCollapsed ? (
-            <button className="floating-sidebar-toggle" title="Show sidebar" onClick={toggleSidebar}>
-              <PanelLeft size={15} />
-            </button>
-          ) : null}
           {view === 'welcome' ? (
             <div className="main-scroll">
               <Welcome />

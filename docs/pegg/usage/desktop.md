@@ -53,6 +53,10 @@ Logo assets live in `pkg/desktop/assets`:
 
 The sidebar swaps the wordmark automatically with the active TUI theme. `make desktop-install` hashes the app icon and writes the hash into the desktop entry (`Icon=pegg-<hash>`), then refreshes the GTK/KDE icon caches, so replacing `appicon.png` and reinstalling updates the titlebar and launcher icon without manually clearing caches.
 
+## Sidebar
+
+Drag the sidebar's right edge to resize it between 200 and 520 px; dragging it below about 140 px collapses it. Double-click the handle to reset the width to 272 px. The width is saved in the desktop preferences and restored on the next launch. When the sidebar is collapsed, a slim rail on the far left reopens it at the saved width; the titlebar toggle and the **Toggle sidebar** command palette action also work.
+
 ## Agent binary
 
 Resolution order:

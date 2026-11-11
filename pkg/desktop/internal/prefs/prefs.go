@@ -13,6 +13,8 @@ const (
 	ThemeModeAuto  = "auto"
 	ThemeModeLight = "light"
 	ThemeModeDark  = "dark"
+
+	DefaultSidebarWidth = 272
 )
 
 type Window struct {
@@ -38,6 +40,7 @@ type Prefs struct {
 	SendOnEnter      bool     `json:"sendOnEnter"`
 	FontScale        float64  `json:"fontScale"`
 	SidebarCollapsed bool     `json:"sidebarCollapsed"`
+	SidebarWidth     int      `json:"sidebarWidth"`
 	LastSession      string   `json:"lastSession"`
 	Window           Window   `json:"window"`
 }
@@ -49,6 +52,7 @@ func Defaults() Prefs {
 		AutoDownload: true,
 		SendOnEnter:  true,
 		FontScale:    1,
+		SidebarWidth: DefaultSidebarWidth,
 	}
 }
 
@@ -110,6 +114,9 @@ func merge(data Prefs) Prefs {
 	}
 	if data.Window.Height <= 0 {
 		data.Window.Height = 840
+	}
+	if data.SidebarWidth < 160 || data.SidebarWidth > 600 {
+		data.SidebarWidth = def.SidebarWidth
 	}
 	return data
 }

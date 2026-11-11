@@ -147,9 +147,14 @@
   border-right: 1px solid color-mix(in srgb, var(--pg-border) 75%, transparent);
   display: flex;
   flex-direction: column;
+  position: relative;
   min-height: 0;
   overflow: hidden;
   transition: width var(--pg-normal), flex-basis var(--pg-normal), opacity var(--pg-fast);
+}
+
+.sidebar.resizing {
+  transition: none;
 }
 
 .sidebar.collapsed {
@@ -470,25 +475,57 @@
   scroll-behavior: smooth;
 }
 
-.floating-sidebar-toggle {
+.sidebar-resize {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 12;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--pg-radius-sm);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--pg-text-2);
-  background: color-mix(in srgb, var(--pg-bg) 80%, transparent);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--pg-border);
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 6;
+  cursor: col-resize;
+  touch-action: none;
 }
 
-.floating-sidebar-toggle:hover {
+.sidebar-resize::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+  transition: background var(--pg-fast);
+}
+
+.sidebar-resize:hover::after,
+.sidebar.resizing .sidebar-resize::after {
+  background: var(--pg-accent);
+}
+
+body.sidebar-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.sidebar-rail {
+  flex: 0 0 14px;
+  width: 14px;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12px;
+  border: 0;
+  border-right: 1px solid color-mix(in srgb, var(--pg-border) 75%, transparent);
+  background: var(--pg-sidebar);
+  color: var(--pg-text-2);
+  cursor: pointer;
+  transition: background var(--pg-fast), color var(--pg-fast);
+}
+
+.sidebar-rail:hover {
   background: var(--pg-surface);
+  color: var(--pg-text);
 }
 
 /* ---------- Composer dock ---------- */

@@ -1384,6 +1384,7 @@ export namespace prefs {
 	    sendOnEnter: boolean;
 	    fontScale: number;
 	    sidebarCollapsed: boolean;
+	    sidebarWidth: number;
 	    lastSession: string;
 	    window: Window;
 	
@@ -1402,6 +1403,7 @@ export namespace prefs {
 	        this.sendOnEnter = source["sendOnEnter"];
 	        this.fontScale = source["fontScale"];
 	        this.sidebarCollapsed = source["sidebarCollapsed"];
+	        this.sidebarWidth = source["sidebarWidth"];
 	        this.lastSession = source["lastSession"];
 	        this.window = this.convertValues(source["window"], Window);
 	    }
