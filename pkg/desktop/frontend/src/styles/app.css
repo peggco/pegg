@@ -478,7 +478,7 @@
 .sidebar-resize {
   position: absolute;
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
   bottom: 0;
   width: 6px;
   z-index: 6;
@@ -490,7 +490,7 @@
   content: '';
   position: absolute;
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
   bottom: 0;
   width: 1px;
   background: transparent;
@@ -581,4 +581,90 @@ body.sidebar-resizing {
   -webkit-mask-position: center;
   mask-position: center;
   flex: none;
+}
+
+.app[data-sidebar-mode='inset'] .shell {
+  padding: 8px;
+  gap: 8px;
+}
+
+.app[data-sidebar-mode='inset'] .sidebar,
+.app[data-sidebar-mode='inset'] .sidebar-rail,
+.app[data-sidebar-mode='inset'] .main {
+  border: 1px solid color-mix(in srgb, var(--pg-border) 75%, transparent);
+  border-radius: var(--pg-radius-md);
+}
+
+.app[data-sidebar-mode='inset'] .sidebar.collapsed {
+  border: 0;
+}
+
+.app[data-sidebar-mode='inset'] .main {
+  overflow: hidden;
+}
+
+.app[data-sidebar-mode='floating'] .shell {
+  padding: 12px;
+  gap: 12px;
+}
+
+.app[data-sidebar-mode='floating'] .sidebar {
+  border: 1px solid color-mix(in srgb, var(--pg-border) 75%, transparent);
+  border-radius: var(--pg-radius-md);
+  box-shadow: var(--pg-shadow-lg);
+}
+
+.app[data-sidebar-mode='floating'] .sidebar.collapsed {
+  border: 0;
+  box-shadow: none;
+}
+
+.app[data-sidebar-mode='floating'] .sidebar-rail {
+  border: 1px solid color-mix(in srgb, var(--pg-border) 75%, transparent);
+  border-radius: var(--pg-radius-md);
+}
+
+.app[data-sidebar-mode='floating'] .main {
+  border-radius: var(--pg-radius-md);
+  overflow: hidden;
+}
+
+.app[data-layout='compact'] .brand {
+  padding: 10px 14px 6px;
+}
+
+.app[data-layout='compact'] .sidebar-nav {
+  padding: 2px 8px 4px;
+}
+
+.app[data-layout='compact'] .nav-item {
+  padding: 5px 8px;
+  font-size: 12.5px;
+}
+
+.app[data-layout='compact'] .sidebar-section {
+  padding: 10px 14px 4px;
+}
+
+.app[data-layout='compact'] .thread {
+  padding: 14px 16px 16px;
+  gap: 10px;
+}
+
+.app[data-layout='compact'] .composer-dock {
+  padding: 6px 16px 8px;
+}
+
+.app[data-layout='full'] .thread {
+  max-width: min(1180px, 100%);
+  padding-inline: 32px;
+}
+
+.app[data-layout='full'] .composer-dock .composer,
+.app[data-layout='full'] .composer-dock .composer-hint {
+  max-width: 1180px;
+}
+
+.app[data-layout='full'] .welcome-inner {
+  max-width: 1400px;
 }

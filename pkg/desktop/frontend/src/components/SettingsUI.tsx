@@ -132,6 +132,29 @@ export function Pill({ children, accent = false }: { children: ReactNode; accent
   return <span className={`badge${accent ? ' accent' : ''}`}>{children}</span>;
 }
 
+export function OptionGrid({ children, columns = 3 }: { children: ReactNode; columns?: 2 | 3 }) {
+  return <div className={`option-grid${columns === 2 ? ' two' : ''}`}>{children}</div>;
+}
+
+export function OptionCard({
+  selected,
+  label,
+  onClick,
+  children,
+}: {
+  selected: boolean;
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button type="button" className={`option-card${selected ? ' active' : ''}`} aria-pressed={selected} onClick={onClick}>
+      <span className="option-thumb">{children}</span>
+      <span className="option-name">{label}</span>
+    </button>
+  );
+}
+
 export function SaveBar({
   onSave,
   saving,

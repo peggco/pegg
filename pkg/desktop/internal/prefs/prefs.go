@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -41,6 +42,9 @@ type Prefs struct {
 	FontScale        float64  `json:"fontScale"`
 	SidebarCollapsed bool     `json:"sidebarCollapsed"`
 	SidebarWidth     int      `json:"sidebarWidth"`
+	SidebarMode      string   `json:"sidebarMode"`
+	LayoutMode       string   `json:"layoutMode"`
+	Direction        string   `json:"direction"`
 	LastSession      string   `json:"lastSession"`
 	Window           Window   `json:"window"`
 }
@@ -53,6 +57,9 @@ func Defaults() Prefs {
 		SendOnEnter:  true,
 		FontScale:    1,
 		SidebarWidth: DefaultSidebarWidth,
+		SidebarMode:  "sidebar",
+		LayoutMode:   "default",
+		Direction:    "ltr",
 	}
 }
 
@@ -95,14 +102,7 @@ func Load() (*Store, error) {
 
 func merge(data Prefs) Prefs {
 	def := Defaults()
-	switch data.Theme {
-	case "pegg-light":
-		data.Theme = "light"
-	case "pegg-dark":
-		data.Theme = "dark"
-	case "":
-		data.Theme = def.Theme
-	}
+	data.Theme = normalizeTheme(data.Theme)
 	if data.ThemeMode == "" {
 		data.ThemeMode = def.ThemeMode
 	}
@@ -118,7 +118,47 @@ func merge(data Prefs) Prefs {
 	if data.SidebarWidth < 160 || data.SidebarWidth > 600 {
 		data.SidebarWidth = def.SidebarWidth
 	}
+	data.SidebarMode = normalizeSidebarMode(data.SidebarMode)
+	data.LayoutMode = normalizeLayoutMode(data.LayoutMode)
+	data.Direction = normalizeDirection(data.Direction)
 	return data
+}
+
+func normalizeTheme(name string) string {
+	switch name {
+	case "light", "dark":
+		return name
+	case "pegg-light", "catppuccin-latte", "tokyonight-day", "gruvbox-light",
+		"solarized-light", "rosepine-dawn", "everforest-light":
+		return "light"
+	}
+	lower := strings.ToLower(name)
+	if strings.Contains(lower, "light") || strings.Contains(lower, "latte") ||
+		strings.Contains(lower, "dawn") || strings.Contains(lower, "day") {
+		return "light"
+	}
+	return "dark"
+}
+
+func normalizeSidebarMode(mode string) string {
+	if mode == "inset" || mode == "floating" {
+		return mode
+	}
+	return "sidebar"
+}
+
+func normalizeLayoutMode(mode string) string {
+	if mode == "compact" || mode == "full" {
+		return mode
+	}
+	return "default"
+}
+
+func normalizeDirection(direction string) string {
+	if direction == "rtl" {
+		return "rtl"
+	}
+	return "ltr"
 }
 
 func (s *Store) Get() Prefs {
@@ -158,9 +198,10 @@ func (s *Store) Update(fn func(*Prefs)) error {
 func (s *Store) SetTheme(theme, mode string) error {
 	return s.Update(func(p *Prefs) {
 		if theme != "" {
-			p.Theme = theme
+			p.Theme = normalizeTheme(theme)
 		}
-		if mode != "" {
+		switch mode {
+		case ThemeModeAuto, ThemeModeLight, ThemeModeDark:
 			p.ThemeMode = mode
 		}
 	})

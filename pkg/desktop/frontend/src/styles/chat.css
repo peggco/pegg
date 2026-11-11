@@ -15,7 +15,7 @@
 
 .scroll-bottom-btn {
   position: absolute;
-  right: 20px;
+  inset-inline-end: 20px;
   bottom: 16px;
   z-index: 6;
   display: inline-flex;

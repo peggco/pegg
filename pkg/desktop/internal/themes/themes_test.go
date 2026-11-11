@@ -35,3 +35,22 @@ func TestFind(t *testing.T) {
 		t.Fatal("legacy pegg theme should not exist")
 	}
 }
+
+func TestDesktop(t *testing.T) {
+	desktop := Desktop()
+	if len(desktop) != 2 {
+		t.Fatalf("desktop themes = %d, want 2", len(desktop))
+	}
+	seen := map[string]Theme{}
+	for _, theme := range desktop {
+		seen[theme.Name] = theme
+		for _, key := range []string{"--pg-bg", "--pg-surface", "--pg-text", "--pg-accent", "--pg-border"} {
+			if theme.Tokens[key] == "" {
+				t.Errorf("theme %q missing %s", theme.Name, key)
+			}
+		}
+	}
+	if !seen["dark"].Dark || seen["light"].Dark {
+		t.Fatal("expected dark theme dark=true and light theme dark=false")
+	}
+}

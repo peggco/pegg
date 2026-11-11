@@ -3,32 +3,40 @@ import { resolveTheme } from './theme';
 import type { Theme } from '../types';
 
 const themes: Theme[] = [
-  { name: 'dark', label: 'Dark', dark: true, tokens: { '--pg-bg': '#18181b', '--pg-accent': '#3b82f6' } },
-  { name: 'light', label: 'Light', dark: false, tokens: { '--pg-bg': '#ffffff', '--pg-accent': '#18181b' } },
-  { name: 'catppuccin-latte', label: 'Latte', dark: false, tokens: { '--pg-bg': '#eff1f5' } },
-  { name: 'catppuccin-mocha', label: 'Mocha', dark: true, tokens: { '--pg-bg': '#1e1e2e' } },
+  { name: 'dark', label: 'Dark', dark: true, tokens: { '--pg-bg': '#0d0d0d', '--pg-accent': '#fafafa' } },
+  { name: 'light', label: 'Light', dark: false, tokens: { '--pg-bg': '#ffffff', '--pg-accent': '#171717' } },
 ];
 
 function mockPrefers(dark: boolean) {
-  vi.stubGlobal('matchMedia', () => ({ matches: dark, addEventListener: () => undefined, removeEventListener: () => undefined }));
+  vi.stubGlobal('matchMedia', () => ({
+    matches: dark,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
 }
 
 describe('theme resolution', () => {
-  it('migrates legacy pegg themes', () => {
-    mockPrefers(true);
-    expect(resolveTheme(themes, 'pegg-light', 'auto').name).toBe('dark');
+  it('migrates legacy pegg theme names', () => {
+    mockPrefers(false);
+    expect(resolveTheme(themes, 'pegg-light', 'light').name).toBe('light');
+    expect(resolveTheme(themes, 'pegg-dark', 'dark').name).toBe('dark');
   });
 
-  it('follows system mode', () => {
+  it('follows the system in auto mode', () => {
     mockPrefers(true);
     expect(resolveTheme(themes, 'light', 'auto').name).toBe('dark');
     mockPrefers(false);
     expect(resolveTheme(themes, 'dark', 'auto').name).toBe('light');
   });
 
-  it('honours explicit light/dark mode', () => {
+  it('honours an explicit light/dark mode', () => {
     mockPrefers(true);
     expect(resolveTheme(themes, 'dark', 'light').name).toBe('light');
     expect(resolveTheme(themes, 'light', 'dark').name).toBe('dark');
+  });
+
+  it('falls back to light or dark when no themes are provided', () => {
+    expect(resolveTheme([], 'light', 'light')).toMatchObject({ name: 'light', dark: false });
+    expect(resolveTheme([], 'dark', 'dark')).toMatchObject({ name: 'dark', dark: true });
   });
 });

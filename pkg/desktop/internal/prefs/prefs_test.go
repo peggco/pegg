@@ -16,6 +16,42 @@ func TestDefaults(t *testing.T) {
 	if p.SidebarWidth != DefaultSidebarWidth {
 		t.Fatalf("default sidebar width = %d, want %d", p.SidebarWidth, DefaultSidebarWidth)
 	}
+	if p.SidebarMode != "sidebar" || p.LayoutMode != "default" || p.Direction != "ltr" {
+		t.Fatalf("default layout prefs = %q/%q/%q", p.SidebarMode, p.LayoutMode, p.Direction)
+	}
+}
+
+func TestMergeTheme(t *testing.T) {
+	cases := map[string]string{
+		"":                 "dark",
+		"dark":             "dark",
+		"light":            "light",
+		"pegg-light":       "light",
+		"pegg-dark":        "dark",
+		"catppuccin-latte": "light",
+		"catppuccin-mocha": "dark",
+		"tokyonight-day":   "light",
+		"rosepine-dawn":    "light",
+		"dracula":          "dark",
+		"solarized-light":  "light",
+		"everforest-dark":  "dark",
+	}
+	for input, want := range cases {
+		if got := merge(Prefs{Theme: input}).Theme; got != want {
+			t.Errorf("merge theme %q = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestMergeLayoutPrefs(t *testing.T) {
+	got := merge(Prefs{SidebarMode: "floating", LayoutMode: "full", Direction: "rtl"})
+	if got.SidebarMode != "floating" || got.LayoutMode != "full" || got.Direction != "rtl" {
+		t.Fatalf("valid layout prefs = %q/%q/%q", got.SidebarMode, got.LayoutMode, got.Direction)
+	}
+	fallback := merge(Prefs{SidebarMode: "bogus", LayoutMode: "wide", Direction: "sideways"})
+	if fallback.SidebarMode != "sidebar" || fallback.LayoutMode != "default" || fallback.Direction != "ltr" {
+		t.Fatalf("invalid layout prefs = %q/%q/%q", fallback.SidebarMode, fallback.LayoutMode, fallback.Direction)
+	}
 }
 
 func TestMergeSidebarWidth(t *testing.T) {

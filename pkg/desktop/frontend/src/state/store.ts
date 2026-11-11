@@ -48,7 +48,6 @@ export interface UIState {
   skillsOpen: boolean;
   paletteOpen: boolean;
   modelsOpen: boolean;
-  themePickerOpen: boolean;
   composerFocus: number;
   error?: string;
 }
@@ -64,6 +63,9 @@ const initialPrefs: Prefs = {
   fontScale: 1,
   sidebarCollapsed: false,
   sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
+  sidebarMode: 'sidebar',
+  layoutMode: 'default',
+  direction: 'ltr',
   lastSession: '',
   window: {},
 };
@@ -93,7 +95,6 @@ export const initialState: UIState = {
   skillsOpen: false,
   paletteOpen: false,
   modelsOpen: false,
-  themePickerOpen: false,
   composerFocus: 0,
 };
 

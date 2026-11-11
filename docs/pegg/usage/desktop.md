@@ -88,7 +88,7 @@ If nothing is found, Settings → Agent and the first-run screen offer **Downloa
 The desktop settings page mirrors the TUI settings layout, backed by the same `~/.pegg/pegg.json` and project `.pegg/` files:
 
 - **General** — provider/model, reasoning effort, language, and speech-to-text provider/model.
-- **Appearance** — auto/light/dark mode, all TUI themes, and interface scale.
+- **Appearance** — auto/light/dark color mode, sidebar mode, layout density, direction, and interface scale.
 - **Session** — active session details, rename/delete/new chat, and context compaction (strategies, threshold, message and tool-output limits).
 - **Permissions** — Auto/Manual/Judge/Recommended presets, per-tool rules, judge provider/model/threshold.
 - **Memory** — enable/consolidate, gate, threshold, context budget, max results, entry stats.
@@ -150,7 +150,7 @@ pkg/desktop/
 │   ├── acpclient/           # stdio JSON-RPC client, batched updates
 │   ├── binary/              # discovery, download, checksum verification
 │   ├── prefs/               # ~/.config/pegg/desktop.json
-│   ├── themes/              # TUI palette → CSS token DTOs
+│   ├── themes/              # Light/Dark palette → CSS token DTOs
 │   └── workspace/           # workspace validation and file reads
 └── frontend/                # React 19 + Vite design system and UI
 ```

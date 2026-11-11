@@ -368,6 +368,15 @@ func (a *App) SavePrefsOnly(p prefs.Prefs) prefs.Prefs {
 		if p.SidebarWidth > 0 {
 			cur.SidebarWidth = p.SidebarWidth
 		}
+		if p.SidebarMode != "" {
+			cur.SidebarMode = p.SidebarMode
+		}
+		if p.LayoutMode != "" {
+			cur.LayoutMode = p.LayoutMode
+		}
+		if p.Direction != "" {
+			cur.Direction = p.Direction
+		}
 	})
 	return a.prefs.Get()
 }

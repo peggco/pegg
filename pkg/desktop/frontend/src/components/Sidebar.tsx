@@ -31,13 +31,13 @@ import {
   renameSession,
   saveSidebarWidth,
   setSidebarCollapsed,
-  setTheme,
   startNewChat,
+  toggleAppearance,
   togglePalette,
   toggleSettings,
   toggleSkills,
 } from '../state/actions';
-import { store, useStore } from '../state/store';
+import { useStore } from '../state/store';
 import type { SessionListItem } from '../types';
 import darkLogo from '../../../assets/dark-logo.png';
 import lightLogo from '../../../assets/light-logo.png';
@@ -307,14 +307,7 @@ export function Sidebar() {
             {t('nav.commandPalette')}
             <span className="shortcut">⌘K</span>
           </button>
-          <button
-            className="nav-item"
-            onClick={() => {
-              const currentTheme = store.get().theme;
-              if (!currentTheme) return;
-              void setTheme(currentTheme.name, currentTheme.dark ? 'light' : 'dark');
-            }}
-          >
+          <button className="nav-item" onClick={toggleAppearance}>
             {theme?.dark ? <Sun size={15} /> : <Moon size={15} />}
             {theme?.dark ? t('nav.lightAppearance') : t('nav.darkAppearance')}
             <span className={`switch${theme && !theme.dark ? ' on' : ''}`} aria-hidden="true" />

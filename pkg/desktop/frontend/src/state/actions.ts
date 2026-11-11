@@ -174,6 +174,12 @@ export async function setTheme(name: string, mode: 'auto' | 'light' | 'dark'): P
   }
 }
 
+export function toggleAppearance(): void {
+  const dark = store.get().theme?.dark ?? true;
+  const target = dark ? 'light' : 'dark';
+  void setTheme(target, target);
+}
+
 export async function savePrefs(patch: Partial<UIState['prefs']>): Promise<void> {
   const prefs = { ...store.get().prefs, ...patch };
   store.set({ prefs });

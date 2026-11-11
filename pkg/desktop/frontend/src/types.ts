@@ -188,6 +188,10 @@ export interface Recent {
   openedAt: string;
 }
 
+export type SidebarMode = 'sidebar' | 'inset' | 'floating';
+export type LayoutMode = 'default' | 'compact' | 'full';
+export type Direction = 'ltr' | 'rtl';
+
 export interface Prefs {
   theme: string;
   themeMode: 'auto' | 'light' | 'dark';
@@ -199,6 +203,9 @@ export interface Prefs {
   fontScale: number;
   sidebarCollapsed: boolean;
   sidebarWidth: number;
+  sidebarMode: SidebarMode;
+  layoutMode: LayoutMode;
+  direction: Direction;
   lastSession: string;
   window: WindowPrefs;
 }
