@@ -126,7 +126,7 @@ pegg run --stt "Summarize this repository"
 ```
 
 A recorder must be available: `sox`, `arecord`, or `ffmpeg`. Override the command
-with `stt.record_command` in `~/.peggco/pegg.json` using `{output}` for the WAV
+with `stt.record_command` in `~/.pegg/pegg.json` using `{output}` for the WAV
 path.
 
 ### Attachments
@@ -269,7 +269,7 @@ pegg connect             # every run after that
 | `--response-timeout` | Seconds a run may produce no output before it is failed |
 
 The relay endpoint is built into the app, so nothing but a token is needed; point a
-self-hosted website at `connect.relay_url` in `~/.peggco/pegg.json`. The pairing
+self-hosted website at `connect.relay_url` in `~/.pegg/pegg.json`. The pairing
 token is stored there too, and is only ever displayed masked.
 
 ## `pegg providers`
@@ -437,7 +437,7 @@ pegg cache clear --provider openai
 Print system file paths and whether they exist:
 
 ```
-config  exists   /home/user/.peggco/pegg.json
+config  exists   /home/user/.pegg/pegg.json
 logs    exists   /home/user/.pegg/logs.db
 cache   exists   /home/user/.pegg/cache.db
 sessions exists  /home/user/.pegg/sessions.db
@@ -453,11 +453,18 @@ vfs     missing  /home/user/.pegg/vfs
 | `pegg mcp add [flags]` | Add a server (interactive unless flags are given) |
 | `pegg mcp remove NAME [--global\|--project]` | Remove a server |
 | `pegg mcp tools [--server NAME]` | List tools exposed by connected servers |
+| `pegg mcp search QUERY [--limit N] [--official] [--json]` | Search the catalog |
+| `pegg mcp info ID` | Show catalog details and required env |
+| `pegg mcp install ID [flags]` | Install a catalog server |
 
 `add` flags: `--global`, `--project`, `--name`,
 `--transport stdio|sse|streamable-http` (aliases `local` and `http`),
 `--command`, `--arg` (repeatable), `--env KEY=VALUE` (repeatable), `--url`,
-`--header KEY=VALUE` (repeatable). See [MCP](../configurations/mcp.md).
+`--header KEY=VALUE` (repeatable).
+
+`install` flags: `--global` (default), `--project`, `--name`, `--env KEY=VALUE`
+(repeatable), `--header KEY=VALUE` (repeatable), `--dry-run`, `--yes`. See
+[MCP](../configurations/mcp.md) and the [Catalog](../catalog.md).
 
 ## `pegg lsp`
 
@@ -474,10 +481,12 @@ vfs     missing  /home/user/.pegg/vfs
 
 ## `pegg plugins`
 
-Install and manage standalone plugins from GitHub releases. `plugin` is kept as an
-alias for the same command tree.
+Install and manage standalone plugins from GitHub releases.
 
 ```bash
+pegg plugins search browser
+pegg plugins search browser --json
+pegg plugins info owner/repo
 pegg plugins install owner/repo
 pegg plugins install owner/repo --version v1.2.3 --asset '*linux_amd64*'
 pegg plugins list
@@ -489,6 +498,11 @@ pegg plugins exclude owner/repo
 pegg plugins include owner/repo
 pegg plugins new my-plugin --module github.com/me/my-plugin
 ```
+
+`plugins search` prints `NAME SOURCE VERSION PLATFORMS OFFICIAL`. `plugins info`
+with an `owner/repo` argument reads catalog metadata; with a bare name it shows the
+installed plugin's runtime details. Catalog ids match the install argument, so a
+search result installs directly. See the [Catalog](../catalog.md).
 
 | Flag | Used by | Description |
 |---|---|---|
@@ -502,8 +516,9 @@ pegg plugins new my-plugin --module github.com/me/my-plugin
 | `--all` | `update` | Update all GitHub-installed plugins |
 | `--check` | `update` | Report updates without installing |
 | `--yes` | `remove` | Skip confirmation |
-| `--json` | `list` | JSON output |
+| `--json` | `list`, `search` | JSON output |
 | `--runtime` | `list` | Launch plugins for runtime metadata |
+| `--limit` | `search` | Maximum number of results |
 
 Set `GITHUB_TOKEN` or `GH_TOKEN` for authenticated API requests. Set
 `PEGG_GITHUB_API` for GitHub Enterprise. See

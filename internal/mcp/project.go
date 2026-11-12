@@ -68,8 +68,31 @@ func SaveProjectServers(dir string, servers map[string]config.MCPServerConfig) e
 	if err != nil {
 		return fmt.Errorf("mcp: marshal project servers: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("mcp: write %s: %w", path, err)
+
+	tmp, err := os.CreateTemp(dir, ".mcp-*.json")
+	if err != nil {
+		return fmt.Errorf("mcp: create temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+
+	if err := tmp.Chmod(0600); err != nil {
+		tmp.Close()
+		return fmt.Errorf("mcp: chmod temp file: %w", err)
+	}
+	if _, err := tmp.Write(append(data, '\n')); err != nil {
+		tmp.Close()
+		return fmt.Errorf("mcp: write temp file: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("mcp: sync temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("mcp: close temp file: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("mcp: replace %s: %w", path, err)
 	}
 	return nil
 }

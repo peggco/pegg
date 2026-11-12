@@ -13,18 +13,18 @@ import (
 	"github.com/peggco/pegg/internal/plugin"
 )
 
-func (c *CLI) newPluginCommand() *cobra.Command {
+func (c *CLI) newPluginsCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "plugins",
-		Aliases: []string{"plugin"},
-		Short:   "Manage plugins",
+		Use:   "plugins",
+		Short: "Manage plugins",
 	}
 
 	cmd.AddCommand(
-		c.newPluginListCommand(),
-		c.newPluginInfoCommand(),
-		c.newPluginToggleCommand(),
-		c.newPluginNewCommand(),
+		c.newPluginsListCommand(),
+		c.newPluginsInfoCommand(),
+		c.newPluginsToggleCommand(),
+		c.newPluginsNewCommand(),
+		c.newPluginsSearchCommand(),
 		c.newPluginsInstallCommand(),
 		c.newPluginsUpdateCommand(),
 		c.newPluginsRemoveCommand(),
@@ -35,7 +35,7 @@ func (c *CLI) newPluginCommand() *cobra.Command {
 	return cmd
 }
 
-func (c *CLI) newPluginListCommand() *cobra.Command {
+func (c *CLI) newPluginsListCommand() *cobra.Command {
 	var asJSON, runtimeView bool
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -43,7 +43,7 @@ func (c *CLI) newPluginListCommand() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if runtimeView {
-				return c.runPluginRuntimeList(cmd)
+				return c.runPluginsRuntimeList(cmd)
 			}
 			return c.runPluginsList(cmd, asJSON)
 		},
@@ -53,7 +53,7 @@ func (c *CLI) newPluginListCommand() *cobra.Command {
 	return cmd
 }
 
-func (c *CLI) runPluginRuntimeList(cmd *cobra.Command) error {
+func (c *CLI) runPluginsRuntimeList(cmd *cobra.Command) error {
 	mgr := plugin.NewManager(c.log, c.cfg, c.bus, c.cache, c.llmMgr, c.sessions, c.fs, c.mcpMgr, c.lspMgr)
 	mgr.SetExcludedPlugins(c.cfg.Plugins.Exclude)
 
@@ -84,13 +84,16 @@ func (c *CLI) runPluginRuntimeList(cmd *cobra.Command) error {
 	return nil
 }
 
-func (c *CLI) newPluginInfoCommand() *cobra.Command {
+func (c *CLI) newPluginsInfoCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "info [name]",
-		Short: "Show plugin information",
+		Use:   "info <name|owner/repo>",
+		Short: "Show installed plugin information or catalog metadata",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			name := args[0]
+			name := strings.TrimSpace(args[0])
+			if strings.Contains(name, "/") {
+				return c.runPluginCatalogInfo(cliContext(cmd), cmd.OutOrStdout(), name)
+			}
 
 			mgr := plugin.NewManager(c.log, c.cfg, c.bus, c.cache, c.llmMgr, c.sessions, c.fs, c.mcpMgr, c.lspMgr)
 			mgr.SetExcludedPlugins(c.cfg.Plugins.Exclude)
@@ -119,7 +122,7 @@ func (c *CLI) newPluginInfoCommand() *cobra.Command {
 	}
 }
 
-func (c *CLI) newPluginToggleCommand() *cobra.Command {
+func (c *CLI) newPluginsToggleCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "toggle [name]",
 		Short: "Toggle plugin enabled/disabled",

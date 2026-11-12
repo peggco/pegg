@@ -64,11 +64,8 @@ func TestPluginsInstallListExcludeRemove(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := c.Execute([]string{"plugin", "list"}); err != nil {
-		t.Fatalf("alias list: %v\n%s", err, out.String())
-	}
-	if !strings.Contains(out.String(), "testplug") {
-		t.Fatalf("alias output: %s", out.String())
+	if err := c.Execute([]string{"plugin", "list"}); err == nil {
+		t.Fatal("singular plugin command should be removed")
 	}
 
 	if err := c.Execute([]string{"plugins", "exclude", "testplug"}); err != nil {

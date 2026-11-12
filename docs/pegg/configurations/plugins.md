@@ -43,6 +43,42 @@ for executable, extensionless files and attempts to load each one as a plugin.
 mkdir -p ~/.pegg/plugins
 ```
 
+## Discovering plugins
+
+The [Pegg catalog](../catalog.md) lists available plugins. Catalog ids are
+`owner/repo`, so a search result can be passed straight to `plugins install`:
+
+```bash
+pegg plugins search browser
+pegg plugins search browser --json
+pegg plugins info peggco/pegg-browser-use
+pegg plugins install peggco/pegg-browser-use
+```
+
+`plugins search` prints `NAME SOURCE VERSION PLATFORMS OFFICIAL`. When the argument
+contains `/`, `plugins info` reads catalog metadata (description, capabilities,
+platforms, license, and install command); a bare name still shows the installed
+plugin's runtime details.
+
+Set `PEGG_CATALOG_API` to point the client at a different catalog endpoint.
+
+### Compatibility warnings
+
+Plugin catalog entries can declare:
+
+```json
+"requires": {
+  "pegg": ">=0.2.4 <0.3.0",
+  "protocol": 2
+}
+```
+
+`requires.pegg` is a semver range for the Pegg version; `requires.protocol` is the
+plugin protocol version (`pkg/plugin.ProtocolVersion`, currently `2`). Pegg compares
+them with the running version. A missing declaration or a mismatch prints a warning
+but does **not** block the install. `plugins info`, `plugins install`, and
+`plugins update` all show the warnings so you can decide whether to continue.
+
 ## Installing from GitHub releases
 
 ```bash
@@ -97,7 +133,7 @@ pegg plugins include <name|owner/repo>
 ```
 
 Excluding writes the plugin binary name and repository to `plugins.exclude`;
-including removes those entries. The legacy `pegg plugin toggle <name>` command is
+including removes those entries. The legacy `pegg plugins toggle <name>` command is
 still available.
 
 ## Lifecycle

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -13,9 +14,11 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/plugin"
 	"github.com/peggco/pegg/internal/plugin/install"
+	pkgplugin "github.com/peggco/pegg/pkg/plugin"
 )
 
 type pluginListEntry struct {
@@ -105,6 +108,138 @@ func (c *CLI) runPluginsList(cmd *cobra.Command, asJSON bool) error {
 	return nil
 }
 
+func (c *CLI) newPluginsSearchCommand() *cobra.Command {
+	var limit int
+	var asJSON bool
+	cmd := &cobra.Command{
+		Use:   "search <query>",
+		Short: "Search the Pegg catalog for plugins",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return c.runPluginsSearch(cliContext(cmd), cmd.OutOrStdout(), args[0], limit, asJSON)
+		},
+	}
+	cmd.Flags().IntVar(&limit, "limit", 20, "maximum number of results")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "output JSON")
+	return cmd
+}
+
+func (c *CLI) runPluginsSearch(ctx context.Context, out io.Writer, query string, limit int, asJSON bool) error {
+	result, err := catalog.NewClient().Search(ctx, catalog.KindPlugin, catalog.SearchOptions{Query: query, Limit: limit})
+	if err != nil {
+		return fmt.Errorf("cli: plugins search: %w", err)
+	}
+	if asJSON {
+		encoder := json.NewEncoder(out)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(result.Items)
+	}
+	if len(result.Items) == 0 {
+		fmt.Fprintln(out, "no plugins found")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "NAME\tSOURCE\tVERSION\tPLATFORMS\tOFFICIAL")
+	for _, item := range result.Items {
+		source := item.Repository
+		if source == "" {
+			source = item.ID
+		}
+		version := item.Version
+		if version == "" {
+			version = "-"
+		}
+		platforms := strings.Join(item.Platforms, ",")
+		if platforms == "" {
+			platforms = "-"
+		}
+		official := "no"
+		if item.Official {
+			official = "yes"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", item.Name, source, version, platforms, official)
+	}
+	return w.Flush()
+}
+
+func (c *CLI) runPluginCatalogInfo(ctx context.Context, out io.Writer, source string) error {
+	id, err := catalog.ParsePluginID(source)
+	if err != nil {
+		return fmt.Errorf("cli: plugins info: %w", err)
+	}
+	entry, err := catalog.NewClient().Get(ctx, catalog.KindPlugin, id)
+	if err != nil {
+		return fmt.Errorf("cli: plugins info: %w", err)
+	}
+
+	fmt.Fprintf(out, "Name:         %s\n", entry.Name)
+	fmt.Fprintf(out, "ID:           %s\n", entry.ID)
+	if entry.Description != "" {
+		fmt.Fprintf(out, "Description:  %s\n", entry.Description)
+	}
+	if entry.Version != "" {
+		fmt.Fprintf(out, "Version:      %s\n", entry.Version)
+	}
+	official := "no"
+	if entry.Official {
+		official = "yes"
+	}
+	fmt.Fprintf(out, "Official:     %s\n", official)
+	if entry.Repository != "" {
+		fmt.Fprintf(out, "Repository:   %s\n", entry.Repository)
+	}
+	if entry.Homepage != "" {
+		fmt.Fprintf(out, "Homepage:     %s\n", entry.Homepage)
+	}
+	if entry.License != "" {
+		fmt.Fprintf(out, "License:      %s\n", entry.License)
+	}
+	if len(entry.Tags) > 0 {
+		fmt.Fprintf(out, "Tags:         %s\n", strings.Join(entry.Tags, ", "))
+	}
+	if len(entry.Capabilities) > 0 {
+		fmt.Fprintf(out, "Capabilities: %s\n", strings.Join(entry.Capabilities, ", "))
+	}
+	if len(entry.Platforms) > 0 {
+		fmt.Fprintf(out, "Platforms:    %s\n", strings.Join(entry.Platforms, ", "))
+	}
+	if len(entry.Arch) > 0 {
+		fmt.Fprintf(out, "Arch:         %s\n", strings.Join(entry.Arch, ", "))
+	}
+	if entry.Requires != nil {
+		if entry.Requires.Pegg != "" {
+			fmt.Fprintf(out, "Pegg:         %s\n", entry.Requires.Pegg)
+		}
+		if entry.Requires.Protocol != 0 {
+			fmt.Fprintf(out, "Protocol:     %d\n", entry.Requires.Protocol)
+		}
+	}
+	printPluginCompatibilityWarnings(out, entry, false)
+	fmt.Fprintf(out, "Install:      pegg plugins install %s\n", id)
+	return nil
+}
+
+func printPluginCompatibilityWarnings(out io.Writer, entry catalog.Entry, continueHint bool) {
+	warnings := entry.CompatibilityWarnings(config.AppVersion, pkgplugin.ProtocolVersion)
+	if len(warnings) == 0 {
+		return
+	}
+	for _, warning := range warnings {
+		fmt.Fprintf(out, "warning: %s\n", warning)
+	}
+	if continueHint {
+		fmt.Fprintln(out, "Continuing anyway; pass --version <tag> to install a specific release.")
+	}
+}
+
+func (c *CLI) printPluginCatalogWarnings(ctx context.Context, out io.Writer, source install.Source) {
+	entry, err := catalog.NewClient().Get(ctx, catalog.KindPlugin, source.Slug())
+	if err == nil {
+		printPluginCompatibilityWarnings(out, entry, false)
+	}
+}
+
 func (c *CLI) newPluginsInstallCommand() *cobra.Command {
 	var opts install.Options
 	cmd := &cobra.Command{
@@ -123,9 +258,22 @@ func (c *CLI) newPluginsInstallCommand() *cobra.Command {
 				return err
 			}
 			opts.Dir = dir
-			result, err := install.Install(cliContext(cmd), install.NewClient(), opts)
+
+			ctx := cliContext(cmd)
+			entry, entryErr := catalog.NewClient().Get(ctx, catalog.KindPlugin, source.Slug())
+			if entryErr == nil {
+				printPluginCompatibilityWarnings(cmd.ErrOrStderr(), entry, true)
+			}
+
+			result, err := install.Install(ctx, install.NewClient(), opts)
 			if err != nil {
 				return err
+			}
+			if entryErr == nil && entry.Version != "" && result.Version != "" &&
+				!catalog.SameVersion(entry.Version, result.Version) {
+				fmt.Fprintf(cmd.ErrOrStderr(),
+					"warning: catalog lists version %s, installed %s; catalog may be stale\n",
+					entry.Version, result.Version)
 			}
 			printInstallResult(cmd, result, false)
 			return nil
@@ -181,6 +329,7 @@ func (c *CLI) newPluginsUpdateCommand() *cobra.Command {
 						continue
 					}
 					opts.Source = source
+					c.printPluginCatalogWarnings(cliContext(cmd), cmd.ErrOrStderr(), source)
 					result, err := install.Update(cliContext(cmd), client, opts)
 					if err != nil {
 						failures = append(failures, fmt.Sprintf("%s: %v", meta.Name, err))
