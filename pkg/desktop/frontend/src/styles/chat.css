@@ -391,6 +391,10 @@
   padding-bottom: 0;
 }
 
+.thread-item[data-index] {
+  padding-bottom: 12px;
+}
+
 .activity {
   display: flex;
   flex-direction: column;

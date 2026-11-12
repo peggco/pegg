@@ -434,10 +434,15 @@ export function DiffView({
 }) {
   const t = useT();
   const rows = useMemo(() => computeRows(diff.oldText ?? '', diff.newText ?? ''), [diff.oldText, diff.newText]);
+  const language = useMemo(() => languageForPath(diff.path), [diff.path]);
   const adds = rows.filter((row) => row.kind === 'add').length;
   const dels = rows.filter((row) => row.kind === 'del').length;
   const limit = 160;
-  const visible = expanded ? rows : rows.slice(0, limit);
+  const visible = useMemo(() => (expanded ? rows : rows.slice(0, limit)), [expanded, rows, limit]);
+  const highlighted = useMemo(
+    () => visible.map((row) => (row.kind === 'hunk' ? '' : highlightCode(row.text || ' ', language))),
+    [visible, language],
+  );
   const hasMore = rows.length > limit;
 
   return (
@@ -461,7 +466,10 @@ export function DiffView({
               <span className="diff-num">{row.oldLine ?? ''}</span>
               <span className="diff-num">{row.newLine ?? ''}</span>
               <span className="diff-sign">{row.kind === 'add' ? '+' : row.kind === 'del' ? '−' : ' '}</span>
-              <span className="diff-text">{row.text || ' '}</span>
+              <span
+                className="diff-text"
+                dangerouslySetInnerHTML={{ __html: highlighted[index] ?? '' }}
+              />
             </div>
           ),
         )}

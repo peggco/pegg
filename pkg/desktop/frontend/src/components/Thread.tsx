@@ -737,12 +737,14 @@ function estimateItemHeight(item: ChatItem): number {
   }
 }
 
+const ROW_GAP = 12;
+
 function estimateRowHeight(row: HistoryRow | undefined): number {
-  if (!row) return 96;
-  if (row.kind === 'activity') return 44;
+  if (!row) return 96 + ROW_GAP;
+  if (row.kind === 'activity') return 44 + ROW_GAP;
   const cached = rowHeightCache.get(row.item);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) return cached + ROW_GAP;
   const height = estimateItemHeight(row.item);
   rowHeightCache.set(row.item, height);
-  return height;
+  return height + ROW_GAP;
 }
