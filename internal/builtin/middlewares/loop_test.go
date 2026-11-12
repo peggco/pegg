@@ -1,9 +1,13 @@
 package middlewares
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/peggco/pegg/internal/agent"
+	agentmw "github.com/peggco/pegg/internal/agent/middleware"
 	"github.com/peggco/pegg/internal/llm"
 )
 
@@ -375,4 +379,66 @@ func containsStr(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func streamRepeats(chunk llm.StreamChunk, n int) agentmw.LLMStreamInvoker {
+	return func(ctx context.Context, _ *llm.Request, handler llm.StreamHandler) error {
+		for i := 0; i < n; i++ {
+			if err := handler(chunk); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func TestLoopDetectorStreamingReasoningAborts(t *testing.T) {
+	ld := NewLoopDetector()
+	ld.BeforeRun(t.Context(), "test", "input")
+
+	delivered := 0
+	err := ld.InvokeLLMStream(t.Context(), nil, func(llm.StreamChunk) error {
+		delivered++
+		return nil
+	}, streamRepeats(llm.StreamChunk{Reasoning: "I should check the file. "}, 100))
+	if !errors.Is(err, ErrRepetitionLoop) {
+		t.Fatalf("err = %v, want ErrRepetitionLoop", err)
+	}
+	if !contains(err.Error(), "thinking") {
+		t.Fatalf("err = %q, want thinking in message", err)
+	}
+	if delivered >= 100 {
+		t.Fatalf("stream was not aborted early: delivered %d chunks", delivered)
+	}
+}
+
+func TestLoopDetectorStreamingContentAborts(t *testing.T) {
+	ld := NewLoopDetector()
+	ld.BeforeRun(t.Context(), "test", "input")
+
+	err := ld.InvokeLLMStream(t.Context(), nil, func(llm.StreamChunk) error { return nil },
+		streamRepeats(llm.StreamChunk{Content: "the same output line here. "}, 100))
+	if !errors.Is(err, ErrRepetitionLoop) {
+		t.Fatalf("err = %v, want ErrRepetitionLoop", err)
+	}
+	if !contains(err.Error(), "content") {
+		t.Fatalf("err = %q, want content in message", err)
+	}
+}
+
+func TestLoopDetectorIntraResponseAborts(t *testing.T) {
+	ld := NewLoopDetector()
+	ld.BeforeRun(t.Context(), "test", "input")
+
+	resp := &llm.Response{Choices: []llm.Choice{{Message: reasoningMsg(
+		"",
+		strings.Repeat("I should check the file. ", 20),
+	)}}}
+	err := ld.AfterLLM(t.Context(), nil, resp)
+	if !errors.Is(err, ErrRepetitionLoop) {
+		t.Fatalf("err = %v, want ErrRepetitionLoop", err)
+	}
+	if !contains(err.Error(), "thinking") {
+		t.Fatalf("err = %q, want thinking in message", err)
+	}
 }
