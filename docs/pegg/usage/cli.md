@@ -471,6 +471,44 @@ vfs     missing  /home/user/.pegg/vfs
 `--filetype` (repeatable), `--rootmarker` (repeatable), `--download URL`,
 `--env KEY=VALUE` (repeatable). See [LSP](../configurations/lsp.md).
 
+## `pegg plugins`
+
+Install and manage standalone plugins from GitHub releases. `plugin` is kept as an
+alias for the same command tree.
+
+```bash
+pegg plugins install owner/repo
+pegg plugins install owner/repo --version v1.2.3 --asset '*linux_amd64*'
+pegg plugins list
+pegg plugins list --runtime
+pegg plugins update owner/repo
+pegg plugins update --all --check
+pegg plugins remove owner/repo --yes
+pegg plugins exclude owner/repo
+pegg plugins include owner/repo
+pegg plugins new my-plugin --module github.com/me/my-plugin
+```
+
+| Flag | Used by | Description |
+|---|---|---|
+| `--version` | `install` | Release tag (default: latest) |
+| `--asset` | `install`, `update` | Asset name or glob |
+| `--binary` | `install`, `update` | Binary path inside an archive |
+| `--name` | `install` | Installed binary name |
+| `--force` | `install`, `update` | Replace/reinstall |
+| `--require-checksum` | `install`, `update` | Fail when no checksum is available |
+| `--skip-checksum` | `install`, `update` | Disable checksum verification |
+| `--all` | `update` | Update all GitHub-installed plugins |
+| `--check` | `update` | Report updates without installing |
+| `--yes` | `remove` | Skip confirmation |
+| `--json` | `list` | JSON output |
+| `--runtime` | `list` | Launch plugins for runtime metadata |
+
+Set `GITHUB_TOKEN` or `GH_TOKEN` for authenticated API requests. Set
+`PEGG_GITHUB_API` for GitHub Enterprise. See
+[Plugins](../configurations/plugins.md) for asset selection, checksums, metadata,
+and configuration.
+
 ## `pegg tui`
 
 Launch the terminal UI explicitly. Equivalent to running `pegg` on a terminal.

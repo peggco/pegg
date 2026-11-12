@@ -42,3 +42,7 @@ func scanPlugins(dir string) ([]string, error) {
 
 	return plugins, nil
 }
+
+func ScanPlugins(dir string) ([]string, error) {
+	return scanPlugins(dir)
+}
