@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-12
+
 ### Added
 
 - Write tool cards now render syntax-highlighted code (as in the desktop app)

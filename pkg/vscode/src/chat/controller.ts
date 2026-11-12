@@ -604,7 +604,7 @@ export class ChatController extends EventEmitter {
       },
       env: await this.serverEnv(),
       log: this.log,
-      version: String(this.context.extension.packageJSON.version ?? '0.2.3'),
+      version: String(this.context.extension.packageJSON.version ?? '0.2.4'),
     });
     client.setRequestHandler((method, params) => this.onServerRequest(method, params));
     client.on('notification', (method: string, params: any) => this.onNotification(method, params));

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.4
+
 - Scrolling back through a long session is now smooth and anchored: loading an
   older page no longer jumps the viewport or snaps it back to the bottom, and
   streamed replies only follow while you are already at the bottom.
