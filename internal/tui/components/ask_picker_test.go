@@ -3,6 +3,7 @@ package components
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 
@@ -704,5 +705,46 @@ func TestAskPickerCustomConfirmShowsValue(t *testing.T) {
 
 	if all := askScreenText(s, 100, 30); !strings.Contains(all, "Zed") {
 		t.Fatalf("confirm page missing the custom answer:\n%s", all)
+	}
+}
+func TestAskPickerTextCursorFollowsBlink(t *testing.T) {
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "name", Question: "Name?", Type: "text", Required: true},
+	})
+	st := p.current()
+	if st == nil || st.input == nil {
+		t.Fatal("expected a text editor")
+	}
+	p.OnTick(true)
+	if !st.input.CursorVisible(time.Now()) {
+		t.Error("idle text cursor should be visible when blink is on")
+	}
+	p.OnTick(false)
+	if st.input.CursorVisible(time.Now()) {
+		t.Error("idle text cursor should be hidden when blink is off")
+	}
+}
+
+func TestAskPickerCustomCursorFollowsBlink(t *testing.T) {
+	p := NewAskPicker()
+	p.SetQuestions([]AskQuestion{
+		{ID: "choice", Question: "Pick?", Type: "select", Options: []string{"A", "B"}},
+	})
+	st := p.current()
+	if st == nil {
+		t.Fatal("expected a question state")
+	}
+	p.openCustom(st)
+	if !st.customEditing || st.custom == nil {
+		t.Fatal("expected the custom editor to be open")
+	}
+	p.OnTick(true)
+	if !st.custom.CursorVisible(time.Now()) {
+		t.Error("idle custom cursor should be visible when blink is on")
+	}
+	p.OnTick(false)
+	if st.custom.CursorVisible(time.Now()) {
+		t.Error("idle custom cursor should be hidden when blink is off")
 	}
 }

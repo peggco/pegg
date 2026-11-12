@@ -71,6 +71,17 @@ func (a *AskPicker) SetOnSend(fn func(map[string]string)) { a.onSend = fn }
 func (a *AskPicker) SetOnDone(fn func())                  { a.onDone = fn }
 func (a *AskPicker) Active() bool                         { return a.active }
 
+func (a *AskPicker) OnTick(blinkOn bool) {
+	for _, st := range a.states {
+		if st.input != nil {
+			st.input.SetBlink(blinkOn)
+		}
+		if st.custom != nil {
+			st.custom.SetBlink(blinkOn)
+		}
+	}
+}
+
 func (a *AskPicker) Clear() {
 	onSend, onDone := a.onSend, a.onDone
 	*a = AskPicker{onSend: onSend, onDone: onDone}

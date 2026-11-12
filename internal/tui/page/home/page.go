@@ -601,6 +601,7 @@ func (p *Page) DismissPickers() {
 func (p *Page) OnTick(blinkOn bool) {
 	p.input.SetBlink(blinkOn)
 	p.chat.OnTick(blinkOn)
+	p.askPicker.OnTick(blinkOn)
 }
 
 func (p *Page) Animate(now time.Time) bool {

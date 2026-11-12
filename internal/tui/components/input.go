@@ -1573,7 +1573,7 @@ func (in *Input) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 		y := bounds.Top + 1 + in.visualRowOf(in.row, in.col) - in.scroll
 		if y >= bounds.Top && y < bounds.Bottom()-1 {
 			style := textStyle.Foreground(th.Placeholder)
-			DrawText(s, x, y, in.Placeholder, style)
+			drawLabel(s, x, y, in.Placeholder, style, focused && cursorOn, th)
 		}
 	}
 }
