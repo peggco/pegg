@@ -124,17 +124,6 @@ button {
   background: var(--vscode-toolbar-hoverBackground);
 }
 
-.history-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 4px 0;
-  font-size: 11px;
-  color: var(--text-muted, #71717a);
-  flex: 0 0 auto;
-}
-
 .messages {
   flex: 1;
   min-height: 0;
@@ -143,12 +132,27 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: relative;
+  overflow-anchor: none;
 }
 
 .messages > * {
   flex: 0 0 auto;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 120px;
+}
+
+.msg-slot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-sentinel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
 }
 
 .messages-spacer {

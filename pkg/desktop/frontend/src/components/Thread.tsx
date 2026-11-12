@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
+import { useChatScroller } from '../lib/useChatScroll';
+import { TOP_PREFETCH_PX } from '../lib/scroll';
 import {
   ArrowDown,
   ArrowLeft,
@@ -16,9 +18,9 @@ import { renderMarkdown } from '../lib/markdown';
 import { closeSubagent, forkMessage, loadOlderMessages, openSubagent, revertMessage, setStickToBottom } from '../state/actions';
 import { store, useStore } from '../state/store';
 import { useT } from '../lib/i18n';
-import type { ChatItem } from '../state/chat';
+import type { ChatItem, ToolState } from '../state/chat';
 import { activityCounts, buildHistoryRows, formatActivityTime, type ActivityCounts, type HistoryRow } from '../lib/activity';
-import { ToolCard, ToolIcon, bashCommand } from './ToolViews';
+import { ToolCard, ToolIcon, bashCommand, classify, computeRows, outputText, writeContent } from './ToolViews';
 import { AskCard, PermissionCard, PlanCard, SubagentCard } from './Cards';
 import { TaskCard } from './TaskCard';
 
@@ -41,13 +43,16 @@ export function Thread() {
   const rows = useMemo(() => buildHistoryRows(items, historyMode), [items, historyMode]);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const stickRef = useRef(true);
-  const pendingScrollRef = useRef<{ height: number; top: number } | null>(null);
-  const autoLoadSeqRef = useRef<number | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
-  const [showJump, setShowJump] = useState(false);
   const t = useT();
+  const sessionKey = `${acpId ?? ''}:${activeAgent ?? ''}`;
+  const scroll = useChatScroller({ sessionKey, syncPinned: setStickToBottom });
+  const { atEndRef, scrollerRef, writeScrollTop } = scroll;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const autoLoadSeqRef = useRef<number | null>(null);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const [measureBatch, setMeasureBatch] = useState<{ start: number; end: number } | null>(null);
 
   const toggleGroup = (id: string) => setOpenGroups((current) => toggleId(current, id));
   const toggleRow = (id: string) => setOpenRows((current) => toggleId(current, id));
@@ -55,70 +60,126 @@ export function Thread() {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollerRef.current,
-    estimateSize: () => 96,
-    overscan: 8,
+    estimateSize: (index) => estimateRowHeight(rows[index]),
+    overscan: 12,
     getItemKey: (index) => rows[index]?.key ?? index,
+    anchorTo: 'end',
+    followOnAppend: 'auto',
+    scrollEndThreshold: 2,
+    rangeExtractor: (range) => {
+      const indices = new Set(defaultRangeExtractor(range));
+      if (measureBatch) {
+        for (
+          let index = Math.max(0, measureBatch.start);
+          index <= measureBatch.end && index < rows.length;
+          index += 1
+        ) {
+          indices.add(index);
+        }
+      }
+      return Array.from(indices).sort((a, b) => a - b);
+    },
   });
   const totalSize = virtualizer.getTotalSize();
 
   useEffect(() => {
-    stickRef.current = true;
-    pendingScrollRef.current = null;
-    setShowJump(false);
+    if (activeAgent) return;
+    let cancelled = false;
+    let timer = 0;
+    const firstUnmeasured = (): number => {
+      const current = rowsRef.current;
+      for (let index = current.length - 1; index >= 0; index -= 1) {
+        if (!virtualizer.itemSizeCache.has(current[index].key)) return index;
+      }
+      return -1;
+    };
+    const tick = () => {
+      if (cancelled) return;
+      if (virtualizer.isScrolling) {
+        timer = window.setTimeout(tick, 150);
+        return;
+      }
+      const end = firstUnmeasured();
+      if (end < 0) {
+        setMeasureBatch(null);
+        return;
+      }
+      const start = Math.max(0, end - 23);
+      setMeasureBatch({ start, end });
+      timer = window.setTimeout(() => {
+        if (cancelled) return;
+        setMeasureBatch(null);
+        timer = window.setTimeout(tick, 70);
+      }, 70);
+    };
+    timer = window.setTimeout(tick, 60);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [rows.length, historyMode, activeAgent, virtualizer]);
+
+  useLayoutEffect(() => {
+    if (!atEndRef.current) return;
+    const el = scrollerRef.current;
+    if (el) writeScrollTop(el.scrollHeight);
+  }, [plan, permissions, asks, running, scrollerRef, atEndRef, writeScrollTop]);
+
+  useEffect(() => {
     setOpenGroups(new Set());
     setOpenRows(new Set());
-    setStickToBottom(true);
-    const frame = requestAnimationFrame(() => {
-      const el = scrollerRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [acpId]);
+    setMeasureBatch(null);
+    autoLoadSeqRef.current = null;
+  }, [sessionKey]);
+
+  const historyRef = useRef({ hasMore: historyHasMore, loading: historyLoading, enabled: !activeAgent });
+  historyRef.current = { hasMore: historyHasMore, loading: historyLoading, enabled: !activeAgent };
 
   useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    if (stickRef.current) el.scrollTop = el.scrollHeight;
-  }, [items, plan, permissions, asks, running, totalSize]);
-
-  useEffect(() => {
-    const pending = pendingScrollRef.current;
-    const el = scrollerRef.current;
-    if (!pending || !el || historyLoading) return;
-    if (el.scrollHeight <= pending.height) {
-      pendingScrollRef.current = null;
-      return;
-    }
-    el.scrollTop = el.scrollHeight - pending.height + pending.top;
-    pendingScrollRef.current = null;
-  }, [items, totalSize, historyLoading]);
+    const root = scrollerRef.current;
+    const target = sentinelRef.current;
+    if (!root || !target || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        const history = historyRef.current;
+        if (!history.enabled || !history.hasMore || history.loading) return;
+        void loadOlderMessages();
+      },
+      { root, rootMargin: `${TOP_PREFETCH_PX}px 0px 0px 0px`, threshold: 0 },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [scrollerRef, sessionKey, activeAgent]);
 
   useEffect(() => {
     if (activeAgent || !historyHasMore || historyLoading) return;
     const el = scrollerRef.current;
     if (!el) return;
-    if (el.scrollHeight > el.clientHeight + 200) return;
+    if (el.scrollHeight > el.clientHeight + 32) return;
     if (autoLoadSeqRef.current === historyOldestSeq) return;
     autoLoadSeqRef.current = historyOldestSeq;
     void loadOlderMessages();
-  }, [activeAgent, rows, historyHasMore, historyLoading, historyOldestSeq, totalSize]);
+  }, [activeAgent, historyHasMore, historyLoading, historyOldestSeq, totalSize, rows, scrollerRef]);
 
-  const jumpToBottom = () => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    stickRef.current = true;
-    pendingScrollRef.current = null;
-    setStickToBottom(true);
-    setShowJump(false);
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  const onThreadScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const userScroll = scroll.onScroll(event);
+    if (!userScroll || activeAgent) return;
+    if (
+      event.currentTarget.scrollTop <= TOP_PREFETCH_PX &&
+      historyHasMore &&
+      !historyLoading
+    ) {
+      void loadOlderMessages();
+    }
   };
 
-  const jumpButton = showJump ? (
+  const jumpButton = scroll.showJump ? (
     <button
       className="scroll-bottom-btn"
       title={t('thread.scrollToBottom')}
       aria-label={t('thread.scrollToBottom')}
-      onClick={jumpToBottom}
+      onClick={scroll.jumpToBottom}
     >
       <ArrowDown size={16} />
     </button>
@@ -166,17 +227,7 @@ export function Thread() {
           <span className="badge">{activeRun.status}</span>
         </div>
         <div className="thread-area">
-          <div
-            className="thread-wrap"
-            ref={scrollerRef}
-            onScroll={(event) => {
-              const el = event.currentTarget;
-              const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
-              stickRef.current = stick;
-              setShowJump(!stick);
-            }}
-            onClick={onThreadClick}
-          >
+          <div className="thread-wrap" ref={scrollerRef} onScroll={onThreadScroll} onClick={onThreadClick}>
             <div className="thread">
               {activeRun.task ? <div className="subagent-modal-task">{activeRun.task}</div> : null}
               {rows.map((row) => (
@@ -184,8 +235,8 @@ export function Thread() {
                   {row.kind === 'activity' ? (
                     <ActivityGroup
                       group={row}
-                      open={openGroups.has(row.id)}
-                      onToggle={() => toggleGroup(row.id)}
+                      open={openGroups.has(row.key)}
+                      onToggle={() => toggleGroup(row.key)}
                       openRows={openRows}
                       onToggleRow={toggleRow}
                     />
@@ -212,33 +263,14 @@ export function Thread() {
 
   return (
     <>
-    {loading ? (
-      <div className="thread-loading" style={{ padding: '6px 0' }}>
-        <span className="spinner" /> {t('thread.restoring')}
-      </div>
-    ) : null}
-    {historyLoading ? (
-      <div className="thread-loading" style={{ padding: '6px 0' }}>
-        <span className="spinner" /> {t('thread.loadingHistory')}
-      </div>
-    ) : null}
     <div className="thread-area">
-      <div
-        className="thread-wrap"
-        ref={scrollerRef}
-        onScroll={(event) => {
-          const el = event.currentTarget;
-          const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
-          stickRef.current = stick;
-          setShowJump(!stick);
-          setStickToBottom(stick);
-          if (el.scrollTop < 80 && historyHasMore && !historyLoading && !pendingScrollRef.current) {
-            pendingScrollRef.current = { height: el.scrollHeight, top: el.scrollTop };
-            void loadOlderMessages();
-          }
-        }}
-        onClick={onThreadClick}
-      >
+      {loading ? (
+        <div className="thread-status" role="status">
+          <span className="spinner" /> {t('thread.restoring')}
+        </div>
+      ) : null}
+      <div className="thread-wrap" ref={scrollerRef} onScroll={onThreadScroll} onClick={onThreadClick}>
+        <div ref={sentinelRef} className="thread-sentinel" aria-hidden="true" />
         <div className="thread">
           {items.length ? (
             <div style={{ height: totalSize, position: 'relative', width: '100%' }}>
@@ -262,8 +294,8 @@ export function Thread() {
                     {row.kind === 'activity' ? (
                       <ActivityGroup
                         group={row}
-                        open={openGroups.has(row.id)}
-                        onToggle={() => toggleGroup(row.id)}
+                        open={openGroups.has(row.key)}
+                        onToggle={() => toggleGroup(row.key)}
                         openRows={openRows}
                         onToggleRow={toggleRow}
                       />
@@ -620,4 +652,97 @@ function ActivityTool({
       ) : null}
     </>
   );
+}
+const DIFF_PREVIEW_ROWS = 160;
+const BASH_PREVIEW_LINES = 24;
+const WRITE_PREVIEW_LINES = 30;
+const rowHeightCache = new WeakMap<ChatItem, number>();
+
+function textLines(text: string, width: number): number {
+  if (!text) return 1;
+  let lines = 0;
+  for (const part of text.split('\n')) {
+    lines += Math.max(1, Math.ceil(part.length / width));
+  }
+  return lines;
+}
+
+function estimateToolHeight(tool: ToolState): number {
+  if (tool.task) return 150;
+  const extra = tool.error ? 36 : 0;
+  switch (classify(tool)) {
+    case 'bash': {
+      const total = outputText(tool.output).split('\n').length;
+      const shown = Math.min(total, BASH_PREVIEW_LINES);
+      const body = Math.min(
+        340,
+        24 + shown * 19 + (total > BASH_PREVIEW_LINES ? 30 : 0),
+      );
+      return 30 + body + extra;
+    }
+    case 'write': {
+      const content = writeContent(tool);
+      const total = content ? content.split('\n').length : 0;
+      const shown = Math.min(total, WRITE_PREVIEW_LINES);
+      const body = Math.min(
+        360,
+        20 + shown * 19 + (content.length > 16000 || total > WRITE_PREVIEW_LINES ? 30 : 0),
+      );
+      return 36 + body + 16 + extra;
+    }
+    case 'edit': {
+      if (!tool.diff) return 64 + extra;
+      const rows = computeRows(tool.diff.oldText ?? '', tool.diff.newText ?? '').length;
+      const body = Math.min(420, rows * 19 + 8);
+      return 34 + body + 16 + (rows > DIFF_PREVIEW_ROWS ? 30 : 0) + extra;
+    }
+    case 'files':
+      return 62 + (tool.files?.length ?? 0) * 36 + extra;
+    default:
+      return 52 + (tool.error ? 40 : 0);
+  }
+}
+
+function estimateAssistantHeight(text: string): number {
+  let height = 52;
+  const parts = text.split('```');
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    if (index % 2 === 0) {
+      height += textLines(part, 80) * 22;
+    } else {
+      const lines = part.split('\n').length;
+      height += 66 + Math.min(460, lines * 19 + 22);
+    }
+  }
+  return Math.min(8000, Math.max(52, height));
+}
+
+function estimateItemHeight(item: ChatItem): number {
+  switch (item.kind) {
+    case 'user': {
+      const attachments = item.attachments?.length ?? 0;
+      return Math.min(1600, 44 + textLines(item.text, 90) * 20 + (attachments ? 28 : 0));
+    }
+    case 'assistant':
+      return estimateAssistantHeight(item.text);
+    case 'reasoning':
+      return 44;
+    case 'tool':
+      return estimateToolHeight(item.tool);
+    case 'subagent':
+      return 140;
+    default:
+      return 48;
+  }
+}
+
+function estimateRowHeight(row: HistoryRow | undefined): number {
+  if (!row) return 96;
+  if (row.kind === 'activity') return 44;
+  const cached = rowHeightCache.get(row.item);
+  if (cached !== undefined) return cached;
+  const height = estimateItemHeight(row.item);
+  rowHeightCache.set(row.item, height);
+  return height;
 }

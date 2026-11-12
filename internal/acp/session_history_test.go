@@ -60,12 +60,12 @@ func TestSessionHistoryFiltersFirstRunMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, err := srv.sessionHistory(sess.ID)
+	page, oldest, hasMore, err := srv.historyPage(sess.ID, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) != 0 {
-		t.Fatalf("history = %d messages, want 0 (active-run message is replayed from the journal)", len(msgs))
+	if len(page) != 0 || oldest != 0 || hasMore {
+		t.Fatalf("history = %d messages, want 0 (active-run message is replayed from the journal)", len(page))
 	}
 }
 
@@ -101,14 +101,14 @@ func TestSessionHistoryKeepsMessagesUpToBaseSeq(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgs, err := srv.sessionHistory(sess.ID)
+	page, oldest, hasMore, err := srv.historyPage(sess.ID, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) != 2 {
-		t.Fatalf("history = %d messages, want 2", len(msgs))
+	if len(page) != 2 || oldest != 1 || hasMore {
+		t.Fatalf("history = %d messages, want 2", len(page))
 	}
-	if msgs[0].Content != "first" || msgs[1].Content != "answer one" {
-		t.Fatalf("history = %+v", msgs)
+	if page[0].Content != "first" || page[1].Content != "answer one" {
+		t.Fatalf("history = %+v", page)
 	}
 }

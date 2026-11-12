@@ -11,6 +11,16 @@
   min-height: 0;
   overflow-y: auto;
   position: relative;
+  overflow-anchor: none;
+}
+
+.thread-sentinel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
 }
 
 .scroll-bottom-btn {
@@ -68,6 +78,25 @@
   padding: 40px 0;
   color: var(--pg-muted);
   font-size: 12.5px;
+}
+
+.thread-status {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px;
+  border: 1px solid var(--pg-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pg-surface) 86%, transparent);
+  color: var(--pg-muted);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateX(-50%);
+  backdrop-filter: blur(8px);
 }
 
 .spinner {

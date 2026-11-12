@@ -75,6 +75,8 @@ export interface PromptOptions {
   includeActiveContext?: boolean;
 }
 
+const HISTORY_PAGE_SIZE = 100;
+
 export class ChatController extends EventEmitter {
   state: ChatState = initialState();
   private client: AcpClient | undefined;
@@ -196,7 +198,7 @@ export class ChatController extends EventEmitter {
     try {
       const history = await this.client!.request<SessionStateResult>(
         'session/load',
-        { sessionId: peggSessionId, cwd: root, historyLimit: 50 },
+        { sessionId: peggSessionId, cwd: root, historyLimit: HISTORY_PAGE_SIZE },
         60000,
       );
       const meta = history?._meta ?? {};
@@ -666,8 +668,8 @@ export class ChatController extends EventEmitter {
     if (!update) return;
     if (sessionId && this.state.acpSessionId && sessionId !== this.state.acpSessionId) return;
     const meta = update._meta ?? {};
-    if (meta['com.pegg/historyPage'] && this.loadingOlder) {
-      this.historyBuffer.push(update);
+    if (meta['com.pegg/historyPage']) {
+      if (this.loadingOlder) this.historyBuffer.push(update);
       return;
     }
 
@@ -725,7 +727,7 @@ export class ChatController extends EventEmitter {
         {
           sessionId,
           cwd: workspaceRoot(),
-          limit: 50,
+          limit: HISTORY_PAGE_SIZE,
           beforeSeq: this.state.historyOldestSeq,
         },
         60000,

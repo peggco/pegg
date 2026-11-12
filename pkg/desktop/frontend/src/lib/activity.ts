@@ -27,12 +27,13 @@ export function buildHistoryRows(items: ChatItem[], mode: ChatHistoryMode): Hist
   const rows: HistoryRow[] = [];
   let group: ChatItem[] = [];
 
-  const flush = () => {
+  const flush = (nextId?: string) => {
     if (!group.length) return;
     const id = `activity:${group[0].id}`;
+    const anchor = nextId ?? group[group.length - 1].id;
     rows.push({
       kind: 'activity',
-      key: id,
+      key: `activity:${anchor}`,
       id,
       items: group,
       createdAt: group[group.length - 1].createdAt,
@@ -45,7 +46,7 @@ export function buildHistoryRows(items: ChatItem[], mode: ChatHistoryMode): Hist
       group.push(item);
       continue;
     }
-    flush();
+    flush(item.id);
     rows.push({ kind: 'item', key: item.id, item });
   }
   flush();

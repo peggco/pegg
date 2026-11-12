@@ -13,6 +13,7 @@ import { renderMarkdown } from './markdown';
 import { host } from './host';
 import { DiffView } from './DiffView';
 import { WriteView } from './WriteView';
+import { useAnchoredScroll } from './useAnchoredScroll';
 
 interface StateMessage {
   type: 'state';
@@ -152,11 +153,9 @@ export function App() {
   const [popup, setPopup] = useState<PopupState | null>(null);
   const [recording, setRecording] = useState(false);
   const [localError, setLocalError] = useState('');
-  const [atBottom, setAtBottom] = useState(true);
   const textarea = useRef<HTMLTextAreaElement>(null);
-  const messages = useRef<HTMLElement>(null);
   const selectedRow = useRef<HTMLButtonElement>(null);
-  const stick = useRef(true);
+  const sentinel = useRef<HTMLDivElement>(null);
   const textRef = useRef('');
   const [menu, setMenu] = useState<{ item: ChatItem; rect: DOMRect } | null>(null);
   const [agentView, setAgentView] = useState<{ id: string; name?: string } | null>(null);
@@ -205,23 +204,73 @@ export function App() {
     );
   }, [state.items, agentView]);
 
-  const pendingScrollRef = useRef<{ height: number; top: number } | null>(null);
+  const sessionKey = `${state.acpSessionId ?? ''}:${state.peggSessionId ?? ''}:${agentView?.id ?? ''}`;
+  const { scrollerRef, atBottom, onScroll, scrollToBottom, follow } = useAnchoredScroll(
+    sessionKey,
+    visibleItems,
+  );
 
-  const scrollToBottom = useCallback((smooth = false) => {
-    const el = messages.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-    stick.current = true;
-    setAtBottom(true);
+  const historyFlags = useRef({ hasMore: false, loading: false, agent: false, cursor: 0 });
+  const olderCooldown = useRef(0);
+  const lastRequestedSeq = useRef<number | null>(null);
+  const wasLoading = useRef(false);
+
+  const requestOlder = useCallback(() => {
+    const flags = historyFlags.current;
+    if (lastRequestedSeq.current === flags.cursor) return;
+    const now = Date.now();
+    if (now - olderCooldown.current < 250) return;
+    olderCooldown.current = now;
+    lastRequestedSeq.current = flags.cursor;
+    host.postMessage({ type: 'loadOlderMessages' });
   }, []);
 
+  historyFlags.current = {
+    hasMore: state.historyHasMore,
+    loading: state.historyLoading,
+    agent: Boolean(agentView),
+    cursor: state.historyOldestSeq,
+  };
+
   useEffect(() => {
-    stick.current = true;
-    pendingScrollRef.current = null;
-    setAtBottom(true);
-    const frame = requestAnimationFrame(() => scrollToBottom(false));
-    return () => cancelAnimationFrame(frame);
-  }, [state.acpSessionId, state.peggSessionId, scrollToBottom]);
+    lastRequestedSeq.current = null;
+    olderCooldown.current = 0;
+  }, [sessionKey]);
+
+  useEffect(() => {
+    if (wasLoading.current && !state.historyLoading) olderCooldown.current = 0;
+    wasLoading.current = state.historyLoading;
+  }, [state.historyLoading]);
+
+  useEffect(() => {
+    const root = scrollerRef.current;
+    const target = sentinel.current;
+    if (!root || !target || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const flags = historyFlags.current;
+        if (flags.agent || !flags.hasMore || flags.loading) return;
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        requestOlder();
+      },
+      { root, rootMargin: '600px 0px 0px 0px' },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [requestOlder, scrollerRef]);
+
+  useEffect(() => {
+    if (agentView || !state.historyHasMore || state.historyLoading) return;
+    const frame = window.requestAnimationFrame(() => {
+      const root = scrollerRef.current;
+      const target = sentinel.current;
+      if (!root || !target) return;
+      const gap = root.getBoundingClientRect().top - target.getBoundingClientRect().bottom;
+      if (gap > 600) return;
+      requestOlder();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [agentView, state.historyHasMore, state.historyLoading, requestOlder, scrollerRef]);
 
   const setCaret = useCallback((position: number) => {
     requestAnimationFrame(() => {
@@ -333,23 +382,9 @@ export function App() {
     };
   }, [menu]);
 
-  useEffect(() => {
-    if (!stick.current) return;
-    const frame = requestAnimationFrame(() => scrollToBottom(false));
-    return () => cancelAnimationFrame(frame);
-  }, [state, scrollToBottom]);
-
-  useEffect(() => {
-    const pending = pendingScrollRef.current;
-    const el = messages.current;
-    if (!pending || !el) return;
-    if (el.scrollHeight <= pending.height) {
-      if (!state.historyLoading) pendingScrollRef.current = null;
-      return;
-    }
-    el.scrollTop = el.scrollHeight - pending.height + pending.top;
-    pendingScrollRef.current = null;
-  }, [state.items, state.historyLoading]);
+  useLayoutEffect(() => {
+    follow();
+  }, [state, follow]);
 
   useEffect(() => {
     if (!textarea.current) return;
@@ -400,23 +435,6 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [popup?.kind, hubQuery, localSuggestions.length]);
 
-  function onScroll() {
-    const el = messages.current;
-    if (!el) return;
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    stick.current = distance < 48;
-    setAtBottom(distance < 48);
-    if (
-      el.scrollTop < 80 &&
-      state.historyHasMore &&
-      !state.historyLoading &&
-      !pendingScrollRef.current
-    ) {
-      pendingScrollRef.current = { height: el.scrollHeight, top: el.scrollTop };
-      host.postMessage({ type: 'loadOlderMessages' });
-    }
-  }
-
   function send() {
     if (state.running) return;
     const value = text.trim();
@@ -425,7 +443,6 @@ export function App() {
     setText('');
     textRef.current = '';
     setPopup(null);
-    stick.current = true;
     requestAnimationFrame(() => scrollToBottom(true));
   }
 
@@ -600,13 +617,8 @@ export function App() {
         </div>
       )}
 
-      {state.historyLoading && (
-        <div className="history-loading">
-          <span className="spinner" />
-          <span>Loading older messages…</span>
-        </div>
-      )}
-      <main className="messages" ref={messages} onScroll={onScroll}>
+      <main className="messages" ref={scrollerRef} onScroll={onScroll}>
+        <div ref={sentinel} className="history-sentinel" aria-hidden="true" />
         {!agentView && state.items.length === 0 && !state.running && (
           <div className="empty">
             <div className="empty-title">Ask Pegg about this workspace</div>
@@ -625,12 +637,13 @@ export function App() {
         )}
 
         {visibleItems.map((item) => (
-          <ItemView
-            key={item.id}
-            item={item}
-            onOpenMenu={openMessageMenu}
-            onOpenSubagent={openSubagent}
-          />
+          <div key={item.id} className="msg-slot" data-msg-id={item.id}>
+            <ItemView
+              item={item}
+              onOpenMenu={openMessageMenu}
+              onOpenSubagent={openSubagent}
+            />
+          </div>
         ))}
 
         {agentView && visibleItems.length === 0 && activeSubagent?.status === 'running' && (

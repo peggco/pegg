@@ -50,7 +50,7 @@ function inputRecord(input: unknown): Record<string, unknown> {
   return input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
 }
 
-function outputText(output: unknown): string {
+export function outputText(output: unknown): string {
   if (output === undefined || output === null) return '';
   if (typeof output === 'string') return stripAnsi(output);
   try {
@@ -67,7 +67,7 @@ function toolPath(tool: ToolState): string {
   return tool.locations?.[0]?.path ?? '';
 }
 
-function writeContent(tool: ToolState): string {
+export function writeContent(tool: ToolState): string {
   const record = inputRecord(tool.input);
   for (const key of ['content', 'text', 'newText', 'new_string', 'newString']) {
     const value = record[key];
@@ -84,7 +84,7 @@ export function bashCommand(tool: ToolState): string {
   return title || tool.name || 'bash';
 }
 
-function classify(tool: ToolState): 'bash' | 'write' | 'edit' | 'files' | 'compact' {
+export function classify(tool: ToolState): 'bash' | 'write' | 'edit' | 'files' | 'compact' {
   if (tool.files?.length) return 'files';
   const haystack = `${tool.name ?? ''} ${tool.title ?? ''}`.toLowerCase();
   if (tool.kind === 'execute' || /\bbash\b/.test(haystack)) return 'bash';
@@ -327,7 +327,7 @@ type DiffRow =
   | { kind: 'ctx' | 'add' | 'del'; text: string; oldLine?: number; newLine?: number }
   | { kind: 'hunk'; text: string };
 
-function computeRows(oldText: string, newText: string): DiffRow[] {
+export function computeRows(oldText: string, newText: string): DiffRow[] {
   const a = oldText === '' ? [] : oldText.replace(/\r\n/g, '\n').split('\n');
   const b = newText === '' ? [] : newText.replace(/\r\n/g, '\n').split('\n');
 

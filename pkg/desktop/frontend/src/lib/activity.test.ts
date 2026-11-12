@@ -53,8 +53,21 @@ describe('buildHistoryRows', () => {
     expect(group.kind).toBe('activity');
     if (group.kind === 'activity') {
       expect(group.items).toHaveLength(3);
-      expect(group.key).toBe('activity:r1');
+      expect(group.id).toBe('activity:r1');
+      expect(group.key).toBe('activity:a1');
       expect(group.createdAt).toBe(4);
+    }
+  });
+
+  it('keeps the activity row key stable when older items merge into the group', () => {
+    const base = [reasoning('r2'), tool('t2', 'read', 'read file'), assistant('a1')];
+    const before = buildHistoryRows(base, 'compact');
+    const after = buildHistoryRows([reasoning('r1'), tool('t1', 'execute', 'bash'), ...base], 'compact');
+    expect(before[0].kind === 'activity' && after[0].kind === 'activity').toBe(true);
+    if (before[0].kind === 'activity' && after[0].kind === 'activity') {
+      expect(after[0].items).toHaveLength(4);
+      expect(after[0].key).toBe(before[0].key);
+      expect(after[0].id).not.toBe(before[0].id);
     }
   });
 

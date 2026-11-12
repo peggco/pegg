@@ -29,6 +29,10 @@
 
 ### Fixed
 
+- Scroll-back through older messages is now anchored: loading a page no longer
+  jumps the viewport or forces it back to the bottom while the agent streams.
+- Sessions now restore more history up front and load older messages in larger
+  batches while scrolling back.
 - TASK cards now flip from running to done as soon as their background subagent
   finishes, without reloading the session.
 - Restored edit tool cards now show their diff again after reloading a session.

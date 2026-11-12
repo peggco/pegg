@@ -641,6 +641,7 @@ export function handleUpdates(sessionId: string, updates: SessionUpdate[]): void
         ...next,
         items: [...finalizeRestoredTasks(temp.items), ...next.items],
         counter: Math.max(next.counter, temp.counter),
+        historyLoading: false,
       };
     }
     if (!history.length && next.stickToBottom) next = pruneChat(next);
@@ -654,25 +655,49 @@ export function handleUpdates(sessionId: string, updates: SessionUpdate[]): void
   });
 }
 
+const HISTORY_PAGE_SIZE = 200;
+
+let historyTimeout: number | undefined;
+
+function clearHistoryTimeout(): void {
+  if (historyTimeout === undefined) return;
+  window.clearTimeout(historyTimeout);
+  historyTimeout = undefined;
+}
+
 export async function loadOlderMessages(): Promise<void> {
   const chat = store.get().chat;
   if (!chat.acpId || !chat.historyHasMore || chat.historyLoading) return;
-  store.setChat((c) => ({ ...c, historyLoading: true }));
+  const requestId = chat.historyRequestId + 1;
+  store.setChat((c) => ({ ...c, historyLoading: true, historyRequestId: requestId }));
+  clearHistoryTimeout();
+  historyTimeout = window.setTimeout(() => {
+    historyTimeout = undefined;
+    store.setChat((c) =>
+      c.historyRequestId === requestId && c.historyLoading ? { ...c, historyLoading: false } : c,
+    );
+  }, 4000);
   try {
     const res = await api.LoadHistory({
       sessionId: chat.acpId,
       cwd: chat.cwd,
       beforeSeq: chat.historyOldestSeq,
-      limit: 50,
+      limit: HISTORY_PAGE_SIZE,
     });
-    store.setChat((c) => ({
-      ...c,
-      historyOldestSeq: res.oldestSeq || c.historyOldestSeq,
-      historyHasMore: res.hasMore,
-      historyLoading: false,
-    }));
+    store.setChat((c) => {
+      if (c.historyRequestId !== requestId) return c;
+      const hasMore = Boolean(res.hasMore);
+      return {
+        ...c,
+        historyOldestSeq: res.oldestSeq || c.historyOldestSeq,
+        historyHasMore: hasMore,
+        historyLoading: hasMore ? c.historyLoading : false,
+      };
+    });
+    if (!res.hasMore) clearHistoryTimeout();
   } catch (err) {
-    store.setChat((c) => ({ ...c, historyLoading: false }));
+    clearHistoryTimeout();
+    store.setChat((c) => (c.historyRequestId === requestId ? { ...c, historyLoading: false } : c));
     store.toast('error', errorText(err));
   }
 }

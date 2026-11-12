@@ -240,8 +240,7 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 	s.applyStoredModel(orch, vs)
 
 	oldest, hasMore := 0, false
-	if msgs, err := s.sessionHistory(vs.ID); err == nil {
-		page, o, more := paginateHistory(msgs, req.HistoryBefore, req.HistoryLimit)
+	if page, o, more, err := s.historyPage(vs.ID, req.HistoryBefore, req.HistoryLimit); err == nil {
 		s.emitHistoryMessages(string(req.SessionId), req.Cwd, page, false)
 		oldest, hasMore = o, more
 	}
@@ -277,45 +276,19 @@ func (s *Server) handleSessionLoad(ctx context.Context, params json.RawMessage) 
 	}, nil
 }
 
-func (s *Server) sessionHistory(sessionID string) ([]session.Message, error) {
-	msgs, err := s.sessions.Messages(sessionID)
-	if err != nil {
-		return nil, err
-	}
-	if s.runs == nil {
-		return msgs, nil
-	}
-	active, _ := s.runs.Active(sessionID)
-	if active == nil {
-		return msgs, nil
-	}
-	filtered := make([]session.Message, 0, len(msgs))
-	for _, m := range msgs {
-		if m.Seq <= active.BaseSeq {
-			filtered = append(filtered, m)
+func (s *Server) historyPage(sessionID string, before, limit int) ([]session.Message, int, bool, error) {
+	bound := before
+	if s.runs != nil {
+		if active, _ := s.runs.Active(sessionID); active != nil && (bound == 0 || bound > active.BaseSeq+1) {
+			bound = active.BaseSeq + 1
 		}
 	}
-	return filtered, nil
-}
-
-func paginateHistory(msgs []session.Message, before, limit int) ([]session.Message, int, bool) {
-	filtered := msgs
-	if before > 0 {
-		filtered = make([]session.Message, 0, len(msgs))
-		for _, m := range msgs {
-			if m.Seq < before {
-				filtered = append(filtered, m)
-			}
-		}
+	page, hasMore, err := s.sessions.MessagesPage(sessionID, bound, limit)
+	oldest := 0
+	if len(page) > 0 {
+		oldest = page[0].Seq
 	}
-	if len(filtered) == 0 {
-		return nil, 0, false
-	}
-	if limit <= 0 || len(filtered) <= limit {
-		return filtered, filtered[0].Seq, false
-	}
-	start := len(filtered) - limit
-	return filtered[start:], filtered[start].Seq, true
+	return page, oldest, hasMore, err
 }
 
 func historyToolContent(cwd string, call llm.ToolCall, args map[string]any) ([]ToolCallContent, []ToolCallLocation) {
@@ -455,11 +428,10 @@ func (s *Server) handleSessionHistory(ctx context.Context, params json.RawMessag
 	if err != nil {
 		return nil, &RPCError{Code: ErrCodeResourceNotFound, Message: "session not found", Data: map[string]any{"sessionId": req.SessionId}}
 	}
-	msgs, err := s.sessionHistory(vs.ID)
+	page, oldest, hasMore, err := s.historyPage(vs.ID, req.BeforeSeq, req.Limit)
 	if err != nil {
 		return SessionHistoryResult{}, nil
 	}
-	page, oldest, hasMore := paginateHistory(msgs, req.BeforeSeq, req.Limit)
 	s.emitHistoryMessages(string(req.SessionId), req.Cwd, page, true)
 	return SessionHistoryResult{OldestSeq: oldest, HasMore: hasMore}, nil
 }

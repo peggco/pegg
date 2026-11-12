@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Scrolling back through a long session is now smooth and anchored: loading an
+  older page no longer jumps the viewport or snaps it back to the bottom, and
+  streamed replies only follow while you are already at the bottom.
+- Sessions now restore more history up front and load older messages in larger
+  batches while scrolling back.
 - Write tool cards now render syntax-highlighted code (as in the desktop app)
   instead of a diff; edit tool cards render a syntax-highlighted inline
   GitHub-style diff with line numbers, hunks, and add/remove highlighting,

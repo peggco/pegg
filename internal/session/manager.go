@@ -454,6 +454,10 @@ func (m *Manager) Messages(sessionID string) ([]Message, error) {
 	return m.store.Messages(sessionID)
 }
 
+func (m *Manager) MessagesPage(sessionID string, beforeSeq, limit int) ([]Message, bool, error) {
+	return m.store.MessagesPage(sessionID, beforeSeq, limit)
+}
+
 func (m *Manager) CompactionChildren(sessionID string) ([]Session, error) {
 	return m.store.CompactionChildren(sessionID)
 }

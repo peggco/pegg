@@ -88,6 +88,26 @@ func (m *mockStore) Messages(sessionID string) ([]session.Message, error) {
 	return m.messages[sessionID], nil
 }
 
+func (m *mockStore) MessagesPage(sessionID string, beforeSeq, limit int) ([]session.Message, bool, error) {
+	msgs, err := m.Messages(sessionID)
+	if err != nil {
+		return nil, false, err
+	}
+	filtered := msgs
+	if beforeSeq > 0 {
+		filtered = make([]session.Message, 0, len(msgs))
+		for _, msg := range msgs {
+			if msg.Seq < beforeSeq {
+				filtered = append(filtered, msg)
+			}
+		}
+	}
+	if limit > 0 && len(filtered) > limit {
+		return filtered[len(filtered)-limit:], true, nil
+	}
+	return filtered, false, nil
+}
+
 func (m *mockStore) TruncateAfter(sessionID, messageID string) ([]session.Message, error) {
 	msgs := m.messages[sessionID]
 	for i, msg := range msgs {

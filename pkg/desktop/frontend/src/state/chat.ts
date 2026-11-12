@@ -139,6 +139,7 @@ export interface ChatState {
   historyOldestSeq: number;
   historyHasMore: boolean;
   historyLoading: boolean;
+  historyRequestId: number;
   stickToBottom: boolean;
 }
 
@@ -159,6 +160,7 @@ export function emptyChat(): ChatState {
     historyOldestSeq: 0,
     historyHasMore: false,
     historyLoading: false,
+    historyRequestId: 0,
     stickToBottom: true,
   };
 }
@@ -416,7 +418,7 @@ export function settlePendingTools(state: ChatState, status: ToolState['status']
   };
 }
 
-export const MAX_CHAT_ITEMS = 160;
+export const MAX_CHAT_ITEMS = 400;
 
 export function pruneChat(state: ChatState): ChatState {
   if (state.items.length <= MAX_CHAT_ITEMS) return state;
@@ -435,6 +437,7 @@ export function pruneChat(state: ChatState): ChatState {
     ...state,
     items,
     historyOldestSeq: firstSeq ?? (droppedSeq > 0 ? droppedSeq + 1 : state.historyOldestSeq),
+    historyHasMore: droppedSeq > 0 ? true : state.historyHasMore,
   };
 }
 

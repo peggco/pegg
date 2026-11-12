@@ -72,6 +72,8 @@ Settings → Appearance also controls the shell:
 
 Assistant replies and user messages stay visible in both modes. Task and subagent cards remain standalone and full. Switching modes applies immediately and the choice is stored with the desktop preferences.
 
+Opening a session restores the last 200 messages. Scrolling to the top loads older messages in batches of 200. The viewport stays anchored on the message you are reading — loading a page never jumps to the bottom, and live replies only auto-follow while you are already at the bottom.
+
 ## Agent binary
 
 Resolution order:
