@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	agenttools "github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/llm/subscription"
@@ -440,12 +441,26 @@ func buildPermissionSettings(cfg *config.Config) PermissionsSettings {
 		out.JudgeModel = cfg.Permission.JudgeModel
 		out.JudgeThreshold = cfg.Permission.JudgeThresholdValue()
 	}
+	seenTools := map[string]bool{}
 	for _, tool := range permissionToolGroups {
 		mode := rules[tool.Name]
 		if mode == "" {
 			mode = out.Default
 		}
 		out.Tools = append(out.Tools, ToolPermission{Name: tool.Name, Mode: mode, Group: tool.Group})
+		seenTools[tool.Name] = true
+	}
+	for _, registered := range agenttools.List() {
+		name := registered.Name()
+		if seenTools[name] {
+			continue
+		}
+		mode := rules[name]
+		if mode == "" {
+			mode = out.Default
+		}
+		out.Tools = append(out.Tools, ToolPermission{Name: name, Mode: mode, Group: "Plugins"})
+		seenTools[name] = true
 	}
 	seen := map[string]bool{}
 	for _, provider := range cfg.Providers {

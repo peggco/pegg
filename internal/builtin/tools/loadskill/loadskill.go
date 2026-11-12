@@ -17,9 +17,11 @@ import (
 	"github.com/peggco/pegg/internal/builtin/tools/subagent"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
+	"github.com/peggco/pegg/internal/plugin/bundle"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/skill"
 	"github.com/peggco/pegg/internal/skillhub"
+	"github.com/peggco/pegg/internal/vfs"
 )
 
 const (
@@ -67,14 +69,14 @@ func (s *agentSessions) get(agentID string) string {
 	return s.sessions[agentID]
 }
 
-func LoadSkillTool(sess *session.Manager) {
+func LoadSkillTool(fs *vfs.VFS, sess *session.Manager) {
 	if sess != nil {
 		sessions.subscribe(sess.Bus())
 	}
-	tools.Register(loadSkillTool(sess, skillhub.NewClient()))
+	tools.Register(loadSkillTool(fs, sess, skillhub.NewClient()))
 }
 
-func loadSkillTool(sess *session.Manager, hub *skillhub.Client) tool.Tool {
+func loadSkillTool(fs *vfs.VFS, sess *session.Manager, hub *skillhub.Client) tool.Tool {
 	prompt, err := generateLoadSkillToolPrompt()
 	if err != nil {
 		panic(fmt.Sprintf("failed to generate loadskill tool prompt: %v", err))
@@ -123,12 +125,13 @@ func loadSkillTool(sess *session.Manager, hub *skillhub.Client) tool.Tool {
 				}
 			}
 
-			return renderSkill(ctx, sess, s, params.Arguments)
+			return renderSkill(ctx, sess, fs, s, params.Arguments)
 		},
 	)
 }
 
-func renderSkill(ctx context.Context, sess *session.Manager, s *skill.Skill, args map[string]string) (string, error) {
+func renderSkill(ctx context.Context, sess *session.Manager, fs *vfs.VFS, s *skill.Skill, args map[string]string) (string, error) {
+	activation := bundle.Activate(ctx, bundle.Deps{FS: fs}, s.ToolBundles)
 	content := skill.ExpandWithArgs(s, args)
 	if s.Context == contextFork {
 		return executeFork(ctx, sess, s, content)
@@ -136,6 +139,9 @@ func renderSkill(ctx context.Context, sess *session.Manager, s *skill.Skill, arg
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "<skill:%s>\n", s.Name)
+	for _, line := range activation {
+		fmt.Fprintf(&b, "%s\n", line)
+	}
 	if s.Description != "" {
 		fmt.Fprintf(&b, "Description: %s\n", s.Description)
 	}

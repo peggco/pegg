@@ -311,7 +311,7 @@ func (v *VFS) writeIgnored(rel string, isDir bool) bool {
 	if wo := v.writeOnlyRel(); wo != "" && rel != wo && !strings.HasPrefix(rel, wo+"/") {
 		return true
 	}
-	if isPeggPath(rel) && !isPlansPath(rel) && !isRulesPath(rel) && !isSkillsPath(rel) {
+	if isPeggPath(rel) && !isPlansPath(rel) && !isRulesPath(rel) && !isSkillsPath(rel) && !isArtifactsPath(rel) {
 		return true
 	}
 	return v.ignorer.Ignored(rel, isDir)

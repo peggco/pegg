@@ -96,8 +96,9 @@ func (p *PermissionConfig) JudgeThresholdValue() float64 {
 }
 
 type PluginConfig struct {
-	Enabled bool     `json:"enabled,omitempty"`
-	Exclude []string `json:"exclude,omitempty"`
+	Enabled bool                       `json:"enabled,omitempty"`
+	Exclude []string                   `json:"exclude,omitempty"`
+	Options map[string]json.RawMessage `json:"options,omitempty"`
 }
 
 type ConnectConfig struct {

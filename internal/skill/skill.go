@@ -15,6 +15,7 @@ type Skill struct {
 	Compatibility string
 	Metadata      map[string]string
 	AllowedTools  []string
+	ToolBundles   []string
 	WhenToUse     string
 	ArgumentHint  string
 	Arguments     []string
@@ -58,6 +59,43 @@ type registry struct {
 }
 
 var reg = &registry{skills: make(map[string]*Skill)}
+
+var (
+	dynamicMu     sync.RWMutex
+	dynamicSkills []*Skill
+)
+
+func RegisterDynamic(s *Skill) error {
+	if s == nil {
+		return ErrNilSkill
+	}
+	if err := ValidateName(s.Name); err != nil {
+		return err
+	}
+	dynamicMu.Lock()
+	replaced := false
+	for i, existing := range dynamicSkills {
+		if existing != nil && existing.Name == s.Name {
+			dynamicSkills[i] = s
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		dynamicSkills = append(dynamicSkills, s)
+	}
+	dynamicMu.Unlock()
+	registerOrReplace(s)
+	return nil
+}
+
+func dynamicSnapshot() []*Skill {
+	dynamicMu.RLock()
+	defer dynamicMu.RUnlock()
+	out := make([]*Skill, len(dynamicSkills))
+	copy(out, dynamicSkills)
+	return out
+}
 
 func Register(s *Skill) error {
 	if s == nil {

@@ -43,6 +43,9 @@ type Agent struct {
 	ToolNames       []string
 	ReasoningEffort string
 
+	bundlesMu     sync.RWMutex
+	activeBundles map[string][]tool.Tool
+
 	sessionMu sync.RWMutex
 	sessionID string
 

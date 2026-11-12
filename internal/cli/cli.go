@@ -144,6 +144,9 @@ func (c *CLI) registerDefaultCommands() {
 			c.newUpdateCommand(),
 		)
 	})
+	c.OnRegisterCommand(func(cmds []*cobra.Command) []*cobra.Command {
+		return append(cmds, c.pluginCommands()...)
+	})
 }
 
 func (c *CLI) tuiDeps() (settings.Deps, error) {

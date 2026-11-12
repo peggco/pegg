@@ -23,7 +23,7 @@ func Create(fs *vfs.VFS, sess *session.Manager) {
 	web.WebTools(fs)
 	subagent.SubAgentTools(sess)
 	ask.AskTool()
-	loadskill.LoadSkillTool(sess)
+	loadskill.LoadSkillTool(fs, sess)
 	searchskill.SearchSkillTool()
 	plan.PlanTools(fs)
 }

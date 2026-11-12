@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -22,6 +23,7 @@ func (c *CLI) newPluginCommand() *cobra.Command {
 		c.newPluginListCommand(),
 		c.newPluginInfoCommand(),
 		c.newPluginToggleCommand(),
+		c.newPluginNewCommand(),
 	)
 
 	return cmd
@@ -89,6 +91,10 @@ func (c *CLI) newPluginInfoCommand() *cobra.Command {
 			fmt.Fprintf(cmd.OutOrStdout(), "Version:     %s\n", p.Version)
 			fmt.Fprintf(cmd.OutOrStdout(), "Description: %s\n", p.Description)
 			fmt.Fprintf(cmd.OutOrStdout(), "Path:        %s\n", p.Path)
+			fmt.Fprintf(cmd.OutOrStdout(), "Capabilities: %s\n", strings.Join(p.Capabilities, ", "))
+			fmt.Fprintf(cmd.OutOrStdout(), "Tools:       %d\n", len(p.Tools))
+			fmt.Fprintf(cmd.OutOrStdout(), "Skills:      %d\n", len(p.Skills))
+			fmt.Fprintf(cmd.OutOrStdout(), "Commands:    %d\n", len(p.Commands))
 
 			return nil
 		},

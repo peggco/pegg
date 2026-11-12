@@ -14,10 +14,11 @@ const ignoreFileGit = ".gitignore"
 const ignoreFilePegg = ".peggignore"
 
 const (
-	peggDir   = ".pegg"
-	PlansDir  = peggDir + "/plans"
-	RulesDir  = peggDir + "/rules"
-	SkillsDir = peggDir + "/skills"
+	peggDir      = ".pegg"
+	PlansDir     = peggDir + "/plans"
+	RulesDir     = peggDir + "/rules"
+	SkillsDir    = peggDir + "/skills"
+	ArtifactsDir = peggDir + "/artifacts"
 )
 
 func isGlobalWritable(abs string) bool {
@@ -57,6 +58,10 @@ func isRulesPath(rel string) bool {
 
 func isSkillsPath(rel string) bool {
 	return rel == SkillsDir || strings.HasPrefix(rel, SkillsDir+"/")
+}
+
+func isArtifactsPath(rel string) bool {
+	return rel == ArtifactsDir || strings.HasPrefix(rel, ArtifactsDir+"/")
 }
 
 type pattern struct {
