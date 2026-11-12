@@ -9,4 +9,5 @@ var (
 	ErrUnsupported    = errors.New("mcp: unsupported transport")
 	ErrClosed         = errors.New("mcp: transport closed")
 	ErrProtocol       = errors.New("mcp: protocol error")
+	ErrSessionExpired = errors.New("mcp: session expired")
 )

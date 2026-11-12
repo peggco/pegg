@@ -23,8 +23,13 @@ tools.
           "env": { "DEBUG": "true" }
         },
         "remote": {
-          "url": "https://example.com/sse",
+          "type": "streamable-http",
+          "url": "https://example.com/mcp",
           "headers": { "Authorization": "Bearer token" }
+        },
+        "legacy": {
+          "type": "sse",
+          "url": "https://example.com/sse"
         }
       }
     }
@@ -52,13 +57,17 @@ Project entries override global entries with the same name.
 
 | Key | Type | Description |
 |---|---|---|
+| `type` | string | Transport: `stdio`, `sse`, or `streamable-http`. When omitted, `url` selects legacy SSE and `command` selects stdio |
 | `command` | string | Executable to spawn (stdio transport) |
 | `args` | string[] | Command arguments |
 | `env` | object | Extra environment variables, merged over the inherited environment |
-| `url` | string | Remote endpoint (SSE transport). Takes precedence over `command` |
-| `headers` | object | HTTP headers sent with SSE requests |
+| `url` | string | Remote endpoint (SSE or Streamable HTTP) |
+| `headers` | object | HTTP headers sent with SSE and Streamable HTTP requests |
 
-A server must define either `url` or `command`.
+A stdio server must define `command`; a remote server must define `url`. The
+`type` aliases `local` (stdio), `http` (legacy SSE), and `streamable`
+(streamable-http) are accepted for compatibility, but new configurations should
+use the canonical names.
 
 ## Transports
 
@@ -73,12 +82,34 @@ Pegg spawns `command args...` as a child process:
   16 MiB per frame.
 - The child is terminated with SIGTERM when Pegg shuts down.
 
-### SSE
+### SSE (legacy)
 
 Pegg opens a `GET` request with `Accept: text/event-stream` and the configured
 headers. The server must first emit an `endpoint` event telling Pegg where to
 POST messages. Subsequent requests include the `Mcp-Session-Id` header when the
 server provides one. Responses arrive as `message` events.
+
+Set `"type": "sse"` explicitly, or omit `type` on a server that only has a `url`.
+The `http` CLI/type alias also selects this legacy transport.
+
+### Streamable HTTP
+
+Set `"type": "streamable-http"` for MCP servers implementing the
+[Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
+transport. Pegg uses protocol version `2025-06-18` for this transport and:
+
+- `POST`s each JSON-RPC message to `url` with
+  `Accept: application/json, text/event-stream`. A response may be a single JSON
+  object, a batch array, an SSE stream, or empty (`202`/`204`) for notifications.
+- Captures `Mcp-Session-Id` from responses and sends it on every subsequent
+  request and on stream reconnects.
+- Sends `MCP-Protocol-Version` after initialization.
+- Opens an optional `GET` SSE stream for server-initiated notifications, resuming
+  with `Last-Event-ID` after a reconnect. Servers that reject the stream with
+  `405` are supported; POST remains the request path.
+- Re-initializes once and retries when the server reports an expired session
+  (`404`).
+- Sends a best-effort `DELETE` on shutdown to end the session.
 
 ## Lifecycle
 
@@ -91,7 +122,9 @@ server provides one. Responses arrive as `message` events.
    Pegg continues normally.
 4. On shutdown, every MCP tool is unregistered and every connection is closed.
 
-The MCP protocol version used is `2024-11-05`.
+Streamable HTTP servers use MCP protocol version `2025-06-18`; stdio and legacy
+SSE servers use `2024-11-05`. Pegg accepts the version returned by the server
+during `initialize`.
 
 ## Managing servers
 
@@ -114,12 +147,17 @@ Fully specified:
 
 ```bash
 # Local stdio server
-pegg mcp add --project --name db --transport local \
+pegg mcp add --project --name db --transport stdio \
   --command npx --arg -y --arg @modelcontextprotocol/server-postgres \
   --env DEBUG=true
 
-# Remote SSE server
-pegg mcp add --global --name remote --transport http \
+# Remote Streamable HTTP server
+pegg mcp add --global --name remote --transport streamable-http \
+  --url https://example.com/mcp \
+  --header Authorization="Bearer token"
+
+# Legacy remote SSE server
+pegg mcp add --global --name legacy --transport sse \
   --url https://example.com/sse \
   --header Authorization="Bearer token"
 ```
@@ -128,11 +166,11 @@ pegg mcp add --global --name remote --transport http \
 |---|---|
 | `--global` / `--project` | Where to write the server |
 | `--name` | Server name |
-| `--transport` | `local` (stdio) or `http` (SSE) |
-| `--command` | Executable for local servers |
+| `--transport` | `stdio`, `sse` (legacy), or `streamable-http` (aliases: `local`, `http`) |
+| `--command` | Executable for stdio servers |
 | `--arg` | Argument (repeatable) |
 | `--env` | `KEY=VALUE` environment variable (repeatable) |
-| `--url` | SSE endpoint for http servers |
+| `--url` | Endpoint for SSE or Streamable HTTP servers |
 | `--header` | `KEY=VALUE` request header (repeatable) |
 
 The interactive flow offers common header presets: `Authorization`, `X-API-Key`,

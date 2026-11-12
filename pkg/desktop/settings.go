@@ -16,6 +16,7 @@ import (
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/llm/subscription"
+	"github.com/peggco/pegg/internal/mcp"
 	"github.com/peggco/pegg/internal/skill"
 	"github.com/peggco/pegg/internal/stt"
 	"github.com/peggco/pegg/internal/tui/i18n"
@@ -535,9 +536,9 @@ func buildMCPSettings(cfg *config.Config) []MCPServerSetting {
 	out := make([]MCPServerSetting, 0, len(names))
 	for _, name := range names {
 		server := cfg.MCPServers[name]
-		kind := "stdio"
-		if server.URL != "" {
-			kind = "http"
+		kind := "invalid"
+		if resolved, err := mcp.ResolveTransportKind(server); err == nil {
+			kind = string(resolved)
 		}
 		out = append(out, MCPServerSetting{
 			Name:    name,

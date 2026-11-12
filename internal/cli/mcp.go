@@ -21,8 +21,9 @@ const (
 )
 
 const (
-	mcpTransportLocal = "local"
-	mcpTransportHTTP  = "http"
+	mcpTransportStdio          = "stdio"
+	mcpTransportSSE            = "sse"
+	mcpTransportStreamableHTTP = "streamable-http"
 )
 
 var popularHeaderKeys = []string{
@@ -109,15 +110,17 @@ func printMCPServers(out io.Writer, servers map[string]config.MCPServerConfig) {
 	fmt.Fprintf(out, "  %-24s %-7s %s\n", "NAME", "TYPE", "DETAIL")
 	for _, name := range names {
 		s := servers[name]
-		if s.URL != "" {
-			fmt.Fprintf(out, "  %-24s %-7s %s\n", name, "http", s.URL)
+		kind, err := mcp.ResolveTransportKind(s)
+		if err != nil {
+			fmt.Fprintf(out, "  %-24s %-7s %s\n", name, "invalid", "(invalid: no command or url)")
 			continue
 		}
-		detail := strings.TrimSpace(s.Command + " " + strings.Join(s.Args, " "))
-		if detail == "" {
-			detail = "(invalid: no command or url)"
+		if kind == mcp.TransportStdio {
+			detail := strings.TrimSpace(s.Command + " " + strings.Join(s.Args, " "))
+			fmt.Fprintf(out, "  %-24s %-7s %s\n", name, string(kind), detail)
+			continue
 		}
-		fmt.Fprintf(out, "  %-24s %-7s %s\n", name, "stdio", detail)
+		fmt.Fprintf(out, "  %-24s %-7s %s\n", name, string(kind), s.URL)
 	}
 }
 
@@ -162,11 +165,11 @@ func (c *CLI) newMCPAddCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&f.globalOnly, "global", false, "add to global config")
 	cmd.Flags().BoolVar(&f.projectOnly, "project", false, "add to project .mcp.json")
 	cmd.Flags().StringVar(&f.name, "name", "", "server name")
-	cmd.Flags().StringVar(&f.transport, "transport", "", "transport type: local or http")
+	cmd.Flags().StringVar(&f.transport, "transport", "", "transport type: stdio, sse (legacy), or streamable-http")
 	cmd.Flags().StringVar(&f.command, "command", "", "local command to run")
 	cmd.Flags().StringSliceVar(&f.args, "arg", nil, "local command argument (repeatable)")
 	cmd.Flags().StringToStringVar(&f.env, "env", nil, "local environment variable KEY=VALUE (repeatable)")
-	cmd.Flags().StringVar(&f.url, "url", "", "remote SSE URL")
+	cmd.Flags().StringVar(&f.url, "url", "", "MCP endpoint (SSE or streamable HTTP)")
 	cmd.Flags().StringToStringVar(&f.headers, "header", nil, "request header KEY=VALUE (repeatable)")
 	return cmd
 }
@@ -198,8 +201,9 @@ func (c *CLI) runMCPAdd(out io.Writer, f *mcpAddFlags) error {
 		}
 		transport = t
 	}
-	if transport != mcpTransportLocal && transport != mcpTransportHTTP {
-		return fmt.Errorf("cli: unknown transport %q (use local or http)", transport)
+	kind, err := mcp.ParseTransportKind(transport)
+	if err != nil || kind == "" {
+		return fmt.Errorf("cli: unknown transport %q (use stdio, sse (legacy), or streamable-http)", transport)
 	}
 
 	name := strings.TrimSpace(f.name)
@@ -212,8 +216,8 @@ func (c *CLI) runMCPAdd(out io.Writer, f *mcpAddFlags) error {
 	}
 
 	var server config.MCPServerConfig
-	switch transport {
-	case mcpTransportLocal:
+	switch kind {
+	case mcp.TransportStdio:
 		command := strings.TrimSpace(f.command)
 		if !f.commandSet || command == "" {
 			cmd, err := promptString("Command")
@@ -238,8 +242,8 @@ func (c *CLI) runMCPAdd(out io.Writer, f *mcpAddFlags) error {
 			}
 			env = e
 		}
-		server = config.MCPServerConfig{Command: command, Args: args, Env: env}
-	case mcpTransportHTTP:
+		server = config.MCPServerConfig{Type: string(kind), Command: command, Args: args, Env: env}
+	case mcp.TransportSSE, mcp.TransportStreamableHTTP:
 		url := strings.TrimSpace(f.url)
 		if !f.urlSet || url == "" {
 			u, err := promptString("URL")
@@ -256,7 +260,7 @@ func (c *CLI) runMCPAdd(out io.Writer, f *mcpAddFlags) error {
 			}
 			headers = h
 		}
-		server = config.MCPServerConfig{URL: url, Headers: headers}
+		server = config.MCPServerConfig{Type: string(kind), URL: url, Headers: headers}
 	}
 
 	if scope == mcpScopeGlobal {
@@ -404,15 +408,19 @@ func promptScope() (string, error) {
 }
 
 func promptTransport() (string, error) {
-	items := []string{"local (stdio)", "http (sse)"}
+	items := []string{mcpTransportStdio, "sse (legacy)", mcpTransportStreamableHTTP}
 	res, err := promptSelect("Transport", items)
 	if err != nil {
 		return "", err
 	}
-	if strings.HasPrefix(res, "local") {
-		return mcpTransportLocal, nil
+	switch res {
+	case mcpTransportStdio:
+		return mcpTransportStdio, nil
+	case mcpTransportStreamableHTTP:
+		return mcpTransportStreamableHTTP, nil
+	default:
+		return mcpTransportSSE, nil
 	}
-	return mcpTransportHTTP, nil
 }
 
 func promptSelect(label string, items []string) (string, error) {

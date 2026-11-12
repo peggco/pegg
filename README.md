@@ -329,7 +329,7 @@ background execution.
 Global and project Markdown injected into every system prompt.
 
 **MCP**  
-Servers over stdio or SSE; tools appear as `server__tool` on every surface.
+Servers over stdio, legacy SSE, or Streamable HTTP; tools appear as `server__tool` on every surface.
 
 </td>
 <td width="50%" valign="top">

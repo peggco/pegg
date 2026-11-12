@@ -7,10 +7,12 @@ import (
 	"strings"
 
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/mcp"
 )
 
 type MCPServerInput struct {
 	Name    string            `json:"name"`
+	Type    string            `json:"type"`
 	Command string            `json:"command"`
 	Args    []string          `json:"args"`
 	Env     map[string]string `json:"env"`
@@ -25,9 +27,6 @@ func (a *App) AddMCPServer(in MCPServerInput) error {
 	}
 	command := strings.TrimSpace(in.Command)
 	url := strings.TrimSpace(in.URL)
-	if command == "" && url == "" {
-		return errors.New("mcp: command or url is required")
-	}
 	args := make([]string, 0, len(in.Args))
 	for _, arg := range in.Args {
 		if v := strings.TrimSpace(arg); v != "" {
@@ -35,12 +34,18 @@ func (a *App) AddMCPServer(in MCPServerInput) error {
 		}
 	}
 	server := config.MCPServerConfig{
+		Type:    in.Type,
 		Command: command,
 		Args:    args,
 		Env:     in.Env,
 		URL:     url,
 		Headers: in.Headers,
 	}
+	kind, err := mcp.ResolveTransportKind(server)
+	if err != nil {
+		return err
+	}
+	server.Type = string(kind)
 	return config.UpsertMCPServer(name, server)
 }
 

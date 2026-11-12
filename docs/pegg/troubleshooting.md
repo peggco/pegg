@@ -213,7 +213,10 @@ uses the same config and session database as the CLI.
     `pegg logs --search mcp`. Common causes:
 
     - The `command` is not on `PATH` (stdio transport).
-    - The `url` is not reachable or does not emit an `endpoint` event (SSE transport).
+    - The `url` is not reachable or does not emit an `endpoint` event (legacy SSE transport).
+    - A Streamable HTTP server returns errors after a restart (expired session;
+      Pegg re-initializes automatically on `404`) or requires headers that are not
+      configured.
     - The server fails its `initialize` handshake or lists no tools.
 
     Connection failures are logged as warnings and the server is skipped; the rest of

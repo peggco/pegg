@@ -39,6 +39,13 @@ func (m *Manager) connect(name string, cfg config.MCPServerConfig) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	kind, err := ResolveTransportKind(cfg)
+	if err != nil {
+		m.log.Fwarn("mcp: server %q: %v", name, err)
+		return
+	}
+	m.log.Fdebug("mcp: server %q transport %s", name, kind)
+
 	transport, err := NewTransport(cfg, m.log.Writer(logger.LevelDebug, "mcp["+name+"]: "))
 	if err != nil {
 		m.log.Fwarn("mcp: server %q: %v", name, err)
@@ -51,7 +58,7 @@ func (m *Manager) connect(name string, cfg config.MCPServerConfig) {
 		return
 	}
 
-	client := NewClient(name, transport, Options{Name: name})
+	client := NewClient(name, transport, Options{Name: name, ProtocolVersion: kind.ProtocolVersion()})
 	if _, err := client.Initialize(ctx); err != nil {
 		_ = client.Close()
 		m.log.Fwarn("mcp: server %q: initialize: %v", name, err)
@@ -132,19 +139,30 @@ func (m *Manager) Close() error {
 }
 
 func NewTransport(cfg config.MCPServerConfig, stderr io.Writer) (Duplex, error) {
-	if cfg.URL != "" {
+	kind, err := ResolveTransportKind(cfg)
+	if err != nil {
+		return nil, err
+	}
+	switch kind {
+	case TransportStreamableHTTP:
+		return NewStreamableHTTPTransport(StreamableHTTPOptions{
+			URL:             cfg.URL,
+			Headers:         cfg.Headers,
+			ProtocolVersion: kind.ProtocolVersion(),
+		})
+	case TransportSSE:
 		return NewSSETransport(SSEOptions{
 			URL:     cfg.URL,
 			Headers: cfg.Headers,
 		})
-	}
-	if cfg.Command != "" {
+	case TransportStdio:
 		return NewStdioTransport(StdioOptions{
 			Command: cfg.Command,
 			Args:    cfg.Args,
 			Env:     cfg.Env,
 			Stderr:  stderr,
 		})
+	default:
+		return nil, ErrUnsupported
 	}
-	return nil, ErrUnsupported
 }

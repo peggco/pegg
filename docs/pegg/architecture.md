@@ -475,7 +475,7 @@ degrades gracefully when unavailable.
 
 ```mermaid
 flowchart LR
-    Agent["Agent"] --> MCP["MCP servers<br/>stdio / SSE"]
+    Agent["Agent"] --> MCP["MCP servers<br/>stdio / SSE / Streamable HTTP"]
     Agent --> LSP["LSP servers<br/>diagnostics on read/write"]
     Agent --> Plugins["Plugins<br/>go-plugin RPC"]
     Agent --> Memory["Memory<br/>observer + librarian"]
@@ -486,7 +486,7 @@ flowchart LR
 
 | Integration | Transport / mechanism | Docs |
 |---|---|---|
-| MCP | stdio or SSE, tools registered into the registry | [MCP](configurations/mcp.md) |
+| MCP | stdio, legacy SSE, or Streamable HTTP; tools registered into the registry | [MCP](configurations/mcp.md) |
 | LSP | stdio; diagnostics appended to file reads/writes | [LSP](configurations/lsp.md) |
 | Plugins | HashiCorp go-plugin over net/rpc | [Plugins](configurations/plugins.md) |
 | Memory | markdown files + background LLM passes | [Memory](features/memory.md) |

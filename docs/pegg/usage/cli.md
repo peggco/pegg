@@ -454,7 +454,8 @@ vfs     missing  /home/user/.pegg/vfs
 | `pegg mcp remove NAME [--global\|--project]` | Remove a server |
 | `pegg mcp tools [--server NAME]` | List tools exposed by connected servers |
 
-`add` flags: `--global`, `--project`, `--name`, `--transport local|http`,
+`add` flags: `--global`, `--project`, `--name`,
+`--transport stdio|sse|streamable-http` (aliases `local` and `http`),
 `--command`, `--arg` (repeatable), `--env KEY=VALUE` (repeatable), `--url`,
 `--header KEY=VALUE` (repeatable). See [MCP](../configurations/mcp.md).
 

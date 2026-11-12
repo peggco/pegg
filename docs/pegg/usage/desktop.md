@@ -109,7 +109,7 @@ The desktop settings page mirrors the TUI settings layout, backed by the same `~
 - **Session** — active session details, rename/delete/new chat, and context compaction (strategies, threshold, message and tool-output limits).
 - **Permissions** — Auto/Manual/Judge/Recommended presets, per-tool rules, judge provider/model/threshold.
 - **Memory** — enable/consolidate, gate, threshold, context budget, max results, entry stats.
-- **MCP** — configured servers and a link to the config file.
+- **MCP** — configured stdio, SSE, and Streamable HTTP servers with their transport labels, plus a link to the config file.
 - **Skills** — global/project skills with reveal actions.
 - **Rules** — global/project Markdown rules with a preview.
 - **Plugins** — installed plugins with per-plugin enable/disable.

@@ -482,6 +482,7 @@ export interface TeamStatus {
 
 export interface MCPServerInput {
   name: string;
+  type: string;
   command: string;
   args: string[];
   env: Record<string, string>;
