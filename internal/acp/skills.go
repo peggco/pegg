@@ -10,9 +10,9 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/skill"
-	"github.com/peggco/pegg/internal/skillhub"
 )
 
 type skillsReloadResult struct {
@@ -58,8 +58,8 @@ type skillsSearchParams struct {
 }
 
 type skillsSearchResult struct {
-	Items      []skillhub.RemoteSkill `json:"items"`
-	NextCursor *int                   `json:"nextCursor,omitempty"`
+	Items      []catalog.RemoteSkill `json:"items"`
+	NextCursor *int                  `json:"nextCursor,omitempty"`
 }
 
 func (s *Server) handleSkillsSearch(ctx context.Context, params json.RawMessage) (any, error) {
@@ -67,7 +67,7 @@ func (s *Server) handleSkillsSearch(ctx context.Context, params json.RawMessage)
 	if len(params) > 0 {
 		_ = json.Unmarshal(params, &req)
 	}
-	opts := skillhub.SearchOptions{Query: req.Query, Limit: req.Limit, Cursor: req.Cursor}
+	opts := catalog.SearchOptions{Query: req.Query, Limit: req.Limit, Cursor: req.Cursor}
 	switch strings.ToLower(strings.TrimSpace(req.Filter)) {
 	case "official":
 		value := true
@@ -78,7 +78,7 @@ func (s *Server) handleSkillsSearch(ctx context.Context, params json.RawMessage)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	res, err := skillhub.NewClient().SearchPage(ctx, opts)
+	res, err := catalog.NewClient().Search(ctx, catalog.KindSkill, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -106,13 +106,13 @@ func (s *Server) handleSkillsInstall(ctx context.Context, params json.RawMessage
 	if err != nil {
 		return nil, err
 	}
-	spec := skillhub.Spec{Source: strings.TrimSpace(req.Source), SkillID: strings.TrimSpace(req.SkillID)}
+	spec := catalog.SkillSpec{Source: strings.TrimSpace(req.Source), SkillID: strings.TrimSpace(req.SkillID)}
 	if spec.Source == "" || spec.SkillID == "" {
 		return nil, errors.New("source and skillId are required")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	installed, err := skillhub.Install(ctx, skillhub.NewClient(), spec, dir)
+	installed, err := catalog.InstallSkill(ctx, catalog.NewClient(), spec, dir)
 	if err != nil {
 		return nil, err
 	}

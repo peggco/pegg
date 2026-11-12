@@ -530,6 +530,7 @@ cmd/pegg/                 binary entry point
 internal/
 ├── agent/                agent framework: run loop, middleware, hooks, tools, prompt
 ├── builtin/              built-in agents, middlewares, tools, reminders, skills
+├── catalog/              hub client for skills, MCP servers, and plugins
 ├── cli/                  cobra command tree and all subcommands
 ├── connect/              relay daemon (WebSocket) for the web client
 ├── core/                 event bus, hooks, config, bootstrap, cache, logger
@@ -546,7 +547,6 @@ internal/
 ├── server/               HTTP API and SSE handlers
 ├── session/              session store, recorder, runs, compaction
 ├── skill/                skill engine and loader
-├── skillhub/             skill hub install/search
 ├── stt/                  speech-to-text drivers and providers
 ├── tui/                  tcell terminal UI
 ├── vfs/                  sandboxed virtual filesystem

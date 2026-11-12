@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/skill"
-	"github.com/peggco/pegg/internal/skillhub"
 )
 
 func (c *Connector) registerSkillMethods() {
@@ -29,7 +29,7 @@ type skillSearchParams struct {
 func (c *Connector) handleSkillsSearch(ctx context.Context, req *Request) (any, error) {
 	var p skillSearchParams
 	_ = req.Decode(&p)
-	opts := skillhub.SearchOptions{Query: p.Query, Limit: p.Limit, Cursor: p.Cursor}
+	opts := catalog.SearchOptions{Query: p.Query, Limit: p.Limit, Cursor: p.Cursor}
 	switch strings.ToLower(strings.TrimSpace(p.Filter)) {
 	case "official":
 		value := true
@@ -38,7 +38,7 @@ func (c *Connector) handleSkillsSearch(ctx context.Context, req *Request) (any, 
 		value := false
 		opts.Official = &value
 	}
-	res, err := skillhub.NewClient().SearchPage(ctx, opts)
+	res, err := catalog.NewClient().Search(ctx, catalog.KindSkill, opts)
 	if err != nil {
 		return nil, &FrameError{Code: ErrCodeInternal, Message: "search skills: " + err.Error()}
 	}
@@ -56,7 +56,7 @@ func (c *Connector) handleSkillsInstall(ctx context.Context, req *Request) (any,
 	if err := req.Decode(&p); err != nil {
 		return nil, &FrameError{Code: ErrCodeBadRequest, Message: "invalid params: " + err.Error()}
 	}
-	spec := skillhub.Spec{Source: strings.TrimSpace(p.Source), SkillID: strings.TrimSpace(p.SkillID)}
+	spec := catalog.SkillSpec{Source: strings.TrimSpace(p.Source), SkillID: strings.TrimSpace(p.SkillID)}
 	if spec.Source == "" || spec.SkillID == "" {
 		return nil, &FrameError{Code: ErrCodeBadRequest, Message: "source and skillId are required"}
 	}
@@ -64,7 +64,7 @@ func (c *Connector) handleSkillsInstall(ctx context.Context, req *Request) (any,
 	if err != nil {
 		return nil, err
 	}
-	installed, err := skillhub.Install(ctx, skillhub.NewClient(), spec, dir)
+	installed, err := catalog.InstallSkill(ctx, catalog.NewClient(), spec, dir)
 	if err != nil {
 		return nil, &FrameError{Code: ErrCodeInternal, Message: "install skill: " + err.Error()}
 	}

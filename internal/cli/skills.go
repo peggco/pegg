@@ -17,9 +17,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/skill"
-	"github.com/peggco/pegg/internal/skillhub"
 )
 
 func (c *CLI) newSkillsCommand() *cobra.Command {
@@ -53,7 +53,7 @@ func (c *CLI) newSkillsAddCommand() *cobra.Command {
 }
 
 func (c *CLI) runSkillsAdd(ctx context.Context, cmd *cobra.Command, out io.Writer, ref string, project, global bool) error {
-	spec, err := skillhub.ParseSpec(ref)
+	spec, err := catalog.ParseSkillSpec(ref)
 	if err != nil {
 		return fmt.Errorf("cli: skills: %w", err)
 	}
@@ -65,8 +65,8 @@ func (c *CLI) runSkillsAdd(ctx context.Context, cmd *cobra.Command, out io.Write
 	if err != nil {
 		return fmt.Errorf("cli: skills: %w", err)
 	}
-	client := skillhub.NewClient()
-	installed, err := skillhub.Install(ctx, client, spec, dir)
+	client := catalog.NewClient()
+	installed, err := catalog.InstallSkill(ctx, client, spec, dir)
 	if err != nil {
 		return fmt.Errorf("cli: skills: %w", err)
 	}
@@ -133,10 +133,11 @@ func (c *CLI) newSkillsSearchCommand() *cobra.Command {
 }
 
 func (c *CLI) runSkillsSearch(ctx context.Context, out io.Writer, query string, limit int, asJSON bool) error {
-	items, err := skillhub.NewClient().Search(ctx, query, limit)
+	res, err := catalog.NewClient().Search(ctx, catalog.KindSkill, catalog.SearchOptions{Query: query, Limit: limit})
 	if err != nil {
 		return fmt.Errorf("cli: skills: %w", err)
 	}
+	items := res.Items
 	if asJSON {
 		data, err := json.MarshalIndent(items, "", "  ")
 		if err != nil {
@@ -179,16 +180,16 @@ func (c *CLI) runSkillsRemove(out io.Writer, name string, project, global bool) 
 		return fmt.Errorf("cli: skills: %w", err)
 	}
 	for _, item := range dirs {
-		err := skillhub.Remove(item.dir, name)
+		err := catalog.RemoveSkill(item.dir, name)
 		if err == nil {
 			fmt.Fprintf(out, "Removed %s (%s)\n", name, item.scope)
 			return nil
 		}
-		if !errors.Is(err, skillhub.ErrSkillNotFound) {
+		if !errors.Is(err, catalog.ErrSkillNotFound) {
 			return fmt.Errorf("cli: skills: %w", err)
 		}
 	}
-	return fmt.Errorf("cli: skills: %w: %s", skillhub.ErrSkillNotFound, name)
+	return fmt.Errorf("cli: skills: %w: %s", catalog.ErrSkillNotFound, name)
 }
 
 func (c *CLI) resolveSkillScope(cmd *cobra.Command, out io.Writer, project, global bool) (bool, error) {
@@ -270,14 +271,14 @@ func skillScopeDirs(project, global bool) ([]skillScopeDir, error) {
 	return out, nil
 }
 
-func installedSkills(project, global bool) ([]skillhub.Installed, error) {
+func installedSkills(project, global bool) ([]catalog.InstalledSkill, error) {
 	dirs, err := skillScopeDirs(project, global)
 	if err != nil {
 		return nil, err
 	}
-	var out []skillhub.Installed
+	var out []catalog.InstalledSkill
 	for _, item := range dirs {
-		out = append(out, skillhub.ListInstalled(item.dir, item.scope)...)
+		out = append(out, catalog.ListInstalledSkills(item.dir, item.scope)...)
 	}
 	seen := make(map[string]bool, len(out))
 	for _, item := range out {
@@ -287,7 +288,7 @@ func installedSkills(project, global bool) ([]skillhub.Installed, error) {
 		if !strings.HasPrefix(registered.Source, "plugin:") || seen[registered.Name] {
 			continue
 		}
-		out = append(out, skillhub.Installed{
+		out = append(out, catalog.InstalledSkill{
 			Name:        registered.Name,
 			Description: registered.Description,
 			Source:      registered.Source,

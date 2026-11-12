@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
-	"github.com/peggco/pegg/internal/skillhub"
 	"github.com/peggco/pegg/pkg/desktop/internal/acpclient"
 )
 
@@ -37,15 +37,15 @@ type HubSearchResult struct {
 }
 
 func (a *App) SearchHubSkills(query string, limit int) ([]HubSkill, error) {
-	items, err := skillhub.NewClient().Search(context.Background(), query, limit)
+	res, err := catalog.NewClient().Search(context.Background(), catalog.KindSkill, catalog.SearchOptions{Query: query, Limit: limit})
 	if err != nil {
 		return []HubSkill{}, err
 	}
-	return toHubSkills(items), nil
+	return toHubSkills(res.Items), nil
 }
 
 func (a *App) SearchHubSkillsFiltered(query string, limit int, filter string, cursor int) (HubSearchResult, error) {
-	opts := skillhub.SearchOptions{Query: query, Limit: limit, Cursor: cursor}
+	opts := catalog.SearchOptions{Query: query, Limit: limit, Cursor: cursor}
 	switch strings.ToLower(strings.TrimSpace(filter)) {
 	case "official":
 		value := true
@@ -56,7 +56,7 @@ func (a *App) SearchHubSkillsFiltered(query string, limit int, filter string, cu
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	res, err := skillhub.NewClient().SearchPage(ctx, opts)
+	res, err := catalog.NewClient().Search(ctx, catalog.KindSkill, opts)
 	if err != nil {
 		return HubSearchResult{}, err
 	}
@@ -66,7 +66,7 @@ func (a *App) SearchHubSkillsFiltered(query string, limit int, filter string, cu
 func (a *App) SkillReadme(source string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	return skillhub.NewClient().Readme(ctx, strings.TrimSpace(source))
+	return catalog.NewClient().SkillReadme(ctx, strings.TrimSpace(source))
 }
 
 func (a *App) InstallHubSkill(source, skillID, scope string) (SkillMutationResult, error) {
@@ -74,13 +74,13 @@ func (a *App) InstallHubSkill(source, skillID, scope string) (SkillMutationResul
 	if err != nil {
 		return SkillMutationResult{}, err
 	}
-	spec := skillhub.Spec{Source: strings.TrimSpace(source), SkillID: strings.TrimSpace(skillID)}
+	spec := catalog.SkillSpec{Source: strings.TrimSpace(source), SkillID: strings.TrimSpace(skillID)}
 	if spec.Source == "" || spec.SkillID == "" {
 		return SkillMutationResult{}, errors.New("source and skill id are required")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	installed, err := skillhub.Install(ctx, skillhub.NewClient(), spec, dir)
+	installed, err := catalog.InstallSkill(ctx, catalog.NewClient(), spec, dir)
 	if err != nil {
 		return SkillMutationResult{}, err
 	}
@@ -129,7 +129,7 @@ func (a *App) reloadSkills() []acpclient.SlashCommand {
 	return commands
 }
 
-func toHubSkills(items []skillhub.RemoteSkill) []HubSkill {
+func toHubSkills(items []catalog.RemoteSkill) []HubSkill {
 	out := make([]HubSkill, 0, len(items))
 	for _, item := range items {
 		out = append(out, HubSkill{

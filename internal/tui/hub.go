@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/skill"
-	"github.com/peggco/pegg/internal/skillhub"
 	"github.com/peggco/pegg/internal/tui/components"
 )
 
@@ -34,7 +34,8 @@ func (a *App) searchHubSkills(query string) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		items, err := skillhub.NewClient().Search(ctx, query, 8)
+		res, err := catalog.NewClient().Search(ctx, catalog.KindSkill, catalog.SearchOptions{Query: query, Limit: 8})
+		items := res.Items
 
 		a.hubMu.Lock()
 		current = a.hubSeq == seq && a.hubQuery == query
@@ -80,7 +81,7 @@ func (a *App) installHubSkill(source, skillID, name string) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
-		installed, err := skillhub.Install(ctx, skillhub.NewClient(), skillhub.Spec{Source: source, SkillID: skillID}, dir)
+		installed, err := catalog.InstallSkill(ctx, catalog.NewClient(), catalog.SkillSpec{Source: source, SkillID: skillID}, dir)
 		if err != nil {
 			a.setHubError(err.Error())
 			return

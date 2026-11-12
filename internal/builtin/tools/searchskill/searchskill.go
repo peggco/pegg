@@ -11,7 +11,7 @@ import (
 	"github.com/peggco/pegg/internal/agent/prompt"
 	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/agent/tools"
-	"github.com/peggco/pegg/internal/skillhub"
+	"github.com/peggco/pegg/internal/catalog"
 )
 
 const (
@@ -30,10 +30,10 @@ func generateSearchSkillToolPrompt() (string, error) {
 }
 
 func SearchSkillTool() {
-	tools.Register(searchSkillTool(skillhub.NewClient()))
+	tools.Register(searchSkillTool(catalog.NewClient()))
 }
 
-func searchSkillTool(client *skillhub.Client) tool.Tool {
+func searchSkillTool(client *catalog.Client) tool.Tool {
 	prompt, err := generateSearchSkillToolPrompt()
 	if err != nil {
 		panic(fmt.Sprintf("failed to generate searchskill tool prompt: %v", err))
@@ -83,16 +83,16 @@ func searchSkillTool(client *skillhub.Client) tool.Tool {
 			ctx, cancel := context.WithTimeout(ctx, searchTimeout)
 			defer cancel()
 
-			items, err := client.Search(ctx, params.Query, params.MaxResults)
+			res, err := client.Search(ctx, catalog.KindSkill, catalog.SearchOptions{Query: params.Query, Limit: params.MaxResults})
 			if err != nil {
 				return "", fmt.Errorf("searchskill: %w", err)
 			}
-			return renderResults(params.Query, items), nil
+			return renderResults(params.Query, res.Items), nil
 		},
 	)
 }
 
-func renderResults(query string, items []skillhub.RemoteSkill) string {
+func renderResults(query string, items []catalog.RemoteSkill) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "<skill_results query=\"%s\" count=\"%d\">\n", escapeXML(query), len(items))
 	for _, item := range items {
