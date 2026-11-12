@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Command,
   FolderOpen,
@@ -14,6 +14,13 @@ import {
   X,
 } from 'lucide-react';
 import { baseName, dayGroup, relativeTime, shortPath } from '../lib/format';
+import {
+  SIDEBAR_DEFAULT_WIDTH,
+  clampSidebarWidth,
+  dragSidebarWidth,
+  resolveSidebarWidth,
+  shouldCollapseSidebar,
+} from '../lib/sidebar';
 import { useT } from '../lib/i18n';
 import {
   chooseWorkspace,
@@ -22,13 +29,15 @@ import {
   loadMoreSessions,
   openSession,
   renameSession,
-  setTheme,
+  saveSidebarWidth,
+  setSidebarCollapsed,
   startNewChat,
+  toggleAppearance,
   togglePalette,
   toggleSettings,
   toggleSkills,
 } from '../state/actions';
-import { store, useStore } from '../state/store';
+import { useStore } from '../state/store';
 import type { SessionListItem } from '../types';
 import darkLogo from '../../../assets/dark-logo.png';
 import lightLogo from '../../../assets/light-logo.png';
@@ -47,6 +56,62 @@ export function Sidebar() {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const recentsRef = useRef<HTMLDivElement>(null);
+  const savedWidth = useStore((s) => s.prefs.sidebarWidth);
+  const [width, setWidth] = useState(() => resolveSidebarWidth(savedWidth));
+  const [resizing, setResizing] = useState(false);
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    if (!dragRef.current) setWidth(resolveSidebarWidth(savedWidth));
+  }, [savedWidth]);
+
+  const pointerWidth = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    return drag ? dragSidebarWidth(drag.startWidth, event.clientX - drag.startX) : width;
+  };
+
+  const onResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (collapsed || window.innerWidth <= 860) return;
+    event.preventDefault();
+    dragRef.current = { startX: event.clientX, startWidth: width };
+    setResizing(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    document.body.classList.add('sidebar-resizing');
+  };
+
+  const onResizeMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    setWidth(pointerWidth(event));
+  };
+
+  const onResizeEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    const next = pointerWidth(event);
+    dragRef.current = null;
+    setResizing(false);
+    document.body.classList.remove('sidebar-resizing');
+    if (shouldCollapseSidebar(next)) {
+      setWidth(resolveSidebarWidth(savedWidth));
+      setSidebarCollapsed(true);
+      return;
+    }
+    const clamped = clampSidebarWidth(next);
+    setWidth(clamped);
+    saveSidebarWidth(clamped);
+  };
+
+  const onResizeCancel = () => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setResizing(false);
+    document.body.classList.remove('sidebar-resizing');
+    setWidth(resolveSidebarWidth(savedWidth));
+  };
+
+  const resetWidth = () => {
+    setWidth(SIDEBAR_DEFAULT_WIDTH);
+    saveSidebarWidth(SIDEBAR_DEFAULT_WIDTH);
+  };
 
   const dayLabel = (label: string) => {
     switch (label) {
@@ -87,7 +152,11 @@ export function Sidebar() {
   };
 
   return (
-    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`} aria-label="Sidebar">
+    <aside
+      className={`sidebar${collapsed ? ' collapsed' : ''}${resizing ? ' resizing' : ''}`}
+      aria-label="Sidebar"
+      style={{ '--pg-sidebar-w': `${width}px` } as CSSProperties}
+    >
       <div className="sidebar-inner">
         <div className="brand">
           <span className="brand-name">
@@ -238,14 +307,7 @@ export function Sidebar() {
             {t('nav.commandPalette')}
             <span className="shortcut">⌘K</span>
           </button>
-          <button
-            className="nav-item"
-            onClick={() => {
-              const currentTheme = store.get().theme;
-              if (!currentTheme) return;
-              void setTheme(currentTheme.name, currentTheme.dark ? 'light' : 'dark');
-            }}
-          >
+          <button className="nav-item" onClick={toggleAppearance}>
             {theme?.dark ? <Sun size={15} /> : <Moon size={15} />}
             {theme?.dark ? t('nav.lightAppearance') : t('nav.darkAppearance')}
             <span className={`switch${theme && !theme.dark ? ' on' : ''}`} aria-hidden="true" />
@@ -260,6 +322,17 @@ export function Sidebar() {
           </button>
         </div>
       </div>
+      <div
+        className="sidebar-resize"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        onPointerDown={onResizeStart}
+        onPointerMove={onResizeMove}
+        onPointerUp={onResizeEnd}
+        onPointerCancel={onResizeCancel}
+        onDoubleClick={resetWidth}
+      />
     </aside>
   );
 }

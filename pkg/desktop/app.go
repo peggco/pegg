@@ -113,7 +113,7 @@ func NewApp() *App {
 	}
 	a := &App{
 		prefs:    store,
-		theme:    themes.All(),
+		theme:    themes.Desktop(),
 		sessions: map[string]*SessionInfo{},
 		pending:  map[string]pendingRequest{},
 	}
@@ -337,6 +337,21 @@ func (a *App) SavePrefs(p prefs.Prefs) (prefs.Prefs, error) {
 			cur.FontScale = p.FontScale
 		}
 		cur.SidebarCollapsed = p.SidebarCollapsed
+		if p.SidebarWidth > 0 {
+			cur.SidebarWidth = p.SidebarWidth
+		}
+		if p.SidebarMode != "" {
+			cur.SidebarMode = p.SidebarMode
+		}
+		if p.LayoutMode != "" {
+			cur.LayoutMode = p.LayoutMode
+		}
+		if p.Direction != "" {
+			cur.Direction = p.Direction
+		}
+		if p.ChatHistoryMode != "" {
+			cur.ChatHistoryMode = p.ChatHistoryMode
+		}
 	})
 	return a.prefs.Get(), err
 }

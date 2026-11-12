@@ -118,6 +118,54 @@ func TestJSONStoreMessagesTruncate(t *testing.T) {
 	}
 }
 
+func TestJSONStoreMessagesPage(t *testing.T) {
+	s := newTestJSONStore(t)
+	if err := s.Create(testSession("s1")); err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= 5; i++ {
+		if err := s.InsertMessage(testMessage("s1", i, llm.RoleUser, "hi")); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cases := []struct {
+		name    string
+		before  int
+		limit   int
+		want    []int
+		hasMore bool
+	}{
+		{name: "newest page", before: 0, limit: 2, want: []int{4, 5}, hasMore: true},
+		{name: "middle page", before: 4, limit: 2, want: []int{2, 3}, hasMore: true},
+		{name: "oldest page", before: 2, limit: 2, want: []int{1}, hasMore: false},
+		{name: "exhausted", before: 1, limit: 2, want: nil, hasMore: false},
+		{name: "all without limit", before: 0, limit: 0, want: []int{1, 2, 3, 4, 5}, hasMore: false},
+		{name: "all below before without limit", before: 4, limit: 0, want: []int{1, 2, 3}, hasMore: false},
+		{name: "limit larger than set", before: 0, limit: 10, want: []int{1, 2, 3, 4, 5}, hasMore: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			page, hasMore, err := s.MessagesPage("s1", tc.before, tc.limit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if hasMore != tc.hasMore {
+				t.Fatalf("hasMore = %v, want %v", hasMore, tc.hasMore)
+			}
+			if len(page) != len(tc.want) {
+				t.Fatalf("page = %+v, want seqs %v", page, tc.want)
+			}
+			for i, wantSeq := range tc.want {
+				if page[i].Seq != wantSeq {
+					t.Fatalf("page[%d].Seq = %d, want %d (page %+v)", i, page[i].Seq, wantSeq, page)
+				}
+			}
+		})
+	}
+}
+
 func TestJSONStoreMessagesTruncateFrom(t *testing.T) {
 	s := newTestJSONStore(t)
 	if err := s.Create(testSession("s1")); err != nil {

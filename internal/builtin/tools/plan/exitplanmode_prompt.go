@@ -6,7 +6,7 @@ func exitplanmodeToolPromptBuilder() *prompt.Prompt {
 	return prompt.New().
 		Paragraph("Use this tool when you are in plan mode and have finished planning and are ready for user approval.").
 		Heading(2, "How This Tool Works").
-		List("The plan should already exist - the planner subagent wrote it to a file under .pegg/plans/ during plan mode",
+		List("The plan should already exist - you wrote it to a file under .pegg/plans/ during plan mode",
 			"This tool does NOT take the plan content as a parameter - it reads the plan file written during plan mode",
 			"This tool asks the user to review and approve the plan; the plan file path is shown in the approval prompt when found",
 			"If the user approves, plan mode ends and you may start implementing",

@@ -27,7 +27,7 @@ function StatusMark({ status }: { status: string }) {
   return <span className={`status-dot ${status}`} title={status} />;
 }
 
-function ToolIcon({ kind }: { kind?: string }) {
+export function ToolIcon({ kind }: { kind?: string }) {
   switch (kind) {
     case 'execute':
       return <Terminal size={13} />;
@@ -50,7 +50,7 @@ function inputRecord(input: unknown): Record<string, unknown> {
   return input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
 }
 
-function outputText(output: unknown): string {
+export function outputText(output: unknown): string {
   if (output === undefined || output === null) return '';
   if (typeof output === 'string') return stripAnsi(output);
   try {
@@ -67,7 +67,7 @@ function toolPath(tool: ToolState): string {
   return tool.locations?.[0]?.path ?? '';
 }
 
-function writeContent(tool: ToolState): string {
+export function writeContent(tool: ToolState): string {
   const record = inputRecord(tool.input);
   for (const key of ['content', 'text', 'newText', 'new_string', 'newString']) {
     const value = record[key];
@@ -77,14 +77,14 @@ function writeContent(tool: ToolState): string {
   return outputText(tool.output);
 }
 
-function bashCommand(tool: ToolState): string {
+export function bashCommand(tool: ToolState): string {
   const record = inputRecord(tool.input);
   if (typeof record.command === 'string' && record.command.trim()) return record.command.trim();
   const title = (tool.title ?? '').replace(/^bash:?\s*/i, '');
   return title || tool.name || 'bash';
 }
 
-function classify(tool: ToolState): 'bash' | 'write' | 'edit' | 'files' | 'compact' {
+export function classify(tool: ToolState): 'bash' | 'write' | 'edit' | 'files' | 'compact' {
   if (tool.files?.length) return 'files';
   const haystack = `${tool.name ?? ''} ${tool.title ?? ''}`.toLowerCase();
   if (tool.kind === 'execute' || /\bbash\b/.test(haystack)) return 'bash';
@@ -327,7 +327,7 @@ type DiffRow =
   | { kind: 'ctx' | 'add' | 'del'; text: string; oldLine?: number; newLine?: number }
   | { kind: 'hunk'; text: string };
 
-function computeRows(oldText: string, newText: string): DiffRow[] {
+export function computeRows(oldText: string, newText: string): DiffRow[] {
   const a = oldText === '' ? [] : oldText.replace(/\r\n/g, '\n').split('\n');
   const b = newText === '' ? [] : newText.replace(/\r\n/g, '\n').split('\n');
 
@@ -434,10 +434,15 @@ export function DiffView({
 }) {
   const t = useT();
   const rows = useMemo(() => computeRows(diff.oldText ?? '', diff.newText ?? ''), [diff.oldText, diff.newText]);
+  const language = useMemo(() => languageForPath(diff.path), [diff.path]);
   const adds = rows.filter((row) => row.kind === 'add').length;
   const dels = rows.filter((row) => row.kind === 'del').length;
   const limit = 160;
-  const visible = expanded ? rows : rows.slice(0, limit);
+  const visible = useMemo(() => (expanded ? rows : rows.slice(0, limit)), [expanded, rows, limit]);
+  const highlighted = useMemo(
+    () => visible.map((row) => (row.kind === 'hunk' ? '' : highlightCode(row.text || ' ', language))),
+    [visible, language],
+  );
   const hasMore = rows.length > limit;
 
   return (
@@ -461,7 +466,10 @@ export function DiffView({
               <span className="diff-num">{row.oldLine ?? ''}</span>
               <span className="diff-num">{row.newLine ?? ''}</span>
               <span className="diff-sign">{row.kind === 'add' ? '+' : row.kind === 'del' ? '−' : ' '}</span>
-              <span className="diff-text">{row.text || ' '}</span>
+              <span
+                className="diff-text"
+                dangerouslySetInnerHTML={{ __html: highlighted[index] ?? '' }}
+              />
             </div>
           ),
         )}

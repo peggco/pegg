@@ -71,6 +71,12 @@ current project.
     `session/resume` (no history replay) or `session/load` (replays history as
     `session/update` notifications). See [ACP](../usage/acp.md).
 
+In the desktop app, VS Code, and IntelliJ, older pages load automatically as you
+approach the top of the transcript. The desktop app restores the last 200 messages
+and loads older pages of 200; the IDE clients use batches of 100. The viewport
+stays anchored on the message you are reading: loading a page never snaps back to
+the bottom, and streamed messages only follow when you are already at the bottom.
+
 Resuming publishes a `session.resume` event so the recorder re-attaches the run to
 the same session rather than creating a new one.
 

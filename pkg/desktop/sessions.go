@@ -17,6 +17,11 @@ import (
 	"github.com/peggco/pegg/pkg/desktop/internal/workspace"
 )
 
+const (
+	sessionHistoryPageSize = 200
+	maxSessionHistoryPage  = 500
+)
+
 func (a *App) ensureClient() (*acpclient.Client, error) {
 	a.mu.Lock()
 	if a.client != nil && a.client.Running() {
@@ -365,6 +370,21 @@ func (a *App) SavePrefsOnly(p prefs.Prefs) prefs.Prefs {
 			cur.FontScale = p.FontScale
 		}
 		cur.SidebarCollapsed = p.SidebarCollapsed
+		if p.SidebarWidth > 0 {
+			cur.SidebarWidth = p.SidebarWidth
+		}
+		if p.SidebarMode != "" {
+			cur.SidebarMode = p.SidebarMode
+		}
+		if p.LayoutMode != "" {
+			cur.LayoutMode = p.LayoutMode
+		}
+		if p.Direction != "" {
+			cur.Direction = p.Direction
+		}
+		if p.ChatHistoryMode != "" {
+			cur.ChatHistoryMode = p.ChatHistoryMode
+		}
 	})
 	return a.prefs.Get()
 }
@@ -462,7 +482,7 @@ func (a *App) LoadSession(req LoadSessionRequest) (*SessionInfo, error) {
 	raw, err := client.Request(ctx, "session/load", acpclient.SessionLoadParams{
 		SessionID:    req.PeggID,
 		Cwd:          abs,
-		HistoryLimit: 50,
+		HistoryLimit: sessionHistoryPageSize,
 	})
 	a.emit("acp:loading", map[string]any{"sessionId": req.PeggID, "loading": false})
 	if err != nil {
@@ -598,8 +618,11 @@ func (a *App) LoadHistory(req LoadHistoryRequest) (acpclient.SessionHistoryResul
 	if info, err := a.resolveSession(req.SessionID); err == nil && info.PeggID != "" {
 		sessionID = info.PeggID
 	}
-	if req.Limit <= 0 || req.Limit > 200 {
-		req.Limit = 50
+	if req.Limit <= 0 {
+		req.Limit = sessionHistoryPageSize
+	}
+	if req.Limit > maxSessionHistoryPage {
+		req.Limit = maxSessionHistoryPage
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

@@ -14,7 +14,7 @@
   width: 196px;
   flex: none;
   padding: 12px 8px;
-  border-right: 1px solid var(--pg-border);
+  border-inline-end: 1px solid var(--pg-border);
   background: var(--pg-sidebar);
   display: flex;
   flex-direction: column;
@@ -1010,4 +1010,110 @@
   .hub-title {
     font-size: 30px;
   }
+}
+
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.option-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.option-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius-md);
+  background: var(--pg-surface);
+  text-align: center;
+  transition: border-color var(--pg-fast), box-shadow var(--pg-fast), transform var(--pg-fast);
+}
+
+.option-card:hover {
+  border-color: var(--pg-border-strong);
+  transform: translateY(-1px);
+}
+
+.option-card.active {
+  border-color: var(--pg-accent);
+  box-shadow: 0 0 0 1px var(--pg-accent);
+}
+
+.option-card.active::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--pg-accent);
+  border: 2px solid var(--pg-bg);
+}
+
+.option-thumb {
+  display: block;
+  border-radius: var(--pg-radius-sm);
+  overflow: hidden;
+  background: var(--pg-bg);
+}
+
+.option-thumb svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.option-name {
+  font-size: 11.5px;
+  color: var(--pg-text-2);
+}
+
+.option-card.active .option-name {
+  color: var(--pg-text);
+}
+
+.option-preview .thumb-bg {
+  fill: var(--pg-bg);
+}
+
+.option-preview .thumb-side {
+  fill: var(--pg-sidebar);
+  stroke: var(--pg-border);
+}
+
+.option-preview .thumb-card {
+  fill: var(--pg-surface);
+  stroke: var(--pg-border);
+}
+
+.option-preview .thumb-line {
+  fill: color-mix(in srgb, var(--pg-text) 22%, transparent);
+}
+
+.option-preview .thumb-line.strong {
+  fill: color-mix(in srgb, var(--pg-text) 42%, transparent);
+}
+
+.option-preview .thumb-block {
+  fill: color-mix(in srgb, var(--pg-text) 12%, transparent);
+}
+
+.option-preview .thumb-shadow {
+  fill: color-mix(in srgb, #000 28%, transparent);
+}
+
+.option-preview .thumb-bubble {
+  fill: color-mix(in srgb, var(--pg-text) 14%, transparent);
+}
+
+.option-preview .thumb-summary {
+  fill: color-mix(in srgb, var(--pg-text) 7%, transparent);
+  stroke: var(--pg-border);
 }

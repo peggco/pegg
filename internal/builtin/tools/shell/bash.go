@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"time"
 
@@ -104,8 +105,8 @@ func bashTool(fs *vfs.VFS) tool.Tool {
 			setProcessGroup(cmd)
 
 			var stdout, stderr bytes.Buffer
-			cmd.Stdout = &stdout
-			cmd.Stderr = &stderr
+			cmd.Stdout = io.MultiWriter(&stdout, tool.OutputWriter(ctx, "stdout"))
+			cmd.Stderr = io.MultiWriter(&stderr, tool.OutputWriter(ctx, "stderr"))
 
 			if err := cmd.Start(); err != nil {
 				return "", fmt.Errorf("bash: %w", err)

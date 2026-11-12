@@ -34,10 +34,11 @@ type SessionPromptResult struct {
 }
 
 type promptState struct {
-	sessionID string
-	textIDs   map[string]string
-	thoughtID map[string]string
-	oldFiles  map[string]string
+	sessionID  string
+	textIDs    map[string]string
+	thoughtID  map[string]string
+	oldFiles   map[string]string
+	toolOutput map[string]*strings.Builder
 
 	toolPending map[string]map[string]bool
 
@@ -130,10 +131,11 @@ func (s *Server) handleSessionPrompt(ctx context.Context, params json.RawMessage
 	}
 
 	state := &promptState{
-		sessionID: string(req.SessionId),
-		textIDs:   make(map[string]string),
-		thoughtID: make(map[string]string),
-		oldFiles:  make(map[string]string),
+		sessionID:  string(req.SessionId),
+		textIDs:    make(map[string]string),
+		thoughtID:  make(map[string]string),
+		oldFiles:   make(map[string]string),
+		toolOutput: make(map[string]*strings.Builder),
 	}
 
 	eventCh := make(chan agent.StreamEvent, 256)
@@ -423,6 +425,24 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 				})
 			}
 		}
+	case agent.StreamToolOutput:
+		if ev.ToolCallID == "" || ev.ToolChunk == "" {
+			return
+		}
+		buf := st.toolOutput[ev.ToolCallID]
+		if buf == nil {
+			buf = &strings.Builder{}
+			st.toolOutput[ev.ToolCallID] = buf
+		}
+		buf.WriteString(ev.ToolChunk)
+		s.notify(st.sessionID, SessionUpdate{
+			SessionUpdate: "tool_call_update",
+			ToolCallID:    ToolCallId(ev.ToolCallID),
+			Name:          ev.ToolName,
+			Status:        string(ToolCallInProgress),
+			RawOutput:     truncate(buf.String(), 128*1024),
+			Meta:          meta,
+		})
 	case agent.StreamToolResult:
 		if ev.ToolCall == nil {
 			return
@@ -472,6 +492,7 @@ func (s *Server) handleStreamEvent(st *promptState, acpSess *ACPSession, ev agen
 			}
 		}
 		s.notify(st.sessionID, update)
+		delete(st.toolOutput, call.ID)
 	case agent.StreamCompaction:
 		s.emitCompaction(st.sessionID, meta, ev)
 	}

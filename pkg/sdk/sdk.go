@@ -9,6 +9,7 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/peggco/pegg/internal/agent/wake"
 	"github.com/peggco/pegg/internal/builtin"
 	"github.com/peggco/pegg/internal/core/cache"
 	"github.com/peggco/pegg/internal/core/config"
@@ -23,7 +24,6 @@ import (
 	"github.com/peggco/pegg/internal/schedule"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/vfs"
-	"github.com/peggco/pegg/internal/wake"
 
 	_ "github.com/peggco/pegg/internal/decision/providers"
 	_ "github.com/peggco/pegg/internal/llm/drivers"

@@ -11,7 +11,8 @@
           const raw = localStorage.getItem('pegg.theme');
           if (raw) {
             const parsed = JSON.parse(raw);
-            const bg = parsed && parsed.tokens && parsed.tokens['--pg-bg'];
+            const valid = parsed && (parsed.name === 'light' || parsed.name === 'dark');
+            const bg = valid && parsed.tokens && parsed.tokens['--pg-bg'];
             document.documentElement.style.background = bg || '#18181b';
           }
         } catch (_) {}

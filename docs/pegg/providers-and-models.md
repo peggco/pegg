@@ -289,7 +289,7 @@ an API key — and falls back to the preferred model when nothing is available.
 
 Enable it in config (`smart_router.enabled`), then pick **Smart Router** in the
 TUI at Settings → General → Model (listed above the regular models) or pass
-`--model smart-router` on the CLI. When enabled, subagents (planner, explorer,
+`--model smart-router` on the CLI. When enabled, subagents (explorer,
 developer, ...) are also routed automatically.
 
 Per-agent preferences under `smart_router.agents` support three layers:

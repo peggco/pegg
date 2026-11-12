@@ -47,7 +47,7 @@ flowchart TB
     subgraph RT["Agent runtime"]
         direction TB
         ORCH["Orchestrator"]
-        SUB["Subagents<br/>explorer · planner · developer"]
+        SUB["Subagents<br/>explorer · developer"]
         LOOP["Run loop<br/>LLM → tools → repeat"]
         ORCH --> SUB
         ORCH --> LOOP
@@ -176,7 +176,7 @@ flowchart TB
 
     subgraph Runtime["Core runtime"]
         Agent["Agent framework<br/>run loop · middleware · hooks"]
-        Subagents["Subagents<br/>orchestrator · explorer · planner · developer"]
+        Subagents["Subagents<br/>orchestrator · explorer · developer"]
         Router["Smart Router"]
         RunCoord["Run Coordinator"]
         LiveHub["Live Hub"]
@@ -268,12 +268,11 @@ persist their own session, and can be resumed with follow-up messages.
 
 ```mermaid
 flowchart TB
-    O["Orchestrator<br/>unlimited iterations"]
+    O["Orchestrator<br/>plans · delegates · verifies"]
     O -->|task tool| E["Explorer<br/>read-only research"]
-    O -->|task tool| P["Planner<br/>writes plan + todos"]
+    O -->|writes| P["Plan + todos<br/>.pegg/plans/"]
     O -->|task tool| D["Developer<br/>implements + tests"]
     E -.->|background reminder| O
-    P -.->|background reminder| O
     D -.->|background reminder| O
     D -->|task tool| N["Nested subagent"]
 ```

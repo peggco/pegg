@@ -55,3 +55,17 @@ func TestSkillifyMentionsPeggPaths(t *testing.T) {
 		t.Error("skillify output should not reference .claude paths")
 	}
 }
+
+func TestOrchestrateMentionsPeggTools(t *testing.T) {
+	out := OrchestrateSkill().MustBuild(prompt.FormatMarkdown)
+	for _, want := range []string{".pegg/plans/", "taskstatus", "todowrite", "todoread", "exitplanmode", "enterplanmode", "subagent_type", "task_id", "Required Todo Table", "Parallelizable Tasks", "Execution Strategy"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("orchestrate output missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{".vesvai", "wait-for-subagents", "subagents-status", "subagent-message", "enter_plan_mode", "exit_plan_mode", "ask_user_question", "list-todo", "update-todo"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("orchestrate output should not reference %q", unwanted)
+		}
+	}
+}

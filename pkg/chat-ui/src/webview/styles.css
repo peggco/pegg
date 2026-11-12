@@ -124,17 +124,6 @@ button {
   background: var(--vscode-toolbar-hoverBackground);
 }
 
-.history-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 4px 0;
-  font-size: 11px;
-  color: var(--text-muted, #71717a);
-  flex: 0 0 auto;
-}
-
 .messages {
   flex: 1;
   min-height: 0;
@@ -143,12 +132,27 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: relative;
+  overflow-anchor: none;
 }
 
 .messages > * {
   flex: 0 0 auto;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 120px;
+}
+
+.msg-slot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-sentinel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
 }
 
 .messages-spacer {
@@ -588,6 +592,202 @@ button {
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 4px;
+}
+
+.bash-card {
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--vscode-editorWidget-background, transparent);
+  font-size: 11px;
+}
+
+.bash-card.failed {
+  border-color: var(--vscode-testing-iconFailed);
+}
+
+.bash-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: var(--vscode-editorWidget-background, transparent);
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  color: var(--vscode-descriptionForeground);
+}
+
+.bash-dots {
+  display: inline-flex;
+  gap: 3px;
+  flex: none;
+}
+
+.bash-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.bash-dots i:nth-child(1) {
+  background: var(--vscode-testing-iconFailed);
+}
+
+.bash-dots i:nth-child(2) {
+  background: var(--vscode-editorWarning-foreground);
+}
+
+.bash-dots i:nth-child(3) {
+  background: var(--vscode-testing-iconPassed);
+}
+
+.bash-icon {
+  flex: none;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10px;
+  color: var(--vscode-terminal-ansiGreen, var(--vscode-testing-iconPassed));
+}
+
+.bash-title {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-foreground);
+}
+
+.bash-agent {
+  font-size: 9px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.bash-spacer {
+  flex: 1;
+}
+
+.bash-status {
+  font-size: 10px;
+}
+
+.bash-status.running {
+  color: var(--vscode-progressBar-background, var(--vscode-terminal-ansiCyan));
+}
+
+.bash-status.failed {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.bash-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--vscode-descriptionForeground);
+}
+
+.bash-dot.in_progress {
+  background: var(--vscode-progressBar-background, var(--vscode-terminal-ansiCyan));
+  animation: bash-pulse 1.2s ease-in-out infinite;
+}
+
+.bash-dot.completed {
+  background: var(--vscode-testing-iconPassed);
+}
+
+.bash-dot.failed {
+  background: var(--vscode-testing-iconFailed);
+}
+
+.bash-dot.cancelled {
+  background: var(--vscode-descriptionForeground);
+}
+
+@keyframes bash-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.bash-body {
+  padding: 8px 10px;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--vscode-textCodeBlock-background);
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.bash-cmd {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bash-prompt {
+  flex: none;
+  user-select: none;
+  color: var(--vscode-terminal-ansiGreen, var(--vscode-testing-iconPassed));
+}
+
+.bash-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bash-stderr {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.bash-muted {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+.bash-error {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.bash-more {
+  margin-top: 6px;
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.bash-more:hover {
+  color: var(--vscode-foreground);
+}
+
+.bash-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  background: var(--vscode-editorWidget-background, transparent);
+}
+
+.bash-exit {
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+.bash-exit.ok {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.bash-exit.bad {
+  color: var(--vscode-testing-iconFailed);
 }
 
 .tool-files {
@@ -1617,4 +1817,199 @@ button {
   font-size: 10px;
   color: var(--vscode-textLink-foreground);
   cursor: pointer;
+}
+
+.diff {
+  --diff-add: var(--vscode-testing-iconPassed, #3fb950);
+  --diff-del: var(--vscode-testing-iconFailed, #f85149);
+  --diff-bg: var(--vscode-textCodeBlock-background);
+
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--diff-bg);
+}
+
+.diff-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  background: color-mix(in srgb, var(--vscode-foreground) 4%, transparent);
+}
+
+.diff-icon {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.diff-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-foreground);
+}
+
+.diff-stat {
+  display: flex;
+  gap: 6px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.diff-stat .add { color: var(--diff-add); }
+.diff-stat .del { color: var(--diff-del); }
+
+/* TEK scroll container: hem dikey hem yatay */
+.diff-body {
+  max-height: 360px;
+  overflow: auto;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  line-height: 1.6;
+  scrollbar-width: thin;
+}
+
+/* En uzun satır kadar genişler, en az container kadar olur.
+   Böylece kırmızı/yeşil alan her zaman tam genişliği kaplar. */
+.diff-scroll {
+  width: max-content;
+  min-width: 100%;
+}
+
+.diff-hunk {
+  position: sticky;
+  left: 0;
+  padding: 3px 10px;
+  white-space: pre;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  background: color-mix(in srgb, var(--vscode-foreground) 6%, var(--diff-bg));
+  border-top: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.diff-hunk:first-child {
+  border-top: 0;
+}
+
+.diff-line {
+  display: grid;
+  grid-template-columns: 40px 40px 18px minmax(max-content, 1fr);
+  min-height: 1.6em;
+  white-space: pre;
+}
+
+.diff-num {
+  position: sticky;
+  z-index: 1;
+  text-align: right;
+  padding: 0 8px 0 4px;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  user-select: none;
+  /* opak arka plan: yatay scrollda içerik altından görünmesin */
+  background: color-mix(in srgb, var(--vscode-foreground) 5%, var(--vscode-editor-background));
+}
+
+.diff-num:nth-child(1) { left: 0; }
+.diff-num:nth-child(2) {
+  left: 40px;
+  border-right: 1px solid color-mix(in srgb, var(--vscode-panel-border) 70%, transparent);
+}
+
+.diff-sign {
+  text-align: center;
+  user-select: none;
+  color: var(--vscode-descriptionForeground);
+}
+
+.diff-text {
+  padding: 0 14px 0 6px;
+  white-space: pre;
+}
+
+/* ADD */
+.diff-line.add {
+  background: color-mix(in srgb, var(--diff-add) 16%, var(--vscode-editor-background));
+}
+.diff-line.add .diff-num {
+  background: color-mix(in srgb, var(--diff-add) 26%, var(--vscode-editor-background));
+  color: color-mix(in srgb, var(--diff-add) 80%, var(--vscode-foreground));
+}
+.diff-line.add .diff-sign { color: var(--diff-add); font-weight: 700; }
+
+/* DEL */
+.diff-line.del {
+  background: color-mix(in srgb, var(--diff-del) 15%, var(--vscode-editor-background));
+}
+.diff-line.del .diff-num {
+  background: color-mix(in srgb, var(--diff-del) 25%, var(--vscode-editor-background));
+  color: color-mix(in srgb, var(--diff-del) 80%, var(--vscode-foreground));
+}
+.diff-line.del .diff-sign { color: var(--diff-del); font-weight: 700; }
+
+/* CTX */
+.diff-line.ctx .diff-text {
+  color: var(--vscode-foreground);
+  opacity: 1;
+}
+
+.diff-more {
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: color-mix(in srgb, var(--vscode-foreground) 3%, transparent);
+  color: var(--vscode-descriptionForeground);
+  text-align: left;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.diff-more:hover {
+  color: var(--vscode-foreground);
+  background: color-mix(in srgb, var(--vscode-foreground) 7%, transparent);
+}
+
+.diff-empty {
+  padding: 12px;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+/* write-body aynı kalabilir */
+.write-body {
+  border-top: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-textCodeBlock-background);
+}
+
+.write-code {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 360px;
+  overflow: auto;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--vscode-editor-foreground, var(--vscode-foreground));
+  white-space: pre;
+  scrollbar-width: thin;
+}
+
+.write-code code {
+  font-family: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
 }

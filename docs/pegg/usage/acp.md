@@ -252,7 +252,7 @@ The server pushes spec-compliant `session/update` notifications:
 | `agent_message_chunk` | Streaming assistant text |
 | `agent_thought_chunk` | Streaming model reasoning |
 | `tool_call` | A tool call starts (`toolCallId`, `title`, `name`, `kind`, `status`, `rawInput`, `locations`) |
-| `tool_call_update` | A tool call completes or fails (`status`, `rawOutput`, optional `content` diff) |
+| `tool_call_update` | A tool call updates: `in_progress` with partial `rawOutput` while bash runs, then `completed`/`failed` with the final output (`status`, `rawOutput`, optional `content` diff) |
 | `plan` | A `todowrite` call updates the plan (`entries`) |
 | `available_commands_update` | Skills/commands available for the session (`availableCommands`) |
 | `current_mode_update` | Mode changed (`currentModeId`) |
@@ -320,6 +320,23 @@ Pegg-specific methods are prefixed with `_` per the ACP extensibility rules:
 | `_pegg/session/fork` | Fork a session before a message |
 | `_pegg/session/revert` | Revert a session to a message |
 | `_pegg/ask` | Ask the user structured questions (fallback for elicitation) |
+
+### Session history pagination
+
+`_pegg/session/history` loads one page of older messages for a session that is
+already loaded. Params: `{ sessionId, cwd?, beforeSeq?, limit? }`. `beforeSeq` is
+an exclusive upper bound (`seq < beforeSeq`); `limit` defaults to no cap at the
+protocol level, and the bundled clients request 100–200 per page. The messages are not returned in
+the result — they are streamed as `session/update` notifications, each carrying
+`_meta["com.pegg/seq"]` and `_meta["com.pegg/historyPage"] = true`. The JSON-RPC
+result carries `{ oldestSeq, hasMore }`, where `hasMore` reports whether more
+messages exist before `oldestSeq`.
+
+Clients should treat a history-page update as a prepend, never as a live append,
+and can keep the reading position stable by anchoring the first visible message
+while the page is inserted. `session/load` uses the same pagination through
+`historyLimit`/`historyBefore` (a non-positive `historyLimit` loads the whole
+session for backwards compatibility).
 
 ## Transports
 

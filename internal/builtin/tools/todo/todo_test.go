@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/peggco/pegg/internal/agent"
@@ -117,6 +118,74 @@ func TestTodowriteToolReplace(t *testing.T) {
 	}
 	if len(all) != 2 {
 		t.Fatalf("expected 2 todos, got %d", len(all))
+	}
+}
+
+func TestTodowritePreservesOrder(t *testing.T) {
+	setupTodoTest(t)
+	tool := todowriteTool(nil)
+	ctx := sessionContext(t)
+
+	order := []string{"todo-3", "todo-1", "todo-2", "todo-1.1"}
+	if _, err := tool.Execute(ctx, `{"todos": [
+		{"id": "todo-3", "title": "third", "status": "pending", "priority": "medium"},
+		{"id": "todo-1", "title": "first", "status": "pending", "priority": "high"},
+		{"id": "todo-2", "title": "second", "status": "pending", "priority": "medium"},
+		{"id": "todo-1.1", "title": "first child", "status": "pending", "priority": "low"}
+	]}`); err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := store.all(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != len(order) {
+		t.Fatalf("expected %d todos, got %d", len(order), len(all))
+	}
+	for i, want := range order {
+		if all[i].ID != want {
+			t.Fatalf("todo %d: got %q, want %q", i, all[i].ID, want)
+		}
+	}
+
+	out, err := todoreadTool(nil).Execute(ctx, `{}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := -1
+	for _, id := range order {
+		idx := strings.Index(out, "["+id+"]")
+		if idx < 0 {
+			t.Fatalf("todo %q missing from output:\n%s", id, out)
+		}
+		if idx <= last {
+			t.Fatalf("todo %q out of order in output:\n%s", id, out)
+		}
+		last = idx
+	}
+}
+
+func TestTodoOrderPersists(t *testing.T) {
+	setupTodoTest(t)
+	tool := todowriteTool(nil)
+	ctx := sessionContext(t)
+
+	if _, err := tool.Execute(ctx, `{"todos": [
+		{"id": "todo-2", "title": "second", "status": "pending", "priority": "medium"},
+		{"id": "todo-1", "title": "first", "status": "pending", "priority": "high"}
+	]}`); err != nil {
+		t.Fatal(err)
+	}
+
+	resetSession(t)
+
+	all, err := store.all(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 || all[0].ID != "todo-2" || all[1].ID != "todo-1" {
+		t.Fatalf("order not preserved across reload: %+v", all)
 	}
 }
 

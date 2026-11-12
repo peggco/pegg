@@ -97,7 +97,8 @@ Search file contents with Go regular expressions. Binary files are skipped.
 ### `bash`
 
 Execute a shell command with `sh -c`. stdout and stderr are captured and the exit
-code is included in the output.
+code is included in the output. While the command runs, stdout/stderr chunks stream
+to connected clients; the final tool result is unchanged.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -176,9 +177,11 @@ file from disk, and remote connect clients stream it on demand through the
 
 ## Todos
 
-Todos persist in `.pegg/todos.json` in the project directory. Statuses are
-`pending`, `in_progress`, `completed`, and `cancelled`; priorities are `high`,
-`medium`, and `low`.
+Todos persist per session in `.pegg/todos/<session-id>.json` in the project
+directory. Statuses are `pending`, `in_progress`, `completed`, and `cancelled`;
+priorities are `high`, `medium`, and `low`. Todos are stored, returned, and
+displayed in the order they were submitted to the most recent `todowrite`, so
+every client shows the same order.
 
 ### `todoread`
 
@@ -263,14 +266,14 @@ See [Subagents](../features/subagents.md) for the full workflow.
 | `task` | `name`, `subagent_type`, `prompt`, `task_id[]` (optional), `background` (optional) | Spawn a subagent, or resume a finished one by reusing the same `name` |
 | `taskstatus` | `agent_names[]` (optional) | Report status: `pending`, `running`, `completed`, `failed`, `interrupted` |
 
-Registered agent types for `task`: `orchestrator`, `explorer`, `planner`, and
+Registered agent types for `task`: `orchestrator`, `explorer`, and
 `developer`.
 
 ## Memory
 
 The memory tools query the [markdown-based memory system](../features/memory.md).
-They are registered when memory is enabled and available to the orchestrator,
-planner, and developer agents.
+They are registered when memory is enabled and available to the orchestrator
+and developer agents.
 
 ### `mem-search`
 
@@ -299,7 +302,6 @@ IDs appear in `mem-search` results, in the memory panel, and in the memory index
 | Agent | Tools |
 |---|---|
 | `orchestrator` | All file tools, `sendfile`, `askuserquestion`, `bash`, `task`, `taskstatus`, `todoread`, `todowrite`, `webfetch`, `websearch`, `searchskill`, `loadskill`, `enterplanmode`, `exitplanmode`, `mem-search`, `mem-read` |
-| `planner` | File tools write-scoped to `.pegg/plans`, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite`, `mem-search`, `mem-read` |
 | `developer` | All file tools, `sendfile`, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite`, `mem-search`, `mem-read` |
 | `explorer` | `glob`, `grep`, `list`, `read`, `bash`, `webfetch`, `websearch` |
 

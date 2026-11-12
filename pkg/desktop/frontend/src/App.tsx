@@ -23,10 +23,10 @@ import {
   respondPermission,
   setBinaryProgress,
   setServerStatus,
+  setSidebarCollapsed,
   startNewChat,
   togglePalette,
   toggleSettings,
-  toggleSidebar,
 } from './state/actions';
 import { store, useStore } from './state/store';
 import { CommandPalette } from './components/CommandPalette';
@@ -43,10 +43,21 @@ export function App() {
   const view = useStore((s) => s.view);
   const binary = useStore((s) => s.binary);
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
+  const prefs = useStore((s) => s.prefs);
   const subagentView = useStore((s) => s.subagentView);
   const platform = useStore((s) => s.boot?.platform ?? 'linux');
   const nativeTitlebar = useStore((s) => s.boot?.nativeTitlebar ?? false);
   const showTitlebar = platform === 'darwin' || !nativeTitlebar;
+  const appAttrs = {
+    'data-sidebar-mode': prefs.sidebarMode,
+    'data-layout': prefs.layoutMode,
+    'data-chat-history': prefs.chatHistoryMode,
+    dir: prefs.direction,
+  };
+
+  useEffect(() => {
+    document.documentElement.dir = prefs.direction;
+  }, [prefs.direction]);
 
   useEffect(() => {
     void bootstrap();
@@ -142,7 +153,7 @@ export function App() {
 
   if (!ready) {
     return (
-      <div className="app">
+      <div className="app" {...appAttrs}>
         {showTitlebar ? <TitleBar /> : null}
         <div className="thread-loading" style={{ flex: 1 }}>
           <span className="spinner" /> Starting Pegg…
@@ -153,7 +164,7 @@ export function App() {
 
   if (!binary.found) {
     return (
-      <div className="app">
+      <div className="app" {...appAttrs}>
         {showTitlebar ? <TitleBar /> : null}
         <div className="main-scroll">
           <Onboarding />
@@ -164,17 +175,22 @@ export function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app" {...appAttrs}>
       {showTitlebar ? <TitleBar /> : null}
       <StatusBanner />
       <div className="shell">
+        {sidebarCollapsed ? (
+          <button
+            className="sidebar-rail"
+            title="Show sidebar"
+            aria-label="Show sidebar"
+            onClick={() => setSidebarCollapsed(false)}
+          >
+            <PanelLeft size={14} />
+          </button>
+        ) : null}
         <Sidebar />
         <main className="main">
-          {sidebarCollapsed ? (
-            <button className="floating-sidebar-toggle" title="Show sidebar" onClick={toggleSidebar}>
-              <PanelLeft size={15} />
-            </button>
-          ) : null}
           {view === 'welcome' ? (
             <div className="main-scroll">
               <Welcome />

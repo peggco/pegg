@@ -223,6 +223,19 @@ func (s *JSONStore) Messages(sessionID string) ([]Message, error) {
 	return out, nil
 }
 
+func (s *JSONStore) MessagesPage(sessionID string, beforeSeq, limit int) ([]Message, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	f, err := s.load(sessionID)
+	if err != nil {
+		return nil, false, err
+	}
+	page, hasMore := paginateMessages(f.Messages, beforeSeq, limit)
+	out := make([]Message, len(page))
+	copy(out, page)
+	return out, hasMore, nil
+}
+
 func (s *JSONStore) TruncateAfter(sessionID, messageID string) ([]Message, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

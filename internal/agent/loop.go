@@ -649,7 +649,7 @@ type toolExecResult struct {
 	duration    time.Duration
 }
 
-func (a *Agent) runTool(ctx context.Context, call llm.ToolCall) (res toolExecResult) {
+func (a *Agent) runTool(ctx context.Context, state *runState, call llm.ToolCall) (res toolExecResult) {
 	res = toolExecResult{call: call}
 	start := time.Now()
 	defer func() { res.duration = time.Since(start) }()
@@ -670,6 +670,33 @@ func (a *Agent) runTool(ctx context.Context, call llm.ToolCall) (res toolExecRes
 
 	sink := tool.NewAttachmentSink()
 	toolCtx := tool.WithAttachmentSink(ctx, sink)
+	outputSink := tool.NewOutputSink(func(stream, chunk string) {
+		a.publish(TopicAgentToolOutput, AgentToolOutput{
+			AgentID:   a.ID,
+			AgentName: a.Name,
+			Model:     a.Model,
+			CallID:    call.ID,
+			ToolName:  t.Name(),
+			Stream:    stream,
+			Chunk:     chunk,
+		})
+		if state.stream != nil {
+			a.streamMu.Lock()
+			err := state.stream(StreamEvent{
+				Type:       StreamToolOutput,
+				AgentID:    a.ID,
+				AgentName:  a.Name,
+				ToolCallID: call.ID,
+				ToolName:   t.Name(),
+				ToolStream: stream,
+				ToolChunk:  chunk,
+			})
+			a.streamMu.Unlock()
+			_ = err
+		}
+	})
+	toolCtx = tool.WithOutputSink(toolCtx, outputSink)
+	defer outputSink.Close()
 	output, toolErr := a.chain.InvokeTool(toolCtx, call, func(ctx context.Context, call llm.ToolCall) (string, error) {
 		return t.Execute(ctx, call.Function.Arguments)
 	})
@@ -702,7 +729,7 @@ func (a *Agent) executeTools(ctx context.Context, state *runState, calls []llm.T
 
 	results := make([]toolExecResult, len(calls))
 	if len(calls) == 1 {
-		results[0] = a.runTool(ctx, calls[0])
+		results[0] = a.runTool(ctx, state, calls[0])
 	} else {
 		sem := make(chan struct{}, maxParallelToolCalls)
 		var wg sync.WaitGroup
@@ -713,7 +740,7 @@ func (a *Agent) executeTools(ctx context.Context, state *runState, calls []llm.T
 			go func() {
 				defer wg.Done()
 				defer func() { <-sem }()
-				results[i] = a.runTool(ctx, call)
+				results[i] = a.runTool(ctx, state, call)
 			}()
 		}
 		wg.Wait()

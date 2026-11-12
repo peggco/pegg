@@ -11,6 +11,7 @@ import type {
   Theme,
 } from '../types';
 import { emptyChat, type ChatState } from './chat';
+import { SIDEBAR_DEFAULT_WIDTH } from '../lib/sidebar';
 
 export interface Toast {
   id: string;
@@ -47,7 +48,6 @@ export interface UIState {
   skillsOpen: boolean;
   paletteOpen: boolean;
   modelsOpen: boolean;
-  themePickerOpen: boolean;
   composerFocus: number;
   error?: string;
 }
@@ -62,6 +62,11 @@ const initialPrefs: Prefs = {
   sendOnEnter: true,
   fontScale: 1,
   sidebarCollapsed: false,
+  sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
+  sidebarMode: 'sidebar',
+  layoutMode: 'default',
+  direction: 'ltr',
+  chatHistoryMode: 'compact',
   lastSession: '',
   window: {},
 };
@@ -91,7 +96,6 @@ export const initialState: UIState = {
   skillsOpen: false,
   paletteOpen: false,
   modelsOpen: false,
-  themePickerOpen: false,
   composerFocus: 0,
 };
 

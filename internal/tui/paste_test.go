@@ -61,3 +61,18 @@ func TestResolvePastedPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestResolvePastedPathsMixedProse(t *testing.T) {
+	dir := t.TempDir()
+	plain := filepath.Join(dir, "plain.png")
+	if err := os.WriteFile(plain, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := resolvePastedPaths("see " + plain + " for details"); got != nil {
+		t.Fatalf("mixed prose resolved as paths: %v", got)
+	}
+	if got := resolvePastedPaths(plain + "\nhello world"); got != nil {
+		t.Fatalf("mixed multiline resolved as paths: %v", got)
+	}
+}

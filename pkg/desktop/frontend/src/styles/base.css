@@ -114,3 +114,18 @@ a:hover {
   transform: scale(var(--pg-font-scale));
   transform-origin: top left;
 }
+
+.code-block,
+.code-block pre,
+.code-block code,
+.tool-output,
+.tool-error,
+.diff-body,
+.write-code,
+.task-output,
+.task-error,
+.bash-body {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}

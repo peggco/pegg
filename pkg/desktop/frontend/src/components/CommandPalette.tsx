@@ -3,13 +3,10 @@ import {
   Download,
   FolderOpen,
   MessageSquare,
-  Moon,
-  Palette,
   RefreshCw,
   Search,
   Settings2,
   SquarePen,
-  Sun,
   Terminal,
 } from 'lucide-react';
 import { api } from '../lib/bridge';
@@ -20,7 +17,6 @@ import {
   installBinary,
   loadSessions,
   openSession,
-  setTheme,
   startNewChat,
   togglePalette,
   toggleSettings,
@@ -40,8 +36,6 @@ interface Item {
 export function CommandPalette() {
   const open = useStore((s) => s.paletteOpen);
   const sessions = useStore((s) => s.sessions);
-  const themes = useStore((s) => s.themes);
-  const currentTheme = useStore((s) => s.theme);
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -88,13 +82,6 @@ export function CommandPalette() {
         run: toggleSidebar,
       },
       {
-        id: 'theme-toggle',
-        label: currentTheme?.dark ? 'Switch to light appearance' : 'Switch to dark appearance',
-        keywords: 'theme dark light mode',
-        icon: currentTheme?.dark ? Sun : Moon,
-        run: () => currentTheme && void setTheme(currentTheme.name, currentTheme.dark ? 'light' : 'dark'),
-      },
-      {
         id: 'reconnect',
         label: 'Reconnect to Pegg server',
         keywords: 'restart acp',
@@ -134,7 +121,7 @@ export function CommandPalette() {
       },
     ];
     return items;
-  }, [currentTheme]);
+  }, []);
 
   const all = useMemo<Item[]>(() => {
     const items = [...actions];
@@ -148,18 +135,8 @@ export function CommandPalette() {
         run: () => void openSession(session),
       });
     }
-    for (const theme of themes) {
-      items.push({
-        id: `theme-${theme.name}`,
-        label: `Theme: ${theme.label}`,
-        hint: theme.dark ? 'dark' : 'light',
-        keywords: `theme ${theme.name}`,
-        icon: Palette,
-        run: () => void setTheme(theme.name, store.get().prefs.themeMode),
-      });
-    }
     return items;
-  }, [actions, sessions, themes]);
+  }, [actions, sessions]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -194,7 +171,7 @@ export function CommandPalette() {
         <input
           ref={inputRef}
           className="palette-input"
-          placeholder="Search commands, sessions, themes…"
+          placeholder="Search commands, sessions…"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {

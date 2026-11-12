@@ -1651,7 +1651,7 @@ func TestRunToolSemantics(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := a.runTool(context.Background(), tt.call)
+			res := a.runTool(context.Background(), &runState{}, tt.call)
 			if res.call.ID != tt.call.ID {
 				t.Fatalf("call ID = %q, want %q", res.call.ID, tt.call.ID)
 			}
@@ -1669,6 +1669,31 @@ func TestRunToolSemantics(t *testing.T) {
 	}
 }
 
+func TestRunToolStreamsOutput(t *testing.T) {
+	streaming := tool.NewSpec("streaming", "", nil, func(ctx context.Context, args string) (string, error) {
+		_, _ = tool.OutputWriter(ctx, "stdout").Write([]byte("hello\n"))
+		return "Exit code: 0\n", nil
+	})
+	a, _ := newTestAgent(t, WithTool(streaming))
+
+	var events []StreamEvent
+	state := &runState{stream: func(ev StreamEvent) error {
+		events = append(events, ev)
+		return nil
+	}}
+
+	res := a.runTool(context.Background(), state, toolCall("c1", "streaming", "{}"))
+	if res.toolErr != nil {
+		t.Fatalf("toolErr = %v", res.toolErr)
+	}
+	for _, ev := range events {
+		if ev.Type == StreamToolOutput && ev.ToolChunk == "hello\n" {
+			return
+		}
+	}
+	t.Fatalf("no tool output stream event: %+v", events)
+}
+
 func TestRunToolMiddlewareAbort(t *testing.T) {
 	blocked := tool.NewSpec("blocked", "", nil, func(context.Context, string) (string, error) {
 		t.Fatal("aborted tool must not execute")
@@ -1676,7 +1701,7 @@ func TestRunToolMiddlewareAbort(t *testing.T) {
 	})
 	a, _ := newTestAgent(t, WithTool(blocked), WithMiddleware(abortingMiddleware{}))
 
-	res := a.runTool(context.Background(), toolCall("c1", "blocked", "{}"))
+	res := a.runTool(context.Background(), &runState{}, toolCall("c1", "blocked", "{}"))
 	if !strings.Contains(res.output, "aborted by middleware") {
 		t.Fatalf("output = %q, want middleware abort message", res.output)
 	}

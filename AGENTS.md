@@ -90,7 +90,7 @@ npm ci
 ```
 
 **Major Components:**
-- **Agent System** (`internal/agent/`): Orchestrator, Explorer, Planner, Developer sub-agents with middleware and hooks
+- **Agent System** (`internal/agent/`): Orchestrator, Explorer, Developer sub-agents with middleware and hooks
 - **LLM Layer** (`internal/llm/`): Provider-agnostic interface with drivers for OpenAI, Anthropic, Google; circuit breakers and rate limit fallbacks
 - **Decision Layer** (`internal/decision/`): Decision-model interface (noul/choice/score) with providers; e.g. JEV via OpenRouter `/api/alpha/decisions`, reused by the permission judge and the smart router
 - **Smart Router** (`internal/router/`): Per-task model selection via decision/LLM fallback; registers an agent `OnModelResolve` system hook that picks models for the orchestrator and subagents at run start, uniformly across CLI, TUI, SDK, and servers

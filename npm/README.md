@@ -94,7 +94,7 @@ resp, _ := eng.Chat(ctx, sdk.ChatRequest{Input: "Fix the leak"})
 
 **Plans before it acts.** Toggle Plan mode to let the agent explore, ask questions, and strategize. Then switch to Act mode and watch it execute — with approval gates on every change.
 
-**Delegates to specialists.** The orchestrator spawns subagents (explorer, planner, developer) that run concurrently with their own tool access and context. They persist across turns.
+**Delegates to specialists.** The orchestrator spawns subagents (explorer, developer) that run concurrently with their own tool access and context. They persist across turns.
 
 **Stays sandboxed.** A virtual filesystem respects `.gitignore` and `.peggignore`. The agent can't escape your project. Five permission modes, an LLM judge for risky ops, and double-`Esc` emergency stop.
 

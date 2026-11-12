@@ -58,16 +58,13 @@ files.
 
 The project's `.pegg/` directory is readable by all agents (sessions, todos,
 plan and rule files), but only `.pegg/plans/` and `.pegg/rules/` are
-writable; other `.pegg` paths return an ignored error on write. The planner
-agent is additionally write-scoped to `.pegg/plans/` and the explorer is
+writable; other `.pegg` paths return an ignored error on write. The explorer is
 read-only.
 
 For `semi-ask` / `semi-judge`, the tool runs first: if it succeeds, no prompt or
 judge is involved. Only an out-of-bounds result triggers the gate. After the user or
 judge approves a path, the call is re-run with that specific path permitted. An
 `allow`-mode call runs with the sandbox fully lifted.
-
-The planner agent is write-scoped to `.pegg/plans/`; the explorer is read-only.
 
 ## Bash policy
 

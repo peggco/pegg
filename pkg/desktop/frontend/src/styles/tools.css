@@ -313,6 +313,8 @@
 }
 
 .diff-hunk {
+  width: max-content;
+  min-width: 100%;
   padding: 2px 10px;
   background: color-mix(in srgb, var(--pg-accent) 8%, var(--pg-code-bg));
   color: var(--pg-syn-function, var(--pg-accent));
@@ -324,7 +326,9 @@
 
 .gh-diff .diff-line {
   display: grid;
-  grid-template-columns: 38px 38px 16px minmax(0, 1fr);
+  grid-template-columns: 38px 38px 16px auto;
+  width: max-content;
+  min-width: 100%;
   gap: 0;
   padding: 0;
   min-height: 1.58em;
@@ -350,7 +354,6 @@
 .gh-diff .diff-text {
   padding: 0 8px;
   white-space: pre;
-  overflow-x: auto;
   color: var(--pg-code-text);
 }
 

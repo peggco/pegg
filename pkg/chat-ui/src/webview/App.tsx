@@ -11,6 +11,9 @@ import {
 import type { AttachmentInfo } from '../types';
 import { renderMarkdown } from './markdown';
 import { host } from './host';
+import { DiffView } from './DiffView';
+import { WriteView } from './WriteView';
+import { useAnchoredScroll } from './useAnchoredScroll';
 
 interface StateMessage {
   type: 'state';
@@ -150,11 +153,9 @@ export function App() {
   const [popup, setPopup] = useState<PopupState | null>(null);
   const [recording, setRecording] = useState(false);
   const [localError, setLocalError] = useState('');
-  const [atBottom, setAtBottom] = useState(true);
   const textarea = useRef<HTMLTextAreaElement>(null);
-  const messages = useRef<HTMLElement>(null);
   const selectedRow = useRef<HTMLButtonElement>(null);
-  const stick = useRef(true);
+  const sentinel = useRef<HTMLDivElement>(null);
   const textRef = useRef('');
   const [menu, setMenu] = useState<{ item: ChatItem; rect: DOMRect } | null>(null);
   const [agentView, setAgentView] = useState<{ id: string; name?: string } | null>(null);
@@ -203,23 +204,73 @@ export function App() {
     );
   }, [state.items, agentView]);
 
-  const pendingScrollRef = useRef<{ height: number; top: number } | null>(null);
+  const sessionKey = `${state.acpSessionId ?? ''}:${state.peggSessionId ?? ''}:${agentView?.id ?? ''}`;
+  const { scrollerRef, atBottom, onScroll, scrollToBottom, follow } = useAnchoredScroll(
+    sessionKey,
+    visibleItems,
+  );
 
-  const scrollToBottom = useCallback((smooth = false) => {
-    const el = messages.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-    stick.current = true;
-    setAtBottom(true);
+  const historyFlags = useRef({ hasMore: false, loading: false, agent: false, cursor: 0 });
+  const olderCooldown = useRef(0);
+  const lastRequestedSeq = useRef<number | null>(null);
+  const wasLoading = useRef(false);
+
+  const requestOlder = useCallback(() => {
+    const flags = historyFlags.current;
+    if (lastRequestedSeq.current === flags.cursor) return;
+    const now = Date.now();
+    if (now - olderCooldown.current < 250) return;
+    olderCooldown.current = now;
+    lastRequestedSeq.current = flags.cursor;
+    host.postMessage({ type: 'loadOlderMessages' });
   }, []);
 
+  historyFlags.current = {
+    hasMore: state.historyHasMore,
+    loading: state.historyLoading,
+    agent: Boolean(agentView),
+    cursor: state.historyOldestSeq,
+  };
+
   useEffect(() => {
-    stick.current = true;
-    pendingScrollRef.current = null;
-    setAtBottom(true);
-    const frame = requestAnimationFrame(() => scrollToBottom(false));
-    return () => cancelAnimationFrame(frame);
-  }, [state.acpSessionId, state.peggSessionId, scrollToBottom]);
+    lastRequestedSeq.current = null;
+    olderCooldown.current = 0;
+  }, [sessionKey]);
+
+  useEffect(() => {
+    if (wasLoading.current && !state.historyLoading) olderCooldown.current = 0;
+    wasLoading.current = state.historyLoading;
+  }, [state.historyLoading]);
+
+  useEffect(() => {
+    const root = scrollerRef.current;
+    const target = sentinel.current;
+    if (!root || !target || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const flags = historyFlags.current;
+        if (flags.agent || !flags.hasMore || flags.loading) return;
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        requestOlder();
+      },
+      { root, rootMargin: '600px 0px 0px 0px' },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [requestOlder, scrollerRef]);
+
+  useEffect(() => {
+    if (agentView || !state.historyHasMore || state.historyLoading) return;
+    const frame = window.requestAnimationFrame(() => {
+      const root = scrollerRef.current;
+      const target = sentinel.current;
+      if (!root || !target) return;
+      const gap = root.getBoundingClientRect().top - target.getBoundingClientRect().bottom;
+      if (gap > 600) return;
+      requestOlder();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [agentView, state.historyHasMore, state.historyLoading, requestOlder, scrollerRef]);
 
   const setCaret = useCallback((position: number) => {
     requestAnimationFrame(() => {
@@ -331,23 +382,9 @@ export function App() {
     };
   }, [menu]);
 
-  useEffect(() => {
-    if (!stick.current) return;
-    const frame = requestAnimationFrame(() => scrollToBottom(false));
-    return () => cancelAnimationFrame(frame);
-  }, [state, scrollToBottom]);
-
-  useEffect(() => {
-    const pending = pendingScrollRef.current;
-    const el = messages.current;
-    if (!pending || !el) return;
-    if (el.scrollHeight <= pending.height) {
-      if (!state.historyLoading) pendingScrollRef.current = null;
-      return;
-    }
-    el.scrollTop = el.scrollHeight - pending.height + pending.top;
-    pendingScrollRef.current = null;
-  }, [state.items, state.historyLoading]);
+  useLayoutEffect(() => {
+    follow();
+  }, [state, follow]);
 
   useEffect(() => {
     if (!textarea.current) return;
@@ -398,23 +435,6 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [popup?.kind, hubQuery, localSuggestions.length]);
 
-  function onScroll() {
-    const el = messages.current;
-    if (!el) return;
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    stick.current = distance < 48;
-    setAtBottom(distance < 48);
-    if (
-      el.scrollTop < 80 &&
-      state.historyHasMore &&
-      !state.historyLoading &&
-      !pendingScrollRef.current
-    ) {
-      pendingScrollRef.current = { height: el.scrollHeight, top: el.scrollTop };
-      host.postMessage({ type: 'loadOlderMessages' });
-    }
-  }
-
   function send() {
     if (state.running) return;
     const value = text.trim();
@@ -423,7 +443,6 @@ export function App() {
     setText('');
     textRef.current = '';
     setPopup(null);
-    stick.current = true;
     requestAnimationFrame(() => scrollToBottom(true));
   }
 
@@ -598,13 +617,8 @@ export function App() {
         </div>
       )}
 
-      {state.historyLoading && (
-        <div className="history-loading">
-          <span className="spinner" />
-          <span>Loading older messages…</span>
-        </div>
-      )}
-      <main className="messages" ref={messages} onScroll={onScroll}>
+      <main className="messages" ref={scrollerRef} onScroll={onScroll}>
+        <div ref={sentinel} className="history-sentinel" aria-hidden="true" />
         {!agentView && state.items.length === 0 && !state.running && (
           <div className="empty">
             <div className="empty-title">Ask Pegg about this workspace</div>
@@ -623,12 +637,13 @@ export function App() {
         )}
 
         {visibleItems.map((item) => (
-          <ItemView
-            key={item.id}
-            item={item}
-            onOpenMenu={openMessageMenu}
-            onOpenSubagent={openSubagent}
-          />
+          <div key={item.id} className="msg-slot" data-msg-id={item.id}>
+            <ItemView
+              item={item}
+              onOpenMenu={openMessageMenu}
+              onOpenSubagent={openSubagent}
+            />
+          </div>
         ))}
 
         {agentView && visibleItems.length === 0 && activeSubagent?.status === 'running' && (
@@ -1437,16 +1452,149 @@ function cappedLines(text: string, limit: number, mark: boolean): string {
   return mark ? `${shown}\n…` : shown;
 }
 
+interface BashLine {
+  text: string;
+  kind: 'stdout' | 'stderr';
+}
+
+interface BashOutput {
+  lines: BashLine[];
+  exitCode?: number;
+}
+
+function bashCommand(tool: ToolState): string {
+  const input = tool.input;
+  if (input && typeof input === 'object' && 'command' in input) {
+    const command = (input as { command?: unknown }).command;
+    if (typeof command === 'string' && command.trim()) return command.trim();
+  }
+  const title = (tool.title || '').replace(/^bash\s*:\s*/i, '').trim();
+  if (title && title.toLowerCase() !== 'bash') return title;
+  return tool.name || 'bash';
+}
+
+function parseBashOutput(output: string): BashOutput {
+  const lines: BashLine[] = [];
+  let section: 'stdout' | 'stderr' = 'stdout';
+  let exitCode: number | undefined;
+  for (const line of output.split('\n')) {
+    const exit = line.match(/^Exit code:\s*(-?\d+)\s*$/);
+    if (exit) {
+      exitCode = Number(exit[1]);
+      continue;
+    }
+    if (/^stdout:\s*$/.test(line)) {
+      section = 'stdout';
+      continue;
+    }
+    if (/^stderr:\s*$/.test(line)) {
+      section = 'stderr';
+      continue;
+    }
+    lines.push({ text: line, kind: section });
+  }
+  while (lines.length && lines[lines.length - 1].text === '') lines.pop();
+  return { lines, exitCode };
+}
+
+function BashToolCard({ tool }: { tool: ToolState }) {
+  const [expanded, setExpanded] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const command = bashCommand(tool);
+  const output = stripAnsi(tool.output === undefined ? '' : pretty(tool.output));
+  const parsed = parseBashOutput(output);
+  const running = tool.status === 'in_progress';
+  const failed =
+    tool.status === 'failed' || Boolean(tool.error) || (parsed.exitCode !== undefined && parsed.exitCode !== 0);
+  const statusClass = failed ? 'failed' : running ? 'in_progress' : tool.status;
+  const limit = 24;
+  const truncated = !running && parsed.lines.length > limit;
+  const visible = running
+    ? parsed.lines.slice(-limit)
+    : expanded
+      ? parsed.lines
+      : parsed.lines.slice(0, limit);
+
+  useEffect(() => {
+    if (!running || !bodyRef.current) return;
+    bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [running, output]);
+
+  return (
+    <div className={`bash-card${failed ? ' failed' : ''}`}>
+      <div className="bash-head">
+        <span className="bash-dots" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="bash-icon" aria-hidden="true">
+          &gt;_
+        </span>
+        <span className="bash-title">bash</span>
+        {tool.agentName && tool.agentName !== 'orchestrator' ? (
+          <span className="bash-agent">{tool.agentName}</span>
+        ) : null}
+        <span className="bash-spacer" />
+        {running ? <span className="bash-status running">running</span> : null}
+        {failed ? <span className="bash-status failed">failed</span> : null}
+        <span className={`bash-dot ${statusClass}`} title={statusClass} />
+      </div>
+      <div className="bash-body" ref={bodyRef}>
+        <div className="bash-cmd">
+          <span className="bash-prompt">$</span>
+          <span>{command}</span>
+        </div>
+        {parsed.lines.length === 0 && !tool.error ? (
+          <div className="bash-line bash-muted">No output</div>
+        ) : null}
+        {visible.map((line, index) => (
+          <div className={`bash-line${line.kind === 'stderr' ? ' bash-stderr' : ''}`} key={index}>
+            {line.text || '\u00a0'}
+          </div>
+        ))}
+        {tool.error ? <div className="bash-line bash-error">{stripAnsi(tool.error)}</div> : null}
+        {truncated ? (
+          <button className="bash-more" onClick={() => setExpanded(true)}>
+            Show all {parsed.lines.length} lines
+          </button>
+        ) : null}
+        {expanded && parsed.lines.length > limit ? (
+          <button className="bash-more" onClick={() => setExpanded(false)}>
+            Collapse
+          </button>
+        ) : null}
+      </div>
+      <div className="bash-footer">
+        {parsed.exitCode !== undefined ? (
+          <span className={`bash-exit ${parsed.exitCode === 0 ? 'ok' : 'bad'}`}>exit {parsed.exitCode}</span>
+        ) : null}
+        <span className="bash-spacer" />
+        {output ? (
+          <button className="mini-button" onClick={() => host.postMessage({ type: 'copyText', text: output })}>
+            Copy output
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function ToolCard({ tool }: { tool: ToolState }) {
   const [open, setOpen] = useState(false);
   const name = (tool.name ?? '').toLowerCase();
   const isBash = name === 'bash' || tool.kind === 'execute' || /^bash\b/i.test(tool.title);
+  if (isBash) return <BashToolCard tool={tool} />;
+  const isWrite = /\bwrite\b/i.test(`${tool.name ?? ''} ${tool.title}`);
+  const writeText = isWrite ? writeContent(tool) : '';
   const hasDiff = Boolean(tool.diff);
   const output = stripAnsi(tool.output === undefined ? '' : pretty(tool.output));
   const hasOutput = isBash && output.length > 0;
   const failed = Boolean(tool.error);
+  const running = tool.status === 'in_progress';
   const longOutput = hasOutput && output.split('\n').length > 9;
   const canExpand = failed || longOutput;
+  const compact = !canExpand && !hasDiff && !isWrite;
 
   const head = (
     <>
@@ -1461,7 +1609,7 @@ function ToolCard({ tool }: { tool: ToolState }) {
   );
 
   return (
-    <div className={`tool-card status-${tool.status}${canExpand ? '' : ' compact'}`}>
+    <div className={`tool-card status-${tool.status}${compact ? ' compact' : ''}`}>
       {canExpand ? (
         <button className="tool-head" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
           {head}
@@ -1509,11 +1657,14 @@ function ToolCard({ tool }: { tool: ToolState }) {
         <div className="tool-error-preview">{stripAnsi(tool.error ?? '').split('\n')[0]}</div>
       )}
 
-      {hasOutput && (!longOutput || open) && (
+      {hasOutput && (running || !longOutput || open) && (
         <div className="tool-output-wrap">
           <pre className="tool-output expanded">{output}</pre>
         </div>
       )}
+
+      {isWrite && writeText ? <WriteView path={toolPath(tool)} content={writeText} /> : null}
+      {!isWrite && tool.diff ? <DiffView diff={tool.diff} /> : null}
 
       {(hasDiff || (open && hasOutput)) && (
         <div className="tool-buttons">
@@ -1531,7 +1682,7 @@ function ToolCard({ tool }: { tool: ToolState }) {
               Copy output
             </button>
           )}
-          {tool.diff && (
+          {!isWrite && tool.diff && (
             <button
               className="mini-button"
               onClick={() =>
@@ -1550,6 +1701,29 @@ function ToolCard({ tool }: { tool: ToolState }) {
       )}
     </div>
   );
+}
+
+function toolPath(tool: ToolState): string {
+  const input = tool.input;
+  if (input && typeof input === 'object' && 'path' in input) {
+    const path = (input as { path?: unknown }).path;
+    if (typeof path === 'string') return path;
+  }
+  if (tool.diff?.path) return tool.diff.path;
+  return tool.locations?.[0]?.path ?? '';
+}
+
+function writeContent(tool: ToolState): string {
+  const input = tool.input;
+  if (input && typeof input === 'object') {
+    const record = input as Record<string, unknown>;
+    for (const key of ['content', 'text', 'newText', 'new_string', 'newString']) {
+      const value = record[key];
+      if (typeof value === 'string') return value;
+    }
+  }
+  if (tool.diff?.newText) return tool.diff.newText;
+  return typeof tool.output === 'string' ? tool.output : '';
 }
 
 function PermissionCard({ pending }: { pending: PendingPermission }) {

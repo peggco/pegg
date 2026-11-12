@@ -82,6 +82,7 @@ type Store interface {
 	InsertMessage(m Message) error
 	UpdateMessage(m Message) error
 	Messages(sessionID string) ([]Message, error)
+	MessagesPage(sessionID string, beforeSeq, limit int) ([]Message, bool, error)
 	TruncateAfter(sessionID, messageID string) ([]Message, error)
 	TruncateFrom(sessionID, messageID string) ([]Message, error)
 
@@ -104,4 +105,24 @@ type CreateOptions struct {
 	Mode            string
 	ProjectDir      string
 	IsSubagent      bool
+}
+
+func paginateMessages(msgs []Message, before, limit int) ([]Message, bool) {
+	filtered := msgs
+	if before > 0 {
+		filtered = make([]Message, 0, len(msgs))
+		for _, m := range msgs {
+			if m.Seq < before {
+				filtered = append(filtered, m)
+			}
+		}
+	}
+	if len(filtered) == 0 {
+		return nil, false
+	}
+	if limit <= 0 || len(filtered) <= limit {
+		return filtered, false
+	}
+	start := len(filtered) - limit
+	return filtered[start:], true
 }

@@ -12,7 +12,9 @@ attachments, `@` mentions, project instructions, rules, and skills.
 ### In the TUI
 
 - **Paste a path** — pasting a single line that is an existing file path attaches
-  that file. In a multi-line paste, every line that is a file path is attached.
+  that file. A multi-line paste is attached only when every non-empty line is an
+  existing file path; otherwise the pasted text is inserted verbatim, with its
+  newlines preserved.
 - **Attachment bar** — attachments appear above the input as cards with type icons
   (image, audio, video, file). Focus it with ++shift+tab++, navigate with ++left++/++right++, and
   remove with ++backspace++/++delete++.
@@ -100,8 +102,9 @@ reference (for example `@internal/server` prompts it to look at that directory).
 ## Long text
 
 Pasting text longer than 100 characters inserts it as a collapsible **long text**
-chip showing a short preview. The full text is sent with the message. Shorter
-pastes are inserted character by character.
+chip showing a short preview. The full text, including its line breaks, is sent
+with the message. Shorter pastes are inserted character by character, preserving
+newlines and tabs.
 
 ## Persistent context
 

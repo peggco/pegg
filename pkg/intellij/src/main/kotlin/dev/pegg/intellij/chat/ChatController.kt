@@ -69,6 +69,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
+private const val HISTORY_PAGE_SIZE = 100
+
 class ChatController(
     private val project: Project,
     private val binaryManager: BinaryManager,
@@ -250,7 +252,7 @@ class ChatController(
                 buildJsonObject {
                     put("sessionId", peggSessionId)
                     put("cwd", root)
-                    put("historyLimit", 50)
+                    put("historyLimit", HISTORY_PAGE_SIZE)
                 },
                 60_000,
             )
@@ -705,8 +707,10 @@ class ChatController(
             return
         }
         if (sessionId != null && state.acpSessionId != null && sessionId != state.acpSessionId && !loadingSession) return
-        if (update.historyPage && loadingOlder) {
-            synchronized(stateLock) { historyBuffer.add(update) }
+        if (update.historyPage) {
+            if (loadingOlder) {
+                synchronized(stateLock) { historyBuffer.add(update) }
+            }
             return
         }
         if (update.sessionUpdate == "run_ask_resolved") {
@@ -752,7 +756,7 @@ class ChatController(
                 buildJsonObject {
                     put("sessionId", sessionId)
                     put("cwd", projectRoot() ?: "")
-                    put("limit", 50)
+                    put("limit", HISTORY_PAGE_SIZE)
                     put("beforeSeq", state.historyOldestSeq)
                 },
                 60_000,

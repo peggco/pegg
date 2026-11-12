@@ -205,7 +205,45 @@ func (s *SQLiteStore) Messages(sessionID string) ([]Message, error) {
 		return nil, err
 	}
 	defer rows.Close()
+	return scanMessages(rows)
+}
 
+func (s *SQLiteStore) MessagesPage(sessionID string, beforeSeq, limit int) ([]Message, bool, error) {
+	q := "SELECT id, session_id, seq, role, content, reasoning, name, tool_call_id, tool_calls, created_at, duration_ms FROM session_messages WHERE session_id = ?"
+	args := []any{sessionID}
+	if beforeSeq > 0 {
+		q += " AND seq < ?"
+		args = append(args, beforeSeq)
+	}
+	q += " ORDER BY seq DESC"
+	if limit > 0 {
+		q += " LIMIT ?"
+		args = append(args, limit+1)
+	}
+
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+
+	msgs, err := scanMessages(rows)
+	if err != nil {
+		return nil, false, err
+	}
+
+	hasMore := false
+	if limit > 0 && len(msgs) > limit {
+		hasMore = true
+		msgs = msgs[:limit]
+	}
+	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+		msgs[i], msgs[j] = msgs[j], msgs[i]
+	}
+	return msgs, hasMore, nil
+}
+
+func scanMessages(rows *sql.Rows) ([]Message, error) {
 	var msgs []Message
 	for rows.Next() {
 		var m Message

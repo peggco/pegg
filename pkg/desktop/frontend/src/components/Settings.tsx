@@ -11,7 +11,6 @@ import {
   Palette,
   Plug,
   Puzzle,
-  Search,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -34,7 +33,7 @@ import {
 } from '../state/actions';
 import { store, useStore } from '../state/store';
 import { useT } from '../lib/i18n';
-import type { ProviderCatalogEntry, STTProviderEntry, SettingsSnapshot, Theme } from '../types';
+import type { ProviderCatalogEntry, STTProviderEntry, SettingsSnapshot } from '../types';
 import {
   MCPPanel,
   MemoryPanel,
@@ -45,7 +44,8 @@ import {
   SkillsPanel,
 } from './SettingsPanels';
 import { TeamPanel } from './TeamPanel';
-import { Card, Field, PageHead, Range, Segmented } from './SettingsUI';
+import { Card, Field, OptionCard, OptionGrid, PageHead, Range, Segmented } from './SettingsUI';
+import { ChatHistoryPreview, DirectionPreview, LayoutPreview, SidebarModePreview } from './AppearancePreviews';
 
 type Tab =
   | 'general'
@@ -192,17 +192,13 @@ export function Settings() {
 
 function AppearancePanel() {
   const t = useT();
-  const themes = useStore((s) => s.themes);
-  const current = useStore((s) => s.theme);
   const prefs = useStore((s) => s.prefs);
-  const [query, setQuery] = useState('');
-  const filtered = themes.filter((theme) => theme.label.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <>
       <PageHead
         title={t('settings.appearance')}
-        description="Every color palette comes from the terminal UI. Auto follows the system light/dark preference."
+        description="Light or dark, or follow the operating system. Sidebar and layout options apply immediately."
       />
       <Card title="Color mode">
         <div className="settings-row">
@@ -218,7 +214,7 @@ function AppearancePanel() {
                 { value: 'light', label: 'Light' },
                 { value: 'dark', label: 'Dark' },
               ]}
-              onChange={(mode) => void setTheme(prefs.theme, mode)}
+              onChange={(mode) => void setTheme(mode === 'auto' ? prefs.theme : mode, mode)}
             />
           </div>
         </div>
@@ -242,49 +238,93 @@ function AppearancePanel() {
           </div>
         </div>
       </Card>
-      <Card title={`Themes · ${themes.length}`}>
-        <div style={{ position: 'relative', marginBottom: 10 }}>
-          <Search size={13} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--pg-muted)' }} />
-          <input
-            className="input"
-            style={{ width: '100%', paddingLeft: 30 }}
-            placeholder="Search themes…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </div>
-        <div className="theme-grid">
-          {filtered.map((theme) => (
-            <ThemeCard
-              key={theme.name}
-              theme={theme}
-              active={current?.name === theme.name}
-              onClick={() => void setTheme(theme.name, prefs.themeMode)}
-            />
-          ))}
-        </div>
+      <Card title="Sidebar">
+        <OptionGrid>
+          <OptionCard
+            selected={prefs.sidebarMode === 'inset'}
+            label="Inset"
+            onClick={() => void savePrefs({ sidebarMode: 'inset' })}
+          >
+            <SidebarModePreview mode="inset" />
+          </OptionCard>
+          <OptionCard
+            selected={prefs.sidebarMode === 'floating'}
+            label="Floating"
+            onClick={() => void savePrefs({ sidebarMode: 'floating' })}
+          >
+            <SidebarModePreview mode="floating" />
+          </OptionCard>
+          <OptionCard
+            selected={prefs.sidebarMode === 'sidebar'}
+            label="Sidebar"
+            onClick={() => void savePrefs({ sidebarMode: 'sidebar' })}
+          >
+            <SidebarModePreview mode="sidebar" />
+          </OptionCard>
+        </OptionGrid>
+      </Card>
+      <Card title="Layout">
+        <OptionGrid>
+          <OptionCard
+            selected={prefs.layoutMode === 'default'}
+            label="Default"
+            onClick={() => void savePrefs({ layoutMode: 'default' })}
+          >
+            <LayoutPreview mode="default" />
+          </OptionCard>
+          <OptionCard
+            selected={prefs.layoutMode === 'compact'}
+            label="Compact"
+            onClick={() => void savePrefs({ layoutMode: 'compact' })}
+          >
+            <LayoutPreview mode="compact" />
+          </OptionCard>
+          <OptionCard
+            selected={prefs.layoutMode === 'full'}
+            label="Full layout"
+            onClick={() => void savePrefs({ layoutMode: 'full' })}
+          >
+            <LayoutPreview mode="full" />
+          </OptionCard>
+        </OptionGrid>
+      </Card>
+      <Card title="Direction">
+        <OptionGrid columns={2}>
+          <OptionCard
+            selected={prefs.direction === 'ltr'}
+            label="Left to Right"
+            onClick={() => void savePrefs({ direction: 'ltr' })}
+          >
+            <DirectionPreview direction="ltr" />
+          </OptionCard>
+          <OptionCard
+            selected={prefs.direction === 'rtl'}
+            label="Right to Left"
+            onClick={() => void savePrefs({ direction: 'rtl' })}
+          >
+            <DirectionPreview direction="rtl" />
+          </OptionCard>
+        </OptionGrid>
+      </Card>
+      <Card title="Chat history">
+        <OptionGrid columns={2}>
+          <OptionCard
+            selected={prefs.chatHistoryMode === 'detailed'}
+            label="Detailed"
+            onClick={() => void savePrefs({ chatHistoryMode: 'detailed' })}
+          >
+            <ChatHistoryPreview mode="detailed" />
+          </OptionCard>
+          <OptionCard
+            selected={prefs.chatHistoryMode === 'compact'}
+            label="Compact"
+            onClick={() => void savePrefs({ chatHistoryMode: 'compact' })}
+          >
+            <ChatHistoryPreview mode="compact" />
+          </OptionCard>
+        </OptionGrid>
       </Card>
     </>
-  );
-}
-
-function ThemeCard({ theme, active, onClick }: { theme: Theme; active: boolean; onClick: () => void }) {
-  const tokens = theme.tokens;
-  return (
-    <button className={`theme-card${active ? ' active' : ''}`} onClick={onClick} title={theme.name}>
-      <div className="theme-preview" style={{ background: tokens['--pg-bg'] }}>
-        <div className="p-side" style={{ background: tokens['--pg-sidebar'] }} />
-        <div className="p-main" style={{ background: tokens['--pg-surface'] }}>
-          <div className="p-line" style={{ background: tokens['--pg-text'], opacity: 0.72 }} />
-          <div className="p-line short" style={{ background: tokens['--pg-accent'] }} />
-          <div className="p-line" style={{ background: tokens['--pg-muted'], opacity: 0.55 }} />
-        </div>
-      </div>
-      <div className="theme-name">
-        <span>{theme.label}</span>
-        {active ? <span style={{ color: 'var(--pg-accent)' }}>✓</span> : null}
-      </div>
-    </button>
   );
 }
 

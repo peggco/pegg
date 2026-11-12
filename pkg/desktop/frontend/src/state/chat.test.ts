@@ -6,6 +6,7 @@ import {
   applyUpdate,
   emptyChat,
   finalizeRestoredTasks,
+  MAX_CHAT_ITEMS,
   pruneChat,
   resolveAsk,
   resolvePermission,
@@ -237,7 +238,7 @@ describe('user attachments', () => {
 describe('history window', () => {
   it('drops the oldest history items and keeps a reload cursor', () => {
     let state = emptyChat();
-    for (let seq = 1; seq <= 200; seq += 1) {
+    for (let seq = 1; seq <= MAX_CHAT_ITEMS + 40; seq += 1) {
       state = applyUpdate(state, {
         sessionUpdate: 'tool_call',
         toolCallId: `t-${seq}`,
@@ -248,9 +249,10 @@ describe('history window', () => {
       state = { ...state, historyOldestSeq: seq };
     }
     const pruned = pruneChat(state);
-    expect(pruned.items).toHaveLength(160);
+    expect(pruned.items).toHaveLength(MAX_CHAT_ITEMS);
     expect(pruned.items[0].seq).toBe(41);
     expect(pruned.historyOldestSeq).toBe(41);
+    expect(pruned.historyHasMore).toBe(true);
   });
 });
 

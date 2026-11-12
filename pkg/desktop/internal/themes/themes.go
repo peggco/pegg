@@ -28,6 +28,19 @@ func All() []Theme {
 	return out
 }
 
+func Desktop() []Theme {
+	styles.RegisterDefaults()
+	out := make([]Theme, 0, 2)
+	for _, name := range []string{"dark", "light"} {
+		t, ok := styles.Get(name)
+		if !ok {
+			continue
+		}
+		out = append(out, fromTUI(name, t))
+	}
+	return out
+}
+
 func Find(name string) (Theme, bool) {
 	for _, t := range All() {
 		if t.Name == name {

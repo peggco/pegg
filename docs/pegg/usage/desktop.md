@@ -32,15 +32,17 @@ The production binary is written to `pkg/desktop/build/bin/pegg-desktop`.
 
 On Linux the build uses `-tags "gui webkit2_41"` because Wails v2 defaults to WebKitGTK 4.0. The `gui` tag keeps the Wails entrypoint out of the normal `go test ./...` / `go vet ./...` runs. macOS and Windows use `-tags gui`.
 
-## Themes
+## Appearance
 
-The desktop theme list is generated from the terminal UI at runtime (`internal/tui/styles`). There is no duplicated palette in the frontend:
+The desktop ships exactly two palettes: **Light** and **Dark**.
 
-- Every TUI theme is available, including Catppuccin (4), Tokyo Night (3), Gruvbox (2), Rose Pine (3), Solarized (2), Kanagawa (2), Everforest (2), Nord, One Dark, Dracula, Monokai (3), and the base `dark` / `light`.
-- The default is the TUI `dark` theme; `auto` follows the OS light/dark preference and picks the matching sibling theme.
-- CSS variables are mapped one-to-one from the TUI `Theme` fields: background, surface, foreground, accent, borders, code colors, and all syntax token colors.
-- Legacy `pegg-light` / `pegg-dark` preferences are migrated to the TUI `light` / `dark` themes.
-- The interface scale can be adjusted in Settings → Appearance.
+- Switch light/dark from the sidebar footer (sun/moon row). This is the only quick switcher.
+- Settings → Appearance → **Color mode** keeps Auto / Light / Dark; Auto follows the OS light/dark preference.
+- Removed palette names and legacy `pegg-light` / `pegg-dark` values are normalized to Light or Dark at load time.
+- Both palettes map the TUI `Theme` fields (background, surface, foreground, accent, borders, code colors, and syntax tokens) to CSS variables.
+- The interface scale is in Settings → Appearance.
+
+The terminal UI keeps its full theme list; only the desktop is limited to Light/Dark.
 
 ## Logo and app icon
 
@@ -52,6 +54,25 @@ Logo assets live in `pkg/desktop/assets`:
 - `pegg.desktop` — desktop entry
 
 The sidebar swaps the wordmark automatically with the active TUI theme. `make desktop-install` hashes the app icon and writes the hash into the desktop entry (`Icon=pegg-<hash>`), then refreshes the GTK/KDE icon caches, so replacing `appicon.png` and reinstalling updates the titlebar and launcher icon without manually clearing caches.
+
+## Sidebar
+
+Drag the sidebar's right edge to resize it between 200 and 520 px; dragging it below about 140 px collapses it. Double-click the handle to reset the width to 272 px. The width is saved in the desktop preferences and restored on the next launch. When the sidebar is collapsed, a slim rail on the far left reopens it at the saved width; the titlebar toggle and the **Toggle sidebar** command palette action also work.
+
+Settings → Appearance also controls the shell:
+
+- **Sidebar** — **Sidebar** (flat, full height), **Inset** (padded card), or **Floating** (padded card with a shadow).
+- **Layout** — **Default**, **Compact** (tighter sidebar and chat spacing), or **Full layout** (wider chat content and composer).
+- **Direction** — **Left to Right** or **Right to Left**. The shell mirrors, while code blocks and terminal output stay left-to-right.
+
+### Chat history
+
+- **Compact** (default) groups consecutive reasoning and tool calls behind a single activity summary such as `Ran 9 commands · read 3 files`, with a timestamp. Expanding the summary shows one-line reasoning/tool rows; expanding a row opens its full tool card (terminal output, diff, written code, or command output).
+- **Detailed** renders every reasoning block and tool card inline, matching the previous behavior.
+
+Assistant replies and user messages stay visible in both modes. Task and subagent cards remain standalone and full. Switching modes applies immediately and the choice is stored with the desktop preferences.
+
+Opening a session restores the last 200 messages. Scrolling to the top loads older messages in batches of 200. The viewport stays anchored on the message you are reading — loading a page never jumps to the bottom, and live replies only auto-follow while you are already at the bottom.
 
 ## Agent binary
 
@@ -84,7 +105,7 @@ If nothing is found, Settings → Agent and the first-run screen offer **Downloa
 The desktop settings page mirrors the TUI settings layout, backed by the same `~/.pegg/pegg.json` and project `.pegg/` files:
 
 - **General** — provider/model, reasoning effort, language, and speech-to-text provider/model.
-- **Appearance** — auto/light/dark mode, all TUI themes, and interface scale.
+- **Appearance** — auto/light/dark color mode, sidebar mode, layout density, direction, chat history mode, and interface scale.
 - **Session** — active session details, rename/delete/new chat, and context compaction (strategies, threshold, message and tool-output limits).
 - **Permissions** — Auto/Manual/Judge/Recommended presets, per-tool rules, judge provider/model/threshold.
 - **Memory** — enable/consolidate, gate, threshold, context budget, max results, entry stats.
@@ -103,7 +124,8 @@ The desktop interface supports English (default) and Turkish. Choose the languag
 Tool output follows the terminal UI's hierarchy instead of dumping everything:
 
 - Reads, listings, searches, and web tools render as compact one-line cards; their output is hidden unless the tool failed, in which case it expands from the error action.
-- Bash renders as a terminal with the command, output, and a status indicator. Long output is truncated with a show-all control.
+- Bash renders as a terminal with the command, live output while the command
+  runs, and a status indicator. Long output is truncated with a show-all control.
 - Writes render syntax-highlighted content, truncated for large files with an expand control.
 - Edits render a GitHub-style line-numbered diff with hunk headers, additions/deletions, and a show-all control for large diffs.
 - `task` calls render as a single **TASK** card: name, subagent type, prompt, `background` badge, live activity, response preview, usage/duration, and an **Open history** action while running. The raw `task` tool row and the duplicate subagent card are no longer shown for task-launched subagents; fork subagents keep the standalone subagent card. Background continuations stream into the same thread when the subagent finishes.
@@ -145,7 +167,7 @@ pkg/desktop/
 │   ├── acpclient/           # stdio JSON-RPC client, batched updates
 │   ├── binary/              # discovery, download, checksum verification
 │   ├── prefs/               # ~/.config/pegg/desktop.json
-│   ├── themes/              # TUI palette → CSS token DTOs
+│   ├── themes/              # Light/Dark palette → CSS token DTOs
 │   └── workspace/           # workspace validation and file reads
 └── frontend/                # React 19 + Vite design system and UI
 ```

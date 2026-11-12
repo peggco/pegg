@@ -12,13 +12,14 @@ prompt, and middleware, and runs **concurrently** with its siblings.
 
 | Agent | Role | Write access | Tools |
 |---|---|---|---|
-| `orchestrator` | Top-level coordinator | Full workspace | All file tools, `askuserquestion`, `bash`, `task`, `taskstatus`, `todoread`, `todowrite`, `webfetch`, `websearch`, `searchskill`, `loadskill`, `enterplanmode`, `exitplanmode` |
-| `planner` | Architecture and planning | `.pegg/plans/` only | File tools write-scoped to plans, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite` |
+| `orchestrator` | Top-level coordinator; plans, delegates, verifies | Full workspace | All file tools, `askuserquestion`, `bash`, `task`, `taskstatus`, `todoread`, `todowrite`, `webfetch`, `websearch`, `searchskill`, `loadskill`, `enterplanmode`, `exitplanmode` |
 | `developer` | Implementation | Full workspace except `.pegg/` config (`.pegg/plans/` and `.pegg/rules/` remain writable) | All file tools, `bash`, `webfetch`, `websearch`, `todoread`, `todowrite` |
 | `explorer` | Read-only research | None | `glob`, `grep`, `list`, `read`, `bash`, `webfetch`, `websearch` |
 
-The **planner** always runs in plan mode: the plan-mode system reminder is attached
-automatically and the agent never exits it, reinforcing its read-only role.
+The **orchestrator** owns planning: for non-trivial work it writes the plan to
+`.pegg/plans/<feature-name>.md`, creates the todo hierarchy, and then delegates
+execution to developers. Load the `/orchestrate` skill for the full
+plan → delegate → verify → report contract.
 
 All agents share a common system prompt that establishes the interaction style
 (tone, proactiveness, code conventions), injects the working environment, git
@@ -31,17 +32,15 @@ chain: loop detection, secret redaction, retry, and permissions.
 | Agent | Temperature | Top-p | Max tokens | Max iterations |
 |---|---|---|---|---|
 | `orchestrator` | 0.2 | 0.9 | `max_tokens` / `max_output_tokens` | unlimited |
-| `planner` | 0.4 | 0.95 | `max_tokens` / `max_output_tokens` | 150 |
 | `explorer` | 0.1 | 0.9 | `max_tokens` / `max_output_tokens` | 150 |
 | `developer` | 0.2 | 0.9 | `max_tokens` / `max_output_tokens` | 150 |
 
 Sampling stays close to deterministic for tool routing, file research, and code
-changes (`orchestrator`, `explorer`, `developer`), and moves into the reasoning
-range for planning (`planner`). Top-p remains near the provider default; the
-primary dial is temperature. Iteration caps are guardrails against runaway tool
-loops, not targets. The orchestrator is intentionally unlimited because it
-coordinates subagents and long multi-step tasks; `planner`, `explorer`, and
-`developer` keep a finite cap.
+changes (`orchestrator`, `explorer`, `developer`). Top-p remains near the
+provider default; the primary dial is temperature. Iteration caps are guardrails
+against runaway tool loops, not targets. The orchestrator is intentionally
+unlimited because it coordinates subagents and long multi-step tasks; `explorer`
+and `developer` keep a finite cap.
 
 ## Spawning subagents
 
@@ -61,7 +60,7 @@ subagent:
 | Field | Description |
 |---|---|
 | `name` | Unique, descriptive name for this run. Reusing a finished name resumes with full history. |
-| `subagent_type` | One of `orchestrator`, `explorer`, `planner`, `developer` |
+| `subagent_type` | One of `orchestrator`, `explorer`, `developer` |
 | `prompt` | Instructions: what to do, constraints, what to report back |
 | `task_id` | Optional todo ids this subagent is working on |
 | `background` | `false` (default) blocks until finished; `true` returns immediately |
@@ -201,3 +200,7 @@ For large, parallelizable changes, invoke the `/batch` skill. It turns the
 orchestrator into a batch manager that explores, plans, delegates to subagents,
 verifies results, and reports back — following the subagent lifecycle described
 above. See [Commands](commands.md#batch).
+
+For the general plan-first contract on any large project, invoke `/orchestrate`.
+It makes the orchestrator write the plan and todo hierarchy itself, then delegate
+execution and verify the results. See [Commands](commands.md#orchestrate).

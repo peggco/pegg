@@ -4,6 +4,10 @@
 
 ### Added
 
+- Write tool cards now render syntax-highlighted code (as in the desktop app)
+  instead of a diff; edit tool cards render a syntax-highlighted inline
+  GitHub-style diff with line numbers, hunks, and add/remove highlighting,
+  themed to the IDE. **View diff** still opens the native editor diff for edits.
 - Unified **TASK** card for `task` calls: subagent name/type, prompt, background
   badge, live activity, final response, usage/duration, and an in-place transcript
   while running; fork subagents keep the standalone subagent card.
@@ -18,11 +22,20 @@
   chat history, with a matching `sendfile` tool.
 - Skill hub support: browse, search, and install skills from the composer.
 - Lazy-loaded long session history with a "load earlier messages" control.
+- Bash tool cards stream stdout/stderr live while the command runs and stay
+  expanded until it completes.
+- Bash tool cards are now terminal-style: traffic-light header, `$ command`
+  prompt, live tail while running, exit-code footer, and a copy action.
 
 ### Fixed
 
+- Scroll-back through older messages is now anchored: loading a page no longer
+  jumps the viewport or forces it back to the bottom while the agent streams.
+- Sessions now restore more history up front and load older messages in larger
+  batches while scrolling back.
 - TASK cards now flip from running to done as soon as their background subagent
   finishes, without reloading the session.
+- Restored edit tool cards now show their diff again after reloading a session.
 - TASK cards no longer scroll internally: long prompts and results collapse with
   a `…` hint, expanding grows the card and reveals more (still capped, never
   unbounded), like the TUI.

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -35,7 +34,7 @@ const defaultSessionID = "default"
 
 type sessionStore struct {
 	file   string
-	todos  map[string]*Todo
+	todos  []*Todo
 	loaded bool
 }
 
@@ -94,7 +93,7 @@ func (s *todoStore) sessionIDLocked(ctx context.Context) string {
 func (s *todoStore) initFor(sessionID string) (*sessionStore, error) {
 	ss, ok := s.sessions[sessionID]
 	if !ok {
-		ss = &sessionStore{todos: make(map[string]*Todo)}
+		ss = &sessionStore{}
 		s.sessions[sessionID] = ss
 	}
 	if ss.loaded {
@@ -124,20 +123,13 @@ func (s *todoStore) initFor(sessionID string) (*sessionStore, error) {
 	if err := json.Unmarshal(data, &list); err != nil {
 		return nil, fmt.Errorf("todo: parse: %w", err)
 	}
-	for _, t := range list {
-		ss.todos[t.ID] = t
-	}
+	ss.todos = list
 	ss.loaded = true
 	return ss, nil
 }
 
 func (s *todoStore) save(ss *sessionStore) error {
-	list := make([]*Todo, 0, len(ss.todos))
-	for _, t := range ss.todos {
-		list = append(list, t)
-	}
-	sort.Slice(list, func(i, j int) bool { return list[i].CreatedAt.After(list[j].CreatedAt) })
-	data, err := json.MarshalIndent(list, "", "  ")
+	data, err := json.MarshalIndent(ss.todos, "", "  ")
 	if err != nil {
 		return fmt.Errorf("todo: marshal: %w", err)
 	}
@@ -154,11 +146,8 @@ func (s *todoStore) all(ctx context.Context) ([]*Todo, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*Todo, 0, len(ss.todos))
-	for _, t := range ss.todos {
-		out = append(out, t)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	out := make([]*Todo, len(ss.todos))
+	copy(out, ss.todos)
 	return out, nil
 }
 
@@ -170,14 +159,21 @@ func (s *todoStore) setAll(ctx context.Context, todos []*Todo) error {
 		return err
 	}
 	now := time.Now()
-	ss.todos = make(map[string]*Todo, len(todos))
+	next := make([]*Todo, 0, len(todos))
+	index := make(map[string]int, len(todos))
 	for _, t := range todos {
 		if t.CreatedAt.IsZero() {
 			t.CreatedAt = now
 		}
 		t.UpdatedAt = now
-		ss.todos[t.ID] = t
+		if i, ok := index[t.ID]; ok {
+			next[i] = t
+			continue
+		}
+		index[t.ID] = len(next)
+		next = append(next, t)
 	}
+	ss.todos = next
 	return s.save(ss)
 }
 

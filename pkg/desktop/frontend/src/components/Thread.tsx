@@ -1,12 +1,26 @@
-import { useEffect, useRef, useState } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowDown, ArrowLeft, ChevronRight, Copy, GitFork, Info, RotateCcw, TriangleAlert } from 'lucide-react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
+import { useChatScroller } from '../lib/useChatScroll';
+import { TOP_PREFETCH_PX } from '../lib/scroll';
+import {
+  ArrowDown,
+  ArrowLeft,
+  Brain,
+  ChevronRight,
+  Copy,
+  GitFork,
+  Info,
+  RotateCcw,
+  TriangleAlert,
+  Wrench,
+} from 'lucide-react';
 import { renderMarkdown } from '../lib/markdown';
 import { closeSubagent, forkMessage, loadOlderMessages, openSubagent, revertMessage, setStickToBottom } from '../state/actions';
 import { store, useStore } from '../state/store';
 import { useT } from '../lib/i18n';
-import type { ChatItem } from '../state/chat';
-import { ToolCard } from './ToolViews';
+import type { ChatItem, ToolState } from '../state/chat';
+import { activityCounts, buildHistoryRows, formatActivityTime, type ActivityCounts, type HistoryRow } from '../lib/activity';
+import { ToolCard, ToolIcon, bashCommand, classify, computeRows, outputText, writeContent } from './ToolViews';
 import { AskCard, PermissionCard, PlanCard, SubagentCard } from './Cards';
 import { TaskCard } from './TaskCard';
 
@@ -17,6 +31,7 @@ export function Thread() {
   const loading = useStore((s) => s.chat.loading);
   const historyLoading = useStore((s) => s.chat.historyLoading);
   const historyHasMore = useStore((s) => s.chat.historyHasMore);
+  const historyOldestSeq = useStore((s) => s.chat.historyOldestSeq);
   const acpId = useStore((s) => s.chat.acpId);
   const permissions = useStore((s) => s.chat.permissions);
   const asks = useStore((s) => s.chat.asks);
@@ -24,68 +39,147 @@ export function Thread() {
   const activeAgent = useStore((s) => s.subagentView);
   const activeRun = activeAgent ? subagents[activeAgent] : undefined;
   const items = activeRun?.items ?? mainItems;
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const stickRef = useRef(true);
-  const pendingScrollRef = useRef<{ height: number; top: number } | null>(null);
+  const historyMode = useStore((s) => s.prefs.chatHistoryMode);
+  const rows = useMemo(() => buildHistoryRows(items, historyMode), [items, historyMode]);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
+  const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
   const [copied, setCopied] = useState<string | null>(null);
-  const [showJump, setShowJump] = useState(false);
   const t = useT();
+  const sessionKey = `${acpId ?? ''}:${activeAgent ?? ''}`;
+  const scroll = useChatScroller({ sessionKey, syncPinned: setStickToBottom });
+  const { atEndRef, scrollerRef, writeScrollTop } = scroll;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const autoLoadSeqRef = useRef<number | null>(null);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const [measureBatch, setMeasureBatch] = useState<{ start: number; end: number } | null>(null);
+
+  const toggleGroup = (id: string) => setOpenGroups((current) => toggleId(current, id));
+  const toggleRow = (id: string) => setOpenRows((current) => toggleId(current, id));
 
   const virtualizer = useVirtualizer({
-    count: items.length,
+    count: rows.length,
     getScrollElement: () => scrollerRef.current,
-    estimateSize: () => 96,
-    overscan: 8,
-    getItemKey: (index) => items[index]?.id ?? index,
+    estimateSize: (index) => estimateRowHeight(rows[index]),
+    overscan: 12,
+    getItemKey: (index) => rows[index]?.key ?? index,
+    anchorTo: 'end',
+    followOnAppend: 'auto',
+    scrollEndThreshold: 2,
+    rangeExtractor: (range) => {
+      const indices = new Set(defaultRangeExtractor(range));
+      if (measureBatch) {
+        for (
+          let index = Math.max(0, measureBatch.start);
+          index <= measureBatch.end && index < rows.length;
+          index += 1
+        ) {
+          indices.add(index);
+        }
+      }
+      return Array.from(indices).sort((a, b) => a - b);
+    },
   });
   const totalSize = virtualizer.getTotalSize();
 
   useEffect(() => {
-    stickRef.current = true;
-    pendingScrollRef.current = null;
-    setShowJump(false);
-    setStickToBottom(true);
-    const frame = requestAnimationFrame(() => {
-      const el = scrollerRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [acpId]);
+    if (activeAgent) return;
+    let cancelled = false;
+    let timer = 0;
+    const firstUnmeasured = (): number => {
+      const current = rowsRef.current;
+      for (let index = current.length - 1; index >= 0; index -= 1) {
+        if (!virtualizer.itemSizeCache.has(current[index].key)) return index;
+      }
+      return -1;
+    };
+    const tick = () => {
+      if (cancelled) return;
+      if (virtualizer.isScrolling) {
+        timer = window.setTimeout(tick, 150);
+        return;
+      }
+      const end = firstUnmeasured();
+      if (end < 0) {
+        setMeasureBatch(null);
+        return;
+      }
+      const start = Math.max(0, end - 23);
+      setMeasureBatch({ start, end });
+      timer = window.setTimeout(() => {
+        if (cancelled) return;
+        setMeasureBatch(null);
+        timer = window.setTimeout(tick, 70);
+      }, 70);
+    };
+    timer = window.setTimeout(tick, 60);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [rows.length, historyMode, activeAgent, virtualizer]);
+
+  useLayoutEffect(() => {
+    if (!atEndRef.current) return;
+    const el = scrollerRef.current;
+    if (el) writeScrollTop(el.scrollHeight);
+  }, [plan, permissions, asks, running, scrollerRef, atEndRef, writeScrollTop]);
 
   useEffect(() => {
+    setOpenGroups(new Set());
+    setOpenRows(new Set());
+    setMeasureBatch(null);
+    autoLoadSeqRef.current = null;
+  }, [sessionKey]);
+
+  const historyRef = useRef({ hasMore: historyHasMore, loading: historyLoading, enabled: !activeAgent });
+  historyRef.current = { hasMore: historyHasMore, loading: historyLoading, enabled: !activeAgent };
+
+  useEffect(() => {
+    const root = scrollerRef.current;
+    const target = sentinelRef.current;
+    if (!root || !target || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        const history = historyRef.current;
+        if (!history.enabled || !history.hasMore || history.loading) return;
+        void loadOlderMessages();
+      },
+      { root, rootMargin: `${TOP_PREFETCH_PX}px 0px 0px 0px`, threshold: 0 },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [scrollerRef, sessionKey, activeAgent]);
+
+  useEffect(() => {
+    if (activeAgent || !historyHasMore || historyLoading) return;
     const el = scrollerRef.current;
     if (!el) return;
-    if (stickRef.current) el.scrollTop = el.scrollHeight;
-  }, [items, plan, permissions, asks, running, totalSize]);
+    if (el.scrollHeight > el.clientHeight + 32) return;
+    if (autoLoadSeqRef.current === historyOldestSeq) return;
+    autoLoadSeqRef.current = historyOldestSeq;
+    void loadOlderMessages();
+  }, [activeAgent, historyHasMore, historyLoading, historyOldestSeq, totalSize, rows, scrollerRef]);
 
-  useEffect(() => {
-    const pending = pendingScrollRef.current;
-    const el = scrollerRef.current;
-    if (!pending || !el || historyLoading) return;
-    if (el.scrollHeight <= pending.height) {
-      pendingScrollRef.current = null;
-      return;
+  const onThreadScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const userScroll = scroll.onScroll(event);
+    if (!userScroll || activeAgent) return;
+    if (
+      event.currentTarget.scrollTop <= TOP_PREFETCH_PX &&
+      historyHasMore &&
+      !historyLoading
+    ) {
+      void loadOlderMessages();
     }
-    el.scrollTop = el.scrollHeight - pending.height + pending.top;
-    pendingScrollRef.current = null;
-  }, [items, totalSize, historyLoading]);
-
-  const jumpToBottom = () => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    stickRef.current = true;
-    pendingScrollRef.current = null;
-    setStickToBottom(true);
-    setShowJump(false);
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   };
 
-  const jumpButton = showJump ? (
+  const jumpButton = scroll.showJump ? (
     <button
       className="scroll-bottom-btn"
       title={t('thread.scrollToBottom')}
       aria-label={t('thread.scrollToBottom')}
-      onClick={jumpToBottom}
+      onClick={scroll.jumpToBottom}
     >
       <ArrowDown size={16} />
     </button>
@@ -133,29 +227,29 @@ export function Thread() {
           <span className="badge">{activeRun.status}</span>
         </div>
         <div className="thread-area">
-          <div
-            className="thread-wrap"
-            ref={scrollerRef}
-            onScroll={(event) => {
-              const el = event.currentTarget;
-              const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
-              stickRef.current = stick;
-              setShowJump(!stick);
-            }}
-            onClick={onThreadClick}
-          >
+          <div className="thread-wrap" ref={scrollerRef} onScroll={onThreadScroll} onClick={onThreadClick}>
             <div className="thread">
               {activeRun.task ? <div className="subagent-modal-task">{activeRun.task}</div> : null}
-              {items.map((entry) => (
-                <div className="thread-item" key={entry.id}>
-                  <Item
-                    item={entry}
-                    streaming={false}
-                    copied={copied}
-                    onCopy={copy}
-                    onOpenSubagent={openSubagent}
-                    userMessageIndex={userIndices.get(entry.id)}
-                  />
+              {rows.map((row) => (
+                <div className="thread-item" key={row.key}>
+                  {row.kind === 'activity' ? (
+                    <ActivityGroup
+                      group={row}
+                      open={openGroups.has(row.key)}
+                      onToggle={() => toggleGroup(row.key)}
+                      openRows={openRows}
+                      onToggleRow={toggleRow}
+                    />
+                  ) : (
+                    <Item
+                      item={row.item}
+                      streaming={false}
+                      copied={copied}
+                      onCopy={copy}
+                      onOpenSubagent={openSubagent}
+                      userMessageIndex={userIndices.get(row.item.id)}
+                    />
+                  )}
                 </div>
               ))}
               {!items.length ? <div className="empty-state">{t('subagent.empty')}</div> : null}
@@ -169,42 +263,24 @@ export function Thread() {
 
   return (
     <>
-    {loading ? (
-      <div className="thread-loading" style={{ padding: '6px 0' }}>
-        <span className="spinner" /> {t('thread.restoring')}
-      </div>
-    ) : null}
-    {historyLoading ? (
-      <div className="thread-loading" style={{ padding: '6px 0' }}>
-        <span className="spinner" /> {t('thread.loadingHistory')}
-      </div>
-    ) : null}
     <div className="thread-area">
-      <div
-        className="thread-wrap"
-        ref={scrollerRef}
-        onScroll={(event) => {
-          const el = event.currentTarget;
-          const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
-          stickRef.current = stick;
-          setShowJump(!stick);
-          setStickToBottom(stick);
-          if (el.scrollTop < 80 && historyHasMore && !historyLoading && !pendingScrollRef.current) {
-            pendingScrollRef.current = { height: el.scrollHeight, top: el.scrollTop };
-            void loadOlderMessages();
-          }
-        }}
-        onClick={onThreadClick}
-      >
+      {loading ? (
+        <div className="thread-status" role="status">
+          <span className="spinner" /> {t('thread.restoring')}
+        </div>
+      ) : null}
+      <div className="thread-wrap" ref={scrollerRef} onScroll={onThreadScroll} onClick={onThreadClick}>
+        <div ref={sentinelRef} className="thread-sentinel" aria-hidden="true" />
         <div className="thread">
           {items.length ? (
             <div style={{ height: totalSize, position: 'relative', width: '100%' }}>
               {virtualizer.getVirtualItems().map((virtualItem) => {
-                const item = items[virtualItem.index];
+                const row = rows[virtualItem.index];
+                if (!row) return null;
                 return (
                   <div
                     className="thread-item"
-                    key={item.id}
+                    key={row.key}
                     data-index={virtualItem.index}
                     ref={virtualizer.measureElement}
                     style={{
@@ -215,14 +291,24 @@ export function Thread() {
                       transform: `translateY(${virtualItem.start}px)`,
                     }}
                   >
-                    <Item
-                      item={item}
-                      streaming={running && item.id === lastAssistantId}
-                      copied={copied}
-                      onCopy={copy}
-                      onOpenSubagent={openSubagent}
-                      userMessageIndex={userIndices.get(item.id)}
-                    />
+                    {row.kind === 'activity' ? (
+                      <ActivityGroup
+                        group={row}
+                        open={openGroups.has(row.key)}
+                        onToggle={() => toggleGroup(row.key)}
+                        openRows={openRows}
+                        onToggleRow={toggleRow}
+                      />
+                    ) : (
+                      <Item
+                        item={row.item}
+                        streaming={running && row.item.id === lastAssistantId}
+                        copied={copied}
+                        onCopy={copy}
+                        onOpenSubagent={openSubagent}
+                        userMessageIndex={userIndices.get(row.item.id)}
+                      />
+                    )}
                   </div>
                 );
               })}
@@ -432,4 +518,233 @@ function Reasoning({ item }: { item: Extract<ChatItem, { kind: 'reasoning' }> })
       {open ? <div className="reasoning-body">{item.text}</div> : null}
     </div>
   );
+}
+
+function toggleId(current: Set<string>, id: string): Set<string> {
+  const next = new Set(current);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}
+
+function activitySummary(counts: ActivityCounts, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  const plural = (count: number, one: string, many: string) => t(count === 1 ? one : many, { count });
+  const parts: string[] = [];
+  if (counts.commands) parts.push(plural(counts.commands, 'chat.ranCommand', 'chat.ranCommands'));
+  if (counts.reads) parts.push(plural(counts.reads, 'chat.readFile', 'chat.readFiles'));
+  if (counts.edits) parts.push(plural(counts.edits, 'chat.editedFile', 'chat.editedFiles'));
+  if (counts.searches) parts.push(plural(counts.searches, 'chat.ranSearch', 'chat.ranSearches'));
+  if (counts.fetches) parts.push(plural(counts.fetches, 'chat.fetchedPage', 'chat.fetchedPages'));
+  if (!parts.length) {
+    return counts.thoughts ? t('chat.activityThoughts', { count: counts.thoughts }) : t('common.thought');
+  }
+  return parts.join(' · ');
+}
+
+function ActivityGroup({
+  group,
+  open,
+  onToggle,
+  openRows,
+  onToggleRow,
+}: {
+  group: Extract<HistoryRow, { kind: 'activity' }>;
+  open: boolean;
+  onToggle: () => void;
+  openRows: Set<string>;
+  onToggleRow: (id: string) => void;
+}) {
+  const t = useT();
+  const language = useStore((s) => s.language);
+  const counts = activityCounts(group.items);
+  return (
+    <div className={`activity${open ? ' open' : ''}`}>
+      <button className="activity-head" onClick={onToggle} aria-expanded={open}>
+        <span className="activity-head-icon">
+          <Wrench size={13} />
+        </span>
+        <span className="activity-summary">{activitySummary(counts, t)}</span>
+        <span className="activity-time">{formatActivityTime(group.createdAt, language)}</span>
+        <ChevronRight size={13} className="activity-chevron" />
+      </button>
+      {open ? (
+        <div className="activity-rows">
+          {group.items.map((item) =>
+            item.kind === 'reasoning' ? (
+              <ActivityReasoning
+                key={item.id}
+                item={item}
+                open={openRows.has(item.id)}
+                onToggle={() => onToggleRow(item.id)}
+                language={language}
+              />
+            ) : item.kind === 'tool' ? (
+              <ActivityTool
+                key={item.id}
+                item={item}
+                open={openRows.has(item.id)}
+                onToggle={() => onToggleRow(item.id)}
+                language={language}
+              />
+            ) : null,
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ActivityReasoning({
+  item,
+  open,
+  onToggle,
+  language,
+}: {
+  item: Extract<ChatItem, { kind: 'reasoning' }>;
+  open: boolean;
+  onToggle: () => void;
+  language: string;
+}) {
+  return (
+    <>
+      <button className="activity-row reasoning" onClick={onToggle} aria-expanded={open}>
+        <span className="activity-row-icon">
+          <Brain size={13} />
+        </span>
+        <span className="activity-row-text">{item.text}</span>
+        <span className="activity-row-time">{formatActivityTime(item.createdAt, language)}</span>
+        <ChevronRight size={12} className={`activity-row-chevron${open ? ' open' : ''}`} />
+      </button>
+      {open ? <div className="activity-detail-reasoning">{item.text}</div> : null}
+    </>
+  );
+}
+
+function ActivityTool({
+  item,
+  open,
+  onToggle,
+  language,
+}: {
+  item: Extract<ChatItem, { kind: 'tool' }>;
+  open: boolean;
+  onToggle: () => void;
+  language: string;
+}) {
+  const tool = item.tool;
+  const label = tool.kind === 'execute' || /^bash\b/i.test(tool.title) ? bashCommand(tool) : tool.title;
+  return (
+    <>
+      <button className="activity-row" onClick={onToggle} aria-expanded={open}>
+        <span className="activity-row-icon">
+          <ToolIcon kind={tool.kind} />
+        </span>
+        <span className="activity-row-text" title={label}>
+          {label}
+        </span>
+        <span className="activity-row-time">{formatActivityTime(item.createdAt, language)}</span>
+        <ChevronRight size={12} className={`activity-row-chevron${open ? ' open' : ''}`} />
+      </button>
+      {open ? (
+        <div className="activity-detail">
+          <ToolCard tool={tool} />
+        </div>
+      ) : null}
+    </>
+  );
+}
+const DIFF_PREVIEW_ROWS = 160;
+const BASH_PREVIEW_LINES = 24;
+const WRITE_PREVIEW_LINES = 30;
+const rowHeightCache = new WeakMap<ChatItem, number>();
+
+function textLines(text: string, width: number): number {
+  if (!text) return 1;
+  let lines = 0;
+  for (const part of text.split('\n')) {
+    lines += Math.max(1, Math.ceil(part.length / width));
+  }
+  return lines;
+}
+
+function estimateToolHeight(tool: ToolState): number {
+  if (tool.task) return 150;
+  const extra = tool.error ? 36 : 0;
+  switch (classify(tool)) {
+    case 'bash': {
+      const total = outputText(tool.output).split('\n').length;
+      const shown = Math.min(total, BASH_PREVIEW_LINES);
+      const body = Math.min(
+        340,
+        24 + shown * 19 + (total > BASH_PREVIEW_LINES ? 30 : 0),
+      );
+      return 30 + body + extra;
+    }
+    case 'write': {
+      const content = writeContent(tool);
+      const total = content ? content.split('\n').length : 0;
+      const shown = Math.min(total, WRITE_PREVIEW_LINES);
+      const body = Math.min(
+        360,
+        20 + shown * 19 + (content.length > 16000 || total > WRITE_PREVIEW_LINES ? 30 : 0),
+      );
+      return 36 + body + 16 + extra;
+    }
+    case 'edit': {
+      if (!tool.diff) return 64 + extra;
+      const rows = computeRows(tool.diff.oldText ?? '', tool.diff.newText ?? '').length;
+      const body = Math.min(420, rows * 19 + 8);
+      return 34 + body + 16 + (rows > DIFF_PREVIEW_ROWS ? 30 : 0) + extra;
+    }
+    case 'files':
+      return 62 + (tool.files?.length ?? 0) * 36 + extra;
+    default:
+      return 52 + (tool.error ? 40 : 0);
+  }
+}
+
+function estimateAssistantHeight(text: string): number {
+  let height = 52;
+  const parts = text.split('```');
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    if (index % 2 === 0) {
+      height += textLines(part, 80) * 22;
+    } else {
+      const lines = part.split('\n').length;
+      height += 66 + Math.min(460, lines * 19 + 22);
+    }
+  }
+  return Math.min(8000, Math.max(52, height));
+}
+
+function estimateItemHeight(item: ChatItem): number {
+  switch (item.kind) {
+    case 'user': {
+      const attachments = item.attachments?.length ?? 0;
+      return Math.min(1600, 44 + textLines(item.text, 90) * 20 + (attachments ? 28 : 0));
+    }
+    case 'assistant':
+      return estimateAssistantHeight(item.text);
+    case 'reasoning':
+      return 44;
+    case 'tool':
+      return estimateToolHeight(item.tool);
+    case 'subagent':
+      return 140;
+    default:
+      return 48;
+  }
+}
+
+const ROW_GAP = 12;
+
+function estimateRowHeight(row: HistoryRow | undefined): number {
+  if (!row) return 96 + ROW_GAP;
+  if (row.kind === 'activity') return 44 + ROW_GAP;
+  const cached = rowHeightCache.get(row.item);
+  if (cached !== undefined) return cached + ROW_GAP;
+  const height = estimateItemHeight(row.item);
+  rowHeightCache.set(row.item, height);
+  return height + ROW_GAP;
 }

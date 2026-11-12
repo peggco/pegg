@@ -23,6 +23,8 @@ import (
 	"github.com/peggco/pegg/internal/tui/page/settings"
 )
 
+const maxToolPartial = 64 * 1024
+
 type agentTranscript struct {
 	id        string
 	name      string
@@ -100,6 +102,7 @@ func (a *App) subscribeChat(bus event.Bus) error {
 		{agent.TopicAgentToken, a.onAgentToken},
 		{agent.TopicAgentMessage, a.onAgentMessage},
 		{agent.TopicAgentToolCall, a.onAgentToolCall},
+		{agent.TopicAgentToolOutput, a.onAgentToolOutput},
 		{agent.TopicAgentToolResult, a.onAgentToolResult},
 		{agent.TopicAgentUsage, a.onAgentUsage},
 		{agent.TopicAgentFinished, a.onAgentFinished},
@@ -132,6 +135,7 @@ func (a *App) unsubscribeChat(bus event.Bus) {
 		{agent.TopicAgentToken, a.onAgentToken},
 		{agent.TopicAgentMessage, a.onAgentMessage},
 		{agent.TopicAgentToolCall, a.onAgentToolCall},
+		{agent.TopicAgentToolOutput, a.onAgentToolOutput},
 		{agent.TopicAgentToolResult, a.onAgentToolResult},
 		{agent.TopicAgentUsage, a.onAgentUsage},
 		{agent.TopicAgentFinished, a.onAgentFinished},
@@ -399,6 +403,31 @@ func formatActivity(call llm.ToolCall) string {
 		}
 	}
 	return name
+}
+
+func (a *App) onAgentToolOutput(e agent.AgentToolOutput) {
+	a.chatMu.Lock()
+	defer a.chatMu.Unlock()
+	if !a.ownsAgentLocked(e.AgentID, "") {
+		return
+	}
+	t := a.transcriptFor(e.AgentID, e.AgentName)
+	it, ok := t.toolByID[e.CallID]
+	if !ok {
+		return
+	}
+	it.ToolPartial += e.Chunk
+	if len(it.ToolPartial) > maxToolPartial {
+		cut := len(it.ToolPartial) - maxToolPartial
+		if i := strings.IndexByte(it.ToolPartial[cut:], '\n'); i >= 0 {
+			cut += i + 1
+		}
+		it.ToolPartial = it.ToolPartial[cut:]
+	}
+	if a.viewID == t.id {
+		a.chat.InvalidateItemPtr(it)
+		a.requestRedraw()
+	}
 }
 
 func (a *App) onAgentToolResult(e agent.AgentToolResult) {

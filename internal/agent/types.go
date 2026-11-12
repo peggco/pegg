@@ -13,6 +13,7 @@ const (
 	StreamToken      StreamEventType = "token"
 	StreamReasoning  StreamEventType = "reasoning"
 	StreamToolCall   StreamEventType = "tool_call"
+	StreamToolOutput StreamEventType = "tool_output"
 	StreamToolResult StreamEventType = "tool_result"
 	StreamCompaction StreamEventType = "compaction"
 	StreamDone       StreamEventType = "done"
@@ -26,6 +27,10 @@ type StreamEvent struct {
 	Content         string
 	Reasoning       string
 	ToolCall        *llm.ToolCall
+	ToolCallID      string
+	ToolName        string
+	ToolStream      string
+	ToolChunk       string
 	ToolOutput      string
 	ToolErr         error
 	ToolAttachments []llm.Attachment

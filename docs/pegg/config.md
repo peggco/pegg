@@ -257,7 +257,7 @@ for a single run.
 | `enabled` | bool | `false` | Master toggle. When on, the orchestrator and every subagent are routed |
 | `provider` | string | — | Decision provider used for routing (currently `openrouter`). Unset → any decision-capable provider with an API key |
 | `model` | string | — | Decision model used for routing (default `typesafe/jev-1.13`) |
-| `agents` | object | — | Per-agent model preferences, keyed by agent name (`orchestrator`, `planner`, `explorer`, `developer`, ...) |
+| `agents` | object | — | Per-agent model preferences, keyed by agent name (`orchestrator`, `explorer`, `developer`, ...) |
 
 Each agent entry accepts:
 
@@ -301,7 +301,7 @@ manages that agent.
 
 | Key | Type | Description |
 |---|---|---|
-| `<agent>` | object | `orchestrator`, `developer`, `explorer` or `planner` |
+| `<agent>` | object | `orchestrator`, `developer` or `explorer` |
 | `.provider` | string | Provider name, normally `pegg-team <team>` |
 | `.model` | string | Default model key |
 | `.fallback_provider` | string | Fallback provider name |
@@ -507,13 +507,6 @@ Map of server name to [language server config](configurations/lsp.md).
           "complex": ["deepseek-v3", "deepseek-r1"]
         },
         "images": ["deepseek-v4-flash-vision-exp"]
-      },
-      "planner": {
-        "default": ["qwen3-coder", "qwen2.5-coder-32b"],
-        "difficulty": {
-          "trivial": ["qwen2.5-coder-7b"],
-          "complex": ["qwen3-coder", "qwen2.5-coder-32b"]
-        }
       },
       "developer": {
         "default": ["qwen2.5-coder-7b"],

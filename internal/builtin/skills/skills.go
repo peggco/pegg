@@ -6,10 +6,11 @@ import (
 
 func All() map[string]func() *prompt.Prompt {
 	return map[string]func() *prompt.Prompt{
-		"batch":    BatchSkill,
-		"review":   ReviewSkill,
-		"init":     InitSkill,
-		"rule":     RuleSkill,
-		"skillify": SkillifySkill,
+		"batch":       BatchSkill,
+		"review":      ReviewSkill,
+		"init":        InitSkill,
+		"orchestrate": OrchestrateSkill,
+		"rule":        RuleSkill,
+		"skillify":    SkillifySkill,
 	}
 }
