@@ -25,6 +25,10 @@ export function Cancel(arg1:string):Promise<void>;
 
 export function Capabilities():Promise<acpclient.PeggCapabilities>;
 
+export function CatalogInstalled():Promise<main.CatalogInstalled>;
+
+export function CatalogReadme(arg1:string,arg2:string):Promise<string>;
+
 export function ConnectLogout():Promise<main.ConnectSettings>;
 
 export function ConnectResetDevice():Promise<main.ConnectSettings>;
@@ -45,7 +49,13 @@ export function ForgetSession(arg1:string):Promise<void>;
 
 export function ForkSession(arg1:string,arg2:string,arg3:number):Promise<acpclient.SessionForkResult>;
 
+export function GetCatalogEntry(arg1:string,arg2:string):Promise<main.CatalogEntry>;
+
 export function InstallBinary():Promise<binary.Status>;
+
+export function InstallCatalogMCP(arg1:string,arg2:Record<string, string>,arg3:Record<string, string>,arg4:string):Promise<main.CatalogMutationResult>;
+
+export function InstallCatalogPlugin(arg1:string,arg2:string):Promise<main.CatalogMutationResult>;
 
 export function InstallHubSkill(arg1:string,arg2:string,arg3:string):Promise<main.SkillMutationResult>;
 
@@ -126,6 +136,8 @@ export function SavePermissionSettings(arg1:main.PermissionsSettings):Promise<vo
 export function SavePrefs(arg1:prefs.Prefs):Promise<prefs.Prefs>;
 
 export function SavePrefsOnly(arg1:prefs.Prefs):Promise<prefs.Prefs>;
+
+export function SearchCatalog(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number):Promise<main.CatalogSearchResult>;
 
 export function SearchFiles(arg1:string,arg2:number):Promise<Array<string>>;
 

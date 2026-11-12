@@ -312,6 +312,200 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class CatalogEntry {
+	    kind: string;
+	    id: string;
+	    name: string;
+	    description?: string;
+	    source: string;
+	    url?: string;
+	    license?: string;
+	    official: boolean;
+	    tags?: string[];
+	    version?: string;
+	    transport?: string;
+	    transports?: string[];
+	    capabilities?: string[];
+	    platforms?: string[];
+	    repository?: string;
+	    homepage?: string;
+	    requiredEnv?: string[];
+	    skillId?: string;
+	    configJSON?: string;
+	    installCommand?: string;
+	    readmeSource?: string;
+	    peggRequirement?: string;
+	    protocolRequirement?: number;
+	    compatibilityWarnings?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.source = source["source"];
+	        this.url = source["url"];
+	        this.license = source["license"];
+	        this.official = source["official"];
+	        this.tags = source["tags"];
+	        this.version = source["version"];
+	        this.transport = source["transport"];
+	        this.transports = source["transports"];
+	        this.capabilities = source["capabilities"];
+	        this.platforms = source["platforms"];
+	        this.repository = source["repository"];
+	        this.homepage = source["homepage"];
+	        this.requiredEnv = source["requiredEnv"];
+	        this.skillId = source["skillId"];
+	        this.configJSON = source["configJSON"];
+	        this.installCommand = source["installCommand"];
+	        this.readmeSource = source["readmeSource"];
+	        this.peggRequirement = source["peggRequirement"];
+	        this.protocolRequirement = source["protocolRequirement"];
+	        this.compatibilityWarnings = source["compatibilityWarnings"];
+	    }
+	}
+	export class CatalogInstalled {
+	    skills: string[];
+	    mcp: string[];
+	    plugins: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogInstalled(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.skills = source["skills"];
+	        this.mcp = source["mcp"];
+	        this.plugins = source["plugins"];
+	    }
+	}
+	export class CatalogItem {
+	    kind: string;
+	    id: string;
+	    name: string;
+	    description?: string;
+	    source: string;
+	    url?: string;
+	    license?: string;
+	    official: boolean;
+	    tags?: string[];
+	    version?: string;
+	    transport?: string;
+	    transports?: string[];
+	    capabilities?: string[];
+	    platforms?: string[];
+	    repository?: string;
+	    homepage?: string;
+	    requiredEnv?: string[];
+	    skillId?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.source = source["source"];
+	        this.url = source["url"];
+	        this.license = source["license"];
+	        this.official = source["official"];
+	        this.tags = source["tags"];
+	        this.version = source["version"];
+	        this.transport = source["transport"];
+	        this.transports = source["transports"];
+	        this.capabilities = source["capabilities"];
+	        this.platforms = source["platforms"];
+	        this.repository = source["repository"];
+	        this.homepage = source["homepage"];
+	        this.requiredEnv = source["requiredEnv"];
+	        this.skillId = source["skillId"];
+	    }
+	}
+	export class CatalogMutationResult {
+	    name?: string;
+	    path?: string;
+	    restartRequired?: boolean;
+	    commands?: acpclient.SlashCommand[];
+	    warnings?: string[];
+	    catalogVersion?: string;
+	    installedVersion?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogMutationResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.restartRequired = source["restartRequired"];
+	        this.commands = this.convertValues(source["commands"], acpclient.SlashCommand);
+	        this.warnings = source["warnings"];
+	        this.catalogVersion = source["catalogVersion"];
+	        this.installedVersion = source["installedVersion"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class CatalogSearchResult {
+	    items: CatalogItem[];
+	    nextCursor?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogSearchResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], CatalogItem);
+	        this.nextCursor = source["nextCursor"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class CompactionSettings {
 	    enabled: boolean;
 	    strategies: string[];
@@ -675,6 +869,7 @@ export namespace main {
 	}
 	export class MCPServerInput {
 	    name: string;
+	    type: string;
 	    command: string;
 	    args: string[];
 	    env: Record<string, string>;
@@ -688,6 +883,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
+	        this.type = source["type"];
 	        this.command = source["command"];
 	        this.args = source["args"];
 	        this.env = source["env"];

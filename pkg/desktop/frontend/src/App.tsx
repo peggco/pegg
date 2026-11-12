@@ -25,6 +25,7 @@ import {
   setServerStatus,
   setSidebarCollapsed,
   startNewChat,
+  toggleCatalog,
   togglePalette,
   toggleSettings,
 } from './state/actions';
@@ -34,7 +35,7 @@ import { Composer } from './components/Composer';
 import { Onboarding, StatusBanner, Toasts, Welcome } from './components/Welcome';
 import { Settings } from './components/Settings';
 import { Sidebar } from './components/Sidebar';
-import { SkillsModal } from './components/SkillsModal';
+import { CatalogModal } from './components/CatalogModal';
 import { Thread } from './components/Thread';
 import { TitleBar } from './components/TitleBar';
 
@@ -124,6 +125,7 @@ export function App() {
       if (event.key === 'Escape') {
         const state = store.get();
         if (state.paletteOpen) togglePalette(false);
+        else if (state.catalogOpen) toggleCatalog(false);
         else if (state.settingsOpen) toggleSettings(false);
         else if (state.modelsOpen) store.set({ modelsOpen: false });
         return;
@@ -209,7 +211,7 @@ export function App() {
         </main>
       </div>
       <Settings />
-      <SkillsModal />
+      <CatalogModal />
       <CommandPalette />
       <Toasts />
     </div>

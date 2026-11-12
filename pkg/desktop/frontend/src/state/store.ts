@@ -4,6 +4,7 @@ import type {
   BinaryProgress,
   BinaryStatus,
   BootstrapInfo,
+  CatalogKind,
   ModelEntry,
   Prefs,
   Recent,
@@ -45,7 +46,8 @@ export interface UIState {
   subagentView: string | null;
   sidebarCollapsed: boolean;
   settingsOpen: boolean;
-  skillsOpen: boolean;
+  catalogOpen: boolean;
+  catalogTab: CatalogKind;
   paletteOpen: boolean;
   modelsOpen: boolean;
   composerFocus: number;
@@ -93,7 +95,8 @@ export const initialState: UIState = {
   subagentView: null,
   sidebarCollapsed: false,
   settingsOpen: false,
-  skillsOpen: false,
+  catalogOpen: false,
+  catalogTab: 'skills',
   paletteOpen: false,
   modelsOpen: false,
   composerFocus: 0,

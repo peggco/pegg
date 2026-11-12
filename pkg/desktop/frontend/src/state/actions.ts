@@ -3,6 +3,11 @@ import type {
   AcpStatus,
   Attachment,
   BinaryProgress,
+  CatalogEntry,
+  CatalogInstalled,
+  CatalogKind,
+  CatalogMutationResult,
+  CatalogSearchResult,
   ModelEntry,
   HubSearchResult,
   HubSkill,
@@ -748,8 +753,65 @@ export function toggleSettings(open?: boolean): void {
   store.set((s) => ({ settingsOpen: open ?? !s.settingsOpen }));
 }
 
-export function toggleSkills(open?: boolean): void {
-  store.set((s) => ({ skillsOpen: open ?? !s.skillsOpen }));
+export function toggleCatalog(open?: boolean, tab?: CatalogKind): void {
+  store.set((s) => ({
+    catalogOpen: open ?? !s.catalogOpen,
+    catalogTab: tab ?? s.catalogTab,
+  }));
+}
+
+export function setCatalogTab(tab: CatalogKind): void {
+  store.set({ catalogTab: tab });
+}
+
+export async function searchCatalog(
+  kind: CatalogKind,
+  query: string,
+  filter: string,
+  limit = 24,
+  cursor = 0,
+): Promise<CatalogSearchResult> {
+  return api.SearchCatalog(kind, query, filter, limit, cursor);
+}
+
+export async function fetchCatalogEntry(kind: CatalogKind, id: string): Promise<CatalogEntry> {
+  return api.GetCatalogEntry(kind, id);
+}
+
+export async function fetchCatalogReadme(kind: CatalogKind, id: string): Promise<string> {
+  return api.CatalogReadme(kind, id);
+}
+
+export async function fetchCatalogInstalled(): Promise<CatalogInstalled> {
+  return api.CatalogInstalled();
+}
+
+function applyCatalogMutation(res: CatalogMutationResult, label: string): void {
+  applySkillCommands(res.commands);
+  store.toast('success', `Installed ${res.name || label}`);
+  for (const warning of res.warnings ?? []) {
+    store.toast('warn', warning);
+  }
+  if (res.restartRequired) {
+    store.toast('warn', 'Restart Pegg Desktop to activate the change');
+  }
+}
+
+export async function installCatalogMCP(
+  id: string,
+  env: Record<string, string>,
+  headers: Record<string, string>,
+  scope: string,
+): Promise<CatalogMutationResult> {
+  const res = await api.InstallCatalogMCP(id, env, headers, scope);
+  applyCatalogMutation(res, id);
+  return res;
+}
+
+export async function installCatalogPlugin(source: string, name: string): Promise<CatalogMutationResult> {
+  const res = await api.InstallCatalogPlugin(source, name);
+  applyCatalogMutation(res, name || source);
+  return res;
 }
 
 export async function searchHubSkills(query: string, limit = 20): Promise<HubSkill[]> {

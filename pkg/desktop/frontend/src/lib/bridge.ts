@@ -30,6 +30,10 @@ import type {
   HubSearchResult,
   HubSkill,
   SkillMutationResult,
+  CatalogEntry,
+  CatalogInstalled,
+  CatalogMutationResult,
+  CatalogSearchResult,
 } from '../types';
 
 export interface NewSessionInput {
@@ -164,6 +168,23 @@ const App = GoApp as unknown as {
   SkillReadme(source: string): Promise<string>;
   InstallHubSkill(source: string, skillId: string, scope: string): Promise<SkillMutationResult>;
   ReloadSkills(): Promise<SlashCommand[]>;
+  SearchCatalog(
+    kind: string,
+    query: string,
+    filter: string,
+    limit: number,
+    cursor: number,
+  ): Promise<CatalogSearchResult>;
+  GetCatalogEntry(kind: string, id: string): Promise<CatalogEntry>;
+  CatalogReadme(kind: string, id: string): Promise<string>;
+  InstallCatalogMCP(
+    id: string,
+    env: Record<string, string>,
+    headers: Record<string, string>,
+    scope: string,
+  ): Promise<CatalogMutationResult>;
+  InstallCatalogPlugin(source: string, name: string): Promise<CatalogMutationResult>;
+  CatalogInstalled(): Promise<CatalogInstalled>;
 };
 
 export const api = App;
