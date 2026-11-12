@@ -55,7 +55,19 @@ export function Thread() {
   rowsRef.current = rows;
   const [measureBatch, setMeasureBatch] = useState<{ start: number; end: number } | null>(null);
 
-  const toggleGroup = (id: string) => setOpenGroups((current) => toggleId(current, id));
+  const groupOpen = (id: string, key: string) => openGroups.has(id) || openGroups.has(key);
+  const toggleGroup = (id: string, key: string) =>
+    setOpenGroups((current) => {
+      const open = current.has(id) || current.has(key);
+      const next = new Set(current);
+      next.delete(id);
+      next.delete(key);
+      if (!open) {
+        next.add(id);
+        next.add(key);
+      }
+      return next;
+    });
   const toggleRow = (id: string) => setOpenRows((current) => toggleId(current, id));
 
   const virtualizer = useVirtualizer({
@@ -124,7 +136,7 @@ export function Thread() {
     if (!atEndRef.current) return;
     const el = scrollerRef.current;
     if (el) writeScrollTop(el.scrollHeight);
-  }, [plan, permissions, asks, running, scrollerRef, atEndRef, writeScrollTop]);
+  }, [plan, permissions, asks, running, rows, totalSize, scrollerRef, atEndRef, writeScrollTop]);
 
   useEffect(() => {
     setOpenGroups(new Set());
@@ -236,10 +248,11 @@ export function Thread() {
                   {row.kind === 'activity' ? (
                     <ActivityGroup
                       group={row}
-                      open={openGroups.has(row.key)}
-                      onToggle={() => toggleGroup(row.key)}
+                      open={groupOpen(row.id, row.key)}
+                      onToggle={() => toggleGroup(row.id, row.key)}
                       openRows={openRows}
                       onToggleRow={toggleRow}
+                      active={row.key === activeGroupKey}
                     />
                   ) : (
                     <Item
@@ -295,8 +308,8 @@ export function Thread() {
                     {row.kind === 'activity' ? (
                       <ActivityGroup
                         group={row}
-                        open={openGroups.has(row.key)}
-                        onToggle={() => toggleGroup(row.key)}
+                        open={groupOpen(row.id, row.key)}
+                        onToggle={() => toggleGroup(row.id, row.key)}
                         openRows={openRows}
                         onToggleRow={toggleRow}
                         active={row.key === activeGroupKey}
