@@ -85,6 +85,21 @@ func (c *Connector) handleMCPTools(_ context.Context, req *Request) (any, error)
 	return map[string]any{"server": p.Name, "tools": out}, nil
 }
 
+func (c *Connector) reloadMCPServers() {
+	if c.deps.MCP == nil {
+		return
+	}
+	project, err := mcp.LoadProjectServers(c.workspace())
+	if err != nil {
+		return
+	}
+	var global map[string]config.MCPServerConfig
+	if c.deps.Config != nil {
+		global = c.deps.Config.MCPServers
+	}
+	c.deps.MCP.Reload(mcp.MergeServers(global, project))
+}
+
 type mcpUpsertParams struct {
 	Name    string            `json:"name"`
 	Type    string            `json:"type"`

@@ -12,7 +12,7 @@ tools.
 
 === "Global"
 
-    Add servers to the `mcp_servers` map in `~/.peggco/pegg.json`:
+    Add servers to the `mcp_servers` map in `~/.pegg/pegg.json`:
 
     ```json
     {
@@ -120,7 +120,13 @@ transport. Pegg uses protocol version `2025-06-18` for this transport and:
    between servers.
 3. A server that fails to connect is logged as a warning and skipped; the rest of
    Pegg continues normally.
-4. On shutdown, every MCP tool is unregistered and every connection is closed.
+4. Before resolving tools, an agent run waits up to 10 seconds for in-flight
+   server connections, so tools from slow servers are included in the first
+   request. The agent also re-syncs discovered tools before every model turn, so a
+   server that finishes connecting mid-run becomes available on the next turn.
+5. Adding, changing, or removing a server through the settings API reconnects the
+   affected server immediately; no restart is required.
+6. On shutdown, every MCP tool is unregistered and every connection is closed.
 
 Streamable HTTP servers use MCP protocol version `2025-06-18`; stdio and legacy
 SSE servers use `2024-11-05`. Pegg accepts the version returned by the server
@@ -175,6 +181,47 @@ pegg mcp add --global --name legacy --transport sse \
 
 The interactive flow offers common header presets: `Authorization`, `X-API-Key`,
 `Cookie`, and `User-Agent`.
+
+### Installing from the catalog
+
+The [Pegg catalog](../catalog.md) lists vetted MCP servers. Search, inspect, and
+install them without assembling the command by hand:
+
+```bash
+pegg mcp search github
+pegg mcp search github --official --limit 5
+pegg mcp info github
+
+# Global config (default)
+pegg mcp install github --env GITHUB_TOKEN=ghp_...
+
+# Project .mcp.json
+pegg mcp install github --project --name gh --env GITHUB_TOKEN=ghp_...
+```
+
+| Flag | Description |
+|---|---|
+| `--global` | Write to `~/.pegg/pegg.json` (default) |
+| `--project` | Write to `.mcp.json` in the current directory |
+| `--name` | Server name; defaults to the catalog id |
+| `--env KEY=VALUE` | Value for a `${KEY}` placeholder (repeatable) |
+| `--header KEY=VALUE` | Override a header on a remote server (repeatable) |
+| `--dry-run` | Print the config JSON without writing |
+| `--yes` | Skip the interactive confirmation |
+
+Catalog entries may use `${VAR}` placeholders in the command, arguments,
+environment values, URL, and headers. `mcp install` resolves them in this order:
+
+1. `--env KEY=VALUE`
+2. The process environment
+3. A masked prompt when stdin is a terminal
+
+On a non-interactive terminal, missing values produce an error listing the exact
+keys and the flags to use. Values are never printed; `--dry-run` redacts resolved
+secrets back to their `${VAR}` placeholders.
+
+Set `PEGG_CATALOG_API` to use a different catalog endpoint (for example a local hub
+API). `PEGG_SKILLS_API` is still honored as a fallback.
 
 ### Removing a server
 

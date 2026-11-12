@@ -13,6 +13,11 @@ type PermissionAware interface {
 	IsPermissionError(err error) bool
 }
 
+type Dynamic interface {
+	Tool
+	IsDynamic() bool
+}
+
 type Spec struct {
 	name            string
 	description     string

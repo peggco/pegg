@@ -50,7 +50,7 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 	mi := expandInput(input)
 	input = mi.Text
 	messageText := a.messageWithAttachments(input)
-	if err := a.resolveToolNames(); err != nil {
+	if err := a.resolveToolNames(ctx); err != nil {
 		return nil, a.fail(ctx, err)
 	}
 	if err := a.resolveMiddlewareNames(); err != nil {
@@ -115,7 +115,7 @@ func (a *Agent) resume(ctx context.Context, input string, history []llm.Message,
 	mi := expandInput(input)
 	input = mi.Text
 	messageText := a.messageWithAttachments(input)
-	if err := a.resolveToolNames(); err != nil {
+	if err := a.resolveToolNames(ctx); err != nil {
 		return nil, a.fail(ctx, err)
 	}
 	if err := a.resolveMiddlewareNames(); err != nil {
@@ -194,6 +194,7 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 		}
 		state.iterations++
 		state.finishReason = ""
+		a.syncDynamicTools()
 		msg, calls, err := a.iterate(ctx, state, prov)
 		if err != nil {
 			if msg.Role == llm.RoleAssistant && !emptyAssistantMessage(msg) {

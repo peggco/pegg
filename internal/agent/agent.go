@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/peggco/pegg/internal/agent/middleware"
@@ -19,6 +20,7 @@ import (
 const (
 	DefaultMaxIterations = 150
 	UnlimitedIterations  = -1
+	dynamicToolWait      = 10 * time.Second
 )
 
 type Option func(*Agent)
@@ -387,7 +389,7 @@ func (a *Agent) ContinueStream(ctx context.Context, history []llm.Message, handl
 	if a.Provider == nil {
 		return nil, a.fail(ctx, ErrNoProvider)
 	}
-	if err := a.resolveToolNames(); err != nil {
+	if err := a.resolveToolNames(ctx); err != nil {
 		return nil, a.fail(ctx, err)
 	}
 	if err := a.resolveMiddlewareNames(); err != nil {
@@ -428,7 +430,12 @@ func (a *Agent) debugf(format string, args ...any) {
 	a.log.Fdebug(format, args...)
 }
 
-func (a *Agent) resolveToolNames() error {
+func (a *Agent) resolveToolNames(ctx context.Context) error {
+	if ctx != nil {
+		waitCtx, cancel := context.WithTimeout(ctx, dynamicToolWait)
+		_ = tools.WaitDynamicReady(waitCtx)
+		cancel()
+	}
 	for _, name := range a.ToolNames {
 		if _, ok := a.Tools.Get(name); ok {
 			continue
@@ -439,7 +446,30 @@ func (a *Agent) resolveToolNames() error {
 		}
 		_ = a.Tools.Register(t)
 	}
+	a.syncDynamicTools()
 	return nil
+}
+
+func (a *Agent) syncDynamicTools() {
+	active := make(map[string]bool)
+	for _, t := range tools.List() {
+		dynamic, ok := t.(tool.Dynamic)
+		if !ok || !dynamic.IsDynamic() {
+			continue
+		}
+		active[t.Name()] = true
+		if _, exists := a.Tools.Get(t.Name()); exists {
+			a.Tools.Unregister(t.Name())
+		}
+		_ = a.Tools.Register(t)
+	}
+	for _, t := range a.Tools.List() {
+		dynamic, ok := t.(tool.Dynamic)
+		if !ok || !dynamic.IsDynamic() || active[t.Name()] {
+			continue
+		}
+		a.Tools.Unregister(t.Name())
+	}
 }
 
 func (a *Agent) resolveMiddlewareNames() error {
