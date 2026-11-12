@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '../state/chat';
-import { activityCounts, buildHistoryRows, formatActivityTime } from './activity';
+import { activeActivityKey, activityCounts, buildHistoryRows, formatActivityTime } from './activity';
 
 function user(id: string, createdAt = 1): ChatItem {
   return { kind: 'user', id, text: 'hi', createdAt };
@@ -71,6 +71,16 @@ describe('buildHistoryRows', () => {
     }
   });
 
+  it('keeps the trailing activity row key stable when new items append', () => {
+    const before = buildHistoryRows([reasoning('r1')], 'compact');
+    const after = buildHistoryRows([reasoning('r1'), tool('t1', 'execute', 'bash')], 'compact');
+    expect(before[0].kind === 'activity' && after[0].kind === 'activity').toBe(true);
+    if (before[0].kind === 'activity' && after[0].kind === 'activity') {
+      expect(after[0].items).toHaveLength(2);
+      expect(after[0].key).toBe(before[0].key);
+    }
+  });
+
   it('breaks groups around assistant, user, notice and task tools', () => {
     const items = [
       reasoning('r1'),
@@ -90,6 +100,29 @@ describe('buildHistoryRows', () => {
     expect(buildHistoryRows([], 'compact')).toEqual([]);
     const items = [tool('t1', 'execute', 'bash')];
     expect(buildHistoryRows(items, 'compact')[0].key).toBe('activity:t1');
+  });
+});
+
+describe('activeActivityKey', () => {
+  it('returns null when the agent is not running', () => {
+    const rows = buildHistoryRows([reasoning('r1'), tool('t1', 'execute', 'bash')], 'compact');
+    expect(activeActivityKey(rows, false)).toBeNull();
+  });
+
+  it('returns null when there are no rows', () => {
+    expect(activeActivityKey([], true)).toBeNull();
+  });
+
+  it('returns the trailing activity key while running', () => {
+    const rows = buildHistoryRows([user('u1'), reasoning('r1'), tool('t1', 'execute', 'bash')], 'compact');
+    expect(rows[rows.length - 1].kind).toBe('activity');
+    expect(activeActivityKey(rows, true)).toBe(rows[rows.length - 1].key);
+  });
+
+  it('returns null when the trailing row is an assistant item', () => {
+    const rows = buildHistoryRows([reasoning('r1'), tool('t1', 'execute', 'bash'), assistant('a1')], 'compact');
+    expect(rows[rows.length - 1].kind).toBe('item');
+    expect(activeActivityKey(rows, true)).toBeNull();
   });
 });
 

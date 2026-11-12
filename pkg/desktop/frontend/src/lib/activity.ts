@@ -30,7 +30,7 @@ export function buildHistoryRows(items: ChatItem[], mode: ChatHistoryMode): Hist
   const flush = (nextId?: string) => {
     if (!group.length) return;
     const id = `activity:${group[0].id}`;
-    const anchor = nextId ?? group[group.length - 1].id;
+    const anchor = nextId ?? group[0].id;
     rows.push({
       kind: 'activity',
       key: `activity:${anchor}`,
@@ -51,6 +51,12 @@ export function buildHistoryRows(items: ChatItem[], mode: ChatHistoryMode): Hist
   }
   flush();
   return rows;
+}
+
+export function activeActivityKey(rows: HistoryRow[], running: boolean): string | null {
+  if (!running || rows.length === 0) return null;
+  const last = rows[rows.length - 1];
+  return last.kind === 'activity' ? last.key : null;
 }
 
 export function activityCounts(items: ChatItem[]): ActivityCounts {

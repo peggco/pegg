@@ -19,7 +19,7 @@ import { closeSubagent, forkMessage, loadOlderMessages, openSubagent, revertMess
 import { store, useStore } from '../state/store';
 import { useT } from '../lib/i18n';
 import type { ChatItem, ToolState } from '../state/chat';
-import { activityCounts, buildHistoryRows, formatActivityTime, type ActivityCounts, type HistoryRow } from '../lib/activity';
+import { activeActivityKey, activityCounts, buildHistoryRows, formatActivityTime, type ActivityCounts, type HistoryRow } from '../lib/activity';
 import { ToolCard, ToolIcon, bashCommand, classify, computeRows, outputText, writeContent } from './ToolViews';
 import { AskCard, PermissionCard, PlanCard, SubagentCard } from './Cards';
 import { TaskCard } from './TaskCard';
@@ -41,6 +41,7 @@ export function Thread() {
   const items = activeRun?.items ?? mainItems;
   const historyMode = useStore((s) => s.prefs.chatHistoryMode);
   const rows = useMemo(() => buildHistoryRows(items, historyMode), [items, historyMode]);
+  const activeGroupKey = activeActivityKey(rows, activeAgent ? activeRun?.status === 'running' : running);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
   const [copied, setCopied] = useState<string | null>(null);
@@ -298,6 +299,7 @@ export function Thread() {
                         onToggle={() => toggleGroup(row.key)}
                         openRows={openRows}
                         onToggleRow={toggleRow}
+                        active={row.key === activeGroupKey}
                       />
                     ) : (
                       <Item
@@ -544,12 +546,14 @@ function activitySummary(counts: ActivityCounts, t: (key: string, vars?: Record<
 function ActivityGroup({
   group,
   open,
+  active,
   onToggle,
   openRows,
   onToggleRow,
 }: {
   group: Extract<HistoryRow, { kind: 'activity' }>;
   open: boolean;
+  active?: boolean;
   onToggle: () => void;
   openRows: Set<string>;
   onToggleRow: (id: string) => void;
@@ -558,13 +562,15 @@ function ActivityGroup({
   const language = useStore((s) => s.language);
   const counts = activityCounts(group.items);
   return (
-    <div className={`activity${open ? ' open' : ''}`}>
+    <div className={`activity${open ? ' open' : ''}${active ? ' is-active' : ''}`}>
       <button className="activity-head" onClick={onToggle} aria-expanded={open}>
         <span className="activity-head-icon">
           <Wrench size={13} />
         </span>
-        <span className="activity-summary">{activitySummary(counts, t)}</span>
-        <span className="activity-time">{formatActivityTime(group.createdAt, language)}</span>
+        <span className="activity-text">
+          <span className="activity-summary">{activitySummary(counts, t)}</span>
+          <span className="activity-time">{formatActivityTime(group.createdAt, language)}</span>
+        </span>
         <ChevronRight size={13} className="activity-chevron" />
       </button>
       {open ? (
