@@ -16,6 +16,7 @@ import (
 type mcpTab struct {
 	settings *Settings
 	list     *components.List
+	version  uint64
 }
 
 func newMCP(s *Settings) *mcpTab {
@@ -24,7 +25,15 @@ func newMCP(s *Settings) *mcpTab {
 	return t
 }
 
+func (t *mcpTab) mcpVersion() uint64 {
+	if t.settings.deps.MCP == nil {
+		return 0
+	}
+	return t.settings.deps.MCP.Version()
+}
+
 func (t *mcpTab) rebuild() {
+	defer func() { t.version = t.mcpVersion() }()
 	var (
 		items   []components.ListItem
 		servers map[string]config.MCPServerConfig
@@ -49,8 +58,12 @@ func (t *mcpTab) rebuild() {
 	for _, name := range names {
 		toolCount := len(mcp.ToolsForServer(name))
 		status := i18n.T("settings.mcp.notConnected")
-		if t.settings.deps.MCP != nil && t.settings.deps.MCP.Clients()[name] != nil {
-			status = i18n.T("settings.mcp.connected")
+		if t.settings.deps.MCP != nil {
+			if t.settings.deps.MCP.Clients()[name] != nil {
+				status = i18n.T("settings.mcp.connected")
+			} else if t.settings.deps.MCP.Pending() > 0 {
+				status = i18n.T("settings.mcp.connecting")
+			}
 		}
 		items = append(items, components.ListItem{
 			Label:  name,

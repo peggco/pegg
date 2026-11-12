@@ -273,6 +273,7 @@ var en = map[string]string{
 	"settings.mcp.serversTitle": "MCP servers",
 	"settings.mcp.failedLoad":   "failed to load servers",
 	"settings.mcp.notConnected": "not connected",
+	"settings.mcp.connecting":   "connecting",
 	"settings.mcp.connected":    "connected",
 	"settings.mcp.toolsStatus":  "%s tools · %s",
 	"settings.mcp.noServers":    "(no MCP servers configured)",

@@ -273,6 +273,7 @@ var tr = map[string]string{
 	"settings.mcp.serversTitle": "MCP sunucuları",
 	"settings.mcp.failedLoad":   "sunucular yüklenemedi",
 	"settings.mcp.notConnected": "bağlı değil",
+	"settings.mcp.connecting":   "bağlanıyor",
 	"settings.mcp.connected":    "bağlı",
 	"settings.mcp.toolsStatus":  "%s araç · %s",
 	"settings.mcp.noServers":    "(yapılandırılmış MCP sunucusu yok)",
