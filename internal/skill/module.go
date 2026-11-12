@@ -49,6 +49,9 @@ func loadAll(log *logger.Logger, projectDir string) error {
 		dirs = append(dirs, config.ProjectReadPaths("skills")...)
 	}
 	resetRegistry()
+	for _, s := range dynamicSnapshot() {
+		registerOrReplace(s)
+	}
 	for _, dir := range dirs {
 		if err := LoadDir(dir, dir); err != nil {
 			warn(log, "skill: skip %s: %v", dir, err)

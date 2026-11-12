@@ -18,6 +18,7 @@ type frontmatter struct {
 	Compatibility string            `yaml:"compatibility"`
 	Metadata      map[string]string `yaml:"metadata"`
 	AllowedTools  string            `yaml:"allowed-tools"`
+	Tools         string            `yaml:"tools"`
 	WhenToUse     string            `yaml:"when_to_use"`
 	ArgumentHint  string            `yaml:"argument-hint"`
 	Arguments     []string          `yaml:"arguments"`

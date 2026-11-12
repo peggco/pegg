@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 	}
 	testMgr = session.NewManager(store, testBus, logger.New(logger.LevelDebug, discardHandler{}))
 	subagent.SubAgentTools(testMgr)
-	LoadSkillTool(testMgr)
+	LoadSkillTool(nil, testMgr)
 	os.Exit(m.Run())
 }
 
@@ -146,7 +146,7 @@ func TestLoadSkillMissingName(t *testing.T) {
 }
 
 func TestLoadSkillNotFound(t *testing.T) {
-	tt := loadSkillTool(testMgr, newStubHubClient(t))
+	tt := loadSkillTool(nil, testMgr, newStubHubClient(t))
 	if _, err := tt.Execute(context.Background(), `{"name": "nonexistent"}`); err == nil {
 		t.Error("expected error for missing skill")
 	}
@@ -300,7 +300,7 @@ func TestLoadSkillFromHub(t *testing.T) {
 
 	items := `[{"name":"hub-docx","skillId":"hub-docx","source":"acme/skills","url":"https://github.com/acme/skills","isOfficial":true}]`
 	server := newHubTestServer(t, items, "hub-docx", "hub-docx", "# Word Documents\nUse the docx skill.")
-	tt := loadSkillTool(testMgr, testHubClient(server))
+	tt := loadSkillTool(nil, testMgr, testHubClient(server))
 
 	out, err := tt.Execute(context.Background(), `{"name":"hub-docx"}`)
 	if err != nil {
@@ -323,7 +323,7 @@ func TestLoadSkillFromHubSourceDisambiguates(t *testing.T) {
 
 	items := `[{"name":"dup-skill","skillId":"dup-skill","source":"acme/skills"},{"name":"dup-skill","skillId":"dup-skill","source":"other/skills"}]`
 	server := newHubTestServer(t, items, "dup-skill", "dup-skill", "# Dup\nFrom acme.")
-	tt := loadSkillTool(testMgr, testHubClient(server))
+	tt := loadSkillTool(nil, testMgr, testHubClient(server))
 
 	_, err := tt.Execute(context.Background(), `{"name":"dup-skill"}`)
 	if err == nil || !strings.Contains(err.Error(), "multiple hub skills") {
@@ -343,7 +343,7 @@ func TestLoadSkillFromHubRef(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	server := newHubTestServer(t, `[]`, "ref-docx", "ref-docx", "# Ref\nLoaded by reference.")
-	tt := loadSkillTool(testMgr, testHubClient(server))
+	tt := loadSkillTool(nil, testMgr, testHubClient(server))
 
 	out, err := tt.Execute(context.Background(), `{"name":"acme/skills/ref-docx"}`)
 	if err != nil {
@@ -359,7 +359,7 @@ func TestLoadSkillFromHubNoExactMatch(t *testing.T) {
 
 	items := `[{"name":"something-else","skillId":"something-else","source":"acme/skills"}]`
 	server := newHubTestServer(t, items, "something-else", "something-else", "# Other\nNot a match.")
-	tt := loadSkillTool(testMgr, testHubClient(server))
+	tt := loadSkillTool(nil, testMgr, testHubClient(server))
 
 	_, err := tt.Execute(context.Background(), `{"name":"docx"}`)
 	if err == nil || !strings.Contains(err.Error(), "candidates") {

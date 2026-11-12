@@ -303,7 +303,7 @@ func newRunTestCLI(t *testing.T) (*CLI, *config.Config, *llm.Manager) {
 	ask.AskTool()
 	web.WebTools(fs)
 	searchskill.SearchSkillTool()
-	loadskill.LoadSkillTool(sess)
+	loadskill.LoadSkillTool(nil, sess)
 	plan.PlanTools(fs)
 	schedule.ScheduleTools(nil)
 	_ = memory.RegisterTools(nil)

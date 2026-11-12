@@ -160,6 +160,7 @@ func subAgentTool() tool.Tool {
 					sub.RouterManaged = parent.RouterManaged
 					sub.ParentAgentID = parent.ID
 					sub.DisplayName = sa.Name
+					sub.InheritBundles(parent)
 
 					var history []llm.Message
 					if sa.SessionID != "" && sessionReader != nil {
@@ -231,6 +232,7 @@ func subAgentTool() tool.Tool {
 				sub.RouterManaged = parent.RouterManaged
 				sub.ParentAgentID = parent.ID
 				sub.DisplayName = sa.Name
+				sub.InheritBundles(parent)
 				if parent.Bus != nil {
 					sub.Bus = parent.Bus
 					store.setAgentID(sa.Name, sub.ID)

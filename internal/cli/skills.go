@@ -18,6 +18,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/skill"
 	"github.com/peggco/pegg/internal/skillhub"
 )
 
@@ -277,6 +278,23 @@ func installedSkills(project, global bool) ([]skillhub.Installed, error) {
 	var out []skillhub.Installed
 	for _, item := range dirs {
 		out = append(out, skillhub.ListInstalled(item.dir, item.scope)...)
+	}
+	seen := make(map[string]bool, len(out))
+	for _, item := range out {
+		seen[item.Name] = true
+	}
+	for _, registered := range skill.List() {
+		if !strings.HasPrefix(registered.Source, "plugin:") || seen[registered.Name] {
+			continue
+		}
+		out = append(out, skillhub.Installed{
+			Name:        registered.Name,
+			Description: registered.Description,
+			Source:      registered.Source,
+			Path:        registered.Path,
+			Scope:       "plugin",
+		})
+		seen[registered.Name] = true
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Scope != out[j].Scope {

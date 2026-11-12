@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -10,6 +11,8 @@ import (
 	agentmw "github.com/peggco/pegg/internal/agent/middleware"
 	"github.com/peggco/pegg/internal/llm"
 )
+
+var ErrRepetitionLoop = errors.New("repetition loop detected")
 
 type responseRecord struct {
 	content  string
@@ -27,8 +30,10 @@ type loopState struct {
 type loopDetector struct {
 	agentmw.BaseMiddleware
 
-	mu     sync.Mutex
-	states map[string]*loopState
+	mu        sync.Mutex
+	states    map[string]*loopState
+	content   repetitionConfig
+	reasoning repetitionConfig
 }
 
 const (
@@ -38,7 +43,21 @@ const (
 )
 
 func NewLoopDetector() *loopDetector {
-	return &loopDetector{states: make(map[string]*loopState)}
+	return &loopDetector{
+		states: make(map[string]*loopState),
+		reasoning: repetitionConfig{
+			MinUnitChars: defaultLoopMinUnitChars,
+			MaxUnitChars: defaultLoopMaxUnitChars,
+			MinRepeats:   defaultLoopRepeatThreshold,
+			WindowChars:  defaultLoopWindowChars,
+		},
+		content: repetitionConfig{
+			MinUnitChars: defaultLoopMinUnitChars,
+			MaxUnitChars: defaultLoopMaxUnitChars,
+			MinRepeats:   defaultLoopRepeatThreshold + contentRepeatExtra,
+			WindowChars:  defaultLoopWindowChars,
+		},
+	}
 }
 
 func loopKey(ctx context.Context) string {
@@ -92,6 +111,26 @@ func (l *loopDetector) BeforeLLM(ctx context.Context, req *llm.Request) error {
 	return nil
 }
 
+func (l *loopDetector) InvokeLLMStream(ctx context.Context, req *llm.Request, handler llm.StreamHandler, next agentmw.LLMStreamInvoker) error {
+	content := newRepetitionDetector("content", l.content)
+	reasoning := newRepetitionDetector("thinking", l.reasoning)
+
+	wrapped := func(chunk llm.StreamChunk) error {
+		if chunk.Reasoning != "" {
+			if hit, ok := reasoning.Append(chunk.Reasoning); ok {
+				return repetitionError(hit)
+			}
+		}
+		if chunk.Content != "" {
+			if hit, ok := content.Append(chunk.Content); ok {
+				return repetitionError(hit)
+			}
+		}
+		return handler(chunk)
+	}
+	return next(ctx, req, wrapped)
+}
+
 func (l *loopDetector) AfterLLM(ctx context.Context, _ *llm.Request, resp *llm.Response) error {
 	st := l.stateFor(loopKey(ctx))
 
@@ -123,6 +162,13 @@ func (l *loopDetector) AfterLLM(ctx context.Context, _ *llm.Request, resp *llm.R
 		st.recentResponses = st.recentResponses[1:]
 	}
 
+	if hit, ok := detectRepeatedText("thinking", resp.GetReasoning(), l.reasoning); ok {
+		return repetitionError(hit)
+	}
+	if hit, ok := detectRepeatedText("content", resp.GetContent(), l.content); ok {
+		return repetitionError(hit)
+	}
+
 	if len(sigs) > 0 {
 		if reason := detectResponseLoop(st.recentResponses); reason != "" {
 			st.loopDetected = true
@@ -142,6 +188,10 @@ func (l *loopDetector) AfterLLM(ctx context.Context, _ *llm.Request, resp *llm.R
 	}
 
 	return nil
+}
+
+func repetitionError(hit repetitionHit) error {
+	return fmt.Errorf("%w: %s", ErrRepetitionLoop, formatRepetitionHit(hit))
 }
 
 func detectLoop(window []string, label string) string {

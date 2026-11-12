@@ -2,7 +2,7 @@ package config
 
 const (
 	AppName    = "pegg"
-	AppVersion = "0.2.3"
+	AppVersion = "0.2.4"
 	AppUrl     = "https://pegg.dev"
 	AppApiUrl  = "https://api.pegg.dev"
 

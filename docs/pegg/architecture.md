@@ -304,7 +304,7 @@ flowchart LR
 
 | Middleware | Responsibility |
 |---|---|
-| `loop-detector` | Detects repeated tool calls and breaks loops |
+| `loop-detector` | Detects repeated tool calls and text across turns, and aborts a stream when the same sentence or block repeats inside a single response |
 | `retry` | Retries transient provider failures with backoff |
 | `stall` | Detects silent provider requests and re-issues the same request without surfacing an error |
 | `permission` | Gates sensitive tools (five modes, LLM judge, allow store) |
