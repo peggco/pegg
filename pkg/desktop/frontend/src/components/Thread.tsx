@@ -21,7 +21,7 @@ import { useT } from '../lib/i18n';
 import type { ChatItem, ToolState } from '../state/chat';
 import { activeActivityKey, activityCounts, buildHistoryRows, formatActivityTime, type ActivityCounts, type HistoryRow } from '../lib/activity';
 import { ToolCard, ToolIcon, bashCommand, classify, computeRows, outputText, writeContent } from './ToolViews';
-import { AskCard, PermissionCard, PlanCard, SubagentCard } from './Cards';
+import { PermissionCard, PlanCard, SubagentCard } from './Cards';
 import { TaskCard } from './TaskCard';
 
 export function Thread() {
@@ -34,7 +34,6 @@ export function Thread() {
   const historyOldestSeq = useStore((s) => s.chat.historyOldestSeq);
   const acpId = useStore((s) => s.chat.acpId);
   const permissions = useStore((s) => s.chat.permissions);
-  const asks = useStore((s) => s.chat.asks);
   const subagents = useStore((s) => s.chat.subagents);
   const activeAgent = useStore((s) => s.subagentView);
   const activeRun = activeAgent ? subagents[activeAgent] : undefined;
@@ -136,7 +135,7 @@ export function Thread() {
     if (!atEndRef.current) return;
     const el = scrollerRef.current;
     if (el) writeScrollTop(el.scrollHeight);
-  }, [plan, permissions, asks, running, rows, totalSize, scrollerRef, atEndRef, writeScrollTop]);
+  }, [plan, permissions, running, rows, totalSize, scrollerRef, atEndRef, writeScrollTop]);
 
   useEffect(() => {
     setOpenGroups(new Set());
@@ -341,10 +340,6 @@ export function Thread() {
 
           {permissions.map((permission) => (
             <PermissionCard key={permission.requestId} request={permission} />
-          ))}
-
-          {asks.map((ask) => (
-            <AskCard key={ask.requestId} request={ask} />
           ))}
         </div>
       </div>

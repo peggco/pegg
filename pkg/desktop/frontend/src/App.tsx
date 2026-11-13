@@ -32,6 +32,7 @@ import {
 import { store, useStore } from './state/store';
 import { CommandPalette } from './components/CommandPalette';
 import { Composer } from './components/Composer';
+import { AskPanel } from './components/AskPanel';
 import { Onboarding, StatusBanner, Toasts, Welcome } from './components/Welcome';
 import { Settings } from './components/Settings';
 import { Sidebar } from './components/Sidebar';
@@ -46,6 +47,7 @@ export function App() {
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const prefs = useStore((s) => s.prefs);
   const subagentView = useStore((s) => s.subagentView);
+  const asks = useStore((s) => s.chat.asks);
   const platform = useStore((s) => s.boot?.platform ?? 'linux');
   const nativeTitlebar = useStore((s) => s.boot?.nativeTitlebar ?? false);
   const showTitlebar = platform === 'darwin' || !nativeTitlebar;
@@ -200,10 +202,13 @@ export function App() {
           ) : (
             <>
               <Thread />
-              <div className={`composer-dock${subagentView ? ' hidden' : ''}`}>
-                <Composer compact />
-                <div className="composer-hint">
-                  Type @ for files · / for commands · Pegg can run commands and edit files.
+              <div className={`composer-dock${subagentView && !asks.length ? ' hidden' : ''}`}>
+                {asks.length ? <AskPanel key={asks[0].requestId} ask={asks[0]} /> : null}
+                <div className={asks.length ? 'composer-hidden' : undefined} aria-hidden={asks.length ? true : undefined}>
+                  <Composer compact />
+                  <div className="composer-hint">
+                    Type @ for files · / for commands · Pegg can run commands and edit files.
+                  </div>
                 </div>
               </div>
             </>

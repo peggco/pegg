@@ -100,6 +100,29 @@ If nothing is found, Settings → Agent and the first-run screen offer **Downloa
 - **Models** — the model menu is populated from `_pegg/models`.
 - **Stop** — the send button becomes a stop button while a run is active.
 
+## Agent questions
+
+When the agent calls `askuserquestion`, the composer is replaced by a question
+panel so you can answer without leaving the chat:
+
+- **One question at a time** with a tab chip per question. A chip shows a check
+  once that question is answered; click a chip (or press `Alt`+`←`/`→`) to switch.
+- **Text** questions use an inline textarea (`Enter` continues, `Shift`+`Enter`
+  adds a newline). **Select**, **multiselect**, and **boolean** questions render
+  option buttons.
+- **Custom…** adds a free-form answer to every select/multiselect/boolean
+  question. Selecting it opens an inline input; for multiselect the custom value
+  is appended to the selected options and can be removed from the editor.
+- Multi-question asks finish with a **Review** step that lists every answer;
+  edit any row or submit them all at once. Required answers are validated
+  client-side and the panel jumps to the first missing one.
+- Only one ask is shown at a time; queued asks appear in order as you submit.
+  `Esc` (or the close button) cancels, and the composer returns to its normal
+  state after the answer is sent.
+
+Answers are submitted as a single `answers` map keyed by question ID, matching
+the terminal UI and the ACP `_pegg/ask` protocol.
+
 ## Settings
 
 The desktop settings page mirrors the TUI settings layout, backed by the same `~/.pegg/pegg.json` and project `.pegg/` files:

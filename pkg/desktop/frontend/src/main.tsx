@@ -12,6 +12,7 @@ import './styles/welcome.css';
 import './styles/composer.css';
 import './styles/chat.css';
 import './styles/panels.css';
+import './styles/ask.css';
 import './styles/markdown.css';
 import './styles/overlays.css';
 import './styles/settings.css';
