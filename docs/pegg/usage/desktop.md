@@ -133,7 +133,7 @@ The desktop settings page mirrors the TUI settings layout, backed by the same `~
 - **Permissions** — Auto/Manual/Judge/Recommended presets, per-tool rules, judge provider/model/threshold.
 - **Memory** — enable/consolidate, gate, threshold, context budget, max results, entry stats.
 - **MCP** — configured stdio, SSE, and Streamable HTTP servers with their transport labels, plus a link to the config file.
-- **Skills** — global/project skills with reveal actions.
+- **Skills** — global, project, and plugin-provided skills with reveal actions; the same list feeds the composer `/` skill menu. Plugin skills appear after the agent has loaded the plugin, so restart the desktop once after installing a plugin.
 - **Rules** — global/project Markdown rules with a preview.
 - **Plugins** — installed plugins with per-plugin enable/disable.
 - **System** — desktop/agent versions, binary resolution and updates, runtime paths, and logs.

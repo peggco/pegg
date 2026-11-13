@@ -222,7 +222,7 @@ func (a *App) SettingsSnapshot() (SettingsSnapshot, error) {
 	snap.Permissions = buildPermissionSettings(cfg)
 	snap.Memory = buildMemorySettings(cfg, globalDir)
 	snap.MCP = buildMCPSettings(cfg)
-	snap.Skills = buildSkillSettings(ws, globalDir)
+	snap.Skills = a.buildSkillSettings(ws, globalDir)
 	snap.Rules = buildRuleSettings(ws, globalDir)
 	snap.Plugins = buildPluginSettings(cfg, globalDir)
 	snap.PluginsEnabled = cfg.Plugins.Enabled
@@ -562,19 +562,9 @@ func loadDesktopSkills(workspace, globalDir string) {
 	_ = skill.LoadDir(filepath.Join(workspace, ".pegg", "skills"), "project")
 }
 
-func buildSkillSettings(workspace, globalDir string) []SkillSetting {
+func (a *App) buildSkillSettings(workspace, globalDir string) []SkillSetting {
 	loadDesktopSkills(workspace, globalDir)
-	skills := skill.List()
-	out := make([]SkillSetting, 0, len(skills))
-	for _, item := range skills {
-		out = append(out, SkillSetting{
-			Name:        item.Name,
-			Description: item.Description,
-			Source:      item.Source,
-			Path:        item.Path,
-		})
-	}
-	return out
+	return mergeSkillSettings(skill.List(), a.agentSkills())
 }
 
 func buildRuleSettings(workspace, globalDir string) []RuleSetting {
@@ -985,6 +975,9 @@ func (a *App) RemoveProvider(name string) error {
 }
 
 func (a *App) SlashCommands() []acpclient.SlashCommand {
+	if commands := a.agentSkillCommands(); len(commands) > 0 {
+		return commands
+	}
 	globalDir, _ := config.GetConfigDir()
 	loadDesktopSkills(a.currentWorkspace(), globalDir)
 	skills := skill.List()

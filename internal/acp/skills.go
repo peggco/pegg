@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -48,6 +49,34 @@ func (s *Server) handleSkillsReload(_ context.Context, params json.RawMessage) (
 		s.notifyCommands(id)
 	}
 	return skillsReloadResult{Commands: commands}, nil
+}
+
+type skillInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Path        string `json:"path,omitempty"`
+	WhenToUse   string `json:"whenToUse,omitempty"`
+}
+
+type skillsListResult struct {
+	Skills []skillInfo `json:"skills"`
+}
+
+func (s *Server) handleSkillsList(_ context.Context, _ json.RawMessage) (any, error) {
+	skills := skill.List()
+	out := make([]skillInfo, 0, len(skills))
+	for _, sk := range skills {
+		out = append(out, skillInfo{
+			Name:        sk.Name,
+			Description: sk.Description,
+			Source:      sk.Source,
+			Path:        sk.Path,
+			WhenToUse:   sk.WhenToUse,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return skillsListResult{Skills: out}, nil
 }
 
 type skillsSearchParams struct {

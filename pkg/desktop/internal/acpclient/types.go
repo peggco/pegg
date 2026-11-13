@@ -221,6 +221,18 @@ type SkillsReloadResult struct {
 	Commands []SlashCommand `json:"commands"`
 }
 
+type SkillInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Path        string `json:"path,omitempty"`
+	WhenToUse   string `json:"whenToUse,omitempty"`
+}
+
+type SkillsListResult struct {
+	Skills []SkillInfo `json:"skills"`
+}
+
 type SessionLoadParams struct {
 	Meta                  Meta     `json:"_meta,omitempty"`
 	SessionID             string   `json:"sessionId"`

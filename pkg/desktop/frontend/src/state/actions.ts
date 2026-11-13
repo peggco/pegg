@@ -630,7 +630,11 @@ export async function toggleRecording(): Promise<void> {
 
 export function handleUpdates(sessionId: string, updates: SessionUpdate[]): void {
   const chat = store.get().chat;
-  if (!chat.acpId) return;
+  if (!chat.acpId) {
+    const commands = updates.filter((update) => update.sessionUpdate === 'available_commands_update');
+    if (commands.length) store.setChat((c) => applyUpdates(c, commands));
+    return;
+  }
   if (sessionId !== chat.acpId && sessionId !== chat.peggId) return;
   const isHistory = (u: SessionUpdate) => u._meta?.['com.pegg/historyPage'] === true;
   const history = updates.filter(isHistory);

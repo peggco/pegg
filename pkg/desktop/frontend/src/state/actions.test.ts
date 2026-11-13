@@ -130,6 +130,29 @@ describe('handleUpdates', () => {
     expect(chat.items.length).toBeLessThanOrEqual(MAX_CHAT_ITEMS);
     expect(chat.historyHasMore).toBe(true);
   });
+
+  it('applies command updates before the session id is known', () => {
+    seed({ acpId: '', peggId: '', commands: [] });
+
+    handleUpdates('unknown', [
+      {
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [{ name: 'plugin-skill', description: 'from plugin' }],
+      },
+    ]);
+
+    expect(store.get().chat.commands).toEqual([{ name: 'plugin-skill', description: 'from plugin' }]);
+  });
+
+  it('ignores other updates before the session id is known', () => {
+    seed({ acpId: '', peggId: '', items: [] });
+
+    handleUpdates('unknown', [
+      { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'hello' } },
+    ]);
+
+    expect(store.get().chat.items).toEqual([]);
+  });
 });
 
 describe('catalog actions', () => {

@@ -448,6 +448,18 @@ func (c *Client) ReloadSkills(ctx context.Context, workspace string) ([]SlashCom
 	return res.Commands, nil
 }
 
+func (c *Client) ListSkills(ctx context.Context) ([]SkillInfo, error) {
+	raw, err := c.Request(ctx, "_pegg/skills/list", nil)
+	if err != nil {
+		return nil, err
+	}
+	var res SkillsListResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, err
+	}
+	return res.Skills, nil
+}
+
 func (c *Client) Notify(method string, params any) error {
 	msg := map[string]any{"jsonrpc": "2.0", "method": method}
 	if params != nil {

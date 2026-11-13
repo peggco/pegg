@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/skill"
 	"github.com/peggco/pegg/pkg/desktop/internal/acpclient"
 )
 
@@ -89,6 +91,65 @@ func (a *App) InstallHubSkill(source, skillID, scope string) (SkillMutationResul
 
 func (a *App) ReloadSkills() []acpclient.SlashCommand {
 	return a.reloadSkills()
+}
+
+func (a *App) agentSkills() []acpclient.SkillInfo {
+	a.mu.Lock()
+	client := a.client
+	a.mu.Unlock()
+	if client == nil || !client.Running() {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	skills, err := client.ListSkills(ctx)
+	if err != nil {
+		a.logf("skills: list: %v", err)
+		return nil
+	}
+	return skills
+}
+
+func (a *App) agentSkillCommands() []acpclient.SlashCommand {
+	skills := a.agentSkills()
+	out := make([]acpclient.SlashCommand, 0, len(skills))
+	for _, sk := range skills {
+		description := sk.Description
+		if description == "" {
+			description = sk.WhenToUse
+		}
+		out = append(out, acpclient.SlashCommand{Name: sk.Name, Description: description})
+	}
+	return out
+}
+
+func mergeSkillSettings(local []*skill.Skill, remote []acpclient.SkillInfo) []SkillSetting {
+	entries := make(map[string]SkillSetting, len(local)+len(remote))
+	for _, item := range local {
+		entries[item.Name] = SkillSetting{
+			Name:        item.Name,
+			Description: item.Description,
+			Source:      item.Source,
+			Path:        item.Path,
+		}
+	}
+	for _, item := range remote {
+		if _, exists := entries[item.Name]; exists && !strings.HasPrefix(item.Source, "plugin:") {
+			continue
+		}
+		entries[item.Name] = SkillSetting{
+			Name:        item.Name,
+			Description: item.Description,
+			Source:      item.Source,
+			Path:        item.Path,
+		}
+	}
+	out := make([]SkillSetting, 0, len(entries))
+	for _, item := range entries {
+		out = append(out, item)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 func (a *App) skillDir(scope string) (string, error) {
