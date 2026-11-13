@@ -383,6 +383,52 @@ func TestProviderAddCustomEndpointInteractive(t *testing.T) {
 	}
 }
 
+func TestProviderAddPromptsBaseURLBeforeAPIKey(t *testing.T) {
+	c, _ := newTestCLI(t)
+	registerTestDriver(t, "testdrv-order")
+
+	var order []string
+	p := stubPrompts(nil)
+	p.selectProvider = func() (string, error) { return customEndpointOption, nil }
+	p.selectDriver = func() (string, error) { return "testdrv-order", nil }
+	p.promptString = func(label string) (string, error) {
+		order = append(order, label)
+		switch label {
+		case "Provider name":
+			return "ordered-endpoint", nil
+		case "Base URL":
+			return "http://127.0.0.1:9/v1", nil
+		}
+		return "", nil
+	}
+	p.promptHeaders = func() (map[string]string, error) {
+		order = append(order, "Headers")
+		return nil, nil
+	}
+	p.promptAPIKey = func() (string, error) {
+		order = append(order, "API key")
+		return "k", nil
+	}
+
+	var out bytes.Buffer
+	if err := c.runProviderAdd(&out, &providerAddFlags{}, p); err != nil {
+		t.Fatal(err)
+	}
+
+	baseIdx, keyIdx := -1, -1
+	for i, step := range order {
+		switch step {
+		case "Base URL":
+			baseIdx = i
+		case "API key":
+			keyIdx = i
+		}
+	}
+	if baseIdx == -1 || keyIdx == -1 || baseIdx > keyIdx {
+		t.Fatalf("prompt order = %v, want Base URL before API key", order)
+	}
+}
+
 func TestProviderAddCustomEndpointRequiresName(t *testing.T) {
 	c, _ := newTestCLI(t)
 	registerTestDriver(t, "testdrv-noname")
