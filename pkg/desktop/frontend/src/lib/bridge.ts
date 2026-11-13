@@ -30,6 +30,7 @@ import type {
   HubSearchResult,
   HubSkill,
   SkillMutationResult,
+  SelfUpdateStatus,
   CatalogEntry,
   CatalogInstalled,
   CatalogMutationResult,
@@ -116,6 +117,10 @@ const App = GoApp as unknown as {
   SetBinaryPath(path: string): Promise<BinaryStatus>;
   PickBinary(): Promise<string>;
   InstallBinary(): Promise<BinaryStatus>;
+  SelfUpdateStatus(): Promise<SelfUpdateStatus>;
+  CheckDesktopUpdate(): Promise<SelfUpdateStatus>;
+  DownloadDesktopUpdate(): Promise<SelfUpdateStatus>;
+  RestartToUpdate(): Promise<void>;
   PickWorkspace(): Promise<string>;
   OpenWorkspace(path: string): Promise<string>;
   SavePrefs(p: Prefs): Promise<Prefs>;
@@ -235,6 +240,10 @@ export function onSessionsChanged(cb: () => void): Unsubscribe {
 
 export function onBinaryProgress(cb: (progress: BinaryProgress) => void): Unsubscribe {
   return on<BinaryProgress>('binary:progress', cb);
+}
+
+export function onDesktopUpdate(cb: (status: SelfUpdateStatus) => void): Unsubscribe {
+  return on<SelfUpdateStatus>('desktop:update', cb);
 }
 
 export function onFileDrop(cb: (paths: string[]) => void): Unsubscribe {

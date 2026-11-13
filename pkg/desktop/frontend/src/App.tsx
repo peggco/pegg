@@ -3,6 +3,7 @@ import { PanelLeft } from 'lucide-react';
 import {
   onAsk,
   onBinaryProgress,
+  onDesktopUpdate,
   onFileDrop,
   onLoading,
   onPendingClear,
@@ -22,6 +23,7 @@ import {
   readDropped,
   respondPermission,
   setBinaryProgress,
+  setSelfUpdate,
   setServerStatus,
   setSidebarCollapsed,
   startNewChat,
@@ -39,6 +41,7 @@ import { Sidebar } from './components/Sidebar';
 import { CatalogModal } from './components/CatalogModal';
 import { Thread } from './components/Thread';
 import { TitleBar } from './components/TitleBar';
+import { UpdateBanner } from './components/UpdateBanner';
 
 export function App() {
   const ready = useStore((s) => s.ready);
@@ -88,6 +91,7 @@ export function App() {
       onPendingClear(clearPending),
       onSessionsChanged(handleSessionsChanged),
       onBinaryProgress(setBinaryProgress),
+      onDesktopUpdate(setSelfUpdate),
       onFileDrop((paths) => {
         void readDropped(paths).then((attachments) => {
           if (attachments.length) {
@@ -182,6 +186,7 @@ export function App() {
     <div className="app" {...appAttrs}>
       {showTitlebar ? <TitleBar /> : null}
       <StatusBanner />
+      <UpdateBanner />
       <div className="shell">
         {sidebarCollapsed ? (
           <button

@@ -221,6 +221,27 @@ export interface BinaryStatus {
   error?: string;
 }
 
+export interface SelfUpdateStatus {
+  currentVersion: string;
+  latestVersion?: string;
+  state: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'unsupported' | 'error';
+  available: boolean;
+  supported: boolean;
+  desktopAvailable: boolean;
+  desktopReady: boolean;
+  ready: boolean;
+  progress: number;
+  error?: string;
+  releaseUrl?: string;
+  targetPath?: string;
+  agentCurrentVersion?: string;
+  agentLatestVersion?: string;
+  agentAvailable: boolean;
+  agentSupported: boolean;
+  agentReady: boolean;
+  agentTargetPath?: string;
+}
+
 export interface BootstrapInfo {
   platform: string;
   arch: string;
@@ -229,6 +250,7 @@ export interface BootstrapInfo {
   prefs: Prefs;
   themes: Theme[];
   binary: BinaryStatus;
+  selfUpdate: SelfUpdateStatus;
   defaultWorkspace: string;
   workspace: string;
   logPath: string;

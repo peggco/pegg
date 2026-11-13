@@ -46,6 +46,10 @@ export function CatalogReadme(arg1, arg2) {
   return window['go']['main']['App']['CatalogReadme'](arg1, arg2);
 }
 
+export function CheckDesktopUpdate() {
+  return window['go']['main']['App']['CheckDesktopUpdate']();
+}
+
 export function ConnectLogout() {
   return window['go']['main']['App']['ConnectLogout']();
 }
@@ -72,6 +76,10 @@ export function CurrentSession() {
 
 export function DeleteSession(arg1) {
   return window['go']['main']['App']['DeleteSession'](arg1);
+}
+
+export function DownloadDesktopUpdate() {
+  return window['go']['main']['App']['DownloadDesktopUpdate']();
 }
 
 export function FindBinary() {
@@ -222,6 +230,10 @@ export function RespondPermission(arg1, arg2) {
   return window['go']['main']['App']['RespondPermission'](arg1, arg2);
 }
 
+export function RestartToUpdate() {
+  return window['go']['main']['App']['RestartToUpdate']();
+}
+
 export function RevealPath(arg1) {
   return window['go']['main']['App']['RevealPath'](arg1);
 }
@@ -276,6 +288,10 @@ export function SearchHubSkills(arg1, arg2) {
 
 export function SearchHubSkillsFiltered(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SearchHubSkillsFiltered'](arg1, arg2, arg3, arg4);
+}
+
+export function SelfUpdateStatus() {
+  return window['go']['main']['App']['SelfUpdateStatus']();
 }
 
 export function SendPrompt(arg1) {

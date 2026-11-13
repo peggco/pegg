@@ -95,7 +95,7 @@ func (d *Downloader) Install(ctx context.Context, version string, progress func(
 		if !ok {
 			return Status{}, fmt.Errorf("checksums.txt has no entry for %s", asset)
 		}
-		got, err := fileSHA256(archive)
+		got, err := FileSHA256(archive)
 		if err != nil {
 			return Status{}, err
 		}
@@ -107,9 +107,9 @@ func (d *Downloader) Install(ctx context.Context, version string, progress func(
 	report("Extracting", 82, asset)
 	binPath := filepath.Join(tmpDir, Name())
 	if strings.HasSuffix(ext, "zip") {
-		err = extractZip(archive, Name(), binPath)
+		err = ExtractZip(archive, Name(), binPath)
 	} else {
-		err = extractTarGz(archive, Name(), binPath)
+		err = ExtractTarGz(archive, Name(), binPath)
 	}
 	if err != nil {
 		return Status{}, fmt.Errorf("extract %s: %w", asset, err)
@@ -124,7 +124,7 @@ func (d *Downloader) Install(ctx context.Context, version string, progress func(
 	report("Installing", 92, final)
 	_ = os.Remove(final)
 	if err := os.Rename(binPath, final); err != nil {
-		if err := copyFile(binPath, final); err != nil {
+		if err := CopyFile(binPath, final); err != nil {
 			return Status{}, err
 		}
 	}
@@ -156,13 +156,13 @@ func (d *Downloader) assetURL(version, asset string) string {
 	return base + "/" + version + "/" + asset
 }
 
-func (d *Downloader) download(ctx context.Context, url, dest string, progress func(int)) error {
+func DownloadTo(ctx context.Context, client *http.Client, url, dest string, progress func(int)) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("User-Agent", "pegg-desktop")
-	resp, err := d.HTTP.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -202,14 +202,17 @@ func (d *Downloader) download(ctx context.Context, url, dest string, progress fu
 	return nil
 }
 
-func (d *Downloader) fetchChecksums(ctx context.Context, version string) (map[string]string, error) {
-	url := d.assetURL(version, "checksums.txt")
+func (d *Downloader) download(ctx context.Context, url, dest string, progress func(int)) error {
+	return DownloadTo(ctx, d.HTTP, url, dest, progress)
+}
+
+func FetchChecksums(ctx context.Context, client *http.Client, url string) (map[string]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "pegg-desktop")
-	resp, err := d.HTTP.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +235,11 @@ func (d *Downloader) fetchChecksums(ctx context.Context, version string) (map[st
 	return sums, nil
 }
 
-func fileSHA256(path string) (string, error) {
+func (d *Downloader) fetchChecksums(ctx context.Context, version string) (map[string]string, error) {
+	return FetchChecksums(ctx, d.HTTP, d.assetURL(version, "checksums.txt"))
+}
+
+func FileSHA256(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
@@ -245,7 +252,7 @@ func fileSHA256(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func extractTarGz(archive, want, dest string) error {
+func ExtractTarGz(archive, want, dest string) error {
 	f, err := os.Open(archive)
 	if err != nil {
 		return err
@@ -275,7 +282,7 @@ func extractTarGz(archive, want, dest string) error {
 	}
 }
 
-func extractZip(archive, want, dest string) error {
+func ExtractZip(archive, want, dest string) error {
 	zr, err := zip.OpenReader(archive)
 	if err != nil {
 		return err
@@ -312,7 +319,7 @@ func writeLimited(dest string, r io.Reader, mode os.FileMode) error {
 	return nil
 }
 
-func copyFile(src, dst string) error {
+func CopyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err

@@ -268,6 +268,7 @@ export namespace main {
 	    prefs: prefs.Prefs;
 	    themes: themes.Theme[];
 	    binary: binary.Status;
+	    selfUpdate: selfupdate.Status;
 	    defaultWorkspace: string;
 	    workspace: string;
 	    logPath: string;
@@ -287,6 +288,7 @@ export namespace main {
 	        this.prefs = this.convertValues(source["prefs"], prefs.Prefs);
 	        this.themes = this.convertValues(source["themes"], themes.Theme);
 	        this.binary = this.convertValues(source["binary"], binary.Status);
+	        this.selfUpdate = this.convertValues(source["selfUpdate"], selfupdate.Status);
 	        this.defaultWorkspace = source["defaultWorkspace"];
 	        this.workspace = source["workspace"];
 	        this.logPath = source["logPath"];
@@ -1631,6 +1633,57 @@ export namespace prefs {
 		}
 	}
 	
+
+}
+
+export namespace selfupdate {
+	
+	export class Status {
+	    currentVersion: string;
+	    latestVersion?: string;
+	    state: string;
+	    available: boolean;
+	    supported: boolean;
+	    desktopAvailable: boolean;
+	    desktopReady: boolean;
+	    ready: boolean;
+	    progress: number;
+	    error?: string;
+	    releaseUrl?: string;
+	    targetPath?: string;
+	    agentCurrentVersion?: string;
+	    agentLatestVersion?: string;
+	    agentAvailable: boolean;
+	    agentSupported: boolean;
+	    agentReady: boolean;
+	    agentTargetPath?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.state = source["state"];
+	        this.available = source["available"];
+	        this.supported = source["supported"];
+	        this.desktopAvailable = source["desktopAvailable"];
+	        this.desktopReady = source["desktopReady"];
+	        this.ready = source["ready"];
+	        this.progress = source["progress"];
+	        this.error = source["error"];
+	        this.releaseUrl = source["releaseUrl"];
+	        this.targetPath = source["targetPath"];
+	        this.agentCurrentVersion = source["agentCurrentVersion"];
+	        this.agentLatestVersion = source["agentLatestVersion"];
+	        this.agentAvailable = source["agentAvailable"];
+	        this.agentSupported = source["agentSupported"];
+	        this.agentReady = source["agentReady"];
+	        this.agentTargetPath = source["agentTargetPath"];
+	    }
+	}
 
 }
 

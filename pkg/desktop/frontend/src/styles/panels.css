@@ -404,6 +404,72 @@
   flex: 1;
 }
 
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--pg-text-2);
+  background: color-mix(in srgb, var(--pg-accent) 8%, var(--pg-bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--pg-accent) 24%, var(--pg-border));
+}
+
+.update-banner.ready {
+  background: color-mix(in srgb, var(--pg-success) 8%, var(--pg-bg));
+  border-bottom-color: color-mix(in srgb, var(--pg-success) 24%, var(--pg-border));
+}
+
+.update-banner svg {
+  color: var(--pg-accent);
+  flex: none;
+}
+
+.update-banner.ready svg {
+  color: var(--pg-success);
+}
+
+.update-banner .spacer {
+  flex: 1;
+}
+
+.update-action {
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius-sm);
+  background: var(--pg-surface);
+  color: var(--pg-text-2);
+  font-size: 11.5px;
+}
+
+.update-action:hover {
+  border-color: var(--pg-border-strong);
+  color: var(--pg-text);
+}
+
+.update-action.primary {
+  border-color: var(--pg-accent);
+  background: var(--pg-accent);
+  color: var(--pg-accent-fg);
+}
+
+.update-progress {
+  flex: none;
+  width: 120px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--pg-border);
+  overflow: hidden;
+}
+
+.update-progress span {
+  display: block;
+  height: 100%;
+  background: var(--pg-accent);
+  transition: width 160ms linear;
+}
+
 .onboarding {
   max-width: 620px;
   margin: 0 auto;

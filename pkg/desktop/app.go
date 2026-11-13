@@ -20,6 +20,7 @@ import (
 	"github.com/peggco/pegg/pkg/desktop/internal/acpclient"
 	"github.com/peggco/pegg/pkg/desktop/internal/binary"
 	"github.com/peggco/pegg/pkg/desktop/internal/prefs"
+	"github.com/peggco/pegg/pkg/desktop/internal/selfupdate"
 	"github.com/peggco/pegg/pkg/desktop/internal/themes"
 	"github.com/peggco/pegg/pkg/desktop/internal/workspace"
 
@@ -44,18 +45,19 @@ type SessionInfo struct {
 }
 
 type BootstrapInfo struct {
-	Platform         string         `json:"platform"`
-	Arch             string         `json:"arch"`
-	Version          string         `json:"version"`
-	Home             string         `json:"home"`
-	Prefs            prefs.Prefs    `json:"prefs"`
-	Themes           []themes.Theme `json:"themes"`
-	Binary           binary.Status  `json:"binary"`
-	DefaultWorkspace string         `json:"defaultWorkspace"`
-	Workspace        string         `json:"workspace"`
-	LogPath          string         `json:"logPath"`
-	Language         string         `json:"language"`
-	NativeTitlebar   bool           `json:"nativeTitlebar"`
+	Platform         string            `json:"platform"`
+	Arch             string            `json:"arch"`
+	Version          string            `json:"version"`
+	Home             string            `json:"home"`
+	Prefs            prefs.Prefs       `json:"prefs"`
+	Themes           []themes.Theme    `json:"themes"`
+	Binary           binary.Status     `json:"binary"`
+	SelfUpdate       selfupdate.Status `json:"selfUpdate"`
+	DefaultWorkspace string            `json:"defaultWorkspace"`
+	Workspace        string            `json:"workspace"`
+	LogPath          string            `json:"logPath"`
+	Language         string            `json:"language"`
+	NativeTitlebar   bool              `json:"nativeTitlebar"`
 }
 
 type pendingRequest struct {
@@ -71,9 +73,10 @@ type updateItem struct {
 type App struct {
 	ctx context.Context
 
-	prefs  *prefs.Store
-	theme  []themes.Theme
-	binary binary.Status
+	prefs      *prefs.Store
+	theme      []themes.Theme
+	binary     binary.Status
+	selfUpdate *selfupdate.Manager
 
 	mu       sync.Mutex
 	client   *acpclient.Client
@@ -131,6 +134,8 @@ func (a *App) startup(ctx context.Context) {
 		a.binary = binary.Resolve(ctx, p.BinaryPath, p.Workspace)
 	}
 	a.logf("pegg desktop %s %s/%s", appVersion, goruntime.GOOS, goruntime.GOARCH)
+	a.initSelfUpdate()
+	go a.autoCheckDesktopUpdate()
 	go a.autoStartConnect()
 }
 
@@ -209,6 +214,7 @@ func (a *App) Bootstrap() (BootstrapInfo, error) {
 		Prefs:            p,
 		Themes:           a.theme,
 		Binary:           a.binary,
+		SelfUpdate:       a.selfUpdateStatus(),
 		DefaultWorkspace: ws,
 		Workspace:        ws,
 		LogPath:          logPath,

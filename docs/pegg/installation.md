@@ -103,6 +103,13 @@ are produced for Linux, macOS, and Windows on both `amd64` and `arm64`.
     sha256sum -c checksums.txt --ignore-missing
     ```
 
+    Desktop releases publish a separate `pegg-desktop_checksums.txt` covering
+    the `pegg-desktop_*` archives, installers, and packages:
+
+    ```bash
+    sha256sum -c pegg-desktop_checksums.txt --ignore-missing
+    ```
+
 === "go install"
 
     ```bash

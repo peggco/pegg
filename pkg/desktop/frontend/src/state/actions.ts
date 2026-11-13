@@ -12,6 +12,7 @@ import type {
   HubSearchResult,
   HubSkill,
   PromptAttachment,
+  SelfUpdateStatus,
   SessionListItem,
   SessionUpdate,
   SkillMutationResult,
@@ -71,6 +72,7 @@ export async function bootstrap(): Promise<void> {
       workspace: boot.workspace || boot.defaultWorkspace,
       recents: prefs.recents ?? [],
       binary: boot.binary,
+      selfUpdate: boot.selfUpdate,
       sidebarCollapsed: prefs.sidebarCollapsed,
       language: boot.language || 'en',
       status: { state: boot.binary.found ? 'connecting' : 'disconnected' },
@@ -81,6 +83,7 @@ export async function bootstrap(): Promise<void> {
       await loadModels();
       await loadCommandsCatalog();
     }
+    void refreshSelfUpdateStatus();
   } catch (err) {
     store.set({ ready: true, error: errorText(err) });
     store.toast('error', errorText(err));
@@ -130,6 +133,48 @@ export async function loadCommandsCatalog(): Promise<void> {
     store.set({ commandsCatalog: commands ?? [] });
   } catch {
     /* the session's server-provided commands remain available */
+  }
+}
+
+export function setSelfUpdate(status: SelfUpdateStatus): void {
+  store.set({ selfUpdate: status });
+}
+
+export async function refreshSelfUpdateStatus(): Promise<void> {
+  try {
+    store.set({ selfUpdate: await api.SelfUpdateStatus() });
+  } catch {
+    /* self-update is optional */
+  }
+}
+
+export async function checkDesktopUpdate(): Promise<void> {
+  const current = store.get().selfUpdate;
+  store.set({ selfUpdate: { ...current, state: 'checking', error: '' } });
+  try {
+    store.set({ selfUpdate: await api.CheckDesktopUpdate() });
+  } catch (err) {
+    store.set({ selfUpdate: { ...store.get().selfUpdate, state: 'error', error: errorText(err) } });
+    store.toast('error', errorText(err));
+  }
+}
+
+export async function downloadDesktopUpdate(): Promise<void> {
+  const current = store.get().selfUpdate;
+  store.set({ selfUpdate: { ...current, state: 'downloading', error: '' } });
+  try {
+    store.set({ selfUpdate: await api.DownloadDesktopUpdate() });
+  } catch (err) {
+    store.set({ selfUpdate: { ...store.get().selfUpdate, state: 'error', error: errorText(err) } });
+    store.toast('error', errorText(err));
+  }
+}
+
+export async function restartToUpdate(): Promise<void> {
+  try {
+    await api.RestartToUpdate();
+  } catch (err) {
+    store.toast('error', errorText(err));
   }
 }
 

@@ -8,6 +8,7 @@ import type {
   ModelEntry,
   Prefs,
   Recent,
+  SelfUpdateStatus,
   SessionListItem,
   Theme,
 } from '../types';
@@ -37,6 +38,7 @@ export interface UIState {
   recents: Recent[];
   status: AcpStatus;
   binary: BinaryStatus;
+  selfUpdate: SelfUpdateStatus;
   installing: boolean;
   installProgress?: BinaryProgress;
   loadingSession?: string;
@@ -88,6 +90,7 @@ export const initialState: UIState = {
   recents: [],
   status: { state: 'disconnected' },
   binary: { found: false },
+  selfUpdate: { currentVersion: '', state: 'idle', available: false, supported: false, desktopAvailable: false, desktopReady: false, ready: false, progress: 0, agentAvailable: false, agentSupported: false, agentReady: false },
   installing: false,
   toasts: [],
   language: 'en',

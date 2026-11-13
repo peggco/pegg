@@ -154,6 +154,35 @@ Tool output follows the terminal UI's hierarchy instead of dumping everything:
 - `task` calls render as a single **TASK** card: name, subagent type, prompt, `background` badge, live activity, response preview, usage/duration, and an **Open history** action while running. The raw `task` tool row and the duplicate subagent card are no longer shown for task-launched subagents; fork subagents keep the standalone subagent card. Background continuations stream into the same thread when the subagent finishes.
 - Todo/plan writes render as an inline plan card at the latest `todowrite` in each message, replacing the tool row. Older updates in the same message collapse into that last card; a new todo list in a later message appears as its own card. The plan no longer sticks to the bottom of the chat or follows you into new messages.
 
+## Desktop updates
+
+Pegg Desktop checks for a newer release on startup and covers both binaries:
+
+- the desktop app (`pegg-desktop`), verified against
+  `pegg-desktop_checksums.txt`
+- the agent (`pegg`), verified against the release `checksums.txt`
+
+When both have a newer version, they are downloaded and staged together; a
+single **Restart to update** banner lists both versions and applies them in one
+go. If only one has an update, only that one is offered. The staged update is
+applied only after you confirm and the app relaunches.
+
+- **Linux/Windows** — automatic for user-writable installs (e.g.
+  `~/.local/bin`, a tarball/zip extracted somewhere you own). If the install
+  directory is not writable (deb/rpm/AUR/Homebrew, `/usr/bin`,
+  `/Applications`), the app does not overwrite it; update through the package
+  manager or the download page.
+- **Agent binary** — updated together with the desktop when it is the
+  desktop-managed/writable binary. A system-installed agent is reported in the
+  same banner but must be updated through its package manager.
+- **macOS** — desktop check/notify only in this release; use the download page
+  until signed/notarized bundle updates are available. The agent can still be
+  updated automatically if it is writable.
+- **Staged updates** — closing and reopening the app keeps the staged update
+  and shows the Restart banner again; it is never applied silently.
+- **Manual** — Settings → System has **Check for updates**, download progress,
+  current/latest versions for both binaries, and **Restart to update**.
+
 ## Releases
 
 `.github/workflows/release.yml` builds the desktop app on native runners for:
