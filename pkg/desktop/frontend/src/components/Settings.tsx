@@ -22,17 +22,21 @@ import { api } from '../lib/bridge';
 import {
   changeModel,
   changeReasoning,
+  checkDesktopUpdate,
   chooseBinary,
+  downloadDesktopUpdate,
   errorText,
   findBinary,
   installBinary,
   loadModels,
+  restartToUpdate,
   savePrefs,
   setTheme,
   toggleSettings,
 } from '../state/actions';
 import { store, useStore } from '../state/store';
 import { useT } from '../lib/i18n';
+import { updateDownloads, updateSummary, updateUnsupportedAgent, updateUnsupportedDesktop } from '../lib/update';
 import type { ProviderCatalogEntry, STTProviderEntry, SettingsSnapshot } from '../types';
 import {
   MCPPanel,
@@ -873,6 +877,7 @@ function SystemPanel({ snap }: { snap: SettingsSnapshot }) {
   const binary = useStore((s) => s.binary);
   const installing = useStore((s) => s.installing);
   const progress = useStore((s) => s.installProgress);
+  const selfUpdate = useStore((s) => s.selfUpdate);
   const system = snap.system;
 
   const row = (label: string, value: string, reveal?: string) => (
@@ -918,7 +923,7 @@ function SystemPanel({ snap }: { snap: SettingsSnapshot }) {
             <button className="btn small" onClick={() => void chooseBinary()}>Locate</button>
             <button className="btn small primary" disabled={installing} onClick={() => void installBinary()}>
               <Download size={13} />
-              {installing ? 'Installing…' : 'Update Pegg'}
+              {installing ? 'Installing…' : 'Update agent'}
             </button>
           </div>
         </div>
@@ -930,6 +935,72 @@ function SystemPanel({ snap }: { snap: SettingsSnapshot }) {
             <div className="settings-footnote">{progress.stage} {progress.detail ? `· ${progress.detail}` : ''}</div>
           </div>
         ) : null}
+      </Card>
+      <Card title={t('update.title')}>
+        <div className="settings-grid">
+          <Field label={`${t('update.desktop')} · ${t('update.current')}`}>
+            <div className="settings-row-value">{selfUpdate.currentVersion || system.appVersion}</div>
+          </Field>
+          <Field label={`${t('update.desktop')} · ${t('update.latest')}`}>
+            <div className="settings-row-value">{selfUpdate.latestVersion || '—'}</div>
+          </Field>
+          <Field label={`${t('update.agent')} · ${t('update.current')}`}>
+            <div className="settings-row-value">{selfUpdate.agentCurrentVersion || system.binaryVersion || '—'}</div>
+          </Field>
+          <Field label={`${t('update.agent')} · ${t('update.latest')}`}>
+            <div className="settings-row-value">{selfUpdate.agentLatestVersion || '—'}</div>
+          </Field>
+        </div>
+        {selfUpdate.state === 'downloading' ? (
+          <div style={{ marginTop: 8 }}>
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${selfUpdate.progress}%` }} />
+            </div>
+            <div className="settings-footnote">
+              {t('update.downloadingAll', { progress: selfUpdate.progress })}
+            </div>
+          </div>
+        ) : null}
+        {selfUpdate.error ? (
+          <div className="notice error" style={{ marginTop: 8 }}>
+            {t('update.error', { error: selfUpdate.error })}
+          </div>
+        ) : null}
+        <div className="settings-row">
+          <div className="info">
+            <div className="name">{updateSummary(selfUpdate, t)}</div>
+            <div className="desc">
+              {selfUpdate.targetPath || ''}
+              {updateUnsupportedAgent(selfUpdate)
+                ? ` · ${t('update.agentManaged', { version: selfUpdate.agentLatestVersion ?? '' })}`
+                : ''}
+            </div>
+          </div>
+          <div className="control">
+            <button
+              className="btn small"
+              disabled={selfUpdate.state === 'checking' || selfUpdate.state === 'downloading'}
+              onClick={() => void checkDesktopUpdate()}
+            >
+              {selfUpdate.state === 'checking' ? t('update.checking') : t('update.check')}
+            </button>
+            {updateDownloads(selfUpdate) && selfUpdate.state !== 'downloading' ? (
+              <button className="btn small primary" onClick={() => void downloadDesktopUpdate()}>
+                {t('update.download')}
+              </button>
+            ) : null}
+            {selfUpdate.ready ? (
+              <button className="btn small primary" onClick={() => void restartToUpdate()}>
+                {t('update.restart')}
+              </button>
+            ) : null}
+            {updateUnsupportedDesktop(selfUpdate) && selfUpdate.releaseUrl ? (
+              <button className="btn small" onClick={() => void api.OpenExternal(selfUpdate.releaseUrl as string)}>
+                {t('update.open')}
+              </button>
+            ) : null}
+          </div>
+        </div>
       </Card>
       <Card title="Paths">
         {row('Config', system.configPath, system.configPath)}

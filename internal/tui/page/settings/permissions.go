@@ -98,13 +98,14 @@ type judgePick struct {
 }
 
 type permissionsTab struct {
-	settings  *Settings
-	focus     permFocus
-	toolIdx   int
-	scroll    int
-	tools     []toolPerm
-	presetIdx int
-	loaded    bool
+	settings   *Settings
+	focus      permFocus
+	toolIdx    int
+	scroll     int
+	tools      []toolPerm
+	presetIdx  int
+	loaded     bool
+	mcpVersion uint64
 
 	judgeProvider  string
 	judgeModel     string
@@ -116,15 +117,32 @@ func newPermissions(s *Settings) *permissionsTab {
 }
 
 func (t *permissionsTab) loadIfNeeded() {
-	if t.loaded {
+	if !t.loaded {
+		t.loaded = true
+		t.loadJudge()
+		t.presetIdx = int(t.detectPreset())
+		t.toolIdx = 0
+		t.scroll = 0
+	}
+	t.loadToolsIfStale()
+}
+
+func (t *permissionsTab) loadToolsIfStale() {
+	version := uint64(0)
+	if t.settings.deps.MCP != nil {
+		version = t.settings.deps.MCP.Version()
+	}
+	if t.tools != nil && version == t.mcpVersion {
 		return
 	}
-	t.loaded = true
 	t.loadTools()
-	t.loadJudge()
-	t.presetIdx = int(t.detectPreset())
-	t.toolIdx = 0
-	t.scroll = 0
+	t.mcpVersion = version
+	if t.toolIdx >= len(t.tools) {
+		t.toolIdx = len(t.tools) - 1
+		if t.toolIdx < 0 {
+			t.toolIdx = 0
+		}
+	}
 }
 
 func (t *permissionsTab) loadJudge() {

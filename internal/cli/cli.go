@@ -135,11 +135,12 @@ func (c *CLI) registerDefaultCommands() {
 			c.newRunCommand(),
 			c.newScheduleCommand(),
 			c.newMCPCommand(),
+			c.newCatalogCommand(),
 			c.newLSPCommand(),
 			c.newTUICommand(),
 			c.newServeCommand(),
 			c.newConnectCommand(),
-			c.newPluginCommand(),
+			c.newPluginsCommand(),
 			c.newVersionCommand(),
 			c.newUpdateCommand(),
 		)

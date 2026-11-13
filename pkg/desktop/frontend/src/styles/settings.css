@@ -516,13 +516,48 @@
   overflow-wrap: anywhere;
 }
 
-.skills-modal {
+.skills-modal,
+.catalog-modal {
   width: min(1160px, 96vw);
   max-height: min(860px, 90vh);
 }
 
-.skills-modal .modal-body {
+.skills-modal .modal-body,
+.catalog-modal .modal-body {
   padding: 0;
+}
+
+.catalog-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--pg-border);
+  border-radius: 10px;
+  background: var(--pg-surface);
+}
+
+.catalog-tab {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 7px;
+  color: var(--pg-muted);
+  font-size: 12px;
+  font-weight: 550;
+  transition: background var(--pg-fast), color var(--pg-fast);
+}
+
+.catalog-tab:hover {
+  color: var(--pg-text);
+}
+
+.catalog-tab.active {
+  background: var(--pg-text);
+  color: var(--pg-bg);
+}
+
+.catalog-tab:focus-visible {
+  outline: 2px solid var(--pg-accent);
+  outline-offset: 1px;
 }
 
 .hub-pane {
@@ -760,6 +795,106 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.hub-card-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.9em;
+  color: var(--pg-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hub-tag-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hub-kind-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--pg-accent) 35%, var(--pg-border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--pg-accent) 8%, transparent);
+  color: var(--pg-accent);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hub-required-env {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  white-space: normal;
+}
+
+.hub-required-env::before {
+  content: none;
+}
+
+.catalog-warnings {
+  margin: 6px 0;
+  padding-left: 18px;
+  color: var(--pg-warning);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.catalog-warnings li + li {
+  margin-top: 4px;
+}
+
+.catalog-skeleton {
+  pointer-events: none;
+  cursor: default;
+}
+
+.catalog-skeleton:hover {
+  border-color: var(--pg-border);
+  background: var(--pg-surface);
+  transform: none;
+}
+
+.catalog-skeleton .sk-avatar,
+.catalog-skeleton .sk-line {
+  display: block;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--pg-text) 9%, transparent);
+  animation: catalog-pulse 1.3s ease-in-out infinite;
+}
+
+.catalog-skeleton .sk-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.catalog-skeleton .sk-line {
+  width: 100%;
+  height: 12px;
+}
+
+.catalog-skeleton .sk-line.short {
+  width: 55%;
+}
+
+@keyframes catalog-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .hub-card-foot {
@@ -1009,6 +1144,22 @@
 
   .hub-title {
     font-size: 30px;
+  }
+
+  .catalog-modal .modal-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .catalog-tabs {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .catalog-tab {
+    flex: 1;
+    white-space: nowrap;
   }
 }
 

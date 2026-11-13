@@ -38,6 +38,18 @@ export function Capabilities() {
   return window['go']['main']['App']['Capabilities']();
 }
 
+export function CatalogInstalled() {
+  return window['go']['main']['App']['CatalogInstalled']();
+}
+
+export function CatalogReadme(arg1, arg2) {
+  return window['go']['main']['App']['CatalogReadme'](arg1, arg2);
+}
+
+export function CheckDesktopUpdate() {
+  return window['go']['main']['App']['CheckDesktopUpdate']();
+}
+
 export function ConnectLogout() {
   return window['go']['main']['App']['ConnectLogout']();
 }
@@ -66,6 +78,10 @@ export function DeleteSession(arg1) {
   return window['go']['main']['App']['DeleteSession'](arg1);
 }
 
+export function DownloadDesktopUpdate() {
+  return window['go']['main']['App']['DownloadDesktopUpdate']();
+}
+
 export function FindBinary() {
   return window['go']['main']['App']['FindBinary']();
 }
@@ -78,8 +94,20 @@ export function ForkSession(arg1, arg2, arg3) {
   return window['go']['main']['App']['ForkSession'](arg1, arg2, arg3);
 }
 
+export function GetCatalogEntry(arg1, arg2) {
+  return window['go']['main']['App']['GetCatalogEntry'](arg1, arg2);
+}
+
 export function InstallBinary() {
   return window['go']['main']['App']['InstallBinary']();
+}
+
+export function InstallCatalogMCP(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['InstallCatalogMCP'](arg1, arg2, arg3, arg4);
+}
+
+export function InstallCatalogPlugin(arg1, arg2) {
+  return window['go']['main']['App']['InstallCatalogPlugin'](arg1, arg2);
 }
 
 export function InstallHubSkill(arg1, arg2, arg3) {
@@ -202,6 +230,10 @@ export function RespondPermission(arg1, arg2) {
   return window['go']['main']['App']['RespondPermission'](arg1, arg2);
 }
 
+export function RestartToUpdate() {
+  return window['go']['main']['App']['RestartToUpdate']();
+}
+
 export function RevealPath(arg1) {
   return window['go']['main']['App']['RevealPath'](arg1);
 }
@@ -242,6 +274,10 @@ export function SavePrefsOnly(arg1) {
   return window['go']['main']['App']['SavePrefsOnly'](arg1);
 }
 
+export function SearchCatalog(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SearchCatalog'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function SearchFiles(arg1, arg2) {
   return window['go']['main']['App']['SearchFiles'](arg1, arg2);
 }
@@ -252,6 +288,10 @@ export function SearchHubSkills(arg1, arg2) {
 
 export function SearchHubSkillsFiltered(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SearchHubSkillsFiltered'](arg1, arg2, arg3, arg4);
+}
+
+export function SelfUpdateStatus() {
+  return window['go']['main']['App']['SelfUpdateStatus']();
 }
 
 export function SendPrompt(arg1) {

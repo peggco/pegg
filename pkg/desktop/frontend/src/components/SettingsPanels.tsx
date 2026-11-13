@@ -551,7 +551,7 @@ export function MCPPanel({ snap, refresh }: PanelProps) {
                 <div className="row-main">
                   <div className="row-name">{server.name}</div>
                   <div className="row-desc">
-                    {server.type === 'http' ? server.url : [server.command, ...(server.args ?? [])].filter(Boolean).join(' ')}
+                    {server.type !== 'stdio' ? server.url : [server.command, ...(server.args ?? [])].filter(Boolean).join(' ')}
                   </div>
                 </div>
                 <div className="row-side">

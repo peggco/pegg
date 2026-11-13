@@ -18,7 +18,7 @@ type pluginNewOptions struct {
 	replace string
 }
 
-func (c *CLI) newPluginNewCommand() *cobra.Command {
+func (c *CLI) newPluginsNewCommand() *cobra.Command {
 	opts := pluginNewOptions{}
 	cmd := &cobra.Command{
 		Use:   "new <name>",

@@ -1,4 +1,4 @@
-package skillhub
+package catalog
 
 import (
 	"context"
@@ -21,7 +21,7 @@ type treeResponse struct {
 	Truncated bool        `json:"truncated"`
 }
 
-func (c *Client) Resolve(ctx context.Context, spec Spec) ([]byte, string, error) {
+func (c *Client) ResolveSkill(ctx context.Context, spec SkillSpec) ([]byte, string, error) {
 	if !isGitHubSource(spec.Source) {
 		return nil, "", fmt.Errorf("%w: %s", ErrSourceUnsupported, spec.Source)
 	}
@@ -41,7 +41,7 @@ func (c *Client) Resolve(ctx context.Context, spec Spec) ([]byte, string, error)
 	return nil, "", fmt.Errorf("%w: %s", ErrSkillNotFound, spec.String())
 }
 
-func (c *Client) Readme(ctx context.Context, source string) (string, error) {
+func (c *Client) SkillReadme(ctx context.Context, source string) (string, error) {
 	if !isGitHubSource(source) {
 		return "", fmt.Errorf("%w: %s", ErrSourceUnsupported, source)
 	}
@@ -51,29 +51,29 @@ func (c *Client) Readme(ctx context.Context, source string) (string, error) {
 	endpoint := c.BaseURL + "/readme/" + escapeSegments(source)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return "", fmt.Errorf("skillhub: readme request: %w", err)
+		return "", fmt.Errorf("catalog: readme request: %w", err)
 	}
 	req.Header.Set("Accept", "text/markdown")
 	req.Header.Set("User-Agent", "pegg")
 	resp, err := c.client().Do(req)
 	if err != nil {
-		return "", fmt.Errorf("skillhub: readme: %w", err)
+		return "", fmt.Errorf("catalog: readme: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
 		return "", ErrSkillNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("skillhub: readme returned %s", resp.Status)
+		return "", fmt.Errorf("catalog: readme returned %s", resp.Status)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxSkillBytes))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
-		return "", fmt.Errorf("skillhub: readme body: %w", err)
+		return "", fmt.Errorf("catalog: readme body: %w", err)
 	}
 	return string(data), nil
 }
 
-func (c *Client) findSkillPath(ctx context.Context, spec Spec) string {
+func (c *Client) findSkillPath(ctx context.Context, spec SkillSpec) string {
 	entries, err := c.repoTree(ctx, spec.Source)
 	if err != nil {
 		return ""
@@ -114,11 +114,14 @@ func (c *Client) repoTree(ctx context.Context, source string) ([]treeEntry, erro
 		c.mu.Unlock()
 		return entries, nil
 	}
+	if c.trees == nil {
+		c.trees = map[string][]treeEntry{}
+	}
 	c.mu.Unlock()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.GitHubAPI+"/repos/"+escapeSegments(source)+"/git/trees/HEAD?recursive=1", nil)
 	if err != nil {
-		return nil, fmt.Errorf("skillhub: tree request: %w", err)
+		return nil, fmt.Errorf("catalog: tree request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "pegg")
@@ -127,15 +130,15 @@ func (c *Client) repoTree(ctx context.Context, source string) ([]treeEntry, erro
 	}
 	resp, err := c.client().Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("skillhub: github tree: %w", err)
+		return nil, fmt.Errorf("catalog: github tree: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("skillhub: github tree returned %s", resp.Status)
+		return nil, fmt.Errorf("catalog: github tree returned %s", resp.Status)
 	}
 	var out treeResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxSkillBytes)).Decode(&out); err != nil {
-		return nil, fmt.Errorf("skillhub: decode github tree: %w", err)
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&out); err != nil {
+		return nil, fmt.Errorf("catalog: decode github tree: %w", err)
 	}
 	c.mu.Lock()
 	c.trees[source] = out.Tree
@@ -147,18 +150,18 @@ func (c *Client) fetchRaw(ctx context.Context, source, path string) ([]byte, err
 	endpoint := c.RawBase + "/" + escapeSegments(source) + "/HEAD/" + escapePath(path)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("skillhub: raw request: %w", err)
+		return nil, fmt.Errorf("catalog: raw request: %w", err)
 	}
 	req.Header.Set("User-Agent", "pegg")
 	resp, err := c.client().Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("skillhub: download skill: %w", err)
+		return nil, fmt.Errorf("catalog: download skill: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("skillhub: download skill returned %s", resp.Status)
+		return nil, fmt.Errorf("catalog: download skill returned %s", resp.Status)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, maxSkillBytes))
+	return io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 }
 
 func escapePath(path string) string {

@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	ProtocolVersion = "2024-11-05"
+	ProtocolVersion           = "2024-11-05"
+	ProtocolVersionStreamable = "2025-06-18"
 
 	MethodInitialize  = "initialize"
 	MethodInitialized = "notifications/initialized"

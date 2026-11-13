@@ -1,4 +1,4 @@
-package skillhub
+package catalog
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 
 const sidecarName = ".pegg-skill.json"
 
-type Installed struct {
+type InstalledSkill struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Source      string `json:"source,omitempty"`
@@ -27,34 +27,34 @@ type sidecar struct {
 	SkillID string `json:"skillId"`
 }
 
-func Install(ctx context.Context, c *Client, spec Spec, dir string) (Installed, error) {
+func InstallSkill(ctx context.Context, c *Client, spec SkillSpec, dir string) (InstalledSkill, error) {
 	if strings.TrimSpace(dir) == "" {
-		return Installed{}, fmt.Errorf("%w: target directory is empty", ErrBadSpec)
+		return InstalledSkill{}, fmt.Errorf("%w: target directory is empty", ErrBadSpec)
 	}
 	if !validSkillID(spec.SkillID) {
-		return Installed{}, fmt.Errorf("%w: %q", ErrBadSpec, spec.SkillID)
+		return InstalledSkill{}, fmt.Errorf("%w: %q", ErrBadSpec, spec.SkillID)
 	}
-	data, _, err := c.Resolve(ctx, spec)
+	data, _, err := c.ResolveSkill(ctx, spec)
 	if err != nil {
-		return Installed{}, err
+		return InstalledSkill{}, err
 	}
 	if !hasFrontmatter(data) {
-		return Installed{}, fmt.Errorf("%w: %s has no frontmatter", ErrBadSpec, spec.String())
+		return InstalledSkill{}, fmt.Errorf("%w: %s has no frontmatter", ErrBadSpec, spec.String())
 	}
 
 	target := filepath.Join(dir, spec.SkillID)
 	if err := os.MkdirAll(target, 0o755); err != nil {
-		return Installed{}, fmt.Errorf("skillhub: create %s: %w", target, err)
+		return InstalledSkill{}, fmt.Errorf("catalog: create %s: %w", target, err)
 	}
 	if err := writeAtomic(filepath.Join(target, skill.SkillFileName), data); err != nil {
-		return Installed{}, err
+		return InstalledSkill{}, err
 	}
 	meta, _ := json.Marshal(sidecar{Source: spec.Source, SkillID: spec.SkillID})
 	if err := writeAtomic(filepath.Join(target, sidecarName), meta); err != nil {
-		return Installed{}, err
+		return InstalledSkill{}, err
 	}
 
-	out := Installed{
+	out := InstalledSkill{
 		Name:    spec.SkillID,
 		Source:  spec.Source,
 		Path:    target,
@@ -67,12 +67,12 @@ func Install(ctx context.Context, c *Client, spec Spec, dir string) (Installed, 
 	return out, nil
 }
 
-func ListInstalled(dir, scope string) []Installed {
+func ListInstalledSkills(dir, scope string) []InstalledSkill {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return []Installed{}
+		return []InstalledSkill{}
 	}
-	out := make([]Installed, 0, len(entries))
+	out := make([]InstalledSkill, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
@@ -82,7 +82,7 @@ func ListInstalled(dir, scope string) []Installed {
 		if err != nil {
 			continue
 		}
-		item := Installed{
+		item := InstalledSkill{
 			Name:        parsed.Name,
 			Description: parsed.Description,
 			Path:        path,
@@ -105,7 +105,7 @@ func ListInstalled(dir, scope string) []Installed {
 	return out
 }
 
-func Remove(dir, name string) error {
+func RemoveSkill(dir, name string) error {
 	name = strings.TrimSpace(name)
 	if !validSkillID(name) {
 		return fmt.Errorf("%w: %q", ErrBadSpec, name)
@@ -150,25 +150,25 @@ func writeAtomic(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".skill-*")
 	if err != nil {
-		return fmt.Errorf("skillhub: temp file: %w", err)
+		return fmt.Errorf("catalog: temp file: %w", err)
 	}
 	tmpName := tmp.Name()
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		os.Remove(tmpName)
-		return fmt.Errorf("skillhub: write %s: %w", path, err)
+		return fmt.Errorf("catalog: write %s: %w", path, err)
 	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(tmpName)
-		return fmt.Errorf("skillhub: close %s: %w", path, err)
+		return fmt.Errorf("catalog: close %s: %w", path, err)
 	}
 	if err := os.Chmod(tmpName, 0o644); err != nil {
 		os.Remove(tmpName)
-		return fmt.Errorf("skillhub: chmod %s: %w", path, err)
+		return fmt.Errorf("catalog: chmod %s: %w", path, err)
 	}
 	if err := os.Rename(tmpName, path); err != nil {
 		os.Remove(tmpName)
-		return fmt.Errorf("skillhub: move %s: %w", path, err)
+		return fmt.Errorf("catalog: move %s: %w", path, err)
 	}
 	return nil
 }

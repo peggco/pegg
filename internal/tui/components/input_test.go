@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	"github.com/gdamore/tcell/v2"
+
+	"github.com/peggco/pegg/internal/tui/layout"
+	"github.com/peggco/pegg/internal/tui/styles"
 )
 
 func TestVisibleRowsGrows(t *testing.T) {
@@ -1004,5 +1007,42 @@ func TestNewlineThenValue(t *testing.T) {
 	in.InsertRune('b')
 	if got := in.Value(); got != "a\nb" {
 		t.Fatalf("Value = %q, want %q", got, "a\nb")
+	}
+}
+
+func TestInputPlaceholderKeepsCursorBlink(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+	s := tcell.NewSimulationScreen("UTF-8")
+	if err := s.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Fini()
+	s.SetSize(40, 6)
+
+	in := NewInput()
+	in.Placeholder = "Type here"
+	in.Focus()
+	bounds := layout.Region{Left: 0, Top: 0, Width: 40, Height: 3}
+	th := styles.Current()
+
+	in.SetBlink(true)
+	in.Draw(s, bounds, true)
+	str, style, _ := s.Get(bounds.Left+1, bounds.Top+1)
+	if str != "T" {
+		t.Fatalf("first placeholder rune = %q, want T", str)
+	}
+	if _, bg, _ := style.Decompose(); bg != th.Cursor {
+		t.Fatalf("placeholder cursor background = %v, want %v", bg, th.Cursor)
+	}
+
+	in.SetBlink(false)
+	in.Draw(s, bounds, true)
+	str, style, _ = s.Get(bounds.Left+1, bounds.Top+1)
+	if str != "T" {
+		t.Fatalf("first placeholder rune = %q, want T", str)
+	}
+	if _, bg, _ := style.Decompose(); bg != th.InputBg {
+		t.Fatalf("blink-off placeholder background = %v, want %v", bg, th.InputBg)
 	}
 }

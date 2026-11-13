@@ -90,6 +90,10 @@
   justify-content: center;
 }
 
+.todo-plan {
+  margin: 2px 0;
+}
+
 .plan-card {
   border: 1px solid var(--pg-border);
   border-radius: var(--pg-radius-md);
@@ -309,75 +313,6 @@
   opacity: 0.45;
 }
 
-.ask-card {
-  border: 1px solid color-mix(in srgb, var(--pg-accent) 34%, var(--pg-border));
-  background: color-mix(in srgb, var(--pg-accent) 4%, var(--pg-surface));
-  border-radius: var(--pg-radius-md);
-  padding: 13px 14px;
-}
-
-.ask-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--pg-accent);
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 9px;
-}
-
-.ask-question {
-  margin-bottom: 10px;
-}
-
-.ask-label {
-  font-size: 13px;
-  color: var(--pg-text);
-  margin-bottom: 6px;
-}
-
-.ask-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.ask-option {
-  padding: 6px 11px;
-  border: 1px solid var(--pg-border);
-  border-radius: 999px;
-  background: var(--pg-surface);
-  color: var(--pg-text-2);
-  font-size: 12px;
-  transition: all var(--pg-fast);
-}
-
-.ask-option:hover {
-  border-color: var(--pg-border-strong);
-}
-
-.ask-option.selected {
-  border-color: var(--pg-accent);
-  background: color-mix(in srgb, var(--pg-accent) 12%, var(--pg-surface));
-  color: var(--pg-text);
-}
-
-.ask-input {
-  width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--pg-border);
-  border-radius: var(--pg-radius-sm);
-  background: var(--pg-surface);
-  font-size: 13px;
-  outline: none;
-}
-
-.ask-input:focus {
-  border-color: var(--pg-accent);
-}
-
 .notice {
   display: flex;
   align-items: flex-start;
@@ -467,6 +402,72 @@
 
 .banner .spacer {
   flex: 1;
+}
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--pg-text-2);
+  background: color-mix(in srgb, var(--pg-accent) 8%, var(--pg-bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--pg-accent) 24%, var(--pg-border));
+}
+
+.update-banner.ready {
+  background: color-mix(in srgb, var(--pg-success) 8%, var(--pg-bg));
+  border-bottom-color: color-mix(in srgb, var(--pg-success) 24%, var(--pg-border));
+}
+
+.update-banner svg {
+  color: var(--pg-accent);
+  flex: none;
+}
+
+.update-banner.ready svg {
+  color: var(--pg-success);
+}
+
+.update-banner .spacer {
+  flex: 1;
+}
+
+.update-action {
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius-sm);
+  background: var(--pg-surface);
+  color: var(--pg-text-2);
+  font-size: 11.5px;
+}
+
+.update-action:hover {
+  border-color: var(--pg-border-strong);
+  color: var(--pg-text);
+}
+
+.update-action.primary {
+  border-color: var(--pg-accent);
+  background: var(--pg-accent);
+  color: var(--pg-accent-fg);
+}
+
+.update-progress {
+  flex: none;
+  width: 120px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--pg-border);
+  overflow: hidden;
+}
+
+.update-progress span {
+  display: block;
+  height: 100%;
+  background: var(--pg-accent);
+  transition: width 160ms linear;
 }
 
 .onboarding {

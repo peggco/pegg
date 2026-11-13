@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
-import { Check, CircleDot, ListChecks, ShieldQuestion, Sparkles, UserRound } from 'lucide-react';
+import { useMemo } from 'react';
+import { Check, CircleDot, ListChecks, ShieldQuestion, Sparkles } from 'lucide-react';
 import type { PlanEntry } from '../types';
-import type { PendingAsk, PendingPermission } from '../state/chat';
+import type { PendingPermission } from '../state/chat';
 import type { ChatItem } from '../state/chat';
-import { respondAsk, respondPermission } from '../state/actions';
+import { respondPermission } from '../state/actions';
 import { useT } from '../lib/i18n';
 
 export function PlanCard({ entries }: { entries: PlanEntry[] }) {
@@ -124,92 +124,6 @@ export function PermissionCard({ request }: { request: PendingPermission }) {
             </button>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-export function AskCard({ request }: { request: PendingAsk }) {
-  const [answers, setAnswers] = useState<Record<string, string>>(request.answers ?? {});
-  const questions = request.params.questions ?? [];
-  const missing = questions.some((q) => q.required && !answers[q.id]);
-
-  const set = (id: string, value: string) => setAnswers((prev) => ({ ...prev, [id]: value }));
-
-  const toggleMulti = (id: string, option: string) => {
-    const current = (answers[id] ?? '').split(', ').filter(Boolean);
-    const next = current.includes(option) ? current.filter((v) => v !== option) : [...current, option];
-    set(id, next.join(', '));
-  };
-
-  return (
-    <div className="ask-card">
-      <div className="ask-head">
-        <UserRound size={14} />
-        {request.params.agentName ? `${request.params.agentName} asks` : 'Pegg asks'}
-      </div>
-      {questions.map((question) => {
-        const value = answers[question.id] ?? '';
-        return (
-          <div className="ask-question" key={question.id}>
-            <div className="ask-label">{question.question}</div>
-            {question.type === 'text' ? (
-              <input
-                className="ask-input"
-                value={value}
-                onChange={(event) => set(question.id, event.target.value)}
-                placeholder="Type your answer…"
-              />
-            ) : null}
-            {question.type === 'boolean' ? (
-              <div className="ask-options">
-                {['Yes', 'No'].map((option) => (
-                  <button
-                    key={option}
-                    className={`ask-option${value === option ? ' selected' : ''}`}
-                    onClick={() => set(question.id, option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            {question.type === 'select' ? (
-              <div className="ask-options">
-                {(question.options ?? []).map((option) => (
-                  <button
-                    key={option}
-                    className={`ask-option${value === option ? ' selected' : ''}`}
-                    onClick={() => set(question.id, option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            {question.type === 'multiselect' ? (
-              <div className="ask-options">
-                {(question.options ?? []).map((option) => {
-                  const selected = value.split(', ').filter(Boolean).includes(option);
-                  return (
-                    <button
-                      key={option}
-                      className={`ask-option${selected ? ' selected' : ''}`}
-                      onClick={() => toggleMulti(question.id, option)}
-                    >
-                      {option}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-      <div className="permission-actions">
-        <button className="btn primary" disabled={missing} onClick={() => void respondAsk(request.requestId, answers)}>
-          Send answer
-        </button>
       </div>
     </div>
   );

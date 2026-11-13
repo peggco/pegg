@@ -12,7 +12,7 @@ tools.
 
 === "Global"
 
-    Add servers to the `mcp_servers` map in `~/.peggco/pegg.json`:
+    Add servers to the `mcp_servers` map in `~/.pegg/pegg.json`:
 
     ```json
     {
@@ -23,8 +23,13 @@ tools.
           "env": { "DEBUG": "true" }
         },
         "remote": {
-          "url": "https://example.com/sse",
+          "type": "streamable-http",
+          "url": "https://example.com/mcp",
           "headers": { "Authorization": "Bearer token" }
+        },
+        "legacy": {
+          "type": "sse",
+          "url": "https://example.com/sse"
         }
       }
     }
@@ -52,13 +57,17 @@ Project entries override global entries with the same name.
 
 | Key | Type | Description |
 |---|---|---|
+| `type` | string | Transport: `stdio`, `sse`, or `streamable-http`. When omitted, `url` selects legacy SSE and `command` selects stdio |
 | `command` | string | Executable to spawn (stdio transport) |
 | `args` | string[] | Command arguments |
 | `env` | object | Extra environment variables, merged over the inherited environment |
-| `url` | string | Remote endpoint (SSE transport). Takes precedence over `command` |
-| `headers` | object | HTTP headers sent with SSE requests |
+| `url` | string | Remote endpoint (SSE or Streamable HTTP) |
+| `headers` | object | HTTP headers sent with SSE and Streamable HTTP requests |
 
-A server must define either `url` or `command`.
+A stdio server must define `command`; a remote server must define `url`. The
+`type` aliases `local` (stdio), `http` (legacy SSE), and `streamable`
+(streamable-http) are accepted for compatibility, but new configurations should
+use the canonical names.
 
 ## Transports
 
@@ -73,12 +82,34 @@ Pegg spawns `command args...` as a child process:
   16 MiB per frame.
 - The child is terminated with SIGTERM when Pegg shuts down.
 
-### SSE
+### SSE (legacy)
 
 Pegg opens a `GET` request with `Accept: text/event-stream` and the configured
 headers. The server must first emit an `endpoint` event telling Pegg where to
 POST messages. Subsequent requests include the `Mcp-Session-Id` header when the
 server provides one. Responses arrive as `message` events.
+
+Set `"type": "sse"` explicitly, or omit `type` on a server that only has a `url`.
+The `http` CLI/type alias also selects this legacy transport.
+
+### Streamable HTTP
+
+Set `"type": "streamable-http"` for MCP servers implementing the
+[Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
+transport. Pegg uses protocol version `2025-06-18` for this transport and:
+
+- `POST`s each JSON-RPC message to `url` with
+  `Accept: application/json, text/event-stream`. A response may be a single JSON
+  object, a batch array, an SSE stream, or empty (`202`/`204`) for notifications.
+- Captures `Mcp-Session-Id` from responses and sends it on every subsequent
+  request and on stream reconnects.
+- Sends `MCP-Protocol-Version` after initialization.
+- Opens an optional `GET` SSE stream for server-initiated notifications, resuming
+  with `Last-Event-ID` after a reconnect. Servers that reject the stream with
+  `405` are supported; POST remains the request path.
+- Re-initializes once and retries when the server reports an expired session
+  (`404`).
+- Sends a best-effort `DELETE` on shutdown to end the session.
 
 ## Lifecycle
 
@@ -89,9 +120,17 @@ server provides one. Responses arrive as `message` events.
    between servers.
 3. A server that fails to connect is logged as a warning and skipped; the rest of
    Pegg continues normally.
-4. On shutdown, every MCP tool is unregistered and every connection is closed.
+4. Before resolving tools, an agent run waits up to 10 seconds for in-flight
+   server connections, so tools from slow servers are included in the first
+   request. The agent also re-syncs discovered tools before every model turn, so a
+   server that finishes connecting mid-run becomes available on the next turn.
+5. Adding, changing, or removing a server through the settings API reconnects the
+   affected server immediately; no restart is required.
+6. On shutdown, every MCP tool is unregistered and every connection is closed.
 
-The MCP protocol version used is `2024-11-05`.
+Streamable HTTP servers use MCP protocol version `2025-06-18`; stdio and legacy
+SSE servers use `2024-11-05`. Pegg accepts the version returned by the server
+during `initialize`.
 
 ## Managing servers
 
@@ -114,12 +153,17 @@ Fully specified:
 
 ```bash
 # Local stdio server
-pegg mcp add --project --name db --transport local \
+pegg mcp add --project --name db --transport stdio \
   --command npx --arg -y --arg @modelcontextprotocol/server-postgres \
   --env DEBUG=true
 
-# Remote SSE server
-pegg mcp add --global --name remote --transport http \
+# Remote Streamable HTTP server
+pegg mcp add --global --name remote --transport streamable-http \
+  --url https://example.com/mcp \
+  --header Authorization="Bearer token"
+
+# Legacy remote SSE server
+pegg mcp add --global --name legacy --transport sse \
   --url https://example.com/sse \
   --header Authorization="Bearer token"
 ```
@@ -128,15 +172,56 @@ pegg mcp add --global --name remote --transport http \
 |---|---|
 | `--global` / `--project` | Where to write the server |
 | `--name` | Server name |
-| `--transport` | `local` (stdio) or `http` (SSE) |
-| `--command` | Executable for local servers |
+| `--transport` | `stdio`, `sse` (legacy), or `streamable-http` (aliases: `local`, `http`) |
+| `--command` | Executable for stdio servers |
 | `--arg` | Argument (repeatable) |
 | `--env` | `KEY=VALUE` environment variable (repeatable) |
-| `--url` | SSE endpoint for http servers |
+| `--url` | Endpoint for SSE or Streamable HTTP servers |
 | `--header` | `KEY=VALUE` request header (repeatable) |
 
 The interactive flow offers common header presets: `Authorization`, `X-API-Key`,
 `Cookie`, and `User-Agent`.
+
+### Installing from the catalog
+
+The [Pegg catalog](../catalog.md) lists vetted MCP servers. Search, inspect, and
+install them without assembling the command by hand:
+
+```bash
+pegg mcp search github
+pegg mcp search github --official --limit 5
+pegg mcp info github
+
+# Global config (default)
+pegg mcp install github --env GITHUB_TOKEN=ghp_...
+
+# Project .mcp.json
+pegg mcp install github --project --name gh --env GITHUB_TOKEN=ghp_...
+```
+
+| Flag | Description |
+|---|---|
+| `--global` | Write to `~/.pegg/pegg.json` (default) |
+| `--project` | Write to `.mcp.json` in the current directory |
+| `--name` | Server name; defaults to the catalog id |
+| `--env KEY=VALUE` | Value for a `${KEY}` placeholder (repeatable) |
+| `--header KEY=VALUE` | Override a header on a remote server (repeatable) |
+| `--dry-run` | Print the config JSON without writing |
+| `--yes` | Skip the interactive confirmation |
+
+Catalog entries may use `${VAR}` placeholders in the command, arguments,
+environment values, URL, and headers. `mcp install` resolves them in this order:
+
+1. `--env KEY=VALUE`
+2. The process environment
+3. A masked prompt when stdin is a terminal
+
+On a non-interactive terminal, missing values produce an error listing the exact
+keys and the flags to use. Values are never printed; `--dry-run` redacts resolved
+secrets back to their `${VAR}` placeholders.
+
+Set `PEGG_CATALOG_API` to use a different catalog endpoint (for example a local hub
+API). `PEGG_SKILLS_API` is still honored as a fallback.
 
 ### Removing a server
 

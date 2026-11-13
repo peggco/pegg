@@ -238,7 +238,11 @@ func (s *Settings) openTools(server string) {
 		items = append(items, components.ListItem{Label: tool.Name, Detail: tool.Description})
 	}
 	if len(items) == 0 {
-		items = append(items, components.ListItem{Label: i18n.T("settings.mcp.noTools")})
+		if s.deps.MCP != nil && s.deps.MCP.Pending() > 0 {
+			items = append(items, components.ListItem{Label: i18n.T("settings.mcp.connecting")})
+		} else {
+			items = append(items, components.ListItem{Label: i18n.T("settings.mcp.noTools")})
+		}
 	}
 	l.SetItems(items)
 	s.openSub(&listModal{title: i18n.T("settings.mcp.toolsModal"), list: l, onBack: s.back})

@@ -325,6 +325,8 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleListModels(ctx, params)
 	case "_pegg/skills/reload":
 		result, handlerErr = s.handleSkillsReload(ctx, params)
+	case "_pegg/skills/list":
+		result, handlerErr = s.handleSkillsList(ctx, params)
 	case "_pegg/skills/search":
 		result, handlerErr = s.handleSkillsSearch(ctx, params)
 	case "_pegg/skills/install":

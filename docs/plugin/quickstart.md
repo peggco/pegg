@@ -93,7 +93,7 @@ chmod +x ~/.pegg/plugins/my-plugin
 ## Step 4: Verify
 
 ```bash
-pegg plugin list
+pegg plugins list
 ```
 
 Output:
@@ -109,7 +109,7 @@ Total: 1 plugins
 ## Step 5: Check details
 
 ```bash
-pegg plugin info my-plugin
+pegg plugins info my-plugin
 ```
 
 Output:

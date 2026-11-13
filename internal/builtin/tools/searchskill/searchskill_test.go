@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/peggco/pegg/internal/skillhub"
+	"github.com/peggco/pegg/internal/catalog"
 )
 
-func testClient(server *httptest.Server) *skillhub.Client {
-	c := skillhub.NewClient()
+func testClient(server *httptest.Server) *catalog.Client {
+	c := catalog.NewClient()
 	c.BaseURL = server.URL
 	c.GitHubAPI = server.URL
 	c.RawBase = server.URL

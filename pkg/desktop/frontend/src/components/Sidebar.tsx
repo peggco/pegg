@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
+  Boxes,
   Command,
   FolderOpen,
   GitBranch,
@@ -7,7 +8,6 @@ import {
   Pencil,
   Search,
   Settings2,
-  Sparkles,
   SquarePen,
   Sun,
   Trash2,
@@ -33,9 +33,9 @@ import {
   setSidebarCollapsed,
   startNewChat,
   toggleAppearance,
+  toggleCatalog,
   togglePalette,
   toggleSettings,
-  toggleSkills,
 } from '../state/actions';
 import { useStore } from '../state/store';
 import type { SessionListItem } from '../types';
@@ -191,9 +191,9 @@ export function Sidebar() {
               {workspace ? baseName(workspace).slice(0, 12) : ''}
             </span>
           </button>
-          <button className="nav-item" onClick={() => toggleSkills(true)}>
-            <Sparkles size={15} />
-            {t('nav.skills')}
+          <button className="nav-item" onClick={() => toggleCatalog(true)}>
+            <Boxes size={15} />
+            {t('nav.catalog')}
           </button>
           <button className="nav-item" onClick={() => toggleSettings(true)}>
             <Settings2 size={15} />

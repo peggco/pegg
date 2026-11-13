@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
-	"github.com/peggco/pegg/internal/skillhub"
+	"github.com/peggco/pegg/internal/skill"
 	"github.com/peggco/pegg/pkg/desktop/internal/acpclient"
 )
 
@@ -37,15 +39,15 @@ type HubSearchResult struct {
 }
 
 func (a *App) SearchHubSkills(query string, limit int) ([]HubSkill, error) {
-	items, err := skillhub.NewClient().Search(context.Background(), query, limit)
+	res, err := catalog.NewClient().Search(context.Background(), catalog.KindSkill, catalog.SearchOptions{Query: query, Limit: limit})
 	if err != nil {
 		return []HubSkill{}, err
 	}
-	return toHubSkills(items), nil
+	return toHubSkills(res.Items), nil
 }
 
 func (a *App) SearchHubSkillsFiltered(query string, limit int, filter string, cursor int) (HubSearchResult, error) {
-	opts := skillhub.SearchOptions{Query: query, Limit: limit, Cursor: cursor}
+	opts := catalog.SearchOptions{Query: query, Limit: limit, Cursor: cursor}
 	switch strings.ToLower(strings.TrimSpace(filter)) {
 	case "official":
 		value := true
@@ -56,7 +58,7 @@ func (a *App) SearchHubSkillsFiltered(query string, limit int, filter string, cu
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	res, err := skillhub.NewClient().SearchPage(ctx, opts)
+	res, err := catalog.NewClient().Search(ctx, catalog.KindSkill, opts)
 	if err != nil {
 		return HubSearchResult{}, err
 	}
@@ -66,7 +68,7 @@ func (a *App) SearchHubSkillsFiltered(query string, limit int, filter string, cu
 func (a *App) SkillReadme(source string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	return skillhub.NewClient().Readme(ctx, strings.TrimSpace(source))
+	return catalog.NewClient().SkillReadme(ctx, strings.TrimSpace(source))
 }
 
 func (a *App) InstallHubSkill(source, skillID, scope string) (SkillMutationResult, error) {
@@ -74,13 +76,13 @@ func (a *App) InstallHubSkill(source, skillID, scope string) (SkillMutationResul
 	if err != nil {
 		return SkillMutationResult{}, err
 	}
-	spec := skillhub.Spec{Source: strings.TrimSpace(source), SkillID: strings.TrimSpace(skillID)}
+	spec := catalog.SkillSpec{Source: strings.TrimSpace(source), SkillID: strings.TrimSpace(skillID)}
 	if spec.Source == "" || spec.SkillID == "" {
 		return SkillMutationResult{}, errors.New("source and skill id are required")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	installed, err := skillhub.Install(ctx, skillhub.NewClient(), spec, dir)
+	installed, err := catalog.InstallSkill(ctx, catalog.NewClient(), spec, dir)
 	if err != nil {
 		return SkillMutationResult{}, err
 	}
@@ -89,6 +91,65 @@ func (a *App) InstallHubSkill(source, skillID, scope string) (SkillMutationResul
 
 func (a *App) ReloadSkills() []acpclient.SlashCommand {
 	return a.reloadSkills()
+}
+
+func (a *App) agentSkills() []acpclient.SkillInfo {
+	a.mu.Lock()
+	client := a.client
+	a.mu.Unlock()
+	if client == nil || !client.Running() {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	skills, err := client.ListSkills(ctx)
+	if err != nil {
+		a.logf("skills: list: %v", err)
+		return nil
+	}
+	return skills
+}
+
+func (a *App) agentSkillCommands() []acpclient.SlashCommand {
+	skills := a.agentSkills()
+	out := make([]acpclient.SlashCommand, 0, len(skills))
+	for _, sk := range skills {
+		description := sk.Description
+		if description == "" {
+			description = sk.WhenToUse
+		}
+		out = append(out, acpclient.SlashCommand{Name: sk.Name, Description: description})
+	}
+	return out
+}
+
+func mergeSkillSettings(local []*skill.Skill, remote []acpclient.SkillInfo) []SkillSetting {
+	entries := make(map[string]SkillSetting, len(local)+len(remote))
+	for _, item := range local {
+		entries[item.Name] = SkillSetting{
+			Name:        item.Name,
+			Description: item.Description,
+			Source:      item.Source,
+			Path:        item.Path,
+		}
+	}
+	for _, item := range remote {
+		if _, exists := entries[item.Name]; exists && !strings.HasPrefix(item.Source, "plugin:") {
+			continue
+		}
+		entries[item.Name] = SkillSetting{
+			Name:        item.Name,
+			Description: item.Description,
+			Source:      item.Source,
+			Path:        item.Path,
+		}
+	}
+	out := make([]SkillSetting, 0, len(entries))
+	for _, item := range entries {
+		out = append(out, item)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 func (a *App) skillDir(scope string) (string, error) {
@@ -129,7 +190,7 @@ func (a *App) reloadSkills() []acpclient.SlashCommand {
 	return commands
 }
 
-func toHubSkills(items []skillhub.RemoteSkill) []HubSkill {
+func toHubSkills(items []catalog.RemoteSkill) []HubSkill {
 	out := make([]HubSkill, 0, len(items))
 	for _, item := range items {
 		out = append(out, HubSkill{

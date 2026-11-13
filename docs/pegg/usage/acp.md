@@ -310,6 +310,7 @@ Pegg-specific methods are prefixed with `_` per the ACP extensibility rules:
 |---|---|
 | `_pegg/models` | List available models |
 | `_pegg/skills/reload` | Reload skills and re-advertise commands |
+| `_pegg/skills/list` | Read-only list of registered skills (name, description, source, path) |
 | `_pegg/skills/search` | Search the skill hub |
 | `_pegg/skills/install` | Install a skill from the hub |
 | `_pegg/stt/transcribe` | Transcribe base64 audio |

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Todo/plan updates now render as an inline plan card at the latest
+  `todowrite` in each message instead of a panel above the composer. Older
+  updates in the same message collapse into the last card, a new list in a
+  later message appears as a new card, and the plan no longer follows you into
+  new messages.
+
 ## [0.2.4] - 2026-11-12
 
 ### Added

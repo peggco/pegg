@@ -421,12 +421,69 @@
   color: var(--pg-muted);
 }
 
+.activity-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
 .activity-summary {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.activity.is-active .activity-text {
+  background-image: linear-gradient(
+    90deg,
+    var(--pg-muted) 0%,
+    var(--pg-muted) 38%,
+    var(--pg-text) 50%,
+    var(--pg-muted) 62%,
+    var(--pg-muted) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: pg-activity-shimmer 3.2s linear infinite;
+}
+
+.activity.is-active .activity-summary,
+.activity.is-active .activity-time {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes pg-activity-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity.is-active .activity-text {
+    background: none;
+    color: inherit;
+    -webkit-text-fill-color: currentColor;
+    animation: none;
+  }
+  .activity.is-active .activity-summary,
+  .activity.is-active .activity-time {
+    color: inherit;
+    -webkit-text-fill-color: currentColor;
+  }
+  .activity.is-active .activity-time {
+    color: var(--pg-muted);
+  }
 }
 
 .activity-time {

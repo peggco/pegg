@@ -15,12 +15,12 @@ import (
 	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/builtin/tools/subagent"
+	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/plugin/bundle"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/skill"
-	"github.com/peggco/pegg/internal/skillhub"
 	"github.com/peggco/pegg/internal/vfs"
 )
 
@@ -73,10 +73,10 @@ func LoadSkillTool(fs *vfs.VFS, sess *session.Manager) {
 	if sess != nil {
 		sessions.subscribe(sess.Bus())
 	}
-	tools.Register(loadSkillTool(fs, sess, skillhub.NewClient()))
+	tools.Register(loadSkillTool(fs, sess, catalog.NewClient()))
 }
 
-func loadSkillTool(fs *vfs.VFS, sess *session.Manager, hub *skillhub.Client) tool.Tool {
+func loadSkillTool(fs *vfs.VFS, sess *session.Manager, hub *catalog.Client) tool.Tool {
 	prompt, err := generateLoadSkillToolPrompt()
 	if err != nil {
 		panic(fmt.Sprintf("failed to generate loadskill tool prompt: %v", err))
@@ -168,7 +168,7 @@ func renderSkill(ctx context.Context, sess *session.Manager, fs *vfs.VFS, s *ski
 	return b.String(), nil
 }
 
-func loadSkillFromHub(ctx context.Context, hub *skillhub.Client, name, source string) (*skill.Skill, error) {
+func loadSkillFromHub(ctx context.Context, hub *catalog.Client, name, source string) (*skill.Skill, error) {
 	if hub == nil {
 		return nil, fmt.Errorf("hub client is unavailable")
 	}
@@ -186,7 +186,7 @@ func loadSkillFromHub(ctx context.Context, hub *skillhub.Client, name, source st
 	installCtx, cancel := context.WithTimeout(ctx, hubInstallTime)
 	defer cancel()
 
-	installed, err := skillhub.Install(installCtx, hub, spec, dir)
+	installed, err := catalog.InstallSkill(installCtx, hub, spec, dir)
 	if err != nil {
 		return nil, fmt.Errorf("install %s from hub: %w", spec.String(), err)
 	}
@@ -202,26 +202,27 @@ func loadSkillFromHub(ctx context.Context, hub *skillhub.Client, name, source st
 	return nil, fmt.Errorf("installed skill %s could not be registered", spec.String())
 }
 
-func resolveHubSpec(ctx context.Context, hub *skillhub.Client, name, source string) (skillhub.Spec, error) {
+func resolveHubSpec(ctx context.Context, hub *catalog.Client, name, source string) (catalog.SkillSpec, error) {
 	if source != "" {
-		if spec, err := skillhub.ParseSpec(name); err == nil && spec.Source == source {
+		if spec, err := catalog.ParseSkillSpec(name); err == nil && spec.Source == source {
 			return spec, nil
 		}
-		return skillhub.Spec{Source: source, SkillID: name}, nil
+		return catalog.SkillSpec{Source: source, SkillID: name}, nil
 	}
 	if strings.Contains(name, "/") {
-		return skillhub.ParseSpec(name)
+		return catalog.ParseSkillSpec(name)
 	}
 	return findHubSkill(ctx, hub, name)
 }
 
-func findHubSkill(ctx context.Context, hub *skillhub.Client, name string) (skillhub.Spec, error) {
-	items, err := hub.Search(ctx, name, hubSearchResults)
+func findHubSkill(ctx context.Context, hub *catalog.Client, name string) (catalog.SkillSpec, error) {
+	res, err := hub.Search(ctx, catalog.KindSkill, catalog.SearchOptions{Query: name, Limit: hubSearchResults})
 	if err != nil {
-		return skillhub.Spec{}, fmt.Errorf("search hub: %w", err)
+		return catalog.SkillSpec{}, fmt.Errorf("search hub: %w", err)
 	}
+	items := res.Items
 
-	var matches []skillhub.RemoteSkill
+	var matches []catalog.RemoteSkill
 	for _, item := range items {
 		if strings.EqualFold(item.SkillID, name) || strings.EqualFold(item.Name, name) {
 			matches = append(matches, item)
@@ -229,13 +230,13 @@ func findHubSkill(ctx context.Context, hub *skillhub.Client, name string) (skill
 	}
 	if len(matches) == 0 {
 		if len(items) > 0 {
-			return skillhub.Spec{}, fmt.Errorf("no exact hub match; candidates: %s", hubRefs(items, 5))
+			return catalog.SkillSpec{}, fmt.Errorf("no exact hub match; candidates: %s", hubRefs(items, 5))
 		}
-		return skillhub.Spec{}, fmt.Errorf("no hub skill matched %q", name)
+		return catalog.SkillSpec{}, fmt.Errorf("no hub skill matched %q", name)
 	}
 
 	if len(matches) > 1 {
-		var official []skillhub.RemoteSkill
+		var official []catalog.RemoteSkill
 		for _, item := range matches {
 			if item.Official {
 				official = append(official, item)
@@ -246,13 +247,13 @@ func findHubSkill(ctx context.Context, hub *skillhub.Client, name string) (skill
 		}
 	}
 	if len(matches) > 1 {
-		return skillhub.Spec{}, fmt.Errorf("multiple hub skills match %q; retry with source or ref: %s", name, hubRefs(matches, 5))
+		return catalog.SkillSpec{}, fmt.Errorf("multiple hub skills match %q; retry with source or ref: %s", name, hubRefs(matches, 5))
 	}
 
-	return skillhub.Spec{Source: matches[0].Source, SkillID: matches[0].SkillID}, nil
+	return catalog.SkillSpec{Source: matches[0].Source, SkillID: matches[0].SkillID}, nil
 }
 
-func hubRefs(items []skillhub.RemoteSkill, limit int) string {
+func hubRefs(items []catalog.RemoteSkill, limit int) string {
 	refs := make([]string, 0, len(items))
 	for i, item := range items {
 		if limit > 0 && i >= limit {

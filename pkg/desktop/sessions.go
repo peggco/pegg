@@ -445,6 +445,7 @@ func (a *App) NewSession(req NewSessionRequest) (*SessionInfo, error) {
 			a.logf("set model: %v", err)
 		}
 	}
+	info.Commands = a.agentSkillCommands()
 	a.rememberSession(info)
 	_ = a.prefs.TouchWorkspace(abs, workspace.Name(abs))
 	a.saveLastSession(info.PeggID)
@@ -510,6 +511,7 @@ func (a *App) LoadSession(req LoadSessionRequest) (*SessionInfo, error) {
 	if info.Title == "" {
 		info.Title = "Session"
 	}
+	info.Commands = a.agentSkillCommands()
 	a.rememberSession(info)
 	a.saveLastSession(info.PeggID)
 	_ = a.prefs.TouchWorkspace(abs, workspace.Name(abs))

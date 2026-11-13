@@ -1,16 +1,23 @@
 package cli
 
 import (
+	"bufio"
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/mcp"
 )
@@ -21,8 +28,9 @@ const (
 )
 
 const (
-	mcpTransportLocal = "local"
-	mcpTransportHTTP  = "http"
+	mcpTransportStdio          = "stdio"
+	mcpTransportSSE            = "sse"
+	mcpTransportStreamableHTTP = "streamable-http"
 )
 
 var popularHeaderKeys = []string{
@@ -42,6 +50,9 @@ func (c *CLI) newMCPCommand() *cobra.Command {
 		c.newMCPAddCommand(),
 		c.newMCPRemoveCommand(),
 		c.newMCPToolsCommand(),
+		c.newMCPSearchCommand(),
+		c.newMCPInfoCommand(),
+		c.newMCPInstallCommand(),
 	)
 	return cmd
 }
@@ -109,15 +120,17 @@ func printMCPServers(out io.Writer, servers map[string]config.MCPServerConfig) {
 	fmt.Fprintf(out, "  %-24s %-7s %s\n", "NAME", "TYPE", "DETAIL")
 	for _, name := range names {
 		s := servers[name]
-		if s.URL != "" {
-			fmt.Fprintf(out, "  %-24s %-7s %s\n", name, "http", s.URL)
+		kind, err := mcp.ResolveTransportKind(s)
+		if err != nil {
+			fmt.Fprintf(out, "  %-24s %-7s %s\n", name, "invalid", "(invalid: no command or url)")
 			continue
 		}
-		detail := strings.TrimSpace(s.Command + " " + strings.Join(s.Args, " "))
-		if detail == "" {
-			detail = "(invalid: no command or url)"
+		if kind == mcp.TransportStdio {
+			detail := strings.TrimSpace(s.Command + " " + strings.Join(s.Args, " "))
+			fmt.Fprintf(out, "  %-24s %-7s %s\n", name, string(kind), detail)
+			continue
 		}
-		fmt.Fprintf(out, "  %-24s %-7s %s\n", name, "stdio", detail)
+		fmt.Fprintf(out, "  %-24s %-7s %s\n", name, string(kind), s.URL)
 	}
 }
 
@@ -162,11 +175,11 @@ func (c *CLI) newMCPAddCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&f.globalOnly, "global", false, "add to global config")
 	cmd.Flags().BoolVar(&f.projectOnly, "project", false, "add to project .mcp.json")
 	cmd.Flags().StringVar(&f.name, "name", "", "server name")
-	cmd.Flags().StringVar(&f.transport, "transport", "", "transport type: local or http")
+	cmd.Flags().StringVar(&f.transport, "transport", "", "transport type: stdio, sse (legacy), or streamable-http")
 	cmd.Flags().StringVar(&f.command, "command", "", "local command to run")
 	cmd.Flags().StringSliceVar(&f.args, "arg", nil, "local command argument (repeatable)")
 	cmd.Flags().StringToStringVar(&f.env, "env", nil, "local environment variable KEY=VALUE (repeatable)")
-	cmd.Flags().StringVar(&f.url, "url", "", "remote SSE URL")
+	cmd.Flags().StringVar(&f.url, "url", "", "MCP endpoint (SSE or streamable HTTP)")
 	cmd.Flags().StringToStringVar(&f.headers, "header", nil, "request header KEY=VALUE (repeatable)")
 	return cmd
 }
@@ -198,8 +211,9 @@ func (c *CLI) runMCPAdd(out io.Writer, f *mcpAddFlags) error {
 		}
 		transport = t
 	}
-	if transport != mcpTransportLocal && transport != mcpTransportHTTP {
-		return fmt.Errorf("cli: unknown transport %q (use local or http)", transport)
+	kind, err := mcp.ParseTransportKind(transport)
+	if err != nil || kind == "" {
+		return fmt.Errorf("cli: unknown transport %q (use stdio, sse (legacy), or streamable-http)", transport)
 	}
 
 	name := strings.TrimSpace(f.name)
@@ -212,8 +226,8 @@ func (c *CLI) runMCPAdd(out io.Writer, f *mcpAddFlags) error {
 	}
 
 	var server config.MCPServerConfig
-	switch transport {
-	case mcpTransportLocal:
+	switch kind {
+	case mcp.TransportStdio:
 		command := strings.TrimSpace(f.command)
 		if !f.commandSet || command == "" {
 			cmd, err := promptString("Command")
@@ -238,8 +252,8 @@ func (c *CLI) runMCPAdd(out io.Writer, f *mcpAddFlags) error {
 			}
 			env = e
 		}
-		server = config.MCPServerConfig{Command: command, Args: args, Env: env}
-	case mcpTransportHTTP:
+		server = config.MCPServerConfig{Type: string(kind), Command: command, Args: args, Env: env}
+	case mcp.TransportSSE, mcp.TransportStreamableHTTP:
 		url := strings.TrimSpace(f.url)
 		if !f.urlSet || url == "" {
 			u, err := promptString("URL")
@@ -256,7 +270,7 @@ func (c *CLI) runMCPAdd(out io.Writer, f *mcpAddFlags) error {
 			}
 			headers = h
 		}
-		server = config.MCPServerConfig{URL: url, Headers: headers}
+		server = config.MCPServerConfig{Type: string(kind), URL: url, Headers: headers}
 	}
 
 	if scope == mcpScopeGlobal {
@@ -398,21 +412,384 @@ func (c *CLI) runMCPTools(out io.Writer, server string) error {
 	return nil
 }
 
+func (c *CLI) newMCPSearchCommand() *cobra.Command {
+	var limit int
+	var asJSON, official bool
+	cmd := &cobra.Command{
+		Use:   "search <query>",
+		Short: "Search the Pegg catalog for MCP servers",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return c.runMCPSearch(cliContext(cmd), cmd.OutOrStdout(), args[0], limit, official, asJSON)
+		},
+	}
+	cmd.Flags().IntVar(&limit, "limit", 20, "maximum number of results")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "output JSON")
+	cmd.Flags().BoolVar(&official, "official", false, "only show official entries")
+	return cmd
+}
+
+func (c *CLI) runMCPSearch(ctx context.Context, out io.Writer, query string, limit int, official, asJSON bool) error {
+	opts := catalog.SearchOptions{Query: query, Limit: limit}
+	if official {
+		value := true
+		opts.Official = &value
+	}
+	result, err := catalog.NewClient().Search(ctx, catalog.KindMCP, opts)
+	if err != nil {
+		return fmt.Errorf("cli: mcp search: %w", err)
+	}
+	if asJSON {
+		data, err := json.MarshalIndent(result.Items, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(out, string(data))
+		return nil
+	}
+	if len(result.Items) == 0 {
+		fmt.Fprintln(out, "no MCP servers found")
+		return nil
+	}
+	w := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tNAME\tTRANSPORT\tOFFICIAL")
+	for _, item := range result.Items {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", item.ID, item.Name, mcpEntryTransport(item), yesNo(item.Official))
+	}
+	return w.Flush()
+}
+
+func (c *CLI) newMCPInfoCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "info <id>",
+		Short: "Show MCP server catalog details",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return c.runMCPInfo(cliContext(cmd), cmd.OutOrStdout(), args[0])
+		},
+	}
+}
+
+func (c *CLI) runMCPInfo(ctx context.Context, out io.Writer, id string) error {
+	mcpID, err := catalog.ParseMCPID(id)
+	if err != nil {
+		return fmt.Errorf("cli: mcp info: %w", err)
+	}
+	entry, err := catalog.NewClient().Get(ctx, catalog.KindMCP, mcpID)
+	if err != nil {
+		return fmt.Errorf("cli: mcp info: %w", err)
+	}
+
+	fmt.Fprintf(out, "ID:           %s\n", entry.ID)
+	fmt.Fprintf(out, "Name:         %s\n", entry.Name)
+	if entry.Description != "" {
+		fmt.Fprintf(out, "Description:  %s\n", entry.Description)
+	}
+	if entry.Vendor != "" {
+		fmt.Fprintf(out, "Vendor:       %s\n", entry.Vendor)
+	}
+	if entry.Version != "" {
+		fmt.Fprintf(out, "Version:      %s\n", entry.Version)
+	}
+	fmt.Fprintf(out, "Official:     %s\n", yesNo(entry.Official))
+	fmt.Fprintf(out, "Transport:    %s\n", mcpEntryTransport(entry))
+	if entry.Repository != "" {
+		fmt.Fprintf(out, "Repository:   %s\n", entry.Repository)
+	}
+	if entry.Homepage != "" {
+		fmt.Fprintf(out, "Homepage:     %s\n", entry.Homepage)
+	}
+	if entry.License != "" {
+		fmt.Fprintf(out, "License:      %s\n", entry.License)
+	}
+	if len(entry.Tags) > 0 {
+		fmt.Fprintf(out, "Tags:         %s\n", strings.Join(entry.Tags, ", "))
+	}
+	if len(entry.RequiredEnv) > 0 {
+		fmt.Fprintln(out, "Required env:")
+		for _, key := range entry.RequiredEnv {
+			status := "missing"
+			if strings.TrimSpace(os.Getenv(key)) != "" {
+				status = "set"
+			}
+			fmt.Fprintf(out, "  %-20s %s\n", key, status)
+		}
+	}
+	fmt.Fprintf(out, "Install:      pegg mcp install %s\n", entry.ID)
+	return nil
+}
+
+type mcpInstallFlags struct {
+	global  bool
+	project bool
+	name    string
+	env     map[string]string
+	headers map[string]string
+	dryRun  bool
+	yes     bool
+}
+
+func (c *CLI) newMCPInstallCommand() *cobra.Command {
+	f := &mcpInstallFlags{}
+	cmd := &cobra.Command{
+		Use:   "install <id>",
+		Short: "Install an MCP server from the Pegg catalog",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return c.runMCPInstall(cliContext(cmd), cmd, args[0], f)
+		},
+	}
+	cmd.Flags().BoolVar(&f.global, "global", true, "write to the global config")
+	cmd.Flags().BoolVar(&f.project, "project", false, "write to the project .mcp.json")
+	cmd.MarkFlagsMutuallyExclusive("global", "project")
+	cmd.Flags().StringVar(&f.name, "name", "", "server name (default: catalog id)")
+	cmd.Flags().StringToStringVar(&f.env, "env", nil, "placeholder value KEY=VALUE (repeatable)")
+	cmd.Flags().StringToStringVar(&f.headers, "header", nil, "header override KEY=VALUE (repeatable)")
+	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false, "print the config without writing")
+	cmd.Flags().BoolVar(&f.yes, "yes", false, "install without confirmation")
+	return cmd
+}
+
+func (c *CLI) runMCPInstall(ctx context.Context, cmd *cobra.Command, rawID string, f *mcpInstallFlags) error {
+	out := cmd.OutOrStdout()
+	id, err := catalog.ParseMCPID(rawID)
+	if err != nil {
+		return fmt.Errorf("cli: mcp install: %w", err)
+	}
+	entry, err := catalog.NewClient().Get(ctx, catalog.KindMCP, id)
+	if err != nil {
+		return fmt.Errorf("cli: mcp install: %w", err)
+	}
+
+	values := make(map[string]string, len(f.env))
+	for key, value := range f.env {
+		values[key] = value
+	}
+	for _, key := range entry.RequiredEnv {
+		if values[key] == "" {
+			if value := os.Getenv(key); value != "" {
+				values[key] = value
+			}
+		}
+	}
+
+	server, missing, err := entry.Config(values)
+	if err != nil {
+		return fmt.Errorf("cli: mcp install: %w", err)
+	}
+	if !f.dryRun && len(missing) > 0 && isTerminalInput() {
+		for _, key := range missing {
+			value, err := promptSecret(cmd, key)
+			if err != nil {
+				return err
+			}
+			if value != "" {
+				values[key] = value
+			}
+		}
+		server, missing, err = entry.Config(values)
+		if err != nil {
+			return fmt.Errorf("cli: mcp install: %w", err)
+		}
+	}
+	if !f.dryRun && len(missing) > 0 {
+		return fmt.Errorf(
+			"cli: mcp install: missing required values: %s (set them in the environment or pass --env KEY=VALUE)",
+			strings.Join(missing, ", "),
+		)
+	}
+
+	for key, value := range f.headers {
+		if server.URL == "" {
+			return errors.New("cli: mcp install: --header only applies to remote MCP servers")
+		}
+		if server.Headers == nil {
+			server.Headers = map[string]string{}
+		}
+		server.Headers[key] = value
+	}
+
+	name := strings.TrimSpace(f.name)
+	if name == "" {
+		name = entry.ID
+	}
+	if name == "" {
+		name = id
+	}
+	if name == "" || strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("cli: mcp install: invalid server name %q", name)
+	}
+
+	scope := mcpScopeGlobal
+	if f.project {
+		scope = mcpScopeProject
+	}
+
+	if f.dryRun {
+		payload := map[string]any{}
+		redactValues := make(map[string]string, len(values)+len(f.headers))
+		for key, value := range values {
+			redactValues[key] = value
+		}
+		for key, value := range f.headers {
+			redactValues[key] = value
+		}
+		redacted := redactMCPServerConfig(server, redactValues)
+		if scope == mcpScopeProject {
+			payload["mcpServers"] = map[string]config.MCPServerConfig{name: redacted}
+		} else {
+			payload["mcp_servers"] = map[string]config.MCPServerConfig{name: redacted}
+		}
+		data, err := json.MarshalIndent(payload, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(out, string(data))
+		return nil
+	}
+
+	if !f.yes && isTerminalInput() {
+		ok, err := confirm(cmd, fmt.Sprintf("Install MCP server %s (%s)?", name, scope))
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(out, "Cancelled.")
+			return nil
+		}
+	}
+
+	switch scope {
+	case mcpScopeProject:
+		if err := mcp.UpsertProjectServer(".", name, server); err != nil {
+			return fmt.Errorf("cli: save project mcp server: %w", err)
+		}
+	default:
+		if err := config.UpsertMCPServer(name, server); err != nil {
+			return fmt.Errorf("cli: save mcp server: %w", err)
+		}
+	}
+
+	c.log.Finfo("mcp server %q installed from catalog (%s)", name, scope)
+	fmt.Fprintf(out, "Installed MCP server %q (%s)\n", name, scope)
+	fmt.Fprintf(out, "Transport: %s\n", mcpConfigTransport(server))
+	if len(entry.RequiredEnv) > 0 {
+		fmt.Fprintf(out, "Required env: %s\n", strings.Join(entry.RequiredEnv, ", "))
+	}
+	return nil
+}
+
+func mcpEntryTransport(entry catalog.Entry) string {
+	if value := strings.TrimSpace(entry.Transport.Type); value != "" {
+		return value
+	}
+	if len(entry.Transports) > 0 {
+		return strings.Join(entry.Transports, ",")
+	}
+	return "-"
+}
+
+func mcpConfigTransport(cfg config.MCPServerConfig) string {
+	if value := strings.TrimSpace(cfg.Type); value != "" {
+		return value
+	}
+	if cfg.URL != "" {
+		return "sse"
+	}
+	return "stdio"
+}
+
+func yesNo(value bool) string {
+	if value {
+		return "yes"
+	}
+	return "no"
+}
+
+func isTerminalInput() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
+func promptSecret(cmd *cobra.Command, key string) (string, error) {
+	fmt.Fprintf(cmd.OutOrStdout(), "%s: ", key)
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		data, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Fprintln(cmd.OutOrStdout())
+		if err != nil {
+			return "", fmt.Errorf("cli: read %s: %w", key, err)
+		}
+		return strings.TrimSpace(string(data)), nil
+	}
+	line, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("cli: read %s: %w", key, err)
+	}
+	return strings.TrimSpace(line), nil
+}
+
+func redactMCPServerConfig(cfg config.MCPServerConfig, values map[string]string) config.MCPServerConfig {
+	keys := make([]string, 0, len(values))
+	for key, value := range values {
+		if value != "" {
+			keys = append(keys, key)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if len(values[keys[i]]) != len(values[keys[j]]) {
+			return len(values[keys[i]]) > len(values[keys[j]])
+		}
+		return keys[i] < keys[j]
+	})
+	redact := func(value string) string {
+		for _, key := range keys {
+			value = strings.ReplaceAll(value, values[key], "${"+key+"}")
+		}
+		return value
+	}
+
+	out := cfg
+	out.Command = redact(cfg.Command)
+	out.URL = redact(cfg.URL)
+	if cfg.Args != nil {
+		out.Args = make([]string, len(cfg.Args))
+		for i, arg := range cfg.Args {
+			out.Args[i] = redact(arg)
+		}
+	}
+	if cfg.Env != nil {
+		out.Env = make(map[string]string, len(cfg.Env))
+		for key, value := range cfg.Env {
+			out.Env[key] = redact(value)
+		}
+	}
+	if cfg.Headers != nil {
+		out.Headers = make(map[string]string, len(cfg.Headers))
+		for key, value := range cfg.Headers {
+			out.Headers[key] = redact(value)
+		}
+	}
+	return out
+}
+
 func promptScope() (string, error) {
 	items := []string{mcpScopeGlobal, mcpScopeProject}
 	return promptSelect("Target", items)
 }
 
 func promptTransport() (string, error) {
-	items := []string{"local (stdio)", "http (sse)"}
+	items := []string{mcpTransportStdio, "sse (legacy)", mcpTransportStreamableHTTP}
 	res, err := promptSelect("Transport", items)
 	if err != nil {
 		return "", err
 	}
-	if strings.HasPrefix(res, "local") {
-		return mcpTransportLocal, nil
+	switch res {
+	case mcpTransportStdio:
+		return mcpTransportStdio, nil
+	case mcpTransportStreamableHTTP:
+		return mcpTransportStreamableHTTP, nil
+	default:
+		return mcpTransportSSE, nil
 	}
-	return mcpTransportHTTP, nil
 }
 
 func promptSelect(label string, items []string) (string, error) {

@@ -136,8 +136,8 @@ cp my-plugin ~/.pegg/plugins/
 chmod +x ~/.pegg/plugins/my-plugin
 
 # Verify
-pegg plugin list
-pegg plugin info my-plugin
+pegg plugins list
+pegg plugins info my-plugin
 ```
 
 ## Example: Provider checker plugin

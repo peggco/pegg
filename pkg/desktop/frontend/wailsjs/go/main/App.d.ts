@@ -4,6 +4,7 @@ import {main} from '../models';
 import {workspace} from '../models';
 import {binary} from '../models';
 import {acpclient} from '../models';
+import {selfupdate} from '../models';
 import {prefs} from '../models';
 import {themes} from '../models';
 
@@ -25,6 +26,12 @@ export function Cancel(arg1:string):Promise<void>;
 
 export function Capabilities():Promise<acpclient.PeggCapabilities>;
 
+export function CatalogInstalled():Promise<main.CatalogInstalled>;
+
+export function CatalogReadme(arg1:string,arg2:string):Promise<string>;
+
+export function CheckDesktopUpdate():Promise<selfupdate.Status>;
+
 export function ConnectLogout():Promise<main.ConnectSettings>;
 
 export function ConnectResetDevice():Promise<main.ConnectSettings>;
@@ -39,13 +46,21 @@ export function CurrentSession():Promise<main.SessionInfo>;
 
 export function DeleteSession(arg1:string):Promise<void>;
 
+export function DownloadDesktopUpdate():Promise<selfupdate.Status>;
+
 export function FindBinary():Promise<binary.Status>;
 
 export function ForgetSession(arg1:string):Promise<void>;
 
 export function ForkSession(arg1:string,arg2:string,arg3:number):Promise<acpclient.SessionForkResult>;
 
+export function GetCatalogEntry(arg1:string,arg2:string):Promise<main.CatalogEntry>;
+
 export function InstallBinary():Promise<binary.Status>;
+
+export function InstallCatalogMCP(arg1:string,arg2:Record<string, string>,arg3:Record<string, string>,arg4:string):Promise<main.CatalogMutationResult>;
+
+export function InstallCatalogPlugin(arg1:string,arg2:string):Promise<main.CatalogMutationResult>;
 
 export function InstallHubSkill(arg1:string,arg2:string,arg3:string):Promise<main.SkillMutationResult>;
 
@@ -107,6 +122,8 @@ export function RespondElicitation(arg1:string,arg2:string,arg3:Record<string, a
 
 export function RespondPermission(arg1:string,arg2:string):Promise<void>;
 
+export function RestartToUpdate():Promise<void>;
+
 export function RevealPath(arg1:string):Promise<void>;
 
 export function RevertSession(arg1:string,arg2:string,arg3:number):Promise<acpclient.SessionRevertResult>;
@@ -127,11 +144,15 @@ export function SavePrefs(arg1:prefs.Prefs):Promise<prefs.Prefs>;
 
 export function SavePrefsOnly(arg1:prefs.Prefs):Promise<prefs.Prefs>;
 
+export function SearchCatalog(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number):Promise<main.CatalogSearchResult>;
+
 export function SearchFiles(arg1:string,arg2:number):Promise<Array<string>>;
 
 export function SearchHubSkills(arg1:string,arg2:number):Promise<Array<main.HubSkill>>;
 
 export function SearchHubSkillsFiltered(arg1:string,arg2:number,arg3:string,arg4:number):Promise<main.HubSearchResult>;
+
+export function SelfUpdateStatus():Promise<selfupdate.Status>;
 
 export function SendPrompt(arg1:main.PromptRequest):Promise<acpclient.SessionPromptResult>;
 

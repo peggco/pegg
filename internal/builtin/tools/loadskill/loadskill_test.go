@@ -14,12 +14,12 @@ import (
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/builtin/tools/subagent"
+	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/skill"
-	"github.com/peggco/pegg/internal/skillhub"
 	"github.com/peggco/pegg/internal/utils/query"
 )
 
@@ -367,15 +367,15 @@ func TestLoadSkillFromHubNoExactMatch(t *testing.T) {
 	}
 }
 
-func newStubHubClient(t *testing.T) *skillhub.Client {
+func newStubHubClient(t *testing.T) *catalog.Client {
 	t.Helper()
 	server := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(server.Close)
 	return testHubClient(server)
 }
 
-func testHubClient(server *httptest.Server) *skillhub.Client {
-	c := skillhub.NewClient()
+func testHubClient(server *httptest.Server) *catalog.Client {
+	c := catalog.NewClient()
 	c.BaseURL = server.URL
 	c.GitHubAPI = server.URL
 	c.RawBase = server.URL

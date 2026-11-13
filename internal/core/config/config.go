@@ -52,6 +52,7 @@ type SessionConfig struct {
 }
 
 type MCPServerConfig struct {
+	Type    string            `json:"type,omitempty"`
 	Command string            `json:"command,omitempty"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`

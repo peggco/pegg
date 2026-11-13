@@ -221,6 +221,27 @@ export interface BinaryStatus {
   error?: string;
 }
 
+export interface SelfUpdateStatus {
+  currentVersion: string;
+  latestVersion?: string;
+  state: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'unsupported' | 'error';
+  available: boolean;
+  supported: boolean;
+  desktopAvailable: boolean;
+  desktopReady: boolean;
+  ready: boolean;
+  progress: number;
+  error?: string;
+  releaseUrl?: string;
+  targetPath?: string;
+  agentCurrentVersion?: string;
+  agentLatestVersion?: string;
+  agentAvailable: boolean;
+  agentSupported: boolean;
+  agentReady: boolean;
+  agentTargetPath?: string;
+}
+
 export interface BootstrapInfo {
   platform: string;
   arch: string;
@@ -229,6 +250,7 @@ export interface BootstrapInfo {
   prefs: Prefs;
   themes: Theme[];
   binary: BinaryStatus;
+  selfUpdate: SelfUpdateStatus;
   defaultWorkspace: string;
   workspace: string;
   logPath: string;
@@ -482,6 +504,7 @@ export interface TeamStatus {
 
 export interface MCPServerInput {
   name: string;
+  type: string;
   command: string;
   args: string[];
   env: Record<string, string>;
@@ -507,4 +530,57 @@ export interface SkillMutationResult {
   name?: string;
   path?: string;
   commands?: SlashCommand[];
+}
+
+export type CatalogKind = 'skills' | 'mcp' | 'plugins';
+
+export interface CatalogItem {
+  kind: CatalogKind;
+  id: string;
+  name: string;
+  description?: string;
+  source: string;
+  url: string;
+  license?: string;
+  official: boolean;
+  tags?: string[];
+  version?: string;
+  transport?: string;
+  transports?: string[];
+  capabilities?: string[];
+  platforms?: string[];
+  repository?: string;
+  homepage?: string;
+  requiredEnv?: string[];
+  skillId?: string;
+}
+
+export interface CatalogSearchResult {
+  items: CatalogItem[];
+  nextCursor?: number | null;
+}
+
+export interface CatalogEntry extends CatalogItem {
+  configJSON?: string;
+  installCommand?: string;
+  readmeSource?: string;
+  peggRequirement?: string;
+  protocolRequirement?: number;
+  compatibilityWarnings?: string[];
+}
+
+export interface CatalogMutationResult {
+  name?: string;
+  path?: string;
+  restartRequired?: boolean;
+  commands?: SlashCommand[];
+  warnings?: string[];
+  catalogVersion?: string;
+  installedVersion?: string;
+}
+
+export interface CatalogInstalled {
+  skills: string[];
+  mcp: string[];
+  plugins: string[];
 }

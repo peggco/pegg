@@ -6,7 +6,7 @@ import { store } from '../state/store';
 import { useT } from '../lib/i18n';
 import { Field } from './SettingsUI';
 
-type Transport = 'stdio' | 'http';
+type Transport = 'stdio' | 'sse' | 'streamable-http';
 
 function parseKeyValues(text: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -49,7 +49,7 @@ export function MCPModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
       store.toast('warn', t('mcp.commandRequired'));
       return;
     }
-    if (transport === 'http' && !url.trim()) {
+    if (transport !== 'stdio' && !url.trim()) {
       store.toast('warn', t('mcp.urlRequired'));
       return;
     }
@@ -57,11 +57,12 @@ export function MCPModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
     try {
       await api.AddMCPServer({
         name: trimmed,
+        type: transport,
         command: transport === 'stdio' ? command.trim() : '',
         args: transport === 'stdio' ? parseArgs(args) : [],
         env: transport === 'stdio' ? parseKeyValues(env) : {},
-        url: transport === 'http' ? url.trim() : '',
-        headers: transport === 'http' ? parseKeyValues(headers) : {},
+        url: transport !== 'stdio' ? url.trim() : '',
+        headers: transport !== 'stdio' ? parseKeyValues(headers) : {},
       });
       await onAdded();
       store.toast('success', t('mcp.added', { name: trimmed }));
@@ -100,8 +101,9 @@ export function MCPModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
                 value={transport}
                 onChange={(event) => setTransport(event.target.value as Transport)}
               >
-                <option value="stdio">stdio</option>
-                <option value="http">HTTP</option>
+                <option value="stdio">{t('mcp.transportStdio')}</option>
+                <option value="sse">{t('mcp.transportSSE')}</option>
+                <option value="streamable-http">{t('mcp.transportStreamableHTTP')}</option>
               </select>
             </Field>
 

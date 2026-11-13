@@ -31,7 +31,7 @@ type Plugin interface {
 
 Returns the unique name of the plugin. This name is used for:
 
-- Identifying the plugin in `pegg plugin list`
+- Identifying the plugin in `pegg plugins list`
 - Excluding plugins via configuration
 - Logging
 

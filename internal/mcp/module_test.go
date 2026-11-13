@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -103,13 +104,49 @@ func TestMergeServersProjectOverridesGlobal(t *testing.T) {
 }
 
 func TestNewTransportSelection(t *testing.T) {
-	if _, err := NewTransport(config.MCPServerConfig{URL: "https://x/sse"}, io.Discard); err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		name  string
+		cfg   config.MCPServerConfig
+		check func(Duplex) bool
+	}{
+		{"sse inferred", config.MCPServerConfig{URL: "https://x/sse"}, func(d Duplex) bool {
+			_, ok := d.(*SSETransport)
+			return ok
+		}},
+		{"sse explicit", config.MCPServerConfig{Type: "sse", URL: "https://x/sse"}, func(d Duplex) bool {
+			_, ok := d.(*SSETransport)
+			return ok
+		}},
+		{"streamable explicit", config.MCPServerConfig{Type: "streamable-http", URL: "https://x/mcp"}, func(d Duplex) bool {
+			_, ok := d.(*StreamableHTTPTransport)
+			return ok
+		}},
+		{"stdio inferred", config.MCPServerConfig{Command: "cat"}, func(d Duplex) bool {
+			_, ok := d.(*StdioTransport)
+			return ok
+		}},
+		{"stdio explicit", config.MCPServerConfig{Type: "stdio", Command: "cat"}, func(d Duplex) bool {
+			_, ok := d.(*StdioTransport)
+			return ok
+		}},
 	}
-	if _, err := NewTransport(config.MCPServerConfig{Command: "cat"}, io.Discard); err != nil {
-		t.Fatal(err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tr, err := NewTransport(tc.cfg, io.Discard)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = tr.Close()
+			if !tc.check(tr) {
+				t.Fatalf("transport = %T", tr)
+			}
+		})
 	}
-	if _, err := NewTransport(config.MCPServerConfig{}, io.Discard); err != ErrUnsupported {
+
+	if _, err := NewTransport(config.MCPServerConfig{}, io.Discard); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("err = %v, want ErrUnsupported", err)
+	}
+	if _, err := NewTransport(config.MCPServerConfig{Type: "websocket", URL: "https://x"}, io.Discard); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("err = %v, want ErrUnsupported", err)
 	}
 }

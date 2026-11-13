@@ -3,6 +3,7 @@ import { PanelLeft } from 'lucide-react';
 import {
   onAsk,
   onBinaryProgress,
+  onDesktopUpdate,
   onFileDrop,
   onLoading,
   onPendingClear,
@@ -22,21 +23,25 @@ import {
   readDropped,
   respondPermission,
   setBinaryProgress,
+  setSelfUpdate,
   setServerStatus,
   setSidebarCollapsed,
   startNewChat,
+  toggleCatalog,
   togglePalette,
   toggleSettings,
 } from './state/actions';
 import { store, useStore } from './state/store';
 import { CommandPalette } from './components/CommandPalette';
 import { Composer } from './components/Composer';
+import { AskPanel } from './components/AskPanel';
 import { Onboarding, StatusBanner, Toasts, Welcome } from './components/Welcome';
 import { Settings } from './components/Settings';
 import { Sidebar } from './components/Sidebar';
-import { SkillsModal } from './components/SkillsModal';
+import { CatalogModal } from './components/CatalogModal';
 import { Thread } from './components/Thread';
 import { TitleBar } from './components/TitleBar';
+import { UpdateBanner } from './components/UpdateBanner';
 
 export function App() {
   const ready = useStore((s) => s.ready);
@@ -45,6 +50,7 @@ export function App() {
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const prefs = useStore((s) => s.prefs);
   const subagentView = useStore((s) => s.subagentView);
+  const asks = useStore((s) => s.chat.asks);
   const platform = useStore((s) => s.boot?.platform ?? 'linux');
   const nativeTitlebar = useStore((s) => s.boot?.nativeTitlebar ?? false);
   const showTitlebar = platform === 'darwin' || !nativeTitlebar;
@@ -85,6 +91,7 @@ export function App() {
       onPendingClear(clearPending),
       onSessionsChanged(handleSessionsChanged),
       onBinaryProgress(setBinaryProgress),
+      onDesktopUpdate(setSelfUpdate),
       onFileDrop((paths) => {
         void readDropped(paths).then((attachments) => {
           if (attachments.length) {
@@ -124,6 +131,7 @@ export function App() {
       if (event.key === 'Escape') {
         const state = store.get();
         if (state.paletteOpen) togglePalette(false);
+        else if (state.catalogOpen) toggleCatalog(false);
         else if (state.settingsOpen) toggleSettings(false);
         else if (state.modelsOpen) store.set({ modelsOpen: false });
         return;
@@ -178,6 +186,7 @@ export function App() {
     <div className="app" {...appAttrs}>
       {showTitlebar ? <TitleBar /> : null}
       <StatusBanner />
+      <UpdateBanner />
       <div className="shell">
         {sidebarCollapsed ? (
           <button
@@ -198,10 +207,13 @@ export function App() {
           ) : (
             <>
               <Thread />
-              <div className={`composer-dock${subagentView ? ' hidden' : ''}`}>
-                <Composer compact />
-                <div className="composer-hint">
-                  Type @ for files · / for commands · Pegg can run commands and edit files.
+              <div className={`composer-dock${subagentView && !asks.length ? ' hidden' : ''}`}>
+                {asks.length ? <AskPanel key={asks[0].requestId} ask={asks[0]} /> : null}
+                <div className={asks.length ? 'composer-hidden' : undefined} aria-hidden={asks.length ? true : undefined}>
+                  <Composer compact />
+                  <div className="composer-hint">
+                    Type @ for files · / for commands · Pegg can run commands and edit files.
+                  </div>
                 </div>
               </div>
             </>
@@ -209,7 +221,7 @@ export function App() {
         </main>
       </div>
       <Settings />
-      <SkillsModal />
+      <CatalogModal />
       <CommandPalette />
       <Toasts />
     </div>

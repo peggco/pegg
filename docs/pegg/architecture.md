@@ -475,7 +475,7 @@ degrades gracefully when unavailable.
 
 ```mermaid
 flowchart LR
-    Agent["Agent"] --> MCP["MCP servers<br/>stdio / SSE"]
+    Agent["Agent"] --> MCP["MCP servers<br/>stdio / SSE / Streamable HTTP"]
     Agent --> LSP["LSP servers<br/>diagnostics on read/write"]
     Agent --> Plugins["Plugins<br/>go-plugin RPC"]
     Agent --> Memory["Memory<br/>observer + librarian"]
@@ -486,7 +486,7 @@ flowchart LR
 
 | Integration | Transport / mechanism | Docs |
 |---|---|---|
-| MCP | stdio or SSE, tools registered into the registry | [MCP](configurations/mcp.md) |
+| MCP | stdio, legacy SSE, or Streamable HTTP; tools registered into the registry | [MCP](configurations/mcp.md) |
 | LSP | stdio; diagnostics appended to file reads/writes | [LSP](configurations/lsp.md) |
 | Plugins | HashiCorp go-plugin over net/rpc | [Plugins](configurations/plugins.md) |
 | Memory | markdown files + background LLM passes | [Memory](features/memory.md) |
@@ -530,6 +530,7 @@ cmd/pegg/                 binary entry point
 internal/
 ├── agent/                agent framework: run loop, middleware, hooks, tools, prompt
 ├── builtin/              built-in agents, middlewares, tools, reminders, skills
+├── catalog/              hub client for skills, MCP servers, and plugins
 ├── cli/                  cobra command tree and all subcommands
 ├── connect/              relay daemon (WebSocket) for the web client
 ├── core/                 event bus, hooks, config, bootstrap, cache, logger
@@ -546,7 +547,6 @@ internal/
 ├── server/               HTTP API and SSE handlers
 ├── session/              session store, recorder, runs, compaction
 ├── skill/                skill engine and loader
-├── skillhub/             skill hub install/search
 ├── stt/                  speech-to-text drivers and providers
 ├── tui/                  tcell terminal UI
 ├── vfs/                  sandboxed virtual filesystem

@@ -886,6 +886,27 @@ button {
   background: var(--vscode-editorWidget-background, transparent);
 }
 
+.plan.inline-plan {
+  border-top: none;
+  max-height: none;
+  padding: 8px 10px;
+  background: transparent;
+}
+
+.tool-plan {
+  margin: 4px 0;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-editorWidget-background, transparent);
+  overflow: hidden;
+}
+
+.tool-plan .tool-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
 .plan-title {
   font-size: 10px;
   font-weight: 600;

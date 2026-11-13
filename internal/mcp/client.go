@@ -2,78 +2,113 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"sync"
 	"time"
+
+	json "github.com/goccy/go-json"
 )
 
 type Client struct {
-	name      string
-	transport Duplex
-	timeout   time.Duration
+	name            string
+	transport       Duplex
+	timeout         time.Duration
+	protocolVersion string
 
-	mu        sync.Mutex
-	nextID    int
-	pending   map[int]chan *Response
-	closeCh   chan struct{}
-	closeOnce sync.Once
-	initOnce  sync.Once
-	info      InitializeResult
+	mu          sync.Mutex
+	nextID      int
+	pending     map[int]chan *Response
+	closeCh     chan struct{}
+	closeOnce   sync.Once
+	initMu      sync.Mutex
+	initialized bool
+	generation  int
+	info        InitializeResult
 }
 
 type Options struct {
-	Name    string
-	Timeout time.Duration
+	Name            string
+	Timeout         time.Duration
+	ProtocolVersion string
 }
 
 func NewClient(name string, transport Duplex, opts Options) *Client {
 	if opts.Timeout <= 0 {
 		opts.Timeout = 60 * time.Second
 	}
+	if opts.ProtocolVersion == "" {
+		opts.ProtocolVersion = ProtocolVersion
+	}
 	c := &Client{
-		name:      name,
-		transport: transport,
-		timeout:   opts.Timeout,
-		pending:   make(map[int]chan *Response),
-		closeCh:   make(chan struct{}),
+		name:            name,
+		transport:       transport,
+		timeout:         opts.Timeout,
+		protocolVersion: opts.ProtocolVersion,
+		pending:         make(map[int]chan *Response),
+		closeCh:         make(chan struct{}),
 	}
 	go c.readLoop()
 	return c
 }
 
 func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) {
-	var err error
-	c.initOnce.Do(func() {
-		var result InitializeResult
-		err = c.call(ctx, MethodInitialize, map[string]any{
-			"protocolVersion": ProtocolVersion,
-			"capabilities":    map[string]any{},
-			"clientInfo": map[string]any{
-				"name":    "pegg",
-				"version": "0.1.0",
-			},
-		}, &result)
-		if err != nil {
-			return
-		}
-		if result.ProtocolVersion == "" {
-			err = fmt.Errorf("%w: initialize missing protocolVersion", ErrProtocol)
-			return
-		}
-		notif, err := buildNotification(MethodInitialized, nil)
-		if err != nil {
-			return
-		}
-		if err := c.transport.Write(notif); err != nil {
-			return
-		}
-		c.info = result
-	})
+	c.initMu.Lock()
+	defer c.initMu.Unlock()
+	if c.initialized {
+		return c.info, nil
+	}
+	return c.initializeLocked(ctx)
+}
+
+func (c *Client) initializeLocked(ctx context.Context) (InitializeResult, error) {
+	var result InitializeResult
+	err := c.request(ctx, MethodInitialize, map[string]any{
+		"protocolVersion": c.protocolVersion,
+		"capabilities":    map[string]any{},
+		"clientInfo": map[string]any{
+			"name":    "pegg",
+			"version": "0.1.0",
+		},
+	}, &result)
 	if err != nil {
 		return InitializeResult{}, err
 	}
-	return c.info, nil
+	if result.ProtocolVersion == "" {
+		return InitializeResult{}, fmt.Errorf("%w: initialize missing protocolVersion", ErrProtocol)
+	}
+	c.protocolVersion = result.ProtocolVersion
+	if setter, ok := c.transport.(ProtocolVersionSetter); ok {
+		setter.SetProtocolVersion(result.ProtocolVersion)
+	}
+
+	notif, err := buildNotification(MethodInitialized, nil)
+	if err != nil {
+		return InitializeResult{}, err
+	}
+	if err := c.transport.Write(notif); err != nil {
+		return InitializeResult{}, err
+	}
+
+	if starter, ok := c.transport.(StreamStarter); ok {
+		starter.StartStream()
+	}
+
+	c.initialized = true
+	c.generation++
+	c.info = result
+	return result, nil
+}
+
+func (c *Client) reinitialize(ctx context.Context, generation int) error {
+	c.initMu.Lock()
+	defer c.initMu.Unlock()
+	if c.generation != generation {
+		return nil
+	}
+	c.initialized = false
+	_, err := c.initializeLocked(ctx)
+	return err
 }
 
 func (c *Client) Ping(ctx context.Context) error {
@@ -122,6 +157,21 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) call(ctx context.Context, method string, params any, result any) error {
+	c.initMu.Lock()
+	generation := c.generation
+	c.initMu.Unlock()
+
+	err := c.request(ctx, method, params, result)
+	if !errors.Is(err, ErrSessionExpired) {
+		return err
+	}
+	if err := c.reinitialize(ctx, generation); err != nil {
+		return err
+	}
+	return c.request(ctx, method, params, result)
+}
+
+func (c *Client) request(ctx context.Context, method string, params any, result any) error {
 	select {
 	case <-c.closeCh:
 		return ErrClosed
@@ -223,5 +273,7 @@ func (c *Client) failAll(err error) {
 }
 
 func (c *Client) ServerInfo() InitializeResult {
+	c.initMu.Lock()
+	defer c.initMu.Unlock()
 	return c.info
 }

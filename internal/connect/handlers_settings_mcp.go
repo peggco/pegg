@@ -47,13 +47,19 @@ func (c *Connector) handleMCPList(_ context.Context, _ *Request) (any, error) {
 
 	out := make([]map[string]any, 0, len(names))
 	for _, name := range names {
+		server := servers[name]
+		kind := server.Type
+		if resolved, err := mcp.ResolveTransportKind(server); err == nil {
+			kind = string(resolved)
+		}
 		out = append(out, map[string]any{
 			"name":      name,
-			"command":   servers[name].Command,
-			"args":      servers[name].Args,
-			"url":       servers[name].URL,
-			"env":       servers[name].Env,
-			"headers":   servers[name].Headers,
+			"type":      kind,
+			"command":   server.Command,
+			"args":      server.Args,
+			"url":       server.URL,
+			"env":       server.Env,
+			"headers":   server.Headers,
 			"tools":     len(mcp.ToolsForServer(name)),
 			"connected": clients[name],
 		})
@@ -79,8 +85,24 @@ func (c *Connector) handleMCPTools(_ context.Context, req *Request) (any, error)
 	return map[string]any{"server": p.Name, "tools": out}, nil
 }
 
+func (c *Connector) reloadMCPServers() {
+	if c.deps.MCP == nil {
+		return
+	}
+	project, err := mcp.LoadProjectServers(c.workspace())
+	if err != nil {
+		return
+	}
+	var global map[string]config.MCPServerConfig
+	if c.deps.Config != nil {
+		global = c.deps.Config.MCPServers
+	}
+	c.deps.MCP.Reload(mcp.MergeServers(global, project))
+}
+
 type mcpUpsertParams struct {
 	Name    string            `json:"name"`
+	Type    string            `json:"type"`
 	Command string            `json:"command"`
 	Args    []string          `json:"args"`
 	Env     map[string]string `json:"env"`
@@ -101,17 +123,22 @@ func (c *Connector) handleMCPUpsert(_ context.Context, req *Request) (any, error
 		return nil, &FrameError{Code: ErrCodeBadRequest, Message: "command or url is required"}
 	}
 	server := config.MCPServerConfig{
+		Type:    p.Type,
 		Command: p.Command,
 		Args:    p.Args,
 		Env:     p.Env,
 		URL:     p.URL,
 		Headers: p.Headers,
 	}
+	kind, err := mcp.ResolveTransportKind(server)
+	if err != nil {
+		return nil, &FrameError{Code: ErrCodeBadRequest, Message: err.Error()}
+	}
+	server.Type = string(kind)
 	scope := p.Scope
 	if scope == "" {
 		scope = "global"
 	}
-	var err error
 	switch scope {
 	case "project":
 		err = mcp.UpsertProjectServer(c.workspace(), p.Name, server)

@@ -1,12 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { loadHistory } = vi.hoisted(() => ({ loadHistory: vi.fn() }));
-
-vi.mock('../lib/bridge', () => ({
-  api: { LoadHistory: loadHistory },
+const { loadHistory, searchCatalog, installCatalogMCP, installCatalogPlugin } = vi.hoisted(() => ({
+  loadHistory: vi.fn(),
+  searchCatalog: vi.fn(),
+  installCatalogMCP: vi.fn(),
+  installCatalogPlugin: vi.fn(),
 }));
 
-import { handleUpdates, loadOlderMessages } from './actions';
+vi.mock('../lib/bridge', () => ({
+  api: {
+    LoadHistory: loadHistory,
+    SearchCatalog: searchCatalog,
+    InstallCatalogMCP: installCatalogMCP,
+    InstallCatalogPlugin: installCatalogPlugin,
+  },
+}));
+
+import {
+  handleUpdates,
+  installCatalogMCP as installMCP,
+  installCatalogPlugin as installPlugin,
+  loadOlderMessages,
+  searchCatalog as runSearch,
+} from './actions';
 import { MAX_CHAT_ITEMS, emptyChat, type ChatItem, type ChatState } from './chat';
 import { store } from './store';
 import type { SessionUpdate } from '../types';
@@ -113,5 +129,61 @@ describe('handleUpdates', () => {
     const chat = store.get().chat;
     expect(chat.items.length).toBeLessThanOrEqual(MAX_CHAT_ITEMS);
     expect(chat.historyHasMore).toBe(true);
+  });
+
+  it('applies command updates before the session id is known', () => {
+    seed({ acpId: '', peggId: '', commands: [] });
+
+    handleUpdates('unknown', [
+      {
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [{ name: 'plugin-skill', description: 'from plugin' }],
+      },
+    ]);
+
+    expect(store.get().chat.commands).toEqual([{ name: 'plugin-skill', description: 'from plugin' }]);
+  });
+
+  it('ignores other updates before the session id is known', () => {
+    seed({ acpId: '', peggId: '', items: [] });
+
+    handleUpdates('unknown', [
+      { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'hello' } },
+    ]);
+
+    expect(store.get().chat.items).toEqual([]);
+  });
+});
+
+describe('catalog actions', () => {
+  it('delegates search parameters to the bridge', async () => {
+    searchCatalog.mockResolvedValue({ items: [], nextCursor: 2 });
+
+    const result = await runSearch('mcp', 'git', 'official,stdio', 10, 0);
+
+    expect(searchCatalog).toHaveBeenCalledWith('mcp', 'git', 'official,stdio', 10, 0);
+    expect(result.nextCursor).toBe(2);
+  });
+
+  it('toasts a restart notice when MCP install requests one', async () => {
+    installCatalogMCP.mockResolvedValue({ name: 'github', restartRequired: true });
+
+    const result = await installMCP('github', { GITHUB_TOKEN: 'x' }, {}, 'global');
+
+    expect(installCatalogMCP).toHaveBeenCalledWith('github', { GITHUB_TOKEN: 'x' }, {}, 'global');
+    expect(result.restartRequired).toBe(true);
+    expect(store.get().toasts.some((toast) => toast.kind === 'warn')).toBe(true);
+  });
+
+  it('installs plugins and applies returned commands', async () => {
+    installCatalogPlugin.mockResolvedValue({
+      name: 'browser-use',
+      commands: [{ name: 'browse', description: 'Open a browser' }],
+    });
+
+    await installPlugin('peggco/pegg-browser-use', 'browser-use');
+
+    expect(installCatalogPlugin).toHaveBeenCalledWith('peggco/pegg-browser-use', 'browser-use');
+    expect(store.get().chat.commands).toContainEqual({ name: 'browse', description: 'Open a browser' });
   });
 });

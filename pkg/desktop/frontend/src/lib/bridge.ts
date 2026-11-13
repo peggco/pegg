@@ -30,6 +30,11 @@ import type {
   HubSearchResult,
   HubSkill,
   SkillMutationResult,
+  SelfUpdateStatus,
+  CatalogEntry,
+  CatalogInstalled,
+  CatalogMutationResult,
+  CatalogSearchResult,
 } from '../types';
 
 export interface NewSessionInput {
@@ -112,6 +117,10 @@ const App = GoApp as unknown as {
   SetBinaryPath(path: string): Promise<BinaryStatus>;
   PickBinary(): Promise<string>;
   InstallBinary(): Promise<BinaryStatus>;
+  SelfUpdateStatus(): Promise<SelfUpdateStatus>;
+  CheckDesktopUpdate(): Promise<SelfUpdateStatus>;
+  DownloadDesktopUpdate(): Promise<SelfUpdateStatus>;
+  RestartToUpdate(): Promise<void>;
   PickWorkspace(): Promise<string>;
   OpenWorkspace(path: string): Promise<string>;
   SavePrefs(p: Prefs): Promise<Prefs>;
@@ -164,6 +173,23 @@ const App = GoApp as unknown as {
   SkillReadme(source: string): Promise<string>;
   InstallHubSkill(source: string, skillId: string, scope: string): Promise<SkillMutationResult>;
   ReloadSkills(): Promise<SlashCommand[]>;
+  SearchCatalog(
+    kind: string,
+    query: string,
+    filter: string,
+    limit: number,
+    cursor: number,
+  ): Promise<CatalogSearchResult>;
+  GetCatalogEntry(kind: string, id: string): Promise<CatalogEntry>;
+  CatalogReadme(kind: string, id: string): Promise<string>;
+  InstallCatalogMCP(
+    id: string,
+    env: Record<string, string>,
+    headers: Record<string, string>,
+    scope: string,
+  ): Promise<CatalogMutationResult>;
+  InstallCatalogPlugin(source: string, name: string): Promise<CatalogMutationResult>;
+  CatalogInstalled(): Promise<CatalogInstalled>;
 };
 
 export const api = App;
@@ -214,6 +240,10 @@ export function onSessionsChanged(cb: () => void): Unsubscribe {
 
 export function onBinaryProgress(cb: (progress: BinaryProgress) => void): Unsubscribe {
   return on<BinaryProgress>('binary:progress', cb);
+}
+
+export function onDesktopUpdate(cb: (status: SelfUpdateStatus) => void): Unsubscribe {
+  return on<SelfUpdateStatus>('desktop:update', cb);
 }
 
 export function onFileDrop(cb: (paths: string[]) => void): Unsubscribe {

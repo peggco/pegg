@@ -7,8 +7,11 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	agenttool "github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/agent/tools"
 )
+
+var _ agenttool.Dynamic = (*MCPTool)(nil)
 
 const ToolNameSeparator = "__"
 
@@ -60,6 +63,10 @@ func (t *MCPTool) Name() string {
 
 func (t *MCPTool) Server() string {
 	return t.server
+}
+
+func (t *MCPTool) IsDynamic() bool {
+	return true
 }
 
 func (t *MCPTool) Description() string {

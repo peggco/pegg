@@ -100,6 +100,29 @@ If nothing is found, Settings → Agent and the first-run screen offer **Downloa
 - **Models** — the model menu is populated from `_pegg/models`.
 - **Stop** — the send button becomes a stop button while a run is active.
 
+## Agent questions
+
+When the agent calls `askuserquestion`, the composer is replaced by a question
+panel so you can answer without leaving the chat:
+
+- **One question at a time** with a tab chip per question. A chip shows a check
+  once that question is answered; click a chip (or press `Alt`+`←`/`→`) to switch.
+- **Text** questions use an inline textarea (`Enter` continues, `Shift`+`Enter`
+  adds a newline). **Select**, **multiselect**, and **boolean** questions render
+  option buttons.
+- **Custom…** adds a free-form answer to every select/multiselect/boolean
+  question. Selecting it opens an inline input; for multiselect the custom value
+  is appended to the selected options and can be removed from the editor.
+- Multi-question asks finish with a **Review** step that lists every answer;
+  edit any row or submit them all at once. Required answers are validated
+  client-side and the panel jumps to the first missing one.
+- Only one ask is shown at a time; queued asks appear in order as you submit.
+  `Esc` (or the close button) cancels, and the composer returns to its normal
+  state after the answer is sent.
+
+Answers are submitted as a single `answers` map keyed by question ID, matching
+the terminal UI and the ACP `_pegg/ask` protocol.
+
 ## Settings
 
 The desktop settings page mirrors the TUI settings layout, backed by the same `~/.pegg/pegg.json` and project `.pegg/` files:
@@ -109,8 +132,8 @@ The desktop settings page mirrors the TUI settings layout, backed by the same `~
 - **Session** — active session details, rename/delete/new chat, and context compaction (strategies, threshold, message and tool-output limits).
 - **Permissions** — Auto/Manual/Judge/Recommended presets, per-tool rules, judge provider/model/threshold.
 - **Memory** — enable/consolidate, gate, threshold, context budget, max results, entry stats.
-- **MCP** — configured servers and a link to the config file.
-- **Skills** — global/project skills with reveal actions.
+- **MCP** — configured stdio, SSE, and Streamable HTTP servers with their transport labels, plus a link to the config file.
+- **Skills** — global, project, and plugin-provided skills with reveal actions; the same list feeds the composer `/` skill menu. Plugin skills appear after the agent has loaded the plugin, so restart the desktop once after installing a plugin.
 - **Rules** — global/project Markdown rules with a preview.
 - **Plugins** — installed plugins with per-plugin enable/disable.
 - **System** — desktop/agent versions, binary resolution and updates, runtime paths, and logs.
@@ -129,6 +152,36 @@ Tool output follows the terminal UI's hierarchy instead of dumping everything:
 - Writes render syntax-highlighted content, truncated for large files with an expand control.
 - Edits render a GitHub-style line-numbered diff with hunk headers, additions/deletions, and a show-all control for large diffs.
 - `task` calls render as a single **TASK** card: name, subagent type, prompt, `background` badge, live activity, response preview, usage/duration, and an **Open history** action while running. The raw `task` tool row and the duplicate subagent card are no longer shown for task-launched subagents; fork subagents keep the standalone subagent card. Background continuations stream into the same thread when the subagent finishes.
+- Todo/plan writes render as an inline plan card at the latest `todowrite` in each message, replacing the tool row. Older updates in the same message collapse into that last card; a new todo list in a later message appears as its own card. The plan no longer sticks to the bottom of the chat or follows you into new messages.
+
+## Desktop updates
+
+Pegg Desktop checks for a newer release on startup and covers both binaries:
+
+- the desktop app (`pegg-desktop`), verified against
+  `pegg-desktop_checksums.txt`
+- the agent (`pegg`), verified against the release `checksums.txt`
+
+When both have a newer version, they are downloaded and staged together; a
+single **Restart to update** banner lists both versions and applies them in one
+go. If only one has an update, only that one is offered. The staged update is
+applied only after you confirm and the app relaunches.
+
+- **Linux/Windows** — automatic for user-writable installs (e.g.
+  `~/.local/bin`, a tarball/zip extracted somewhere you own). If the install
+  directory is not writable (deb/rpm/AUR/Homebrew, `/usr/bin`,
+  `/Applications`), the app does not overwrite it; update through the package
+  manager or the download page.
+- **Agent binary** — updated together with the desktop when it is the
+  desktop-managed/writable binary. A system-installed agent is reported in the
+  same banner but must be updated through its package manager.
+- **macOS** — desktop check/notify only in this release; use the download page
+  until signed/notarized bundle updates are available. The agent can still be
+  updated automatically if it is writable.
+- **Staged updates** — closing and reopening the app keeps the staged update
+  and shows the Restart banner again; it is never applied silently.
+- **Manual** — Settings → System has **Check for updates**, download progress,
+  current/latest versions for both binaries, and **Restart to update**.
 
 ## Releases
 

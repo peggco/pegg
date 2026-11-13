@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/peggco/pegg/internal/skillhub"
+	"github.com/peggco/pegg/internal/catalog"
 )
 
 func writeTestSkill(t *testing.T, dir, name string) {
@@ -49,7 +49,7 @@ func TestRunSkillsList(t *testing.T) {
 	if err := c.runSkillsList(&out, false, false, true); err != nil {
 		t.Fatal(err)
 	}
-	var items []skillhub.Installed
+	var items []catalog.InstalledSkill
 	if err := json.Unmarshal(out.Bytes(), &items); err != nil {
 		t.Fatalf("json: %v\n%s", err, out.String())
 	}

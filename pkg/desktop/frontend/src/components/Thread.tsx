@@ -19,14 +19,14 @@ import { closeSubagent, forkMessage, loadOlderMessages, openSubagent, revertMess
 import { store, useStore } from '../state/store';
 import { useT } from '../lib/i18n';
 import type { ChatItem, ToolState } from '../state/chat';
-import { activityCounts, buildHistoryRows, formatActivityTime, type ActivityCounts, type HistoryRow } from '../lib/activity';
+import { activeActivityKey, activityCounts, buildHistoryRows, formatActivityTime, type ActivityCounts, type HistoryRow } from '../lib/activity';
 import { ToolCard, ToolIcon, bashCommand, classify, computeRows, outputText, writeContent } from './ToolViews';
-import { AskCard, PermissionCard, PlanCard, SubagentCard } from './Cards';
+import { PermissionCard, SubagentCard } from './Cards';
+import { planEntriesFromInput, filterTodoTools } from '../lib/plan';
 import { TaskCard } from './TaskCard';
 
 export function Thread() {
   const mainItems = useStore((s) => s.chat.items);
-  const plan = useStore((s) => s.chat.plan);
   const running = useStore((s) => s.chat.running);
   const loading = useStore((s) => s.chat.loading);
   const historyLoading = useStore((s) => s.chat.historyLoading);
@@ -34,13 +34,14 @@ export function Thread() {
   const historyOldestSeq = useStore((s) => s.chat.historyOldestSeq);
   const acpId = useStore((s) => s.chat.acpId);
   const permissions = useStore((s) => s.chat.permissions);
-  const asks = useStore((s) => s.chat.asks);
   const subagents = useStore((s) => s.chat.subagents);
   const activeAgent = useStore((s) => s.subagentView);
   const activeRun = activeAgent ? subagents[activeAgent] : undefined;
   const items = activeRun?.items ?? mainItems;
   const historyMode = useStore((s) => s.prefs.chatHistoryMode);
-  const rows = useMemo(() => buildHistoryRows(items, historyMode), [items, historyMode]);
+  const visibleItems = useMemo(() => filterTodoTools(items), [items]);
+  const rows = useMemo(() => buildHistoryRows(visibleItems, historyMode), [visibleItems, historyMode]);
+  const activeGroupKey = activeActivityKey(rows, activeAgent ? activeRun?.status === 'running' : running);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
   const [copied, setCopied] = useState<string | null>(null);
@@ -54,7 +55,19 @@ export function Thread() {
   rowsRef.current = rows;
   const [measureBatch, setMeasureBatch] = useState<{ start: number; end: number } | null>(null);
 
-  const toggleGroup = (id: string) => setOpenGroups((current) => toggleId(current, id));
+  const groupOpen = (id: string, key: string) => openGroups.has(id) || openGroups.has(key);
+  const toggleGroup = (id: string, key: string) =>
+    setOpenGroups((current) => {
+      const open = current.has(id) || current.has(key);
+      const next = new Set(current);
+      next.delete(id);
+      next.delete(key);
+      if (!open) {
+        next.add(id);
+        next.add(key);
+      }
+      return next;
+    });
   const toggleRow = (id: string) => setOpenRows((current) => toggleId(current, id));
 
   const virtualizer = useVirtualizer({
@@ -123,7 +136,7 @@ export function Thread() {
     if (!atEndRef.current) return;
     const el = scrollerRef.current;
     if (el) writeScrollTop(el.scrollHeight);
-  }, [plan, permissions, asks, running, scrollerRef, atEndRef, writeScrollTop]);
+  }, [permissions, running, rows, totalSize, scrollerRef, atEndRef, writeScrollTop]);
 
   useEffect(() => {
     setOpenGroups(new Set());
@@ -235,10 +248,11 @@ export function Thread() {
                   {row.kind === 'activity' ? (
                     <ActivityGroup
                       group={row}
-                      open={openGroups.has(row.key)}
-                      onToggle={() => toggleGroup(row.key)}
+                      open={groupOpen(row.id, row.key)}
+                      onToggle={() => toggleGroup(row.id, row.key)}
                       openRows={openRows}
                       onToggleRow={toggleRow}
+                      active={row.key === activeGroupKey}
                     />
                   ) : (
                     <Item
@@ -252,7 +266,7 @@ export function Thread() {
                   )}
                 </div>
               ))}
-              {!items.length ? <div className="empty-state">{t('subagent.empty')}</div> : null}
+              {!visibleItems.length ? <div className="empty-state">{t('subagent.empty')}</div> : null}
             </div>
           </div>
           {jumpButton}
@@ -272,7 +286,7 @@ export function Thread() {
       <div className="thread-wrap" ref={scrollerRef} onScroll={onThreadScroll} onClick={onThreadClick}>
         <div ref={sentinelRef} className="thread-sentinel" aria-hidden="true" />
         <div className="thread">
-          {items.length ? (
+          {visibleItems.length ? (
             <div style={{ height: totalSize, position: 'relative', width: '100%' }}>
               {virtualizer.getVirtualItems().map((virtualItem) => {
                 const row = rows[virtualItem.index];
@@ -294,10 +308,11 @@ export function Thread() {
                     {row.kind === 'activity' ? (
                       <ActivityGroup
                         group={row}
-                        open={openGroups.has(row.key)}
-                        onToggle={() => toggleGroup(row.key)}
+                        open={groupOpen(row.id, row.key)}
+                        onToggle={() => toggleGroup(row.id, row.key)}
                         openRows={openRows}
                         onToggleRow={toggleRow}
+                        active={row.key === activeGroupKey}
                       />
                     ) : (
                       <Item
@@ -315,9 +330,7 @@ export function Thread() {
             </div>
           ) : null}
 
-          {plan.length ? <PlanCard entries={plan} /> : null}
-
-          {items.length === 0 && !loading ? (
+          {visibleItems.length === 0 && !loading ? (
             <div className="notice" style={{ justifyContent: 'center', padding: '18px 14px' }}>
               <Info size={14} />
               {t('thread.empty')}
@@ -326,10 +339,6 @@ export function Thread() {
 
           {permissions.map((permission) => (
             <PermissionCard key={permission.requestId} request={permission} />
-          ))}
-
-          {asks.map((ask) => (
-            <AskCard key={ask.requestId} request={ask} />
           ))}
         </div>
       </div>
@@ -544,12 +553,14 @@ function activitySummary(counts: ActivityCounts, t: (key: string, vars?: Record<
 function ActivityGroup({
   group,
   open,
+  active,
   onToggle,
   openRows,
   onToggleRow,
 }: {
   group: Extract<HistoryRow, { kind: 'activity' }>;
   open: boolean;
+  active?: boolean;
   onToggle: () => void;
   openRows: Set<string>;
   onToggleRow: (id: string) => void;
@@ -558,13 +569,15 @@ function ActivityGroup({
   const language = useStore((s) => s.language);
   const counts = activityCounts(group.items);
   return (
-    <div className={`activity${open ? ' open' : ''}`}>
+    <div className={`activity${open ? ' open' : ''}${active ? ' is-active' : ''}`}>
       <button className="activity-head" onClick={onToggle} aria-expanded={open}>
         <span className="activity-head-icon">
           <Wrench size={13} />
         </span>
-        <span className="activity-summary">{activitySummary(counts, t)}</span>
-        <span className="activity-time">{formatActivityTime(group.createdAt, language)}</span>
+        <span className="activity-text">
+          <span className="activity-summary">{activitySummary(counts, t)}</span>
+          <span className="activity-time">{formatActivityTime(group.createdAt, language)}</span>
+        </span>
         <ChevronRight size={13} className="activity-chevron" />
       </button>
       {open ? (
@@ -695,6 +708,10 @@ function estimateToolHeight(tool: ToolState): number {
       const rows = computeRows(tool.diff.oldText ?? '', tool.diff.newText ?? '').length;
       const body = Math.min(420, rows * 19 + 8);
       return 34 + body + 16 + (rows > DIFF_PREVIEW_ROWS ? 30 : 0) + extra;
+    }
+    case 'plan': {
+      const entries = planEntriesFromInput(tool.input);
+      return 40 + entries.length * 20 + extra;
     }
     case 'files':
       return 62 + (tool.files?.length ?? 0) * 36 + extra;

@@ -48,14 +48,17 @@ is included in the expansion, so skills can ship helper scripts.
 
 ## Locations
 
-Skills are loaded from two global directories at startup:
+Skills are loaded from two global directories at startup, plus the current
+project's directory when one is open:
 
 | Directory | Notes |
 |---|---|
 | `~/.agents/skills/` | Shared agent-skills location |
 | `~/.pegg/skills/` | Pegg skills, including the built-ins |
+| `<project>/.pegg/skills/` | Project skills, loaded after the global directories |
 
-If both define the same skill name, `~/.pegg/skills/` wins. Only immediate
+If several directories define the same skill name, later directories win; a
+project skill overrides a global skill with the same name. Only immediate
 subdirectories are scanned, and each must contain a parseable `SKILL.md`; invalid
 skills are skipped silently.
 
@@ -63,7 +66,10 @@ The built-in skills are **materialized** into `~/.pegg/skills/` on first
 run. Existing directories are never overwritten, so you can edit the built-ins in
 place.
 
-There is currently no project-level skill directory.
+Project scope is explicit: `pegg skills add --project` installs into
+`<project>/.pegg/skills/`, and `pegg skills list` reports the scope of each
+installed skill. Global installs (`--global`, or the default with no flag) go to
+`~/.pegg/skills/`.
 
 ## Invoking a skill
 

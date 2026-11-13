@@ -38,6 +38,9 @@ func TestMCPAddGlobal(t *testing.T) {
 	if s.Command != "npx" || len(s.Args) != 2 || s.Env["DEBUG"] != "true" {
 		t.Fatalf("db = %+v", s)
 	}
+	if s.Type != "stdio" {
+		t.Fatalf("db type = %q, want stdio", s.Type)
+	}
 }
 
 func TestMCPAddProject(t *testing.T) {
@@ -66,6 +69,48 @@ func TestMCPAddProject(t *testing.T) {
 	}
 	if s.URL != "https://mcp.example.com/sse" || s.Headers["Authorization"] != "Bearer token" {
 		t.Fatalf("remote = %+v", s)
+	}
+	if s.Type != "sse" {
+		t.Fatalf("remote type = %q, want sse (http alias)", s.Type)
+	}
+}
+
+func TestMCPAddStreamableHTTP(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	c, _ := newTestCLI(t)
+	if err := c.Execute([]string{
+		"mcp", "add",
+		"--project",
+		"--name", "modern",
+		"--transport", "streamable-http",
+		"--url", "https://mcp.example.com/mcp",
+		"--header", "Authorization=Bearer token",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	servers, err := mcp.LoadProjectServers(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, ok := servers["modern"]
+	if !ok {
+		t.Fatalf("project servers = %+v, want modern", servers)
+	}
+	if s.Type != "streamable-http" || s.URL != "https://mcp.example.com/mcp" {
+		t.Fatalf("modern = %+v", s)
+	}
+
+	var buf bytes.Buffer
+	c.root.SetOut(&buf)
+	if err := c.Execute([]string{"mcp", "list", "--project"}); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "streamable-http") || !strings.Contains(out, "https://mcp.example.com/mcp") {
+		t.Fatalf("output = %q", out)
 	}
 }
 
@@ -198,6 +243,66 @@ func TestMCPListFiltered(t *testing.T) {
 	}
 	if strings.Contains(out, "Global") {
 		t.Fatalf("output should not contain Global section: %q", out)
+	}
+}
+
+func TestMCPListTransportKinds(t *testing.T) {
+	tests := []struct {
+		name       string
+		server     config.MCPServerConfig
+		wantType   string
+		wantDetail string
+	}{
+		{
+			name:       "stdio canonical",
+			server:     config.MCPServerConfig{Type: "stdio", Command: "npx", Args: []string{"-y", "server"}},
+			wantType:   "stdio",
+			wantDetail: "npx -y server",
+		},
+		{
+			name:       "sse canonical",
+			server:     config.MCPServerConfig{Type: "sse", URL: "https://mcp.example.com/sse"},
+			wantType:   "sse",
+			wantDetail: "https://mcp.example.com/sse",
+		},
+		{
+			name:       "sse inferred from url",
+			server:     config.MCPServerConfig{URL: "https://mcp.example.com/sse"},
+			wantType:   "sse",
+			wantDetail: "https://mcp.example.com/sse",
+		},
+		{
+			name:       "streamable http canonical",
+			server:     config.MCPServerConfig{Type: "streamable-http", URL: "https://mcp.example.com/mcp"},
+			wantType:   "streamable-http",
+			wantDetail: "https://mcp.example.com/mcp",
+		},
+		{
+			name:       "invalid type",
+			server:     config.MCPServerConfig{Type: "banana", URL: "https://mcp.example.com/mcp"},
+			wantType:   "invalid",
+			wantDetail: "(invalid: no command or url)",
+		},
+		{
+			name:       "invalid missing target",
+			server:     config.MCPServerConfig{},
+			wantType:   "invalid",
+			wantDetail: "(invalid: no command or url)",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			printMCPServers(&buf, map[string]config.MCPServerConfig{"srv": tc.server})
+			out := buf.String()
+			if !strings.Contains(out, tc.wantType) {
+				t.Fatalf("type: output = %q, want %q", out, tc.wantType)
+			}
+			if !strings.Contains(out, tc.wantDetail) {
+				t.Fatalf("detail: output = %q, want %q", out, tc.wantDetail)
+			}
+		})
 	}
 }
 

@@ -3,10 +3,16 @@ import type {
   AcpStatus,
   Attachment,
   BinaryProgress,
+  CatalogEntry,
+  CatalogInstalled,
+  CatalogKind,
+  CatalogMutationResult,
+  CatalogSearchResult,
   ModelEntry,
   HubSearchResult,
   HubSkill,
   PromptAttachment,
+  SelfUpdateStatus,
   SessionListItem,
   SessionUpdate,
   SkillMutationResult,
@@ -66,6 +72,7 @@ export async function bootstrap(): Promise<void> {
       workspace: boot.workspace || boot.defaultWorkspace,
       recents: prefs.recents ?? [],
       binary: boot.binary,
+      selfUpdate: boot.selfUpdate,
       sidebarCollapsed: prefs.sidebarCollapsed,
       language: boot.language || 'en',
       status: { state: boot.binary.found ? 'connecting' : 'disconnected' },
@@ -76,6 +83,7 @@ export async function bootstrap(): Promise<void> {
       await loadModels();
       await loadCommandsCatalog();
     }
+    void refreshSelfUpdateStatus();
   } catch (err) {
     store.set({ ready: true, error: errorText(err) });
     store.toast('error', errorText(err));
@@ -125,6 +133,48 @@ export async function loadCommandsCatalog(): Promise<void> {
     store.set({ commandsCatalog: commands ?? [] });
   } catch {
     /* the session's server-provided commands remain available */
+  }
+}
+
+export function setSelfUpdate(status: SelfUpdateStatus): void {
+  store.set({ selfUpdate: status });
+}
+
+export async function refreshSelfUpdateStatus(): Promise<void> {
+  try {
+    store.set({ selfUpdate: await api.SelfUpdateStatus() });
+  } catch {
+    /* self-update is optional */
+  }
+}
+
+export async function checkDesktopUpdate(): Promise<void> {
+  const current = store.get().selfUpdate;
+  store.set({ selfUpdate: { ...current, state: 'checking', error: '' } });
+  try {
+    store.set({ selfUpdate: await api.CheckDesktopUpdate() });
+  } catch (err) {
+    store.set({ selfUpdate: { ...store.get().selfUpdate, state: 'error', error: errorText(err) } });
+    store.toast('error', errorText(err));
+  }
+}
+
+export async function downloadDesktopUpdate(): Promise<void> {
+  const current = store.get().selfUpdate;
+  store.set({ selfUpdate: { ...current, state: 'downloading', error: '' } });
+  try {
+    store.set({ selfUpdate: await api.DownloadDesktopUpdate() });
+  } catch (err) {
+    store.set({ selfUpdate: { ...store.get().selfUpdate, state: 'error', error: errorText(err) } });
+    store.toast('error', errorText(err));
+  }
+}
+
+export async function restartToUpdate(): Promise<void> {
+  try {
+    await api.RestartToUpdate();
+  } catch (err) {
+    store.toast('error', errorText(err));
   }
 }
 
@@ -625,7 +675,11 @@ export async function toggleRecording(): Promise<void> {
 
 export function handleUpdates(sessionId: string, updates: SessionUpdate[]): void {
   const chat = store.get().chat;
-  if (!chat.acpId) return;
+  if (!chat.acpId) {
+    const commands = updates.filter((update) => update.sessionUpdate === 'available_commands_update');
+    if (commands.length) store.setChat((c) => applyUpdates(c, commands));
+    return;
+  }
   if (sessionId !== chat.acpId && sessionId !== chat.peggId) return;
   const isHistory = (u: SessionUpdate) => u._meta?.['com.pegg/historyPage'] === true;
   const history = updates.filter(isHistory);
@@ -748,8 +802,65 @@ export function toggleSettings(open?: boolean): void {
   store.set((s) => ({ settingsOpen: open ?? !s.settingsOpen }));
 }
 
-export function toggleSkills(open?: boolean): void {
-  store.set((s) => ({ skillsOpen: open ?? !s.skillsOpen }));
+export function toggleCatalog(open?: boolean, tab?: CatalogKind): void {
+  store.set((s) => ({
+    catalogOpen: open ?? !s.catalogOpen,
+    catalogTab: tab ?? s.catalogTab,
+  }));
+}
+
+export function setCatalogTab(tab: CatalogKind): void {
+  store.set({ catalogTab: tab });
+}
+
+export async function searchCatalog(
+  kind: CatalogKind,
+  query: string,
+  filter: string,
+  limit = 24,
+  cursor = 0,
+): Promise<CatalogSearchResult> {
+  return api.SearchCatalog(kind, query, filter, limit, cursor);
+}
+
+export async function fetchCatalogEntry(kind: CatalogKind, id: string): Promise<CatalogEntry> {
+  return api.GetCatalogEntry(kind, id);
+}
+
+export async function fetchCatalogReadme(kind: CatalogKind, id: string): Promise<string> {
+  return api.CatalogReadme(kind, id);
+}
+
+export async function fetchCatalogInstalled(): Promise<CatalogInstalled> {
+  return api.CatalogInstalled();
+}
+
+function applyCatalogMutation(res: CatalogMutationResult, label: string): void {
+  applySkillCommands(res.commands);
+  store.toast('success', `Installed ${res.name || label}`);
+  for (const warning of res.warnings ?? []) {
+    store.toast('warn', warning);
+  }
+  if (res.restartRequired) {
+    store.toast('warn', 'Restart Pegg Desktop to activate the change');
+  }
+}
+
+export async function installCatalogMCP(
+  id: string,
+  env: Record<string, string>,
+  headers: Record<string, string>,
+  scope: string,
+): Promise<CatalogMutationResult> {
+  const res = await api.InstallCatalogMCP(id, env, headers, scope);
+  applyCatalogMutation(res, id);
+  return res;
+}
+
+export async function installCatalogPlugin(source: string, name: string): Promise<CatalogMutationResult> {
+  const res = await api.InstallCatalogPlugin(source, name);
+  applyCatalogMutation(res, name || source);
+  return res;
 }
 
 export async function searchHubSkills(query: string, limit = 20): Promise<HubSkill[]> {

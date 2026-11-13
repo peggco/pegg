@@ -268,7 +268,7 @@ to choose it, click the field to place the cursor, or click outside to go back.
 |---|---|
 | **General** | Provider (add or reconfigure), Model (searchable list), STT provider, STT model, Theme, Reasoning effort |
 | **Session** | Load/New/Delete session, Change title, Compaction settings |
-| **MCP** | Connected MCP servers and their tools |
+| **MCP** | Connected MCP servers (stdio, SSE, Streamable HTTP) and their tools |
 | **Skills** | Loaded skills with descriptions |
 | **Rules** | Global and project rule files |
 | **Plugins** | Installed plugins with enable/disable toggle |

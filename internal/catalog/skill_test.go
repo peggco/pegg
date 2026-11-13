@@ -1,4 +1,4 @@
-package skillhub
+package catalog
 
 import (
 	"context"
@@ -43,7 +43,7 @@ func testClient(server *httptest.Server) *Client {
 	return c
 }
 
-func TestParseSpec(t *testing.T) {
+func TestParseSkillSpec(t *testing.T) {
 	cases := []struct {
 		in     string
 		source string
@@ -58,18 +58,18 @@ func TestParseSpec(t *testing.T) {
 		{"a/../c", "", "", false},
 	}
 	for _, tc := range cases {
-		got, err := ParseSpec(tc.in)
+		got, err := ParseSkillSpec(tc.in)
 		if tc.ok {
 			if err != nil {
-				t.Fatalf("ParseSpec(%q) error: %v", tc.in, err)
+				t.Fatalf("ParseSkillSpec(%q) error: %v", tc.in, err)
 			}
 			if got.Source != tc.source || got.SkillID != tc.skill {
-				t.Fatalf("ParseSpec(%q) = %+v", tc.in, got)
+				t.Fatalf("ParseSkillSpec(%q) = %+v", tc.in, got)
 			}
 			continue
 		}
 		if err == nil {
-			t.Fatalf("ParseSpec(%q) expected error", tc.in)
+			t.Fatalf("ParseSkillSpec(%q) expected error", tc.in)
 		}
 	}
 }
@@ -77,10 +77,11 @@ func TestParseSpec(t *testing.T) {
 func TestSearch(t *testing.T) {
 	server := testServer(t)
 	defer server.Close()
-	items, err := testClient(server).Search(context.Background(), "grill", 5)
+	res, err := testClient(server).Search(context.Background(), KindSkill, SearchOptions{Query: "grill", Limit: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
+	items := res.Items
 	if len(items) != 1 || items[0].SkillID != "grill-me" || items[0].Source != "mattpocock/skills" {
 		t.Fatalf("items = %+v", items)
 	}
@@ -92,7 +93,7 @@ func TestSearch(t *testing.T) {
 func TestResolve(t *testing.T) {
 	server := testServer(t)
 	defer server.Close()
-	data, path, err := testClient(server).Resolve(context.Background(), Spec{Source: "mattpocock/skills", SkillID: "grill-me"})
+	data, path, err := testClient(server).ResolveSkill(context.Background(), SkillSpec{Source: "mattpocock/skills", SkillID: "grill-me"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,14 +108,14 @@ func TestResolve(t *testing.T) {
 func TestReadme(t *testing.T) {
 	server := testServer(t)
 	defer server.Close()
-	text, err := testClient(server).Readme(context.Background(), "mattpocock/skills")
+	text, err := testClient(server).SkillReadme(context.Background(), "mattpocock/skills")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(text, "# Skills") {
 		t.Fatalf("readme = %q", text)
 	}
-	if _, err := testClient(server).Readme(context.Background(), "open.feishu.cn"); err == nil {
+	if _, err := testClient(server).SkillReadme(context.Background(), "open.feishu.cn"); err == nil {
 		t.Fatal("expected error for non-GitHub source")
 	}
 }
@@ -125,7 +126,7 @@ func TestInstallListRemove(t *testing.T) {
 	client := testClient(server)
 	dir := t.TempDir()
 
-	installed, err := Install(context.Background(), client, Spec{Source: "mattpocock/skills", SkillID: "grill-me"}, dir)
+	installed, err := InstallSkill(context.Background(), client, SkillSpec{Source: "mattpocock/skills", SkillID: "grill-me"}, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,18 +137,18 @@ func TestInstallListRemove(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	list := ListInstalled(dir, "global")
+	list := ListInstalledSkills(dir, "global")
 	if len(list) != 1 || list[0].Name != "grill-me" || list[0].Scope != "global" {
 		t.Fatalf("list = %+v", list)
 	}
 
-	if err := Remove(dir, "grill-me"); err != nil {
+	if err := RemoveSkill(dir, "grill-me"); err != nil {
 		t.Fatal(err)
 	}
-	if list := ListInstalled(dir, "global"); len(list) != 0 {
+	if list := ListInstalledSkills(dir, "global"); len(list) != 0 {
 		t.Fatalf("list after remove = %+v", list)
 	}
-	if err := Remove(dir, "grill-me"); err == nil {
+	if err := RemoveSkill(dir, "grill-me"); err == nil {
 		t.Fatal("expected error removing missing skill")
 	}
 }

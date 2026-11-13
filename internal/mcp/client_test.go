@@ -229,3 +229,261 @@ func TestClientCallBeforeInitialize(t *testing.T) {
 		t.Fatal("expected error when transport never responds")
 	}
 }
+
+type retryDuplex struct {
+	mu           sync.Mutex
+	requests     [][]byte
+	responses    [][]byte
+	initialized  int
+	toolCalls    int
+	failTools    int
+	streamStarts int
+	version      string
+	signal       chan struct{}
+	closed       chan struct{}
+	closeOnce    sync.Once
+}
+
+func newRetryDuplex(failTools int) *retryDuplex {
+	return &retryDuplex{
+		failTools: failTools,
+		signal:    make(chan struct{}, 16),
+		closed:    make(chan struct{}),
+	}
+}
+
+func (d *retryDuplex) Write(data []byte) error {
+	var req Request
+	if err := json.Unmarshal(data, &req); err != nil {
+		return err
+	}
+
+	d.mu.Lock()
+	d.requests = append(d.requests, append([]byte(nil), data...))
+	switch req.Method {
+	case MethodInitialize:
+		d.initialized++
+	case MethodCallTool:
+		d.toolCalls++
+		if d.failTools > 0 {
+			d.failTools--
+			d.mu.Unlock()
+			return ErrSessionExpired
+		}
+	}
+
+	var resp []byte
+	switch req.Method {
+	case MethodInitialize:
+		resp, _ = json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      req.ID,
+			"result": map[string]any{
+				"protocolVersion": ProtocolVersionStreamable,
+				"serverInfo":      map[string]any{"name": "retry", "version": "1"},
+			},
+		})
+	case MethodCallTool:
+		resp, _ = json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      req.ID,
+			"result": map[string]any{
+				"content": []map[string]any{{"type": "text", "text": "ok"}},
+			},
+		})
+	}
+	if resp != nil {
+		d.responses = append(d.responses, resp)
+	}
+	d.mu.Unlock()
+
+	if resp != nil {
+		select {
+		case d.signal <- struct{}{}:
+		default:
+		}
+	}
+	return nil
+}
+
+func (d *retryDuplex) ReadFrame() ([]byte, error) {
+	for {
+		d.mu.Lock()
+		if len(d.responses) > 0 {
+			resp := d.responses[0]
+			d.responses = d.responses[1:]
+			d.mu.Unlock()
+			return resp, nil
+		}
+		d.mu.Unlock()
+		select {
+		case <-d.signal:
+		case <-d.closed:
+			return nil, ErrClosed
+		}
+	}
+}
+
+func (d *retryDuplex) Connect(context.Context) error { return nil }
+
+func (d *retryDuplex) Close() error {
+	d.closeOnce.Do(func() { close(d.closed) })
+	return nil
+}
+
+func (d *retryDuplex) SetProtocolVersion(version string) {
+	d.mu.Lock()
+	d.version = version
+	d.mu.Unlock()
+}
+
+func (d *retryDuplex) StartStream() {
+	d.mu.Lock()
+	d.streamStarts++
+	d.mu.Unlock()
+}
+
+func (d *retryDuplex) Request(i int) []byte {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.requests[i]
+}
+
+func (d *retryDuplex) Initialized() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.initialized
+}
+
+func (d *retryDuplex) ToolCalls() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.toolCalls
+}
+
+func (d *retryDuplex) StreamStarts() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.streamStarts
+}
+
+func (d *retryDuplex) Version() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.version
+}
+
+func TestClientProtocolVersionOption(t *testing.T) {
+	duplex := newRetryDuplex(0)
+	c := NewClient("retry", duplex, Options{Name: "retry", ProtocolVersion: ProtocolVersionStreamable})
+	defer c.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	info, err := c.Initialize(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.ProtocolVersion != ProtocolVersionStreamable {
+		t.Fatalf("protocol = %q", info.ProtocolVersion)
+	}
+
+	var req Request
+	if err := json.Unmarshal(duplex.Request(0), &req); err != nil {
+		t.Fatal(err)
+	}
+	var params map[string]any
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		t.Fatal(err)
+	}
+	if params["protocolVersion"] != ProtocolVersionStreamable {
+		t.Fatalf("sent protocol = %v", params["protocolVersion"])
+	}
+	if got := duplex.Version(); got != ProtocolVersionStreamable {
+		t.Fatalf("transport version = %q", got)
+	}
+	if got := duplex.StreamStarts(); got != 1 {
+		t.Fatalf("stream starts = %d", got)
+	}
+}
+
+func TestClientDefaultProtocolVersion(t *testing.T) {
+	duplex := newRetryDuplex(0)
+	c := NewClient("retry", duplex, Options{Name: "retry"})
+	defer c.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if _, err := c.Initialize(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var req Request
+	if err := json.Unmarshal(duplex.Request(0), &req); err != nil {
+		t.Fatal(err)
+	}
+	var params map[string]any
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		t.Fatal(err)
+	}
+	if params["protocolVersion"] != ProtocolVersion {
+		t.Fatalf("sent protocol = %v, want %q", params["protocolVersion"], ProtocolVersion)
+	}
+}
+
+func TestClientSessionRetry(t *testing.T) {
+	duplex := newRetryDuplex(1)
+	c := NewClient("retry", duplex, Options{Name: "retry", ProtocolVersion: ProtocolVersionStreamable})
+	defer c.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if _, err := c.Initialize(ctx); err != nil {
+		t.Fatal(err)
+	}
+	res, err := c.CallTool(ctx, "tool", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Content) != 1 || res.Content[0].Text != "ok" {
+		t.Fatalf("result = %+v", res)
+	}
+	if got := duplex.Initialized(); got != 2 {
+		t.Fatalf("initialize calls = %d, want 2", got)
+	}
+	if got := duplex.ToolCalls(); got != 2 {
+		t.Fatalf("tool calls = %d, want 2", got)
+	}
+}
+
+func TestClientReinitializeCoalesces(t *testing.T) {
+	duplex := newRetryDuplex(0)
+	c := NewClient("retry", duplex, Options{Name: "retry", ProtocolVersion: ProtocolVersionStreamable})
+	defer c.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if _, err := c.Initialize(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- c.reinitialize(ctx, 1)
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := duplex.Initialized(); got != 2 {
+		t.Fatalf("initialize calls = %d, want 2 (initial + one reinitialize)", got)
+	}
+}

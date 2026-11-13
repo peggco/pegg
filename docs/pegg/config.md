@@ -428,11 +428,12 @@ Map of server name to [MCP server config](configurations/mcp.md).
 
 | Key | Type | Description |
 |---|---|---|
+| `type` | string | Transport: `stdio`, `sse`, or `streamable-http`. Inferred from `url`/`command` when omitted |
 | `command` | string | Executable to spawn (stdio transport) |
 | `args` | string[] | Command arguments |
 | `env` | object | Extra environment variables (merged over the inherited environment) |
-| `url` | string | SSE endpoint. When set, the server is treated as a remote SSE server |
-| `headers` | object | HTTP headers for SSE requests |
+| `url` | string | Remote endpoint for SSE or Streamable HTTP |
+| `headers` | object | HTTP headers for SSE and Streamable HTTP requests |
 
 ### `language_servers`
 
@@ -536,7 +537,8 @@ Map of server name to [language server config](configurations/lsp.md).
       "env": { "DEBUG": "true" }
     },
     "remote": {
-      "url": "https://example.com/sse",
+      "type": "streamable-http",
+      "url": "https://example.com/mcp",
       "headers": { "Authorization": "Bearer token" }
     }
   },

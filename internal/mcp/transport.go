@@ -18,6 +18,14 @@ type Duplex interface {
 	Close() error
 }
 
+type ProtocolVersionSetter interface {
+	SetProtocolVersion(version string)
+}
+
+type StreamStarter interface {
+	StartStream()
+}
+
 type FrameDecoder struct {
 	br     *bufio.Reader
 	kind   int

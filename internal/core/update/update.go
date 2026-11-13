@@ -12,12 +12,24 @@ import (
 
 const repoSlug = "peggco/pegg"
 
+var agentAssets = []string{
+	`(?i)^pegg_(linux|darwin|windows)_(amd64|arm64)\.(tar\.gz|zip)$`,
+}
+
 type Release struct {
 	Version string
 }
 
+func newAgentUpdater() (*selfupdate.Updater, error) {
+	return selfupdate.NewUpdater(selfupdate.Config{Filters: agentAssets})
+}
+
 func DetectLatest(ctx context.Context) (*Release, bool, error) {
-	latest, found, err := selfupdate.DetectLatest(ctx, selfupdate.ParseSlug(repoSlug))
+	updater, err := newAgentUpdater()
+	if err != nil {
+		return nil, false, fmt.Errorf("create updater: %w", err)
+	}
+	latest, found, err := updater.DetectLatest(ctx, selfupdate.ParseSlug(repoSlug))
 	if err != nil {
 		return nil, false, fmt.Errorf("detect latest: %w", err)
 	}
@@ -42,7 +54,11 @@ func IsNewerThan(current, latest string) bool {
 }
 
 func UpdateToLatest(ctx context.Context) error {
-	latest, found, err := selfupdate.DetectLatest(ctx, selfupdate.ParseSlug(repoSlug))
+	updater, err := newAgentUpdater()
+	if err != nil {
+		return fmt.Errorf("create updater: %w", err)
+	}
+	latest, found, err := updater.DetectLatest(ctx, selfupdate.ParseSlug(repoSlug))
 	if err != nil {
 		return fmt.Errorf("detect latest: %w", err)
 	}
@@ -55,7 +71,7 @@ func UpdateToLatest(ctx context.Context) error {
 		return fmt.Errorf("get executable path: %w", err)
 	}
 
-	if err := selfupdate.UpdateTo(ctx, latest.AssetURL, latest.AssetName, exe); err != nil {
+	if err := updater.UpdateTo(ctx, latest, exe); err != nil {
 		return fmt.Errorf("update binary: %w", err)
 	}
 
