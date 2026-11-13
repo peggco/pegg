@@ -1,5 +1,6 @@
 import type { ChatItem, ToolState } from '../state/chat';
 import type { ChatHistoryMode } from '../types';
+import { isTodoTool } from './plan';
 
 export type HistoryRow =
   | { kind: 'item'; key: string; item: ChatItem }
@@ -16,7 +17,7 @@ export interface ActivityCounts {
 
 export function isActivityItem(item: ChatItem): boolean {
   if (item.kind === 'reasoning') return true;
-  return item.kind === 'tool' && !item.tool.task;
+  return item.kind === 'tool' && !item.tool.task && !isTodoTool(item.tool);
 }
 
 export function buildHistoryRows(items: ChatItem[], mode: ChatHistoryMode): HistoryRow[] {

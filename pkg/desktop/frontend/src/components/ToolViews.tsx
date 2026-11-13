@@ -17,8 +17,10 @@ import { api } from '../lib/bridge';
 import { humanSize, shortPath, toolKindLabel } from '../lib/format';
 import { highlightCode, languageForPath, stripAnsi } from '../lib/markdown';
 import { useT } from '../lib/i18n';
+import { isTodoTool, planEntriesFromInput } from '../lib/plan';
 import type { ToolState } from '../state/chat';
 import type { AttachmentInfo } from '../types';
+import { PlanCard } from './Cards';
 
 function StatusMark({ status }: { status: string }) {
   if (status === 'completed') {
@@ -84,7 +86,8 @@ export function bashCommand(tool: ToolState): string {
   return title || tool.name || 'bash';
 }
 
-export function classify(tool: ToolState): 'bash' | 'write' | 'edit' | 'files' | 'compact' {
+export function classify(tool: ToolState): 'bash' | 'write' | 'edit' | 'files' | 'compact' | 'plan' {
+  if (isTodoTool(tool)) return 'plan';
   if (tool.files?.length) return 'files';
   const haystack = `${tool.name ?? ''} ${tool.title ?? ''}`.toLowerCase();
   if (tool.kind === 'execute' || /\bbash\b/.test(haystack)) return 'bash';
@@ -104,9 +107,22 @@ export function ToolCard({ tool }: { tool: ToolState }) {
       return <EditTool tool={tool} />;
     case 'files':
       return <FilesTool tool={tool} />;
+    case 'plan':
+      return <TodoPlanCard tool={tool} />;
     default:
       return <CompactTool tool={tool} />;
   }
+}
+
+function TodoPlanCard({ tool }: { tool: ToolState }) {
+  const entries = planEntriesFromInput(tool.input);
+  if (!entries.length && !tool.error) return null;
+  return (
+    <div className="todo-plan">
+      {entries.length ? <PlanCard entries={entries} /> : null}
+      {tool.error ? <pre className="tool-error">{tool.error}</pre> : null}
+    </div>
+  );
 }
 
 function FileKindIcon({ file }: { file: AttachmentInfo }) {

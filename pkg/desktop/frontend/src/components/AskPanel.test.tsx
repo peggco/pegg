@@ -69,7 +69,7 @@ describe('AskPanel', () => {
         ask={makeAsk([{ id: 'q1', question: 'Pick many', type: 'multiselect', options: ['A', 'B'] }])}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'A' }));
+    fireEvent.click(screen.getByRole('button', { name: /^A\b/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Custom…' }));
     const input = screen.getByPlaceholderText('Type a custom answer…');
     fireEvent.change(input, { target: { value: 'Z' } });

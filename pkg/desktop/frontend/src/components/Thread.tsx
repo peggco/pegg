@@ -21,12 +21,12 @@ import { useT } from '../lib/i18n';
 import type { ChatItem, ToolState } from '../state/chat';
 import { activeActivityKey, activityCounts, buildHistoryRows, formatActivityTime, type ActivityCounts, type HistoryRow } from '../lib/activity';
 import { ToolCard, ToolIcon, bashCommand, classify, computeRows, outputText, writeContent } from './ToolViews';
-import { PermissionCard, PlanCard, SubagentCard } from './Cards';
+import { PermissionCard, SubagentCard } from './Cards';
+import { planEntriesFromInput, filterTodoTools } from '../lib/plan';
 import { TaskCard } from './TaskCard';
 
 export function Thread() {
   const mainItems = useStore((s) => s.chat.items);
-  const plan = useStore((s) => s.chat.plan);
   const running = useStore((s) => s.chat.running);
   const loading = useStore((s) => s.chat.loading);
   const historyLoading = useStore((s) => s.chat.historyLoading);
@@ -39,7 +39,8 @@ export function Thread() {
   const activeRun = activeAgent ? subagents[activeAgent] : undefined;
   const items = activeRun?.items ?? mainItems;
   const historyMode = useStore((s) => s.prefs.chatHistoryMode);
-  const rows = useMemo(() => buildHistoryRows(items, historyMode), [items, historyMode]);
+  const visibleItems = useMemo(() => filterTodoTools(items), [items]);
+  const rows = useMemo(() => buildHistoryRows(visibleItems, historyMode), [visibleItems, historyMode]);
   const activeGroupKey = activeActivityKey(rows, activeAgent ? activeRun?.status === 'running' : running);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
@@ -135,7 +136,7 @@ export function Thread() {
     if (!atEndRef.current) return;
     const el = scrollerRef.current;
     if (el) writeScrollTop(el.scrollHeight);
-  }, [plan, permissions, running, rows, totalSize, scrollerRef, atEndRef, writeScrollTop]);
+  }, [permissions, running, rows, totalSize, scrollerRef, atEndRef, writeScrollTop]);
 
   useEffect(() => {
     setOpenGroups(new Set());
@@ -265,7 +266,7 @@ export function Thread() {
                   )}
                 </div>
               ))}
-              {!items.length ? <div className="empty-state">{t('subagent.empty')}</div> : null}
+              {!visibleItems.length ? <div className="empty-state">{t('subagent.empty')}</div> : null}
             </div>
           </div>
           {jumpButton}
@@ -285,7 +286,7 @@ export function Thread() {
       <div className="thread-wrap" ref={scrollerRef} onScroll={onThreadScroll} onClick={onThreadClick}>
         <div ref={sentinelRef} className="thread-sentinel" aria-hidden="true" />
         <div className="thread">
-          {items.length ? (
+          {visibleItems.length ? (
             <div style={{ height: totalSize, position: 'relative', width: '100%' }}>
               {virtualizer.getVirtualItems().map((virtualItem) => {
                 const row = rows[virtualItem.index];
@@ -329,9 +330,7 @@ export function Thread() {
             </div>
           ) : null}
 
-          {plan.length ? <PlanCard entries={plan} /> : null}
-
-          {items.length === 0 && !loading ? (
+          {visibleItems.length === 0 && !loading ? (
             <div className="notice" style={{ justifyContent: 'center', padding: '18px 14px' }}>
               <Info size={14} />
               {t('thread.empty')}
@@ -709,6 +708,10 @@ function estimateToolHeight(tool: ToolState): number {
       const rows = computeRows(tool.diff.oldText ?? '', tool.diff.newText ?? '').length;
       const body = Math.min(420, rows * 19 + 8);
       return 34 + body + 16 + (rows > DIFF_PREVIEW_ROWS ? 30 : 0) + extra;
+    }
+    case 'plan': {
+      const entries = planEntriesFromInput(tool.input);
+      return 40 + entries.length * 20 + extra;
     }
     case 'files':
       return 62 + (tool.files?.length ?? 0) * 36 + extra;

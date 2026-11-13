@@ -86,7 +86,11 @@ The sidebar chat supports:
 - A single **TASK** card per `task` call: subagent name/type, prompt, background
   badge, live activity, response preview, usage/duration, and **History** while
   running. Fork-launched subagents keep the standalone subagent card.
-- Plan/todo updates, subagent activity, token usage, and USD cost.
+- Plan/todo writes render as an inline plan card at the latest `todowrite` in
+  each message. A newer list in a later message appears as a new card, while
+  older updates in the same message collapse into the last one; the plan no
+  longer sticks above the composer or follows you into a new message. Plus
+  subagent activity, token usage, and USD cost.
 - Permission and `askuserquestion` prompts rendered inline.
 - Auto-scroll that follows the run only while you are at the bottom.
 

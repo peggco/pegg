@@ -64,8 +64,9 @@ syntax-highlighted inline GitHub-style diff with a path header, `+adds/−dels`
 stat, dual line-number gutters, hunks, and add/remove highlighting, themed to the
 IDE, plus a **View diff** action); bash uses a terminal-style card with live output and
 an exit-code footer. Unified **TASK** cards with live activity, a response preview,
-usage/duration and an in-place transcript while running, fork-subagent cards, plan
-updates, usage and cost, permission cards, and ask-user forms.
+usage/duration and an in-place transcript while running, fork-subagent cards,
+inline plan cards at the latest todo write per message, usage and cost,
+permission cards, and ask-user forms.
 
 ### Composer
 

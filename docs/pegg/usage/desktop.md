@@ -152,6 +152,7 @@ Tool output follows the terminal UI's hierarchy instead of dumping everything:
 - Writes render syntax-highlighted content, truncated for large files with an expand control.
 - Edits render a GitHub-style line-numbered diff with hunk headers, additions/deletions, and a show-all control for large diffs.
 - `task` calls render as a single **TASK** card: name, subagent type, prompt, `background` badge, live activity, response preview, usage/duration, and an **Open history** action while running. The raw `task` tool row and the duplicate subagent card are no longer shown for task-launched subagents; fork subagents keep the standalone subagent card. Background continuations stream into the same thread when the subagent finishes.
+- Todo/plan writes render as an inline plan card at the latest `todowrite` in each message, replacing the tool row. Older updates in the same message collapse into that last card; a new todo list in a later message appears as its own card. The plan no longer sticks to the bottom of the chat or follows you into new messages.
 
 ## Releases
 

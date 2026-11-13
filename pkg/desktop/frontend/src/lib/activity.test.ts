@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '../state/chat';
-import { activeActivityKey, activityCounts, buildHistoryRows, formatActivityTime } from './activity';
+import { activeActivityKey, activityCounts, buildHistoryRows, formatActivityTime, isActivityItem } from './activity';
 
 function user(id: string, createdAt = 1): ChatItem {
   return { kind: 'user', id, text: 'hi', createdAt };
@@ -79,6 +79,24 @@ describe('buildHistoryRows', () => {
       expect(after[0].items).toHaveLength(2);
       expect(after[0].key).toBe(before[0].key);
     }
+  });
+
+  it('keeps todo writes out of activity groups', () => {
+    const todo: ChatItem = {
+      kind: 'tool',
+      id: 'todo1',
+      createdAt: 5,
+      tool: {
+        id: 'todo1',
+        name: 'todowrite',
+        title: 'todowrite',
+        status: 'completed',
+        input: { todos: [{ title: 'One' }] },
+      },
+    };
+    expect(isActivityItem(todo)).toBe(false);
+    const rows = buildHistoryRows([reasoning('r1'), todo, assistant('a1')], 'compact');
+    expect(rows.map((row) => row.kind)).toEqual(['activity', 'item', 'item']);
   });
 
   it('breaks groups around assistant, user, notice and task tools', () => {

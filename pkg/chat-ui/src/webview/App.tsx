@@ -8,7 +8,8 @@ import {
   type TaskState,
   type ToolState,
 } from '../state';
-import type { AttachmentInfo } from '../types';
+import type { AttachmentInfo, PlanEntry } from '../types';
+import { filterTodoTools, isTodoTool, planEntriesFromInput } from '../plan';
 import { renderMarkdown } from './markdown';
 import { host } from './host';
 import { DiffView } from './DiffView';
@@ -192,7 +193,7 @@ export function App() {
   }, [state.items]);
 
   const visibleItems = useMemo(
-    () => filterConversation(state.items, agentView?.id ?? null, subagentIds),
+    () => filterTodoTools(filterConversation(state.items, agentView?.id ?? null, subagentIds)),
     [state.items, agentView, subagentIds],
   );
 
@@ -674,20 +675,6 @@ export function App() {
         <button className="scroll-bottom" title="Scroll to bottom" onClick={() => scrollToBottom(true)}>
           <ArrowDownIcon />
         </button>
-      )}
-
-      {state.plan.length > 0 && (
-        <section className="plan">
-          <div className="plan-title">Plan</div>
-          <ul>
-            {state.plan.map((entry, index) => (
-              <li key={`${entry.content}-${index}`} className={`plan-${entry.status ?? 'pending'}`}>
-                <span className="plan-status">{planIcon(entry.status)}</span>
-                <span>{entry.content}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
       )}
 
       <footer className={`composer-wrap ${agentView ? 'disabled' : ''}`}>
@@ -1287,6 +1274,7 @@ function ItemView({
         />
       );
     }
+    if (isTodoTool(item.tool)) return <ToolPlanCard tool={item.tool} />;
     return <ToolCard tool={item.tool} />;
   }
   if (item.kind === 'error') return <div className="notice error">{item.text}</div>;
@@ -1576,6 +1564,33 @@ function BashToolCard({ tool }: { tool: ToolState }) {
           </button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function PlanList({ entries }: { entries: PlanEntry[] }) {
+  return (
+    <section className="plan inline-plan">
+      <div className="plan-title">Plan</div>
+      <ul>
+        {entries.map((entry, index) => (
+          <li key={`${entry.content}-${index}`} className={`plan-${entry.status ?? 'pending'}`}>
+            <span className="plan-status">{planIcon(entry.status)}</span>
+            <span>{entry.content}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ToolPlanCard({ tool }: { tool: ToolState }) {
+  const entries = planEntriesFromInput(tool.input);
+  if (!entries.length && !tool.error) return null;
+  return (
+    <div className="tool-plan">
+      {entries.length ? <PlanList entries={entries} /> : null}
+      {tool.error ? <pre className="tool-error">{stripAnsi(tool.error)}</pre> : null}
     </div>
   );
 }

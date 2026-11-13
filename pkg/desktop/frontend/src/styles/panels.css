@@ -90,6 +90,10 @@
   justify-content: center;
 }
 
+.todo-plan {
+  margin: 2px 0;
+}
+
 .plan-card {
   border: 1px solid var(--pg-border);
   border-radius: var(--pg-radius-md);

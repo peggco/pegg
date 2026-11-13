@@ -22,6 +22,27 @@ describe('ToolCard', () => {
     expect(container.querySelector('.tool-chevron')).toBeNull();
   });
 
+  it('renders a todo write as an inline plan card', () => {
+    const { container } = render(
+      <ToolCard
+        tool={tool({
+          name: 'todowrite',
+          title: 'todowrite',
+          input: {
+            todos: [
+              { title: 'Inspect', status: 'completed' },
+              { title: 'Implement', status: 'in_progress' },
+            ],
+          },
+        })}
+      />,
+    );
+    expect(container.querySelector('.plan-card')).not.toBeNull();
+    expect(container.textContent).toContain('Inspect');
+    expect(container.textContent).toContain('Implement');
+    expect(container.querySelector('.tool-mini')).toBeNull();
+  });
+
   it('renders bash as a terminal', () => {
     const { container } = render(
       <ToolCard
