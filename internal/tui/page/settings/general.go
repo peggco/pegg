@@ -1,7 +1,9 @@
 package settings
 
 import (
+	"context"
 	"strings"
+	"sync"
 
 	"github.com/gdamore/tcell/v2"
 
@@ -9,6 +11,7 @@ import (
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/llm/subscription"
+	"github.com/peggco/pegg/internal/pegglogin"
 	"github.com/peggco/pegg/internal/router"
 	"github.com/peggco/pegg/internal/tui/components"
 	"github.com/peggco/pegg/internal/tui/i18n"
@@ -162,6 +165,14 @@ func (s *Settings) openProviders() {
 			s.openSubscription(name, info)
 			return
 		}
+		if name == pegglogin.ProviderName {
+			if s.peggForeverConfigured() {
+				s.openProviderChoice(name)
+			} else {
+				s.openPeggForeverChoice()
+			}
+			return
+		}
 		if _, ok := s.configured(name); ok {
 			s.openProviderChoice(name)
 		} else {
@@ -205,6 +216,7 @@ func (s *Settings) openSubscription(name string, info subscription.Info) {
 		s.deps.Bus.Publish(event.TopicProviderAdded, cfg)
 	}
 	s.errMsg = ""
+	s.notifyProviderChange()
 	s.back()
 }
 
@@ -224,6 +236,177 @@ func (s *Settings) openProviderChoice(name string) {
 	s.openSub(&listModal{title: i18n.T("settings.provider.alreadyConfigured"), list: l, onBack: s.back})
 }
 
+var verifyProviderKey = pegglogin.Verify
+
+func (s *Settings) peggForeverConfigured() bool {
+	cfg, ok := s.configured(pegglogin.ProviderName)
+	return ok && strings.TrimSpace(cfg.APIKey) != ""
+}
+
+func (s *Settings) openPeggForeverChoice() {
+	l := components.NewList(i18n.Tf("settings.provider.choiceTitle", pegglogin.ProviderName))
+	l.SetItems([]components.ListItem{
+		{Label: i18n.T("onboarding.login"), Detail: i18n.T("onboarding.loginDetail")},
+		{Label: i18n.T("onboarding.apiKey"), Detail: i18n.T("onboarding.apiKeyDetail")},
+	})
+	l.SetOnSelect(func(i int, _ components.ListItem) {
+		if i == 1 {
+			s.openAPIKey(pegglogin.ProviderName)
+			return
+		}
+		s.startPeggLogin()
+	})
+	s.openSub(&listModal{title: i18n.T("settings.provider.configureTitle"), list: l, onBack: s.back})
+}
+
+func (s *Settings) startPeggLogin() {
+	ctx, cancel := context.WithCancel(context.Background())
+	gen := s.beginPeggLogin(cancel)
+	m := &peggLoginModal{
+		settings: s,
+		message:  i18n.T("onboarding.waiting"),
+	}
+	s.openSub(m)
+	s.redraw()
+
+	go func() {
+		defer cancel()
+		cfg, err := pegglogin.Login(ctx, pegglogin.Options{
+			OnURL: func(url string) {
+				s.dispatch(func() {
+					if !s.loginAlive(gen) {
+						return
+					}
+					m.setURL(url)
+					s.redraw()
+				})
+			},
+		})
+		if err != nil {
+			s.dispatch(func() {
+				if !s.completePeggLogin(gen) {
+					return
+				}
+				m.setError(i18n.Tf("onboarding.error", err.Error()))
+				s.redraw()
+			})
+			return
+		}
+		s.dispatch(func() {
+			if !s.completePeggLogin(gen) {
+				return
+			}
+			s.savePeggForeverLogin(cfg)
+			s.redraw()
+		})
+	}()
+}
+
+func (s *Settings) savePeggForeverLogin(cfg *pegglogin.Config) {
+	if err := pegglogin.Apply(cfg); err != nil {
+		s.errMsg = i18n.Tf("onboarding.error", err.Error())
+		s.back()
+		return
+	}
+	lc := config.LLMConfig{
+		Provider: pegglogin.ProviderName,
+		Driver:   cfg.Driver,
+		BaseURL:  cfg.BaseURL,
+		APIKey:   cfg.APIKey,
+		Timeout:  cfg.Timeout,
+	}
+	s.errMsg = ""
+	s.afterProviderSave(lc)
+	s.back()
+}
+
+func (s *Settings) redraw() {
+	if s.requestRedraw != nil {
+		s.requestRedraw()
+	}
+}
+
+type peggLoginModal struct {
+	settings *Settings
+
+	mu      sync.Mutex
+	url     string
+	message string
+	errMsg  string
+
+	region    layout.Region
+	cancelHit layout.Region
+}
+
+func (m *peggLoginModal) setURL(url string) {
+	m.mu.Lock()
+	m.url = url
+	m.mu.Unlock()
+}
+
+func (m *peggLoginModal) setError(msg string) {
+	m.mu.Lock()
+	m.errMsg = msg
+	m.mu.Unlock()
+}
+
+func (m *peggLoginModal) snapshot() (string, string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.url, m.errMsg
+}
+
+func (m *peggLoginModal) close() {
+	m.settings.cancelPeggLogin()
+	m.settings.back()
+	m.settings.redraw()
+}
+
+func (m *peggLoginModal) HandleKey(ev *tcell.EventKey) bool {
+	if ev.Key() == tcell.KeyEsc {
+		m.close()
+	}
+	return true
+}
+
+func (m *peggLoginModal) HandleMouse(x, y int, buttons tcell.ButtonMask) bool {
+	if buttons&tcell.ButtonPrimary != 0 && inRegion(m.cancelHit, x, y) {
+		m.close()
+		return true
+	}
+	if buttons&tcell.ButtonPrimary != 0 && !inRegion(m.region, x, y) {
+		m.close()
+	}
+	return true
+}
+
+func (m *peggLoginModal) Draw(s tcell.Screen, bounds layout.Region, _ bool) {
+	th := styles.Current()
+	w, h := 64, 12
+	if bounds.Width-8 < w {
+		w = bounds.Width - 8
+	}
+	inner := components.DrawCenteredBox(s, bounds, w, h, i18n.T("settings.provider.configureTitle"))
+	m.region = inner
+	bg := th.Base().Background(th.InputBg)
+
+	url, errMsg := m.snapshot()
+	components.DrawText(s, inner.Left, inner.Top, m.message, bg.Foreground(th.Accent))
+	if errMsg != "" {
+		components.DrawText(s, inner.Left, inner.Top+2, components.TruncateTo(errMsg, inner.Width),
+			bg.Foreground(th.Error))
+	} else if url != "" {
+		components.DrawText(s, inner.Left, inner.Top+2, i18n.T("onboarding.openBrowser"), bg.Foreground(th.Hint))
+		components.DrawText(s, inner.Left, inner.Top+3, components.TruncateTo(url, inner.Width),
+			bg.Foreground(th.Foreground))
+	}
+
+	m.cancelHit = layout.Region{Left: inner.Left, Top: inner.Bottom() - 2, Width: 10, Height: 1}
+	components.DrawText(s, m.cancelHit.Left, m.cancelHit.Top, "[ "+i18n.T("onboarding.cancel")+" ]",
+		bg.Foreground(th.Accent))
+	components.DrawFooter(s, inner, i18n.T("common.enterSaveEscCancel"))
+}
+
 func (s *Settings) openAPIKey(name string) {
 	f := components.NewField(i18n.Tf("settings.provider.apiKeyTitle", name))
 	f.SetMask('*')
@@ -240,6 +423,13 @@ func (s *Settings) saveProvider(name, apiKey string) {
 		cfg = config.LLMConfig{Provider: name}
 	}
 	cfg.APIKey = apiKey
+	if name == pegglogin.ProviderName {
+		cfg.Driver = "openai"
+		cfg.BaseURL = pegglogin.DefaultBaseURL
+		if cfg.Timeout == 0 {
+			cfg.Timeout = pegglogin.DefaultTimeout
+		}
+	}
 
 	if err := config.UpsertProvider(cfg); err != nil {
 		s.errMsg = i18n.Tf("settings.provider.saveError", err.Error())
@@ -247,14 +437,34 @@ func (s *Settings) saveProvider(name, apiKey string) {
 		return
 	}
 	s.errMsg = ""
+	s.afterProviderSave(cfg)
+	s.back()
 
+	if name == pegglogin.ProviderName {
+		verify := verifyProviderKey
+		baseURL, key := cfg.BaseURL, cfg.APIKey
+		go func() {
+			if err := verify(context.Background(), baseURL, key, nil); err != nil {
+				s.dispatch(func() {
+					if s.isClosed() {
+						return
+					}
+					s.errMsg = i18n.Tf("onboarding.verifyWarning", err.Error())
+					s.redraw()
+				})
+			}
+		}()
+	}
+}
+
+func (s *Settings) afterProviderSave(cfg config.LLMConfig) {
 	if fresh, err := config.Load(); err == nil {
 		s.deps.Config = fresh
 	}
 	if s.deps.Bus != nil {
 		s.deps.Bus.Publish(event.TopicProviderAdded, cfg)
 	}
-	s.back()
+	s.notifyProviderChange()
 }
 
 func (s *Settings) modelDisplay() string {

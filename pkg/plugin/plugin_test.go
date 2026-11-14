@@ -9,8 +9,9 @@ import (
 
 type testPlugin struct {
 	Base
-	events []Event
-	closed bool
+	events     []Event
+	tuiActions []TUIActionRequest
+	closed     bool
 }
 
 func (p *testPlugin) Name() string        { return "test" }
@@ -18,7 +19,7 @@ func (p *testPlugin) Version() string     { return "1.2.3" }
 func (p *testPlugin) Description() string { return "test plugin" }
 
 func (p *testPlugin) Capabilities() []string {
-	return []string{"tools", "skills", "permissions", "commands", "events"}
+	return []string{"tools", "skills", "permissions", "commands", "events", "tui"}
 }
 
 func (p *testPlugin) Tools() ([]ToolSpec, error) {
@@ -39,6 +40,23 @@ func (p *testPlugin) Commands() ([]CommandSpec, error) {
 
 func (p *testPlugin) EventSubscriptions() ([]string, error) {
 	return []string{"test.topic"}, nil
+}
+
+func (p *testPlugin) TUIPages() ([]TUIPage, error) {
+	return []TUIPage{{
+		ID:    "notify",
+		Title: "Notify",
+		Sections: []TUISection{{
+			Title: "Channels",
+			Items: []TUIItem{{Title: "slack", Detail: "slack", Badge: "ready"}},
+		}},
+		Actions: []TUIAction{{ID: "test", Label: "Send test"}},
+	}}, nil
+}
+
+func (p *testPlugin) ExecuteTUIAction(req TUIActionRequest) (*TUIActionResult, error) {
+	p.tuiActions = append(p.tuiActions, req)
+	return &TUIActionResult{Output: "ok:" + req.ActionID}, nil
 }
 
 func (p *testPlugin) ExecuteTool(req ToolRequest) (*ToolResult, error) {
@@ -70,7 +88,7 @@ func TestRPCProtocol(t *testing.T) {
 	if plugin.Name() != "test" || plugin.Version() != "1.2.3" || plugin.Description() != "test plugin" {
 		t.Fatalf("metadata mismatch")
 	}
-	if len(plugin.Capabilities()) != 5 {
+	if len(plugin.Capabilities()) != 6 {
 		t.Fatalf("capabilities: %v", plugin.Capabilities())
 	}
 	tools, err := plugin.Tools()
@@ -103,6 +121,17 @@ func TestRPCProtocol(t *testing.T) {
 	}
 	if len(impl.events) != 1 || impl.events[0].Topic != "test.topic" {
 		t.Fatalf("events: %#v", impl.events)
+	}
+	pages, err := plugin.TUIPages()
+	if err != nil || len(pages) != 1 || pages[0].ID != "notify" || pages[0].Title != "Notify" {
+		t.Fatalf("tui pages: %#v %v", pages, err)
+	}
+	tuiResult, err := plugin.ExecuteTUIAction(TUIActionRequest{PageID: "notify", ActionID: "test"})
+	if err != nil || tuiResult.Output != "ok:test" {
+		t.Fatalf("tui action: %#v %v", tuiResult, err)
+	}
+	if len(impl.tuiActions) != 1 || impl.tuiActions[0].ActionID != "test" {
+		t.Fatalf("tui actions: %#v", impl.tuiActions)
 	}
 	if err := plugin.Close(); err != nil || !impl.closed {
 		t.Fatalf("close: %v %t", err, impl.closed)

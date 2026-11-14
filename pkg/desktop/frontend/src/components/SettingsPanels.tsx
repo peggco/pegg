@@ -671,7 +671,11 @@ export function RulesPanel({ snap }: PanelProps) {
   );
 }
 
-export function PluginsPanel({ snap, refresh }: PanelProps) {
+export function PluginsPanel({
+  snap,
+  refresh,
+  onPluginsChanged,
+}: PanelProps & { onPluginsChanged?: () => Promise<void> | void }) {
   const t = useT();
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -680,6 +684,7 @@ export function PluginsPanel({ snap, refresh }: PanelProps) {
     try {
       await api.TogglePluginSettings(name);
       await refresh();
+      await onPluginsChanged?.();
       store.toast('success', `Plugin ${name} updated`);
     } catch (err) {
       store.toast('error', errorText(err));

@@ -17,6 +17,7 @@ import (
 	goruntime "runtime"
 
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/plugin"
 	"github.com/peggco/pegg/pkg/desktop/internal/acpclient"
 	"github.com/peggco/pegg/pkg/desktop/internal/binary"
 	"github.com/peggco/pegg/pkg/desktop/internal/prefs"
@@ -58,6 +59,7 @@ type BootstrapInfo struct {
 	LogPath          string            `json:"logPath"`
 	Language         string            `json:"language"`
 	NativeTitlebar   bool              `json:"nativeTitlebar"`
+	ProviderSetup    ProviderSetupInfo `json:"providerSetup"`
 }
 
 type pendingRequest struct {
@@ -107,6 +109,14 @@ type App struct {
 	teamCmd   *exec.Cmd
 	teamDone  chan struct{}
 	teamState TeamStatus
+
+	peggMu    sync.Mutex
+	peggCmd   *exec.Cmd
+	peggDone  chan struct{}
+	peggState ForeverStatus
+
+	pluginMu  sync.Mutex
+	pluginMgr *plugin.Manager
 }
 
 func NewApp() *App {
@@ -154,6 +164,8 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 	_, _ = a.ConnectStop()
 	_, _ = a.TeamCancel()
+	_, _ = a.PeggCancel()
+	a.resetPluginManager()
 	a.logMu.Lock()
 	if a.log != nil {
 		_ = a.log.Close()
@@ -206,6 +218,7 @@ func (a *App) Bootstrap() (BootstrapInfo, error) {
 	if !a.binary.Found {
 		a.binary = binary.Resolve(context.Background(), p.BinaryPath, ws)
 	}
+	providerSetup, _ := a.ProviderSetup()
 	return BootstrapInfo{
 		Platform:         goruntime.GOOS,
 		Arch:             goruntime.GOARCH,
@@ -220,6 +233,7 @@ func (a *App) Bootstrap() (BootstrapInfo, error) {
 		LogPath:          logPath,
 		Language:         currentLanguage(),
 		NativeTitlebar:   nativeTitlebar(),
+		ProviderSetup:    providerSetup,
 	}, nil
 }
 

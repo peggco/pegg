@@ -19,7 +19,7 @@ language servers — all inside a sandboxed workspace.
 
 - [:lucide-bot:{ .lg } **Multi-provider by design**](providers-and-models.md)
 
-    Bring your own key for 32 cloud providers, or point a generic OpenAI-compatible
+    Bring your own key for 33 cloud providers, or point a generic OpenAI-compatible
     driver at any local or self-hosted endpoint. Models are discovered from the
     provider API and enriched with context-window, pricing, and capability metadata.
 
@@ -81,11 +81,14 @@ language servers — all inside a sandboxed workspace.
 
 ## Model Access
 
-Pegg does not proxy your requests through a hosted service. You configure providers
-locally and every request goes straight from your machine to the provider.
+Pegg does not require a hosted service. You configure providers locally and every
+BYOK request goes straight from your machine to the provider. **Pegg Forever**
+(`pegg-forever`) is an optional first-party gateway at `https://forever.pegg.dev/v1`.
 
 - **Bring your own key** — add providers with `pegg login`, the TUI settings page,
-  or directly in `~/.peggco/pegg.json`.
+  or directly in `~/.pegg/pegg.json`.
+- **Pegg Forever** — sign in with `pegg login-pegg` or paste an API key; the desktop
+  and TUI first-run screens offer both.
 - **Custom endpoints** — use the generic `openai`, `claude`, or `gemini` driver with a
   `base_url` to target any compatible gateway.
 - **Local runtimes** — anything speaking the OpenAI chat-completions API works, for

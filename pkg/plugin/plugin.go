@@ -18,6 +18,7 @@ const (
 	CapabilityPermissions Capability = "permissions"
 	CapabilityCommands    Capability = "commands"
 	CapabilityEvents      Capability = "events"
+	CapabilityTUI         Capability = "tui"
 )
 
 var ErrNotSupported = errors.New("plugin: capability not supported")
@@ -103,6 +104,82 @@ type Event struct {
 	Payload json.RawMessage
 }
 
+type TUIField struct {
+	ID          string
+	Label       string
+	Placeholder string
+	Value       string
+	Secret      bool
+	Required    bool
+	Options     []string
+	ShowWhen    *TUIFieldCondition
+}
+
+type TUIFieldCondition struct {
+	Field  string
+	Values []string
+}
+
+type TUIAction struct {
+	ID          string
+	Label       string
+	Description string
+	Confirm     bool
+	PickerField string
+	Fields      []TUIField
+}
+
+type TUIMetric struct {
+	Label  string
+	Value  string
+	Detail string
+	Badge  string
+}
+
+type TUIItem struct {
+	ID       string
+	Title    string
+	Detail   string
+	Badge    string
+	Disabled bool
+	Fields   []TUIField
+	Action   string
+	Column   string
+	Meta     map[string]string
+}
+
+type TUISection struct {
+	Title string
+	Kind  string
+	Items []TUIItem
+	Note  string
+}
+
+type TUIPage struct {
+	ID          string
+	Title       string
+	Description string
+	Owner       string
+	Layout      string
+	Metrics     []TUIMetric
+	Sections    []TUISection
+	Actions     []TUIAction
+	Settings    []TUIField
+	SaveAction  string
+	Footer      string
+}
+
+type TUIActionRequest struct {
+	PageID   string
+	ActionID string
+	Values   map[string]string
+}
+
+type TUIActionResult struct {
+	Output string
+	Page   *TUIPage
+}
+
 type Plugin interface {
 	Name() string
 	Version() string
@@ -115,10 +192,12 @@ type Plugin interface {
 	PermissionRules() (map[string]string, error)
 	Commands() ([]CommandSpec, error)
 	EventSubscriptions() ([]string, error)
+	TUIPages() ([]TUIPage, error)
 
 	ExecuteTool(req ToolRequest) (*ToolResult, error)
 	RunCommand(req CommandRequest) (*CommandResult, error)
 	OnEvent(event Event) error
+	ExecuteTUIAction(req TUIActionRequest) (*TUIActionResult, error)
 	Close() error
 }
 
@@ -134,10 +213,14 @@ func (Base) Skills() ([]SkillSpec, error)                      { return nil, nil
 func (Base) PermissionRules() (map[string]string, error)       { return nil, nil }
 func (Base) Commands() ([]CommandSpec, error)                  { return nil, nil }
 func (Base) EventSubscriptions() ([]string, error)             { return nil, nil }
+func (Base) TUIPages() ([]TUIPage, error)                      { return nil, nil }
 func (Base) ExecuteTool(ToolRequest) (*ToolResult, error)      { return nil, ErrNotSupported }
 func (Base) RunCommand(CommandRequest) (*CommandResult, error) { return nil, ErrNotSupported }
 func (Base) OnEvent(Event) error                               { return nil }
-func (Base) Close() error                                      { return nil }
+func (Base) ExecuteTUIAction(TUIActionRequest) (*TUIActionResult, error) {
+	return nil, ErrNotSupported
+}
+func (Base) Close() error { return nil }
 
 func Supports(capabilities []string, wanted Capability) bool {
 	if capabilities == nil {
@@ -246,6 +329,15 @@ func (s *PeggPluginRPCServer) Commands(args interface{}, resp *[]CommandSpec) er
 	return nil
 }
 
+func (s *PeggPluginRPCServer) TUIPages(args interface{}, resp *[]TUIPage) error {
+	out, err := s.impl.TUIPages()
+	if err != nil {
+		return err
+	}
+	*resp = out
+	return nil
+}
+
 func (s *PeggPluginRPCServer) ExecuteTool(args *ToolRequest, resp *ToolResult) error {
 	out, err := s.impl.ExecuteTool(*args)
 	if err != nil {
@@ -281,6 +373,18 @@ func (s *PeggPluginRPCServer) EventSubscriptions(args interface{}, resp *[]strin
 
 func (s *PeggPluginRPCServer) OnEvent(args *Event, resp *interface{}) error {
 	return s.impl.OnEvent(*args)
+}
+
+func (s *PeggPluginRPCServer) ExecuteTUIAction(args *TUIActionRequest, resp *TUIActionResult) error {
+	out, err := s.impl.ExecuteTUIAction(*args)
+	if err != nil {
+		return err
+	}
+	if out == nil {
+		out = &TUIActionResult{}
+	}
+	*resp = *out
+	return nil
 }
 
 func (s *PeggPluginRPCServer) Close(args interface{}, resp *interface{}) error {
@@ -352,6 +456,12 @@ func (c *PeggPluginRPCClient) Commands() ([]CommandSpec, error) {
 	return resp, err
 }
 
+func (c *PeggPluginRPCClient) TUIPages() ([]TUIPage, error) {
+	var resp []TUIPage
+	err := c.client.Call("Plugin.TUIPages", new(interface{}), &resp)
+	return resp, err
+}
+
 func (c *PeggPluginRPCClient) ExecuteTool(req ToolRequest) (*ToolResult, error) {
 	var resp ToolResult
 	if err := c.client.Call("Plugin.ExecuteTool", &req, &resp); err != nil {
@@ -377,6 +487,14 @@ func (c *PeggPluginRPCClient) EventSubscriptions() ([]string, error) {
 func (c *PeggPluginRPCClient) OnEvent(event Event) error {
 	var resp interface{}
 	return c.client.Call("Plugin.OnEvent", &event, &resp)
+}
+
+func (c *PeggPluginRPCClient) ExecuteTUIAction(req TUIActionRequest) (*TUIActionResult, error) {
+	var resp TUIActionResult
+	if err := c.client.Call("Plugin.ExecuteTUIAction", &req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 func (c *PeggPluginRPCClient) Close() error {

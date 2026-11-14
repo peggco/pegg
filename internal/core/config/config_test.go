@@ -11,13 +11,13 @@ func findProvider(cfg *Config, name string) *LLMConfig {
 	return nil
 }
 
-func TestDefaultConfigHasOpenCodeZen(t *testing.T) {
-	p := findProvider(DefaultConfig(), "opencode-zen")
-	if p == nil {
-		t.Fatal("default config should include opencode-zen")
+func TestDefaultConfigHasNoProviders(t *testing.T) {
+	cfg := DefaultConfig()
+	if len(cfg.Providers) != 0 {
+		t.Fatalf("default config providers = %+v, want none until setup", cfg.Providers)
 	}
-	if p.APIKey != "" {
-		t.Fatalf("opencode-zen API key = %q, want empty", p.APIKey)
+	if findProvider(cfg, "opencode-zen") != nil {
+		t.Fatal("default config should not seed a placeholder provider")
 	}
 }
 
@@ -51,11 +51,11 @@ func TestUpsertProviderAdds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Providers) != 3 {
-		t.Fatalf("providers = %+v, want 3 (default + groq + openai)", cfg.Providers)
+	if len(cfg.Providers) != 2 {
+		t.Fatalf("providers = %+v, want 2 (groq + openai)", cfg.Providers)
 	}
-	if findProvider(cfg, "opencode-zen") == nil {
-		t.Fatalf("default opencode-zen provider missing: %+v", cfg.Providers)
+	if findProvider(cfg, "groq") == nil || findProvider(cfg, "openai") == nil {
+		t.Fatalf("added providers missing: %+v", cfg.Providers)
 	}
 }
 
@@ -73,8 +73,8 @@ func TestUpsertProviderUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Providers) != 2 {
-		t.Fatalf("providers = %+v, want 2 (default + groq)", cfg.Providers)
+	if len(cfg.Providers) != 1 {
+		t.Fatalf("providers = %+v, want 1 (groq)", cfg.Providers)
 	}
 	if p := findProvider(cfg, "groq"); p == nil || p.APIKey != "b" {
 		t.Fatalf("groq provider = %+v, want API key b", p)
@@ -105,8 +105,8 @@ func TestRemoveProvider(t *testing.T) {
 	if findProvider(cfg, "openai") == nil {
 		t.Fatalf("openai should remain: %+v", cfg.Providers)
 	}
-	if findProvider(cfg, "opencode-zen") == nil {
-		t.Fatalf("default provider should remain: %+v", cfg.Providers)
+	if findProvider(cfg, "opencode-zen") != nil {
+		t.Fatalf("no placeholder provider should be seeded: %+v", cfg.Providers)
 	}
 
 	if err := RemoveProvider("nope"); err == nil {
@@ -245,5 +245,105 @@ func TestLoadNormalizesLegacyTeamSTTDriver(t *testing.T) {
 	}
 	if len(loaded.STT.Providers) != 1 || loaded.STT.Providers[0].Driver != "openai" {
 		t.Fatalf("stt providers = %+v", loaded.STT.Providers)
+	}
+}
+
+func TestDefaultConfigNeedsProviderSetup(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Onboarding == nil {
+		t.Fatal("default config should include onboarding settings")
+	}
+	if cfg.Onboarding.ProviderSetupDismissed {
+		t.Fatal("provider setup should not be dismissed by default")
+	}
+	if HasConfiguredProvider(cfg) {
+		t.Fatal("default config should not report a configured provider")
+	}
+	if !NeedsProviderSetup(cfg) {
+		t.Fatal("default config should need provider setup")
+	}
+}
+
+func TestHasConfiguredProvider(t *testing.T) {
+	tests := []struct {
+		name      string
+		providers []LLMConfig
+		want      bool
+	}{
+		{
+			name:      "seeded placeholder",
+			providers: []LLMConfig{{Provider: "opencode-zen"}},
+			want:      false,
+		},
+		{
+			name:      "no providers",
+			providers: nil,
+			want:      false,
+		},
+		{
+			name:      "api key",
+			providers: []LLMConfig{{Provider: "openai", APIKey: "sk-test"}},
+			want:      true,
+		},
+		{
+			name:      "base url",
+			providers: []LLMConfig{{Provider: "opencode-zen", BaseURL: "https://example.com/v1"}},
+			want:      true,
+		},
+		{
+			name:      "headers",
+			providers: []LLMConfig{{Provider: "custom", Headers: map[string]string{"X-Test": "1"}}},
+			want:      true,
+		},
+		{
+			name:      "declared models",
+			providers: []LLMConfig{{Provider: "local", Models: []Model{{ID: "m"}}}},
+			want:      true,
+		},
+		{
+			name:      "pegg forever with key",
+			providers: []LLMConfig{{Provider: "pegg-forever", BaseURL: "https://forever.pegg.dev/v1", APIKey: "vsk_live_test"}},
+			want:      true,
+		},
+		{
+			name:      "pegg forever without key",
+			providers: []LLMConfig{{Provider: "pegg-forever", BaseURL: "https://forever.pegg.dev/v1"}},
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HasConfiguredProvider(&Config{Providers: tt.providers}); got != tt.want {
+				t.Fatalf("HasConfiguredProvider() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNeedsProviderSetupRespectsDismissal(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Onboarding = &OnboardingConfig{ProviderSetupDismissed: true}
+	if NeedsProviderSetup(cfg) {
+		t.Fatal("dismissed onboarding should not need provider setup")
+	}
+}
+
+func TestDismissProviderSetupRoundTrip(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	if err := DismissProviderSetup(); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Onboarding == nil || !cfg.Onboarding.ProviderSetupDismissed {
+		t.Fatalf("onboarding = %+v, want provider setup dismissed", cfg.Onboarding)
+	}
+	if NeedsProviderSetup(cfg) {
+		t.Fatal("dismissal should survive Save/Load")
 	}
 }

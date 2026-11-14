@@ -178,6 +178,31 @@ pegg login --provider anthropic --api-key sk-ant-...
 The provider's model list is fetched before the config is saved, so a login only
 succeeds when the credentials work.
 
+## `pegg login-pegg`
+
+Sign in to Pegg Forever or save a Pegg Forever API key.
+
+```bash
+pegg login-pegg
+pegg login-pegg --no-browser --port 8765
+pegg login-pegg --token vsk_live_...
+```
+
+The browser flow opens the website, waits for approval on a loopback callback,
+creates a revocable API key assigned to your user, and saves the `pegg-forever`
+provider with the default base URL `https://forever.pegg.dev/v1`.
+
+| Flag | Description |
+|---|---|
+| `--token` | Save this API key directly and skip the browser |
+| `--no-browser` | Print the approval URL instead of opening a browser |
+| `--port` | Local callback port; `0` chooses a free port |
+| `--device` | Device name shown on the website and used in the key name |
+
+The command still saves the provider when the `GET /models` check fails; it
+prints a warning and Pegg retries model discovery later. The aliases `pegg
+forever` and `pegg pegg-login` are also accepted.
+
 ## `pegg team`
 
 Connect this machine to a team's BYOK configuration. The command opens the

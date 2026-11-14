@@ -8,6 +8,7 @@ import type {
   CatalogKind,
   CatalogMutationResult,
   CatalogSearchResult,
+  ForeverStatus,
   ModelEntry,
   HubSearchResult,
   HubSkill,
@@ -73,6 +74,7 @@ export async function bootstrap(): Promise<void> {
       recents: prefs.recents ?? [],
       binary: boot.binary,
       selfUpdate: boot.selfUpdate,
+      providerSetup: boot.providerSetup,
       sidebarCollapsed: prefs.sidebarCollapsed,
       language: boot.language || 'en',
       status: { state: boot.binary.found ? 'connecting' : 'disconnected' },
@@ -800,6 +802,40 @@ export function closeSubagent(): void {
 
 export function toggleSettings(open?: boolean): void {
   store.set((s) => ({ settingsOpen: open ?? !s.settingsOpen }));
+}
+
+export function openSettings(tab = 'general'): void {
+  store.set({ settingsOpen: true, settingsTab: tab });
+}
+
+export async function refreshProviderSetup(): Promise<void> {
+  try {
+    store.set({ providerSetup: await api.ProviderSetup() });
+  } catch (err) {
+    store.toast('warn', errorText(err));
+  }
+}
+
+export async function peggLogin(): Promise<ForeverStatus> {
+  return api.PeggLogin();
+}
+
+export async function peggCancel(): Promise<ForeverStatus> {
+  return api.PeggCancel();
+}
+
+export async function peggLogout(): Promise<ForeverStatus> {
+  const status = await api.PeggLogout();
+  await refreshProviderSetup();
+  await loadModels();
+  return status;
+}
+
+export async function dismissProviderSetup(): Promise<void> {
+  await api.DismissProviderSetup();
+  store.set((s) => ({
+    providerSetup: { configured: s.providerSetup?.configured ?? false, dismissed: true },
+  }));
 }
 
 export function toggleCatalog(open?: boolean, tab?: CatalogKind): void {

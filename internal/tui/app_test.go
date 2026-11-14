@@ -72,16 +72,23 @@ func TestAppSelectPreferredAtStartup(t *testing.T) {
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if a.model.provider != "" {
+		a.chatMu.Lock()
+		selected := a.model.provider != ""
+		a.chatMu.Unlock()
+		if selected {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if a.model.provider != "tui-mock" || a.model.model.ID != "mock-1" {
-		t.Fatalf("preferred selection = %+v", a.model)
+	a.chatMu.Lock()
+	model := a.model
+	display := a.modelDisplay()
+	a.chatMu.Unlock()
+	if model.provider != "tui-mock" || model.model.ID != "mock-1" {
+		t.Fatalf("preferred selection = %+v", model)
 	}
-	if got := a.modelDisplay(); got != "tui-mock/Mock One" {
-		t.Errorf("modelDisplay = %q, want tui-mock/Mock One", got)
+	if display != "tui-mock/Mock One" {
+		t.Errorf("modelDisplay = %q, want tui-mock/Mock One", display)
 	}
 }
 
@@ -207,7 +214,11 @@ func TestAppSessionLoadUpdatesHome(t *testing.T) {
 		t.Fatalf("append message: %v", err)
 	}
 
-	a := &App{screen: newTestScreen(t), deps: settings.Deps{Sessions: mgr, Bus: bus}}
+	a := &App{screen: newTestScreen(t), deps: settings.Deps{
+		Sessions: mgr,
+		Bus:      bus,
+		Config:   &config.Config{Providers: []config.LLMConfig{{Provider: "test-provider", APIKey: "sk-test"}}},
+	}}
 	a.build()
 	if a.root == nil {
 		t.Fatal("home page not built")
@@ -251,9 +262,22 @@ func newTestScreen(t *testing.T) tcell.Screen {
 	return s
 }
 
+func newTestApp(t *testing.T, s tcell.Screen) *App {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	return &App{
+		screen: s,
+		deps: settings.Deps{
+			Config: &config.Config{
+				Providers: []config.LLMConfig{{Provider: "test-provider", APIKey: "sk-test"}},
+			},
+		},
+	}
+}
+
 func TestAppQuitsOnCtrlC(t *testing.T) {
 	s := newTestScreen(t)
-	a := &App{screen: s}
+	a := newTestApp(t, s)
 	done := make(chan error, 1)
 	go func() { done <- a.start() }()
 
@@ -277,7 +301,7 @@ func TestAppQuitsOnCtrlC(t *testing.T) {
 
 func TestAppQuitsOnCtrlQ(t *testing.T) {
 	s := newTestScreen(t)
-	a := &App{screen: s}
+	a := newTestApp(t, s)
 	done := make(chan error, 1)
 	go func() { done <- a.start() }()
 
@@ -349,7 +373,8 @@ func TestAppSubmitPublishesEvent(t *testing.T) {
 	}
 	defer bus.Unsubscribe(TopicSubmit, handler)
 
-	a := &App{bus: bus, screen: s}
+	a := newTestApp(t, s)
+	a.bus = bus
 	done := make(chan error, 1)
 	go func() { done <- a.start() }()
 
@@ -380,7 +405,7 @@ func TestAppSubmitPublishesEvent(t *testing.T) {
 
 func TestAppSettingsModal(t *testing.T) {
 	s := newTestScreen(t)
-	a := &App{screen: s}
+	a := newTestApp(t, s)
 	done := make(chan error, 1)
 	go func() { done <- a.start() }()
 
@@ -426,7 +451,7 @@ func TestAppSettingsModal(t *testing.T) {
 func TestAppThemeCycle(t *testing.T) {
 	s := newTestScreen(t)
 	styles.Set("dark")
-	a := &App{screen: s}
+	a := newTestApp(t, s)
 	done := make(chan error, 1)
 	go func() { done <- a.start() }()
 

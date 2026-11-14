@@ -1,7 +1,11 @@
 package settings
 
 import (
+	"context"
+	"errors"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 
@@ -9,6 +13,7 @@ import (
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/llm/credentials"
 	"github.com/peggco/pegg/internal/llm/subscription"
+	"github.com/peggco/pegg/internal/pegglogin"
 	"github.com/peggco/pegg/internal/tui/components"
 	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
@@ -476,5 +481,155 @@ func TestSettingsListTabClick(t *testing.T) {
 
 	if !s.HandleMouse(content.Left+2, content.Top, tcell.ButtonPrimary) {
 		t.Fatal("click on a list item should be handled")
+	}
+}
+
+func TestSettingsUnconfiguredPeggForeverShowsLoginChoice(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg := config.DefaultConfig()
+	cfg.Providers = []config.LLMConfig{{Provider: pegglogin.ProviderName}}
+	s := New(Deps{Config: cfg})
+	s.openProviders()
+
+	providers, ok := s.sub.(*listModal)
+	if !ok {
+		t.Fatalf("openProviders did not open a list modal: %T", s.sub)
+	}
+	target := -1
+	for i, item := range providers.list.Items() {
+		if item.Label == pegglogin.ProviderName {
+			target = i
+			break
+		}
+	}
+	if target < 0 {
+		t.Fatalf("pegg-forever missing from provider list: %+v", providers.list.Items())
+	}
+	for providers.list.SelectedIndex() != target {
+		if !providers.list.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0)) {
+			t.Fatalf("could not select pegg-forever at index %d", target)
+		}
+	}
+	providers.list.HandleKey(tcell.NewEventKey(tcell.KeyEnter, 0, 0))
+
+	choice, ok := s.sub.(*listModal)
+	if !ok {
+		t.Fatalf("expected a login/API-key choice modal, got %T", s.sub)
+	}
+	items := choice.list.Items()
+	if len(items) != 2 {
+		t.Fatalf("choice count = %d, want 2", len(items))
+	}
+	if items[0].Label != i18n.T("onboarding.login") || items[1].Label != i18n.T("onboarding.apiKey") {
+		t.Fatalf("unexpected choices: %+v", items)
+	}
+}
+
+func TestSettingsSavePeggForeverDespiteVerificationFailure(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	verified := make(chan struct{}, 1)
+	oldVerify := verifyProviderKey
+	verifyProviderKey = func(_ context.Context, _, _ string, _ *http.Client) error {
+		select {
+		case verified <- struct{}{}:
+		default:
+		}
+		return errors.New("models endpoint unavailable")
+	}
+	t.Cleanup(func() { verifyProviderKey = oldVerify })
+
+	s := New(Deps{Config: config.DefaultConfig()})
+	s.openAPIKey(pegglogin.ProviderName)
+	fm, ok := s.sub.(*fieldModal)
+	if !ok {
+		t.Fatalf("openAPIKey did not open a field modal: %T", s.sub)
+	}
+	fm.field.SetText("vsk_live_test")
+	s.HandleKey(tcell.NewEventKey(tcell.KeyEnter, 0, 0))
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	for _, p := range cfg.Providers {
+		if p.Provider != pegglogin.ProviderName {
+			continue
+		}
+		if p.APIKey != "vsk_live_test" {
+			t.Fatalf("api key = %q, want vsk_live_test", p.APIKey)
+		}
+		if p.Driver != "openai" || p.BaseURL != pegglogin.DefaultBaseURL {
+			t.Fatalf("provider = %+v, want openai driver and default base url", p)
+		}
+		select {
+		case <-verified:
+		case <-time.After(2 * time.Second):
+			t.Fatal("verification was not attempted")
+		}
+		return
+	}
+	t.Fatal("pegg-forever provider was not saved")
+}
+
+func TestSettingsCancelAsyncInvalidatesPendingLogin(t *testing.T) {
+	s := New(Deps{})
+
+	canceled := make(chan struct{}, 2)
+	gen := s.beginPeggLogin(func() { canceled <- struct{}{} })
+	if !s.completePeggLogin(gen) {
+		t.Fatal("first login should be current")
+	}
+
+	gen = s.beginPeggLogin(func() { canceled <- struct{}{} })
+	s.CancelAsync()
+	select {
+	case <-canceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("active login was not cancelled")
+	}
+	if s.completePeggLogin(gen) {
+		t.Fatal("late callback after CancelAsync should be rejected")
+	}
+
+	gen = s.beginPeggLogin(func() { canceled <- struct{}{} })
+	s.cancelPeggLogin()
+	if s.completePeggLogin(gen) {
+		t.Fatal("late callback after modal cancel should be rejected")
+	}
+}
+
+func TestSettingsVerificationWarningRunsOnPostUI(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	oldVerify := verifyProviderKey
+	verifyProviderKey = func(_ context.Context, _, _ string, _ *http.Client) error {
+		return errors.New("models endpoint unavailable")
+	}
+	t.Cleanup(func() { verifyProviderKey = oldVerify })
+
+	s := New(Deps{Config: config.DefaultConfig()})
+	queue := make(chan func(), 1)
+	s.SetPostUI(func(fn func()) { queue <- fn })
+
+	s.openAPIKey(pegglogin.ProviderName)
+	fm, ok := s.sub.(*fieldModal)
+	if !ok {
+		t.Fatalf("openAPIKey did not open a field modal: %T", s.sub)
+	}
+	fm.field.SetText("vsk_live_test")
+	s.HandleKey(tcell.NewEventKey(tcell.KeyEnter, 0, 0))
+
+	if s.errMsg != "" {
+		t.Fatalf("errMsg mutated before UI dispatch: %q", s.errMsg)
+	}
+	select {
+	case fn := <-queue:
+		fn()
+	case <-time.After(2 * time.Second):
+		t.Fatal("verification warning was not dispatched through postUI")
+	}
+	if s.errMsg == "" {
+		t.Fatal("verification warning was not applied")
 	}
 }

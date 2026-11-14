@@ -503,3 +503,37 @@ pegg logs --search my-plugin
 | Boot fails | Check logs for error message |
 | Plugin crashes | Check stderr output and logs |
 | RPC errors | Ensure `shared.Handshake` is used correctly |
+
+## TUI pages
+
+A plugin can add a settings tab without touching the TUI. Add the `tui`
+capability and implement `TUIPages` and `ExecuteTUIAction` on your plugin. The
+host registers the pages through the `internal/tui/ext` hook; the settings page
+renders the sections, items, badges, confirmation dialogs, and forms, and runs
+actions off the UI event loop.
+
+```go
+func (p *MyPlugin) Capabilities() []string {
+    return []string{"tools", "skills", "commands", "permissions", "tui"}
+}
+
+func (p *MyPlugin) TUIPages() ([]peggplugin.TUIPage, error) {
+    return []peggplugin.TUIPage{{
+        ID:    "my-plugin",
+        Title: "My Plugin",
+        Sections: []peggplugin.TUISection{{
+            Title: "Status",
+            Items: []peggplugin.TUIItem{{Title: "Enabled", Detail: "yes"}},
+        }},
+        Actions: []peggplugin.TUIAction{{ID: "test", Label: "Run test"}},
+    }}, nil
+}
+
+func (p *MyPlugin) ExecuteTUIAction(req peggplugin.TUIActionRequest) (*peggplugin.TUIActionResult, error) {
+    return &peggplugin.TUIActionResult{Output: "ok"}, nil
+}
+```
+
+`TUIPages` is called when the plugin loads and on refresh. `ExecuteTUIAction`
+receives the selected action ID and any form values. Return an updated `Page`
+in the result to refresh the tab immediately.

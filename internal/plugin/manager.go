@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,11 +29,14 @@ import (
 	"github.com/peggco/pegg/internal/plugin/bundle"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/skill"
+	"github.com/peggco/pegg/internal/tui/ext"
 	"github.com/peggco/pegg/internal/vfs"
 )
 
 type Manager struct {
 	mu          sync.RWMutex
+	rootMu      sync.RWMutex
+	root        string
 	log         *logger.Logger
 	cfg         *config.Config
 	bus         event.Bus
@@ -42,6 +46,12 @@ type Manager struct {
 	exclude     map[string]bool
 	commands    []PluginCommand
 	eventUnsubs []func() error
+}
+
+func (m *Manager) SetWorkspaceRoot(root string) {
+	m.rootMu.Lock()
+	m.root = strings.TrimSpace(root)
+	m.rootMu.Unlock()
 }
 
 type logWriter struct {
@@ -65,6 +75,7 @@ type PluginInstance struct {
 	Skills          []pkgplugin.SkillSpec
 	PermissionRules map[string]string
 	Commands        []pkgplugin.CommandSpec
+	TUIPages        []pkgplugin.TUIPage
 
 	execMu  sync.Mutex
 	eventMu sync.Mutex
@@ -106,6 +117,15 @@ func (m *Manager) SetExcludedPlugins(exclude []string) {
 	}
 }
 
+const pluginLoadWorkers = 8
+
+var errPluginSkipped = errors.New("plugin skipped")
+
+type pluginLoadResult struct {
+	instance *PluginInstance
+	err      error
+}
+
 func (m *Manager) LoadPlugins() error {
 	pluginDir, err := GetPluginDir()
 	if err != nil {
@@ -123,32 +143,60 @@ func (m *Manager) LoadPlugins() error {
 
 	m.log.Finfo("plugin: found %d plugins in %s", len(pluginPaths), pluginDir)
 
-	for _, path := range pluginPaths {
-		if err := m.loadPlugin(path); err != nil {
-			m.log.Fwarn("plugin: failed to load %s: %v", filepath.Base(path), err)
+	results := make([]pluginLoadResult, len(pluginPaths))
+	sem := make(chan struct{}, pluginLoadWorkers)
+	var wg sync.WaitGroup
+	for i, path := range pluginPaths {
+		wg.Add(1)
+		go func(i int, path string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			instance, err := m.connectPlugin(path)
+			results[i] = pluginLoadResult{instance: instance, err: err}
+		}(i, path)
+	}
+	wg.Wait()
+
+	for _, result := range results {
+		if result.err != nil {
+			if !errors.Is(result.err, errPluginSkipped) {
+				m.log.Fwarn("plugin: %v", result.err)
+			}
 			continue
+		}
+		if err := m.registerPlugin(result.instance); err != nil {
+			if errors.Is(err, errPluginSkipped) {
+				continue
+			}
+			m.log.Fwarn("plugin: failed to register %s: %v", result.instance.Name, err)
+			if result.instance.Client != nil {
+				result.instance.Client.Kill()
+			}
 		}
 	}
 
 	return nil
 }
 
-func (m *Manager) loadPlugin(path string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+func (m *Manager) pluginExcluded(name string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.exclude[name]
+}
 
+// connectPlugin starts one plugin process, performs the handshake and Boot, and
+// fetches its capability metadata. It does not touch shared manager state, so
+// plugins can be connected concurrently.
+func (m *Manager) connectPlugin(path string) (*PluginInstance, error) {
 	name := filepath.Base(path)
-
-	if m.exclude[name] {
+	if m.pluginExcluded(name) {
 		m.log.Finfo("plugin: skipping excluded plugin %s", name)
-		return nil
-	}
-
-	if _, exists := m.plugins[name]; exists {
-		return fmt.Errorf("plugin %s already loaded", name)
+		return nil, errPluginSkipped
 	}
 
 	m.log.Finfo("plugin: loading %s", name)
+	start := time.Now()
 
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig:  pkgplugin.Handshake,
@@ -164,19 +212,19 @@ func (m *Manager) loadPlugin(path string) error {
 	rpcClient, err := client.Client()
 	if err != nil {
 		client.Kill()
-		return fmt.Errorf("connect to plugin: %w", err)
+		return nil, fmt.Errorf("connect to plugin %s: %w", name, err)
 	}
 
 	raw, err := rpcClient.Dispense("pegg")
 	if err != nil {
 		client.Kill()
-		return fmt.Errorf("dispense plugin: %w", err)
+		return nil, fmt.Errorf("dispense plugin %s: %w", name, err)
 	}
 
 	pluginImpl, ok := raw.(pkgplugin.Plugin)
 	if !ok {
 		client.Kill()
-		return fmt.Errorf("plugin does not implement Plugin interface")
+		return nil, fmt.Errorf("plugin %s does not implement Plugin interface", name)
 	}
 
 	capabilities := pluginImpl.Capabilities()
@@ -192,16 +240,16 @@ func (m *Manager) loadPlugin(path string) error {
 	if instance.Name == "" {
 		instance.Name = name
 	}
-	if m.exclude[instance.Name] {
+	if m.pluginExcluded(instance.Name) {
 		client.Kill()
 		m.log.Finfo("plugin: skipping excluded plugin %s", instance.Name)
-		return nil
+		return nil, errPluginSkipped
 	}
 
 	configJSON, err := json.Marshal(m.cfg)
 	if err != nil {
 		client.Kill()
-		return fmt.Errorf("marshal config: %w", err)
+		return nil, fmt.Errorf("marshal config for %s: %w", instance.Name, err)
 	}
 	var options json.RawMessage
 	if m.cfg != nil {
@@ -219,21 +267,51 @@ func (m *Manager) loadPlugin(path string) error {
 	}
 	if err := pluginImpl.Boot(deps); err != nil {
 		client.Kill()
-		return fmt.Errorf("boot plugin: %w", err)
+		return nil, fmt.Errorf("boot plugin %s: %w", instance.Name, err)
 	}
 
-	m.captureCapabilities(instance)
+	m.fetchCapabilities(instance)
+	m.log.Finfo("plugin: %s ready in %s", instance.Name, time.Since(start).Round(time.Millisecond))
+	return instance, nil
+}
+
+// registerPlugin publishes a connected plugin into the manager and global
+// registries. It must run serially so tool/skill/page registration stays
+// deterministic.
+func (m *Manager) registerPlugin(instance *PluginInstance) error {
+	if instance == nil {
+		return fmt.Errorf("plugin is nil")
+	}
+
+	m.mu.Lock()
+
+	if m.exclude[instance.Name] {
+		m.mu.Unlock()
+		if instance.Client != nil {
+			instance.Client.Kill()
+		}
+		return errPluginSkipped
+	}
+	if _, exists := m.plugins[instance.Name]; exists {
+		m.mu.Unlock()
+		return fmt.Errorf("plugin %s already loaded", instance.Name)
+	}
 
 	m.plugins[instance.Name] = instance
-	m.clients[instance.Name] = client
+	m.clients[instance.Name] = instance.Client
+	m.registerCapabilities(instance)
 	m.registerEventSubscriptions(instance)
+	m.mu.Unlock()
+
+	if pkgplugin.Supports(instance.Capabilities, pkgplugin.CapabilityTUI) {
+		ext.Register(func() []pkgplugin.TUIPage { return m.tuiPagesFor(instance.Name) })
+	}
 
 	m.log.Finfo("plugin: loaded %s v%s (%s)", instance.Name, instance.Version, instance.Description)
-
 	return nil
 }
 
-func (m *Manager) captureCapabilities(instance *PluginInstance) {
+func (m *Manager) fetchCapabilities(instance *PluginInstance) {
 	caps := instance.Capabilities
 	if pkgplugin.Supports(caps, pkgplugin.CapabilityTools) {
 		if tools, err := instance.Plugin.Tools(); err != nil {
@@ -263,7 +341,19 @@ func (m *Manager) captureCapabilities(instance *PluginInstance) {
 			instance.Commands = commands
 		}
 	}
+	if pkgplugin.Supports(caps, pkgplugin.CapabilityTUI) {
+		if pages, err := instance.Plugin.TUIPages(); err != nil {
+			m.log.Fwarn("plugin: %s: tui pages: %v", instance.Name, err)
+		} else {
+			for i := range pages {
+				pages[i].Owner = instance.Name
+			}
+			instance.TUIPages = pages
+		}
+	}
+}
 
+func (m *Manager) registerCapabilities(instance *PluginInstance) {
 	m.registerToolSpecs(instance)
 	m.registerSkillSpecs(instance)
 	m.registerPermissionRules(instance)
@@ -271,6 +361,18 @@ func (m *Manager) captureCapabilities(instance *PluginInstance) {
 		for _, spec := range instance.Commands {
 			m.commands = append(m.commands, PluginCommand{Plugin: instance.Name, Spec: spec})
 		}
+	}
+}
+
+// captureCapabilities is kept for callers that register a plugin by hand
+// (tests). Production loading uses fetchCapabilities + registerPlugin.
+func (m *Manager) captureCapabilities(instance *PluginInstance) {
+	m.fetchCapabilities(instance)
+	m.mu.Lock()
+	m.registerCapabilities(instance)
+	m.mu.Unlock()
+	if pkgplugin.Supports(instance.Capabilities, pkgplugin.CapabilityTUI) {
+		ext.Register(func() []pkgplugin.TUIPage { return m.tuiPagesFor(instance.Name) })
 	}
 }
 
@@ -415,6 +517,12 @@ func (m *Manager) registerPermissionRules(instance *PluginInstance) {
 }
 
 func (m *Manager) workspaceRoot() string {
+	m.rootMu.RLock()
+	root := m.root
+	m.rootMu.RUnlock()
+	if root != "" {
+		return root
+	}
 	if m.fs != nil {
 		return m.fs.Root()
 	}
@@ -474,6 +582,85 @@ func (m *Manager) RunCommand(ctx context.Context, pluginName string, path []stri
 		return "", nil
 	}
 	return res.Output, nil
+}
+
+func (m *Manager) tuiPagesFor(name string) []pkgplugin.TUIPage {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	instance, ok := m.plugins[name]
+	if !ok {
+		return nil
+	}
+	out := make([]pkgplugin.TUIPage, len(instance.TUIPages))
+	copy(out, instance.TUIPages)
+	return out
+}
+
+func (m *Manager) RefreshTUIPages(ctx context.Context, name string) ([]pkgplugin.TUIPage, error) {
+	instance, ok := m.GetPlugin(name)
+	if !ok {
+		return nil, fmt.Errorf("plugin %q is not loaded", name)
+	}
+	if !pkgplugin.Supports(instance.Capabilities, pkgplugin.CapabilityTUI) {
+		return nil, fmt.Errorf("plugin %q does not support tui", name)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	instance.execMu.Lock()
+	defer instance.execMu.Unlock()
+
+	pages, err := instance.Plugin.TUIPages()
+	if err != nil {
+		return nil, fmt.Errorf("plugin %s tui pages: %w", name, err)
+	}
+	for i := range pages {
+		pages[i].Owner = name
+	}
+	m.mu.Lock()
+	instance.TUIPages = pages
+	m.mu.Unlock()
+
+	out := make([]pkgplugin.TUIPage, len(pages))
+	copy(out, pages)
+	return out, nil
+}
+
+func (m *Manager) ExecuteTUIAction(ctx context.Context, name string, req pkgplugin.TUIActionRequest) (*pkgplugin.TUIActionResult, error) {
+	instance, ok := m.GetPlugin(name)
+	if !ok {
+		return nil, fmt.Errorf("plugin %q is not loaded", name)
+	}
+	if !pkgplugin.Supports(instance.Capabilities, pkgplugin.CapabilityTUI) {
+		return nil, fmt.Errorf("plugin %q does not support tui", name)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	instance.execMu.Lock()
+	defer instance.execMu.Unlock()
+
+	res, err := instance.Plugin.ExecuteTUIAction(req)
+	if err != nil {
+		return nil, fmt.Errorf("plugin %s tui action %s: %w", name, req.ActionID, err)
+	}
+	if res == nil {
+		res = &pkgplugin.TUIActionResult{}
+	}
+	if res.Page != nil {
+		res.Page.Owner = name
+		m.mu.Lock()
+		for i := range instance.TUIPages {
+			if instance.TUIPages[i].ID == res.Page.ID {
+				instance.TUIPages[i] = *res.Page
+				break
+			}
+		}
+		m.mu.Unlock()
+	}
+	return res, nil
 }
 
 func remainingMillis(ctx context.Context) int64 {
@@ -555,6 +742,7 @@ func (m *Manager) Close() {
 	m.plugins = make(map[string]*PluginInstance)
 	m.clients = make(map[string]*goplugin.Client)
 	m.commands = nil
+	ext.Reset()
 }
 
 func GetPluginDir() (string, error) {

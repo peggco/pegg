@@ -4,10 +4,14 @@ icon: lucide/boxes
 
 # Provider catalog
 
-Pegg ships 236 providers out of the box. Each one is a dedicated package
+Pegg ships 237 providers out of the box. Each one is a dedicated package
 under `internal/llm/providers/`. Credentials are supplied per provider in
 your config (`api_key`). The API key env column lists the conventional
 variable name used by the upstream SDK, for reference.
+
+The first-party `pegg-forever` provider points at `https://forever.pegg.dev/v1`.
+Add it with an API key or sign in through the browser with `pegg login-pegg`;
+see [Pegg Forever](providers-and-models.md#pegg-forever).
 
 Base URLs containing `${VAR}` are resolved from the environment when the
 provider is configured; Pegg reports an error if the variable is unset.
@@ -179,6 +183,7 @@ Vercel) are not part of this catalog.
 | `orcarouter` | openai | `https://api.orcarouter.ai/v1` | `ORCAROUTER_API_KEY` |
 | `ovhcloud` | openai | `https://oai.endpoints.kepler.ai.cloud.ovh.net/v1` | `OVHCLOUD_API_KEY` |
 | `pareto` | openai | `https://api.paretoinference.com/v1` | `PARETO_API_KEY` |
+| `pegg-forever` | openai | `https://forever.pegg.dev/v1` | `PEGG_FOREVER_API_KEY` |
 | `pendra` | openai | `https://api.pendra.ai/api/v1` | `PENDRA_API_KEY` |
 | `perplexity` | openai | `https://api.perplexity.ai` | — |
 | `perplexity-agent` | openai | `https://api.perplexity.ai/v1` | `PERPLEXITY_API_KEY` |

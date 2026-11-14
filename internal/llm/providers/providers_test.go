@@ -7,7 +7,7 @@ import (
 )
 
 func TestGeneratedProvidersRegistered(t *testing.T) {
-	for _, name := range []string{"302ai", "alibaba", "evren", "minimax-cn", "subconscious", "zenmux"} {
+	for _, name := range []string{"302ai", "alibaba", "evren", "minimax-cn", "pegg-forever", "subconscious", "zenmux"} {
 		if !llm.HasProvider(name) {
 			t.Fatalf("provider %q is not registered", name)
 		}

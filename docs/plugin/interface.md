@@ -213,3 +213,49 @@ If `Boot` returns an error:
 3. Pegg continues without the plugin
 
 This ensures plugin failures don't crash the application.
+
+## TUI pages
+
+Plugins can contribute tabs to the TUI settings page without changing TUI code.
+Declare the `tui` capability and implement `TUIPages` and `ExecuteTUIAction`:
+
+```go
+func (p *MyPlugin) Capabilities() []string {
+    return []string{"tools", "skills", "commands", "permissions", "tui"}
+}
+
+func (p *MyPlugin) TUIPages() ([]peggplugin.TUIPage, error) {
+    return []peggplugin.TUIPage{{
+        ID:          "my-plugin",
+        Title:       "My Plugin",
+        Description: "Configure the plugin.",
+        Sections: []peggplugin.TUISection{{
+            Title: "Status",
+            Items: []peggplugin.TUIItem{{Title: "Enabled", Detail: "yes", Badge: "ready"}},
+        }},
+        Actions: []peggplugin.TUIAction{{
+            ID:    "test",
+            Label: "Run test",
+            Fields: []peggplugin.TUIField{{
+                ID: "name", Label: "Name", Required: true,
+            }},
+        }},
+        Footer: "Enter run action · r refresh · Esc close",
+    }}, nil
+}
+
+func (p *MyPlugin) ExecuteTUIAction(req peggplugin.TUIActionRequest) (*peggplugin.TUIActionResult, error) {
+    if req.ActionID != "test" {
+        return nil, peggplugin.ErrNotSupported
+    }
+    page, _ := p.tuiPage()
+    return &peggplugin.TUIActionResult{Output: "ok", Page: &page}, nil
+}
+```
+
+- Pages are collected through the generic `internal/tui/ext` hook; the settings
+  page renders sections, items, badges, actions, confirmation dialogs, and forms.
+- Actions run in a goroutine, so a slow plugin RPC never blocks the TUI loop.
+- Return a `Page` in `TUIActionResult` to refresh the tab immediately; `r` also
+  refreshes through `TUIPages`.
+- Old plugins that do not declare `tui` are unaffected.

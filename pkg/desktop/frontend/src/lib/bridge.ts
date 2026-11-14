@@ -26,6 +26,8 @@ import type {
   ConnectSettings,
   ConnectStatus,
   TeamStatus,
+  ProviderSetupInfo,
+  ForeverStatus,
   MCPServerInput,
   HubSearchResult,
   HubSkill,
@@ -35,6 +37,8 @@ import type {
   CatalogInstalled,
   CatalogMutationResult,
   CatalogSearchResult,
+  PluginSettingPage,
+  PluginSettingResult,
 } from '../types';
 
 export interface NewSessionInput {
@@ -109,6 +113,14 @@ const App = GoApp as unknown as {
   SavePermissionSettings(p: PermissionsSettings): Promise<void>;
   SaveMemorySettings(m: MemorySettings): Promise<void>;
   TogglePluginSettings(name: string): Promise<boolean>;
+  PluginSettingsPages(): Promise<PluginSettingPage[]>;
+  PluginSettingsRefresh(): Promise<PluginSettingPage[]>;
+  PluginSettingsAction(
+    owner: string,
+    pageId: string,
+    actionId: string,
+    values: Record<string, string>,
+  ): Promise<PluginSettingResult>;
   SetReasoningEffort(sessionId: string, provider: string, model: string, effort: string): Promise<SessionInfo>;
   Version(): Promise<string>;
   LogPath(): Promise<string>;
@@ -168,6 +180,12 @@ const App = GoApp as unknown as {
   TeamCancel(): Promise<TeamStatus>;
   TeamRefresh(provider: string): Promise<TeamStatus>;
   TeamRemove(provider: string): Promise<TeamStatus>;
+  ProviderSetup(): Promise<ProviderSetupInfo>;
+  DismissProviderSetup(): Promise<void>;
+  PeggStatus(): Promise<ForeverStatus>;
+  PeggLogin(): Promise<ForeverStatus>;
+  PeggCancel(): Promise<ForeverStatus>;
+  PeggLogout(): Promise<ForeverStatus>;
   SearchHubSkills(query: string, limit: number): Promise<HubSkill[]>;
   SearchHubSkillsFiltered(query: string, limit: number, filter: string, cursor: number): Promise<HubSearchResult>;
   SkillReadme(source: string): Promise<string>;
@@ -259,6 +277,14 @@ export function onConnectStatus(cb: (status: ConnectStatus) => void): Unsubscrib
 
 export function onTeamStatus(cb: (status: TeamStatus) => void): Unsubscribe {
   return on<TeamStatus>('team:status', cb);
+}
+
+export function onPeggStatus(cb: (status: ForeverStatus) => void): Unsubscribe {
+  return on<ForeverStatus>('pegg:status', cb);
+}
+
+export function onPeggLog(cb: (line: string) => void): Unsubscribe {
+  return on<string>('pegg:log', cb);
 }
 
 export function offAll(events: string[]): void {

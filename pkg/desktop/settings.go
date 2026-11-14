@@ -873,7 +873,12 @@ func (a *App) SaveMemorySettings(m MemorySettings) error {
 }
 
 func (a *App) TogglePluginSettings(name string) (bool, error) {
-	return config.TogglePlugin(name)
+	enabled, err := config.TogglePlugin(name)
+	if err != nil {
+		return enabled, err
+	}
+	a.resetPluginManager()
+	return enabled, nil
 }
 
 func (a *App) ProviderCatalog() []ProviderCatalogEntry {
