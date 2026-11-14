@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -173,6 +175,15 @@ func (c *CLI) newHooksServeCommand() *cobra.Command {
 				return err
 			}
 			defer mgr.Close()
+
+			signals := make(chan os.Signal, 1)
+			signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+			defer signal.Stop(signals)
+			go func() {
+				<-signals
+				mgr.Close()
+				os.Exit(0)
+			}()
 
 			decoder := json.NewDecoder(cmd.InOrStdin())
 			encoder := json.NewEncoder(cmd.OutOrStdout())

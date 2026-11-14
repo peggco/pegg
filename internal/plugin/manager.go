@@ -938,5 +938,7 @@ func GetPluginDir() (string, error) {
 }
 
 func pluginCmd(path string) *exec.Cmd {
-	return exec.Command(path)
+	cmd := exec.Command(path)
+	configurePluginCmd(cmd)
+	return cmd
 }
