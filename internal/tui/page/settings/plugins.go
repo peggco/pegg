@@ -35,6 +35,12 @@ func newPlugins(s *Settings) *pluginsTab {
 
 func (t *pluginsTab) rebuild() {
 	var items []components.ListItem
+	selectedName := ""
+	if item, ok := t.list.Selected(); ok {
+		if pd, ok := item.Data.(pluginData); ok {
+			selectedName = pd.name
+		}
+	}
 
 	pluginDir, err := plugin.GetPluginDir()
 	if err != nil {
@@ -102,27 +108,30 @@ func (t *pluginsTab) rebuild() {
 		}
 
 		name := entry.Name()
-		disabled := excludeSet[name] || !globalEnabled
+		excluded := excludeSet[name] || !globalEnabled
 		status := i18n.T("settings.plugins.enabled")
-		if disabled {
+		if excluded {
 			status = i18n.T("settings.plugins.excluded")
 		}
 
+		label := name
+		detail := status
+		dataName := name
 		if p, ok := loadedMap[name]; ok {
-			items = append(items, components.ListItem{
-				Label:    p.Name,
-				Detail:   p.Version + " · " + p.Description,
-				Disabled: disabled,
-				Data:     pluginData{name: p.Name},
-			})
-		} else {
-			items = append(items, components.ListItem{
-				Label:    name,
-				Detail:   status,
-				Disabled: disabled,
-				Data:     pluginData{name: name},
-			})
+			label = p.Name
+			dataName = p.Name
+			if p.Version != "" {
+				detail += " · " + p.Version
+			}
+			if p.Description != "" {
+				detail += " · " + p.Description
+			}
 		}
+		items = append(items, components.ListItem{
+			Label:  label,
+			Detail: detail,
+			Data:   pluginData{name: dataName},
+		})
 	}
 
 	if len(items) == 0 {
@@ -133,6 +142,12 @@ func (t *pluginsTab) rebuild() {
 	}
 
 	t.list.SetItems(items)
+	if selectedName != "" {
+		t.list.SelectItem(func(item components.ListItem) bool {
+			pd, ok := item.Data.(pluginData)
+			return ok && pd.name == selectedName
+		})
+	}
 }
 
 func (t *pluginsTab) toggle(name string) {
@@ -144,6 +159,9 @@ func (t *pluginsTab) toggle(name string) {
 	t.settings.errMsg = ""
 	if fresh, err := config.Load(); err == nil {
 		t.settings.deps.Config = fresh
+		if t.settings.deps.Plugin != nil {
+			t.settings.deps.Plugin.SetExcludedPlugins(fresh.Plugins.Exclude)
+		}
 	}
 	t.rebuild()
 }
