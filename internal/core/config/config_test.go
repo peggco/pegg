@@ -11,13 +11,13 @@ func findProvider(cfg *Config, name string) *LLMConfig {
 	return nil
 }
 
-func TestDefaultConfigHasOpenCodeZen(t *testing.T) {
-	p := findProvider(DefaultConfig(), "opencode-zen")
-	if p == nil {
-		t.Fatal("default config should include opencode-zen")
+func TestDefaultConfigHasNoProviders(t *testing.T) {
+	cfg := DefaultConfig()
+	if len(cfg.Providers) != 0 {
+		t.Fatalf("default config providers = %+v, want none until setup", cfg.Providers)
 	}
-	if p.APIKey != "" {
-		t.Fatalf("opencode-zen API key = %q, want empty", p.APIKey)
+	if findProvider(cfg, "opencode-zen") != nil {
+		t.Fatal("default config should not seed a placeholder provider")
 	}
 }
 
@@ -51,11 +51,11 @@ func TestUpsertProviderAdds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Providers) != 3 {
-		t.Fatalf("providers = %+v, want 3 (default + groq + openai)", cfg.Providers)
+	if len(cfg.Providers) != 2 {
+		t.Fatalf("providers = %+v, want 2 (groq + openai)", cfg.Providers)
 	}
-	if findProvider(cfg, "opencode-zen") == nil {
-		t.Fatalf("default opencode-zen provider missing: %+v", cfg.Providers)
+	if findProvider(cfg, "groq") == nil || findProvider(cfg, "openai") == nil {
+		t.Fatalf("added providers missing: %+v", cfg.Providers)
 	}
 }
 
@@ -73,8 +73,8 @@ func TestUpsertProviderUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Providers) != 2 {
-		t.Fatalf("providers = %+v, want 2 (default + groq)", cfg.Providers)
+	if len(cfg.Providers) != 1 {
+		t.Fatalf("providers = %+v, want 1 (groq)", cfg.Providers)
 	}
 	if p := findProvider(cfg, "groq"); p == nil || p.APIKey != "b" {
 		t.Fatalf("groq provider = %+v, want API key b", p)
@@ -105,8 +105,8 @@ func TestRemoveProvider(t *testing.T) {
 	if findProvider(cfg, "openai") == nil {
 		t.Fatalf("openai should remain: %+v", cfg.Providers)
 	}
-	if findProvider(cfg, "opencode-zen") == nil {
-		t.Fatalf("default provider should remain: %+v", cfg.Providers)
+	if findProvider(cfg, "opencode-zen") != nil {
+		t.Fatalf("no placeholder provider should be seeded: %+v", cfg.Providers)
 	}
 
 	if err := RemoveProvider("nope"); err == nil {
