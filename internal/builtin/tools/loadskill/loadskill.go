@@ -131,6 +131,14 @@ func loadSkillTool(fs *vfs.VFS, sess *session.Manager, hub *catalog.Client) tool
 }
 
 func renderSkill(ctx context.Context, sess *session.Manager, fs *vfs.VFS, s *skill.Skill, args map[string]string) (string, error) {
+	if a := agent.FromContext(ctx); a != nil {
+		if mode := agent.Mode(s.Mode); mode.Valid() {
+			a.SetMode(mode)
+		}
+		if len(s.DisableTools) > 0 {
+			a.DisableTools(s.DisableTools...)
+		}
+	}
 	activation := bundle.Activate(ctx, bundle.Deps{FS: fs}, s.ToolBundles)
 	content := skill.ExpandWithArgs(s, args)
 	if s.Context == contextFork {
@@ -141,6 +149,12 @@ func renderSkill(ctx context.Context, sess *session.Manager, fs *vfs.VFS, s *ski
 	fmt.Fprintf(&b, "<skill:%s>\n", s.Name)
 	for _, line := range activation {
 		fmt.Fprintf(&b, "%s\n", line)
+	}
+	if mode := agent.Mode(s.Mode); mode.Valid() {
+		fmt.Fprintf(&b, "Agent mode: %s\n", mode)
+	}
+	if len(s.DisableTools) > 0 {
+		fmt.Fprintf(&b, "Disabled tools: %s\n", strings.Join(s.DisableTools, ", "))
 	}
 	if s.Description != "" {
 		fmt.Fprintf(&b, "Description: %s\n", s.Description)

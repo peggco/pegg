@@ -7,4 +7,5 @@ var (
 	ErrEmptyName = errors.New("tool: empty name")
 	ErrDuplicate = errors.New("tool: already registered")
 	ErrNotFound  = errors.New("tool: not found")
+	ErrDisabled  = errors.New("tool: disabled")
 )

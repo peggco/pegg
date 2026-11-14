@@ -88,6 +88,29 @@ Extract text with pdfplumber.
 	}
 }
 
+func TestParseSKILLRuntimeFields(t *testing.T) {
+	root := t.TempDir()
+	writeSkill(t, root, "runtime-skill", `---
+name: runtime-skill
+description: Applies runtime policy
+mode: auto
+disable-tools: askuserquestion sendfile
+---
+
+Body.
+`)
+	s, err := parseSKILL(filepath.Join(root, "runtime-skill", SkillFileName), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Mode != "auto" {
+		t.Fatalf("mode = %q, want auto", s.Mode)
+	}
+	if len(s.DisableTools) != 2 || s.DisableTools[0] != "askuserquestion" || s.DisableTools[1] != "sendfile" {
+		t.Fatalf("disable-tools = %v", s.DisableTools)
+	}
+}
+
 func TestParseSKILLNoFrontmatter(t *testing.T) {
 	root := t.TempDir()
 	writeSkill(t, root, "bad-skill", "# No frontmatter here\n")

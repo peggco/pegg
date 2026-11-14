@@ -41,7 +41,14 @@ Extract text with pdfplumber:
 | `compatibility` | no | Free-form prerequisites |
 | `metadata` | no | Arbitrary key/value pairs |
 | `allowed-tools` | no | Space-separated list of tool names the skill expects to use |
+| `mode` | no | Agent mode to apply when the skill loads: `auto`, `plan`, or `build` |
+| `disable-tools` | no | Space-separated tool names removed from the loading agent: hidden from the model and rejected if called |
 | `context` | no | `fork` runs the skill in a forked background subagent; anything else (default) loads it into the current conversation |
+
+`mode` and `disable-tools` take effect when the skill is loaded. They affect only
+the agent that loaded the skill; the tool stays registered globally, but it is
+omitted from that agent's tool list and rejected if invoked. The built-in
+[`/goal`](../features/commands.md#goal) skill uses both fields.
 
 A `scripts/` subdirectory next to `SKILL.md` is detected automatically and its path
 is included in the expansion, so skills can ship helper scripts.
@@ -159,6 +166,12 @@ report candidate references so the agent can retry without guessing.
 
     The general plan-first contract for large projects: explore, write the plan
     yourself, create todos, delegate, verify, and report.
+
+- [:lucide-target:{ .lg } **`/goal`**](../features/commands.md#goal)
+
+    Run a stated goal autonomously: switch to `auto` mode, disable
+    `askuserquestion`, plan, research, implement, verify, and report without
+    questions or approval stops.
 
 - [:lucide-git-pull-request:{ .lg } **`/review`**](../features/commands.md#review)
 

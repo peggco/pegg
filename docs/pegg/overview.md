@@ -174,7 +174,8 @@ These are end-user applications built on top of Pegg's agent core:
 
 - [:lucide-square-terminal:{ .lg } **Learn the commands**](features/commands.md)
 
-    `/init`, `/batch`, and `/review` are the built-in slash commands.
+    `/init`, `/batch`, `/orchestrate`, `/goal`, `/review`, `/rule`, and
+    `/skillify` are the built-in slash commands.
 
 - [:lucide-bug:{ .lg } **Something broken?**](troubleshooting.md)
 

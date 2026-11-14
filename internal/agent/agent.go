@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -47,6 +48,9 @@ type Agent struct {
 
 	bundlesMu     sync.RWMutex
 	activeBundles map[string][]tool.Tool
+
+	toolPolicyMu  sync.RWMutex
+	disabledTools map[string]struct{}
 
 	sessionMu sync.RWMutex
 	sessionID string
@@ -114,6 +118,7 @@ func (a *Agent) Clone(name string) *Agent {
 	c.ToolNames = append(c.ToolNames, a.ToolNames...)
 	c.middlewareNames = append(c.middlewareNames, a.middlewareNames...)
 	c.namesResolved = a.namesResolved
+	c.DisableTools(a.DisabledTools()...)
 	for _, t := range a.Tools.List() {
 		_ = c.Tools.Register(t)
 	}
@@ -272,6 +277,45 @@ func (a *Agent) SetMode(m Mode) {
 	if c != nil {
 		c(a, m)
 	}
+}
+
+func (a *Agent) DisableTools(names ...string) {
+	a.toolPolicyMu.Lock()
+	defer a.toolPolicyMu.Unlock()
+	if a.disabledTools == nil {
+		a.disabledTools = make(map[string]struct{})
+	}
+	for _, name := range names {
+		if name != "" {
+			a.disabledTools[name] = struct{}{}
+		}
+	}
+}
+
+func (a *Agent) EnableTools(names ...string) {
+	a.toolPolicyMu.Lock()
+	defer a.toolPolicyMu.Unlock()
+	for _, name := range names {
+		delete(a.disabledTools, name)
+	}
+}
+
+func (a *Agent) IsToolDisabled(name string) bool {
+	a.toolPolicyMu.RLock()
+	defer a.toolPolicyMu.RUnlock()
+	_, ok := a.disabledTools[name]
+	return ok
+}
+
+func (a *Agent) DisabledTools() []string {
+	a.toolPolicyMu.RLock()
+	defer a.toolPolicyMu.RUnlock()
+	out := make([]string, 0, len(a.disabledTools))
+	for name := range a.disabledTools {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (a *Agent) planToolsEnabled() bool {
@@ -437,6 +481,9 @@ func (a *Agent) resolveToolNames(ctx context.Context) error {
 		cancel()
 	}
 	for _, name := range a.ToolNames {
+		if a.IsToolDisabled(name) {
+			continue
+		}
 		if _, ok := a.Tools.Get(name); ok {
 			continue
 		}

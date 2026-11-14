@@ -655,6 +655,13 @@ func (a *Agent) runTool(ctx context.Context, state *runState, call llm.ToolCall)
 	start := time.Now()
 	defer func() { res.duration = time.Since(start) }()
 
+	if a.IsToolDisabled(call.Function.Name) {
+		res.output = fmt.Sprintf("Error: tool %q is disabled for this run", call.Function.Name)
+		res.toolErr = fmt.Errorf("%w: %s", tool.ErrDisabled, call.Function.Name)
+		_ = a.chain.AfterTool(ctx, call, res.output, res.toolErr)
+		return res
+	}
+
 	if err := a.chain.BeforeTool(ctx, call); err != nil {
 		res.output = fmt.Sprintf("Error: tool call aborted by middleware: %v", err)
 		res.toolErr = err
@@ -805,12 +812,16 @@ func (a *Agent) buildRequest(state *runState) *llm.Request {
 
 func (a *Agent) visibleTools() []llm.Tool {
 	tools := a.Tools.LLMTools()
-	if len(tools) == 0 || a.planToolsEnabled() {
+	if len(tools) == 0 {
 		return tools
 	}
+	planEnabled := a.planToolsEnabled()
 	out := tools[:0]
 	for _, t := range tools {
-		if isPlanTool(t.Function.Name) {
+		if a.IsToolDisabled(t.Function.Name) {
+			continue
+		}
+		if !planEnabled && isPlanTool(t.Function.Name) {
 			continue
 		}
 		out = append(out, t)

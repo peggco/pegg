@@ -44,6 +44,29 @@ func TestBuiltinSkillsBuildAndParse(t *testing.T) {
 	}
 }
 
+func TestGoalSkill(t *testing.T) {
+	out := GoalSkill().MustBuild(prompt.FormatMarkdown)
+	for _, want := range []string{
+		"name: goal",
+		"mode: auto",
+		"disable-tools: askuserquestion",
+		"enterplanmode",
+		"exitplanmode",
+		".pegg/plans/",
+		"Do not ask",
+		"implement",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("goal output missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{"enter_plan_mode", "exit_plan_mode", "ask_user_question"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("goal output should not reference %q", unwanted)
+		}
+	}
+}
+
 func TestSkillifyMentionsPeggPaths(t *testing.T) {
 	out := SkillifySkill().MustBuild(prompt.FormatMarkdown)
 	for _, want := range []string{".pegg/skills/", "~/.pegg/skills/", "askuserquestion", "SKILL.md"} {

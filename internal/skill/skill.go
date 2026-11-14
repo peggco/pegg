@@ -16,6 +16,8 @@ type Skill struct {
 	Metadata      map[string]string
 	AllowedTools  []string
 	ToolBundles   []string
+	Mode          string
+	DisableTools  []string
 	WhenToUse     string
 	ArgumentHint  string
 	Arguments     []string
