@@ -262,9 +262,22 @@ func newTestScreen(t *testing.T) tcell.Screen {
 	return s
 }
 
+func newTestApp(t *testing.T, s tcell.Screen) *App {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	return &App{
+		screen: s,
+		deps: settings.Deps{
+			Config: &config.Config{
+				Providers: []config.LLMConfig{{Provider: "test-provider", APIKey: "sk-test"}},
+			},
+		},
+	}
+}
+
 func TestAppQuitsOnCtrlC(t *testing.T) {
 	s := newTestScreen(t)
-	a := &App{screen: s}
+	a := newTestApp(t, s)
 	done := make(chan error, 1)
 	go func() { done <- a.start() }()
 
@@ -288,7 +301,7 @@ func TestAppQuitsOnCtrlC(t *testing.T) {
 
 func TestAppQuitsOnCtrlQ(t *testing.T) {
 	s := newTestScreen(t)
-	a := &App{screen: s}
+	a := newTestApp(t, s)
 	done := make(chan error, 1)
 	go func() { done <- a.start() }()
 
@@ -360,7 +373,8 @@ func TestAppSubmitPublishesEvent(t *testing.T) {
 	}
 	defer bus.Unsubscribe(TopicSubmit, handler)
 
-	a := &App{bus: bus, screen: s}
+	a := newTestApp(t, s)
+	a.bus = bus
 	done := make(chan error, 1)
 	go func() { done <- a.start() }()
 
@@ -391,7 +405,7 @@ func TestAppSubmitPublishesEvent(t *testing.T) {
 
 func TestAppSettingsModal(t *testing.T) {
 	s := newTestScreen(t)
-	a := &App{screen: s}
+	a := newTestApp(t, s)
 	done := make(chan error, 1)
 	go func() { done <- a.start() }()
 
@@ -437,7 +451,7 @@ func TestAppSettingsModal(t *testing.T) {
 func TestAppThemeCycle(t *testing.T) {
 	s := newTestScreen(t)
 	styles.Set("dark")
-	a := &App{screen: s}
+	a := newTestApp(t, s)
 	done := make(chan error, 1)
 	go func() { done <- a.start() }()
 
