@@ -19,6 +19,7 @@ const (
 	CapabilityCommands    Capability = "commands"
 	CapabilityEvents      Capability = "events"
 	CapabilityTUI         Capability = "tui"
+	CapabilityHooks       Capability = "hooks"
 )
 
 var ErrNotSupported = errors.New("plugin: capability not supported")
@@ -97,6 +98,32 @@ type CommandRequest struct {
 
 type CommandResult struct {
 	Output string
+}
+
+type HookKind string
+
+const (
+	HookFilter HookKind = "filter"
+	HookAction HookKind = "action"
+)
+
+type HookSpec struct {
+	Name        string
+	Kind        HookKind
+	Priority    int
+	Description string
+}
+
+type HookRequest struct {
+	Name      string
+	Kind      HookKind
+	Value     json.RawMessage
+	TimeoutMS int64
+}
+
+type HookResult struct {
+	Value   json.RawMessage
+	Handled bool
 }
 
 type Event struct {
@@ -193,11 +220,13 @@ type Plugin interface {
 	Commands() ([]CommandSpec, error)
 	EventSubscriptions() ([]string, error)
 	TUIPages() ([]TUIPage, error)
+	Hooks() ([]HookSpec, error)
 
 	ExecuteTool(req ToolRequest) (*ToolResult, error)
 	RunCommand(req CommandRequest) (*CommandResult, error)
 	OnEvent(event Event) error
 	ExecuteTUIAction(req TUIActionRequest) (*TUIActionResult, error)
+	ExecuteHook(req HookRequest) (*HookResult, error)
 	Close() error
 }
 
@@ -214,13 +243,15 @@ func (Base) PermissionRules() (map[string]string, error)       { return nil, nil
 func (Base) Commands() ([]CommandSpec, error)                  { return nil, nil }
 func (Base) EventSubscriptions() ([]string, error)             { return nil, nil }
 func (Base) TUIPages() ([]TUIPage, error)                      { return nil, nil }
+func (Base) Hooks() ([]HookSpec, error)                        { return nil, nil }
 func (Base) ExecuteTool(ToolRequest) (*ToolResult, error)      { return nil, ErrNotSupported }
 func (Base) RunCommand(CommandRequest) (*CommandResult, error) { return nil, ErrNotSupported }
 func (Base) OnEvent(Event) error                               { return nil }
 func (Base) ExecuteTUIAction(TUIActionRequest) (*TUIActionResult, error) {
 	return nil, ErrNotSupported
 }
-func (Base) Close() error { return nil }
+func (Base) ExecuteHook(HookRequest) (*HookResult, error) { return nil, ErrNotSupported }
+func (Base) Close() error                                 { return nil }
 
 func Supports(capabilities []string, wanted Capability) bool {
 	if capabilities == nil {
@@ -338,6 +369,15 @@ func (s *PeggPluginRPCServer) TUIPages(args interface{}, resp *[]TUIPage) error 
 	return nil
 }
 
+func (s *PeggPluginRPCServer) Hooks(args interface{}, resp *[]HookSpec) error {
+	out, err := s.impl.Hooks()
+	if err != nil {
+		return err
+	}
+	*resp = out
+	return nil
+}
+
 func (s *PeggPluginRPCServer) ExecuteTool(args *ToolRequest, resp *ToolResult) error {
 	out, err := s.impl.ExecuteTool(*args)
 	if err != nil {
@@ -382,6 +422,18 @@ func (s *PeggPluginRPCServer) ExecuteTUIAction(args *TUIActionRequest, resp *TUI
 	}
 	if out == nil {
 		out = &TUIActionResult{}
+	}
+	*resp = *out
+	return nil
+}
+
+func (s *PeggPluginRPCServer) ExecuteHook(args *HookRequest, resp *HookResult) error {
+	out, err := s.impl.ExecuteHook(*args)
+	if err != nil {
+		return err
+	}
+	if out == nil {
+		out = &HookResult{}
 	}
 	*resp = *out
 	return nil
@@ -462,6 +514,12 @@ func (c *PeggPluginRPCClient) TUIPages() ([]TUIPage, error) {
 	return resp, err
 }
 
+func (c *PeggPluginRPCClient) Hooks() ([]HookSpec, error) {
+	var resp []HookSpec
+	err := c.client.Call("Plugin.Hooks", new(interface{}), &resp)
+	return resp, err
+}
+
 func (c *PeggPluginRPCClient) ExecuteTool(req ToolRequest) (*ToolResult, error) {
 	var resp ToolResult
 	if err := c.client.Call("Plugin.ExecuteTool", &req, &resp); err != nil {
@@ -492,6 +550,14 @@ func (c *PeggPluginRPCClient) OnEvent(event Event) error {
 func (c *PeggPluginRPCClient) ExecuteTUIAction(req TUIActionRequest) (*TUIActionResult, error) {
 	var resp TUIActionResult
 	if err := c.client.Call("Plugin.ExecuteTUIAction", &req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *PeggPluginRPCClient) ExecuteHook(req HookRequest) (*HookResult, error) {
+	var resp HookResult
+	if err := c.client.Call("Plugin.ExecuteHook", &req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

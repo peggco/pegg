@@ -54,6 +54,18 @@ func (p *testPlugin) TUIPages() ([]TUIPage, error) {
 	}}, nil
 }
 
+func (p *testPlugin) Hooks() ([]HookSpec, error) {
+	return []HookSpec{{Name: "test.filter", Kind: HookFilter, Priority: 5, Description: "test filter"}}, nil
+}
+
+func (p *testPlugin) ExecuteHook(req HookRequest) (*HookResult, error) {
+	if req.Name != "test.filter" || req.Kind != HookFilter {
+		return &HookResult{}, nil
+	}
+	out, _ := json.Marshal("hooked:" + string(req.Value))
+	return &HookResult{Value: out, Handled: true}, nil
+}
+
 func (p *testPlugin) ExecuteTUIAction(req TUIActionRequest) (*TUIActionResult, error) {
 	p.tuiActions = append(p.tuiActions, req)
 	return &TUIActionResult{Output: "ok:" + req.ActionID}, nil
@@ -132,6 +144,19 @@ func TestRPCProtocol(t *testing.T) {
 	}
 	if len(impl.tuiActions) != 1 || impl.tuiActions[0].ActionID != "test" {
 		t.Fatalf("tui actions: %#v", impl.tuiActions)
+	}
+	hooks, err := plugin.Hooks()
+	if err != nil || len(hooks) != 1 || hooks[0].Name != "test.filter" || hooks[0].Kind != HookFilter {
+		t.Fatalf("hooks: %#v %v", hooks, err)
+	}
+	hookResult, err := plugin.ExecuteHook(HookRequest{
+		Name:      "test.filter",
+		Kind:      HookFilter,
+		Value:     json.RawMessage(`"v"`),
+		TimeoutMS: 250,
+	})
+	if err != nil || !hookResult.Handled || string(hookResult.Value) != `"hooked:\"v\""` {
+		t.Fatalf("hook result: %#v %v", hookResult, err)
 	}
 	if err := plugin.Close(); err != nil || !impl.closed {
 		t.Fatalf("close: %v %t", err, impl.closed)
