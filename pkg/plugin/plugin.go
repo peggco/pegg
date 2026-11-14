@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/rpc"
+	"sync/atomic"
 
 	goplugin "github.com/hashicorp/go-plugin"
 )
@@ -29,6 +30,7 @@ type Deps struct {
 	Options    json.RawMessage
 	Workdir    string
 	PluginPath string
+	DispatchID uint32
 }
 
 type ToolSpec struct {
@@ -119,11 +121,35 @@ type HookRequest struct {
 	Kind      HookKind
 	Value     json.RawMessage
 	TimeoutMS int64
+	Origin    string
 }
 
 type HookResult struct {
 	Value   json.RawMessage
 	Handled bool
+	Outputs []json.RawMessage
+	Errors  []string
+}
+
+type HookDispatchFunc func(req HookRequest) (*HookResult, error)
+
+type hookDispatcherHolder struct{ fn HookDispatchFunc }
+
+var hookDispatcher atomic.Pointer[hookDispatcherHolder]
+
+func HostDispatcher() HookDispatchFunc {
+	if holder := hookDispatcher.Load(); holder != nil {
+		return holder.fn
+	}
+	return nil
+}
+
+func SetHostDispatcher(fn HookDispatchFunc) {
+	if fn == nil {
+		hookDispatcher.Store(nil)
+		return
+	}
+	hookDispatcher.Store(&hookDispatcherHolder{fn: fn})
 }
 
 type Event struct {
@@ -285,19 +311,65 @@ func Serve(impl Plugin) {
 }
 
 type PeggPluginRPC struct {
-	Impl Plugin
+	Impl     Plugin
+	Dispatch HookDispatchFunc
 }
 
-func (p *PeggPluginRPC) Server(*goplugin.MuxBroker) (interface{}, error) {
-	return &PeggPluginRPCServer{impl: p.Impl}, nil
+func (p *PeggPluginRPC) Server(b *goplugin.MuxBroker) (interface{}, error) {
+	return &PeggPluginRPCServer{impl: p.Impl, broker: b}, nil
 }
 
 func (p *PeggPluginRPC) Client(b *goplugin.MuxBroker, c *rpc.Client) (interface{}, error) {
-	return &PeggPluginRPCClient{client: c}, nil
+	client := &PeggPluginRPCClient{client: c}
+	if p.Dispatch != nil && b != nil {
+		client.dispatchID = hookBrokerID(b)
+		go serveHookDispatch(b, client.dispatchID, p.Dispatch)
+	}
+	return client, nil
+}
+
+func hookBrokerID(b *goplugin.MuxBroker) uint32 {
+	return 0xF0000000 | (b.NextId() & 0x0FFFFFFF)
+}
+
+func serveHookDispatch(b *goplugin.MuxBroker, id uint32, dispatch HookDispatchFunc) {
+	conn, err := b.Accept(id)
+	if err != nil {
+		return
+	}
+	server := rpc.NewServer()
+	if err := server.RegisterName("Plugin", &hookDispatchService{dispatch: dispatch}); err != nil {
+		_ = conn.Close()
+		return
+	}
+	server.ServeConn(conn)
+}
+
+type hookDispatchService struct {
+	dispatch HookDispatchFunc
+}
+
+func (s *hookDispatchService) DispatchHook(args *HookRequest, resp *HookResult) error {
+	out, err := s.dispatch(*args)
+	if err != nil {
+		return err
+	}
+	if out == nil {
+		out = &HookResult{}
+	}
+	*resp = *out
+	return nil
+}
+
+func NewClientPluginMap(dispatch HookDispatchFunc) map[string]goplugin.Plugin {
+	return map[string]goplugin.Plugin{
+		"pegg": &PeggPluginRPC{Dispatch: dispatch},
+	}
 }
 
 type PeggPluginRPCServer struct {
-	impl Plugin
+	impl   Plugin
+	broker *goplugin.MuxBroker
 }
 
 func (s *PeggPluginRPCServer) Name(args interface{}, resp *string) error {
@@ -321,7 +393,28 @@ func (s *PeggPluginRPCServer) Capabilities(args interface{}, resp *[]string) err
 }
 
 func (s *PeggPluginRPCServer) Boot(args *Deps, resp *interface{}) error {
+	s.installHookDispatch(args)
 	return s.impl.Boot(*args)
+}
+
+func (s *PeggPluginRPCServer) installHookDispatch(args *Deps) {
+	if args == nil || args.DispatchID == 0 || s.broker == nil {
+		return
+	}
+	conn, err := s.broker.Dial(args.DispatchID)
+	if err != nil {
+		return
+	}
+	client := rpc.NewClient(conn)
+	origin := s.impl.Name()
+	SetHostDispatcher(func(req HookRequest) (*HookResult, error) {
+		req.Origin = origin
+		var out HookResult
+		if err := client.Call("Plugin.DispatchHook", &req, &out); err != nil {
+			return nil, err
+		}
+		return &out, nil
+	})
 }
 
 func (s *PeggPluginRPCServer) Tools(args interface{}, resp *[]ToolSpec) error {
@@ -444,7 +537,8 @@ func (s *PeggPluginRPCServer) Close(args interface{}, resp *interface{}) error {
 }
 
 type PeggPluginRPCClient struct {
-	client *rpc.Client
+	client     *rpc.Client
+	dispatchID uint32
 }
 
 func (c *PeggPluginRPCClient) Name() string {
@@ -480,6 +574,7 @@ func (c *PeggPluginRPCClient) Capabilities() []string {
 }
 
 func (c *PeggPluginRPCClient) Boot(deps Deps) error {
+	deps.DispatchID = c.dispatchID
 	var resp interface{}
 	return c.client.Call("Plugin.Boot", &deps, &resp)
 }

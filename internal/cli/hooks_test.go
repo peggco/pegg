@@ -252,36 +252,3 @@ func TestHooksApplyRejectsInvalidKindAndValue(t *testing.T) {
 		t.Fatalf("timeout error: %v", err)
 	}
 }
-
-func TestHooksServeStreamsRequests(t *testing.T) {
-	fake := &fakeHookManager{outcome: plugin.HookOutcome{Value: json.RawMessage(`"ok"`)}}
-	c, out := newHooksCLI(t, fake)
-	input := strings.Join([]string{
-		`{"name":"kanban.providers","kind":"filter","value":[],"timeout_ms":1500}`,
-		`{"name":"kanban.card.succeeded","kind":"action","value":{"card":{"id":"c1"}},"timeout_ms":1500}`,
-		"",
-	}, "\n")
-	c.root.SetIn(strings.NewReader(input))
-	if err := c.Execute([]string{"hooks", "serve"}); err != nil {
-		t.Fatalf("serve: %v\n%s", err, out.String())
-	}
-	if fake.calls != 2 {
-		t.Fatalf("calls = %d", fake.calls)
-	}
-	if !fake.closed {
-		t.Fatal("manager not closed")
-	}
-	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("responses = %q", out.String())
-	}
-	for _, line := range lines {
-		var resp hookServeResponse
-		if err := json.Unmarshal([]byte(line), &resp); err != nil {
-			t.Fatalf("decode %q: %v", line, err)
-		}
-		if string(resp.Value) != `"ok"` {
-			t.Fatalf("response = %#v", resp)
-		}
-	}
-}

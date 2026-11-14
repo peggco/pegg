@@ -5,10 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -40,7 +37,6 @@ func (c *CLI) newHooksCommand() *cobra.Command {
 	cmd.AddCommand(
 		c.newHooksListCommand(),
 		c.newHooksApplyCommand(),
-		c.newHooksServeCommand(),
 	)
 	return cmd
 }
@@ -52,7 +48,6 @@ func (c *CLI) newHooksListCommand() *cobra.Command {
 		Short: "List registered plugin hooks",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = os.Setenv("PEGG_HOOKS_SERVE", "1")
 			mgr, err := c.hooksManager()
 			if err != nil {
 				return err
@@ -147,77 +142,6 @@ func (c *CLI) newHooksApplyCommand() *cobra.Command {
 	cmd.Flags().DurationVar(&timeout, "timeout", 30*time.Second, "handler timeout")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "output JSON")
 	return cmd
-}
-
-type hookServeRequest struct {
-	Name      string          `json:"name"`
-	Kind      string          `json:"kind"`
-	Value     json.RawMessage `json:"value,omitempty"`
-	TimeoutMS int64           `json:"timeout_ms,omitempty"`
-}
-
-type hookServeResponse struct {
-	Value   json.RawMessage   `json:"value,omitempty"`
-	Outputs []json.RawMessage `json:"outputs,omitempty"`
-	Errors  []string          `json:"errors,omitempty"`
-	Error   string            `json:"error,omitempty"`
-}
-
-func (c *CLI) newHooksServeCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "serve",
-		Short: "Run a long-lived hook dispatcher over newline-delimited JSON",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = os.Setenv("PEGG_HOOKS_SERVE", "1")
-			mgr, err := c.hooksManager()
-			if err != nil {
-				return err
-			}
-			defer mgr.Close()
-
-			signals := make(chan os.Signal, 1)
-			signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-			defer signal.Stop(signals)
-			go func() {
-				<-signals
-				mgr.Close()
-				os.Exit(0)
-			}()
-
-			decoder := json.NewDecoder(cmd.InOrStdin())
-			encoder := json.NewEncoder(cmd.OutOrStdout())
-			for {
-				var req hookServeRequest
-				if err := decoder.Decode(&req); err != nil {
-					if err == io.EOF {
-						return nil
-					}
-					return err
-				}
-				kind := pkgplugin.HookKind(req.Kind)
-				if kind == "" {
-					kind = pkgplugin.HookFilter
-				}
-				timeout := time.Duration(req.TimeoutMS) * time.Millisecond
-				if timeout <= 0 {
-					timeout = 30 * time.Second
-				}
-				outcome, applyErr := mgr.ApplyHook(cmd.Context(), req.Name, kind, req.Value, timeout)
-				resp := hookServeResponse{
-					Value:   outcome.Value,
-					Outputs: outcome.Outputs,
-					Errors:  outcome.Errors,
-				}
-				if applyErr != nil {
-					resp.Error = applyErr.Error()
-				}
-				if err := encoder.Encode(resp); err != nil {
-					return err
-				}
-			}
-		},
-	}
 }
 
 func (c *CLI) hooksManager() (hookManager, error) {

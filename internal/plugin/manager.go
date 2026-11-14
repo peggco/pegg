@@ -48,6 +48,9 @@ type Manager struct {
 	commands    []PluginCommand
 	eventUnsubs []func() error
 	registry    *corehook.Registry
+
+	hookMu    sync.Mutex
+	hookDepth map[string]int
 }
 
 func (m *Manager) SetWorkspaceRoot(root string) {
@@ -115,14 +118,15 @@ func NewManager(
 	_ *lsp.Manager,
 ) *Manager {
 	return &Manager{
-		log:      log,
-		cfg:      cfg,
-		bus:      bus,
-		fs:       fs,
-		plugins:  make(map[string]*PluginInstance),
-		clients:  make(map[string]*goplugin.Client),
-		exclude:  make(map[string]bool),
-		registry: corehook.NewRegistry(),
+		log:       log,
+		cfg:       cfg,
+		bus:       bus,
+		fs:        fs,
+		plugins:   make(map[string]*PluginInstance),
+		clients:   make(map[string]*goplugin.Client),
+		exclude:   make(map[string]bool),
+		registry:  corehook.NewRegistry(),
+		hookDepth: make(map[string]int),
 	}
 }
 
@@ -218,7 +222,7 @@ func (m *Manager) connectPlugin(path string) (*PluginInstance, error) {
 
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig:  pkgplugin.Handshake,
-		Plugins:          pkgplugin.PluginMap,
+		Plugins:          pkgplugin.NewClientPluginMap(m.dispatchHook),
 		Cmd:              pluginCmd(path),
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolNetRPC},
 		Logger: hclog.New(&hclog.LoggerOptions{
@@ -473,7 +477,9 @@ func (m *Manager) registerHooks(instance *PluginInstance) {
 				Value:     raw,
 				TimeoutMS: timeoutMS,
 			}
-			instance.execMu.Lock()
+			if !lockHookExec(ctx, instance) {
+				return nil, fmt.Errorf("%s: hook %s busy: %w", instance.Name, name, ctx.Err())
+			}
 			result, err := instance.Plugin.ExecuteHook(req)
 			instance.execMu.Unlock()
 			if err != nil {
@@ -492,9 +498,22 @@ func (m *Manager) registerHooks(instance *PluginInstance) {
 			return out, nil
 		}
 		if kind == pkgplugin.HookAction {
-			m.registry.AddAction(name, spec.Priority, callback)
+			m.registry.AddActionFor(instance.Name, name, spec.Priority, callback)
 		} else {
-			m.registry.AddFilter(name, spec.Priority, callback)
+			m.registry.AddFilterFor(instance.Name, name, spec.Priority, callback)
+		}
+	}
+}
+
+func lockHookExec(ctx context.Context, instance *PluginInstance) bool {
+	for {
+		if instance.execMu.TryLock() {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(2 * time.Millisecond):
 		}
 	}
 }
@@ -784,6 +803,10 @@ func (m *Manager) HookSpecs() []PluginHookSpec {
 }
 
 func (m *Manager) ApplyHook(ctx context.Context, name string, kind pkgplugin.HookKind, value json.RawMessage, timeout time.Duration) (HookOutcome, error) {
+	return m.ApplyHookFrom(ctx, name, kind, value, timeout, "")
+}
+
+func (m *Manager) ApplyHookFrom(ctx context.Context, name string, kind pkgplugin.HookKind, value json.RawMessage, timeout time.Duration, skipPlugin string) (HookOutcome, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -797,7 +820,7 @@ func (m *Manager) ApplyHook(ctx context.Context, name string, kind pkgplugin.Hoo
 		return HookOutcome{}, err
 	}
 	registryKind := corehook.Kind(kind)
-	if !m.registry.Has(name, registryKind) {
+	if !m.registry.HasFor(name, registryKind, skipPlugin) {
 		return HookOutcome{}, fmt.Errorf("hook %q (%s): no handler registered", name, kind)
 	}
 	if timeout > 0 {
@@ -815,13 +838,13 @@ func (m *Manager) ApplyHook(ctx context.Context, name string, kind pkgplugin.Hoo
 	outcome := HookOutcome{Value: value}
 	switch kind {
 	case pkgplugin.HookFilter:
-		next, errs := m.registry.ApplyFilters(ctx, name, payload)
+		next, errs := m.registry.ApplyFiltersFrom(ctx, name, payload, skipPlugin)
 		if raw, err := json.Marshal(next); err == nil {
 			outcome.Value = raw
 		}
 		outcome.Errors = hookErrors(errs)
 	case pkgplugin.HookAction:
-		outputs, errs := m.registry.DoAction(ctx, name, payload)
+		outputs, errs := m.registry.DoActionFrom(ctx, name, payload, skipPlugin)
 		for _, output := range outputs {
 			raw, err := json.Marshal(output)
 			if err != nil {
@@ -833,6 +856,55 @@ func (m *Manager) ApplyHook(ctx context.Context, name string, kind pkgplugin.Hoo
 		outcome.Errors = append(outcome.Errors, hookErrors(errs)...)
 	}
 	return outcome, ctx.Err()
+}
+
+const maxHookDepth = 4
+
+func (m *Manager) dispatchHook(req pkgplugin.HookRequest) (*pkgplugin.HookResult, error) {
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, fmt.Errorf("hook name is required")
+	}
+	origin := strings.TrimSpace(req.Origin)
+	key := origin + "\x00" + name
+	if !m.enterHook(key) {
+		return nil, fmt.Errorf("hook %q recursion limit reached", name)
+	}
+	defer m.leaveHook(key)
+
+	timeout := time.Duration(req.TimeoutMS) * time.Millisecond
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	outcome, err := m.ApplyHookFrom(context.Background(), name, req.Kind, req.Value, timeout, origin)
+	if err != nil {
+		return nil, err
+	}
+	return &pkgplugin.HookResult{
+		Value:   outcome.Value,
+		Handled: true,
+		Outputs: outcome.Outputs,
+		Errors:  outcome.Errors,
+	}, nil
+}
+
+func (m *Manager) enterHook(key string) bool {
+	m.hookMu.Lock()
+	defer m.hookMu.Unlock()
+	if m.hookDepth[key] >= maxHookDepth {
+		return false
+	}
+	m.hookDepth[key]++
+	return true
+}
+
+func (m *Manager) leaveHook(key string) {
+	m.hookMu.Lock()
+	defer m.hookMu.Unlock()
+	m.hookDepth[key]--
+	if m.hookDepth[key] <= 0 {
+		delete(m.hookDepth, key)
+	}
 }
 
 type hookTimeoutKey struct{}

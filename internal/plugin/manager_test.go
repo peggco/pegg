@@ -235,3 +235,110 @@ func TestFetchHooksRequiresExplicitCapability(t *testing.T) {
 		}
 	}
 }
+
+func TestDispatchHookSkipsOrigin(t *testing.T) {
+	spec := pkgplugin.HookSpec{Name: "kanban.providers", Kind: pkgplugin.HookFilter}
+	var ran []string
+	makePlugin := func(name string) *hookPlugin {
+		return &hookPlugin{name: name, hooks: []pkgplugin.HookSpec{spec}, exec: func(req pkgplugin.HookRequest) (*pkgplugin.HookResult, error) {
+			ran = append(ran, name)
+			return &pkgplugin.HookResult{Value: appendTag(req.Value, name), Handled: true}, nil
+		}}
+	}
+	mgr := newHookTestManager(t, makePlugin("kanban"), makePlugin("github"))
+
+	res, err := mgr.dispatchHook(pkgplugin.HookRequest{
+		Name:      spec.Name,
+		Kind:      pkgplugin.HookFilter,
+		Value:     json.RawMessage(`"v"`),
+		Origin:    "kanban",
+		TimeoutMS: 1000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(ran, ",") != "github" {
+		t.Fatalf("ran: %v", ran)
+	}
+	if string(res.Value) != `"v:github"` {
+		t.Fatalf("value: %s", res.Value)
+	}
+	if !res.Handled {
+		t.Fatal("expected handled result")
+	}
+}
+
+func TestDispatchHookSelfOnlyIsNoHandler(t *testing.T) {
+	spec := pkgplugin.HookSpec{Name: "kanban.providers", Kind: pkgplugin.HookFilter}
+	only := &hookPlugin{name: "kanban", hooks: []pkgplugin.HookSpec{spec}, exec: func(req pkgplugin.HookRequest) (*pkgplugin.HookResult, error) {
+		return &pkgplugin.HookResult{Value: req.Value, Handled: true}, nil
+	}}
+	mgr := newHookTestManager(t, only)
+
+	_, err := mgr.dispatchHook(pkgplugin.HookRequest{
+		Name:   spec.Name,
+		Kind:   pkgplugin.HookFilter,
+		Origin: "kanban",
+	})
+	if err == nil || !strings.Contains(err.Error(), "no handler registered") {
+		t.Fatalf("error: %v", err)
+	}
+}
+
+func TestDispatchHookActionsReturnOutputs(t *testing.T) {
+	spec := pkgplugin.HookSpec{Name: "kanban.card.succeeded", Kind: pkgplugin.HookAction}
+	handler := &hookPlugin{name: "jira", hooks: []pkgplugin.HookSpec{spec}, exec: func(req pkgplugin.HookRequest) (*pkgplugin.HookResult, error) {
+		return &pkgplugin.HookResult{Value: json.RawMessage(`"done"`)}, nil
+	}}
+	mgr := newHookTestManager(t, handler)
+
+	res, err := mgr.dispatchHook(pkgplugin.HookRequest{
+		Name:      spec.Name,
+		Kind:      pkgplugin.HookAction,
+		Value:     json.RawMessage(`{"card":"c1"}`),
+		Origin:    "kanban",
+		TimeoutMS: 1000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Outputs) != 1 || string(res.Outputs[0]) != `"done"` {
+		t.Fatalf("outputs: %#v", res.Outputs)
+	}
+}
+
+func TestDispatchHookRecursionLimit(t *testing.T) {
+	mgr := newHookTestManager(t)
+	key := "alpha\x00loop.hook"
+	for i := 0; i < maxHookDepth; i++ {
+		if !mgr.enterHook(key) {
+			t.Fatalf("enter %d rejected", i)
+		}
+	}
+	_, err := mgr.dispatchHook(pkgplugin.HookRequest{Name: "loop.hook", Kind: pkgplugin.HookFilter, Origin: "alpha"})
+	if err == nil || !strings.Contains(err.Error(), "recursion limit") {
+		t.Fatalf("error: %v", err)
+	}
+	for i := 0; i < maxHookDepth; i++ {
+		mgr.leaveHook(key)
+	}
+	if !mgr.enterHook(key) {
+		t.Fatal("depth was not released")
+	}
+	mgr.leaveHook(key)
+}
+
+func TestLockHookExecHonorsContext(t *testing.T) {
+	instance := &PluginInstance{}
+	instance.execMu.Lock()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if lockHookExec(ctx, instance) {
+		t.Fatal("acquired a held mutex")
+	}
+	instance.execMu.Unlock()
+	if !lockHookExec(context.Background(), instance) {
+		t.Fatal("did not acquire a free mutex")
+	}
+	instance.execMu.Unlock()
+}

@@ -16,6 +16,7 @@ const (
 type Callback func(ctx context.Context, value any) (any, error)
 
 type callback struct {
+	owner    string
 	priority int
 	order    int
 	fn       Callback
@@ -36,14 +37,22 @@ func NewRegistry() *Registry {
 }
 
 func (r *Registry) AddFilter(name string, priority int, fn Callback) {
-	r.add(r.filters, name, priority, fn)
+	r.AddFilterFor("", name, priority, fn)
+}
+
+func (r *Registry) AddFilterFor(owner, name string, priority int, fn Callback) {
+	r.add(r.filters, owner, name, priority, fn)
 }
 
 func (r *Registry) AddAction(name string, priority int, fn Callback) {
-	r.add(r.actions, name, priority, fn)
+	r.AddActionFor("", name, priority, fn)
 }
 
-func (r *Registry) add(target map[string][]callback, name string, priority int, fn Callback) {
+func (r *Registry) AddActionFor(owner, name string, priority int, fn Callback) {
+	r.add(r.actions, owner, name, priority, fn)
+}
+
+func (r *Registry) add(target map[string][]callback, owner, name string, priority int, fn Callback) {
 	if name == "" || fn == nil {
 		return
 	}
@@ -53,7 +62,7 @@ func (r *Registry) add(target map[string][]callback, name string, priority int, 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.next++
-	entry := callback{priority: priority, order: r.next, fn: fn}
+	entry := callback{owner: owner, priority: priority, order: r.next, fn: fn}
 	list := append(target[name], entry)
 	sort.SliceStable(list, func(i, j int) bool {
 		if list[i].priority != list[j].priority {
@@ -65,20 +74,27 @@ func (r *Registry) add(target map[string][]callback, name string, priority int, 
 }
 
 func (r *Registry) Has(name string, kind Kind) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	return r.HasFor(name, kind, "")
+}
+
+func (r *Registry) HasFor(name string, kind Kind, skipOwner string) bool {
 	switch kind {
 	case Filter:
-		return len(r.filters[name]) > 0
+		return len(r.snapshotFor(r.filters, name, skipOwner)) > 0
 	case Action:
-		return len(r.actions[name]) > 0
+		return len(r.snapshotFor(r.actions, name, skipOwner)) > 0
 	default:
-		return len(r.filters[name]) > 0 || len(r.actions[name]) > 0
+		return len(r.snapshotFor(r.filters, name, skipOwner)) > 0 ||
+			len(r.snapshotFor(r.actions, name, skipOwner)) > 0
 	}
 }
 
 func (r *Registry) ApplyFilters(ctx context.Context, name string, value any) (any, []error) {
-	list := r.snapshot(r.filters, name)
+	return r.ApplyFiltersFrom(ctx, name, value, "")
+}
+
+func (r *Registry) ApplyFiltersFrom(ctx context.Context, name string, value any, skipOwner string) (any, []error) {
+	list := r.snapshotFor(r.filters, name, skipOwner)
 	current := value
 	var errs []error
 	for _, entry := range list {
@@ -99,7 +115,11 @@ func (r *Registry) ApplyFilters(ctx context.Context, name string, value any) (an
 }
 
 func (r *Registry) DoAction(ctx context.Context, name string, value any) ([]any, []error) {
-	list := r.snapshot(r.actions, name)
+	return r.DoActionFrom(ctx, name, value, "")
+}
+
+func (r *Registry) DoActionFrom(ctx context.Context, name string, value any, skipOwner string) ([]any, []error) {
+	list := r.snapshotFor(r.actions, name, skipOwner)
 	var outputs []any
 	var errs []error
 	for _, entry := range list {
@@ -119,12 +139,17 @@ func (r *Registry) DoAction(ctx context.Context, name string, value any) ([]any,
 	return outputs, errs
 }
 
-func (r *Registry) snapshot(target map[string][]callback, name string) []callback {
+func (r *Registry) snapshotFor(target map[string][]callback, name, skipOwner string) []callback {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	list := target[name]
-	out := make([]callback, len(list))
-	copy(out, list)
+	out := make([]callback, 0, len(list))
+	for _, entry := range list {
+		if skipOwner != "" && entry.owner == skipOwner {
+			continue
+		}
+		out = append(out, entry)
+	}
 	return out
 }
 

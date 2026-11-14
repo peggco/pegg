@@ -182,3 +182,4 @@ nav:
       - Quickstart: plugin/quickstart.md
       - Interface: plugin/interface.md
       - Development Guide: plugin/development.md
+      - Hooks: plugin/hooks.md
