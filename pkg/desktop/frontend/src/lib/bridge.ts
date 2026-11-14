@@ -102,7 +102,9 @@ const App = GoApp as unknown as {
   SettingsSnapshot(): Promise<SettingsSnapshot>;
   SlashCommands(): Promise<SlashCommand[]>;
   ProviderCatalog(): Promise<ProviderCatalogEntry[]>;
+  ProviderDrivers(): Promise<string[]>;
   AddProvider(name: string, apiKey: string, baseURL: string): Promise<void>;
+  AddCustomProvider(name: string, driver: string, apiKey: string, baseURL: string): Promise<void>;
   RemoveProvider(name: string): Promise<void>;
   AddSTTProvider(name: string, apiKey: string, baseURL: string): Promise<void>;
   RemoveSTTProvider(name: string): Promise<void>;

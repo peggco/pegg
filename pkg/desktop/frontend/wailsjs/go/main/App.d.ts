@@ -8,6 +8,8 @@ import {selfupdate} from '../models';
 import {prefs} from '../models';
 import {themes} from '../models';
 
+export function AddCustomProvider(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
 export function AddMCPServer(arg1:main.MCPServerInput):Promise<void>;
 
 export function AddProvider(arg1:string,arg2:string,arg3:string):Promise<void>;
@@ -111,6 +113,8 @@ export function PluginSettingsPages():Promise<Array<main.PluginSettingPage>>;
 export function PluginSettingsRefresh():Promise<Array<main.PluginSettingPage>>;
 
 export function ProviderCatalog():Promise<Array<main.ProviderCatalogEntry>>;
+
+export function ProviderDrivers():Promise<Array<string>>;
 
 export function ProviderSetup():Promise<main.ProviderSetupInfo>;
 

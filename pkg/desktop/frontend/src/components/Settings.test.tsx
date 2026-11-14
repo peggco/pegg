@@ -4,9 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   settingsSnapshot,
   providerCatalog,
+  providerDrivers,
   peggLogin,
   peggCancel,
   addProvider,
+  addCustomProvider,
   listModels,
   providerSetup,
   openExternal,
@@ -16,9 +18,11 @@ const {
 } = vi.hoisted(() => ({
   settingsSnapshot: vi.fn(),
   providerCatalog: vi.fn(),
+  providerDrivers: vi.fn(),
   peggLogin: vi.fn(),
   peggCancel: vi.fn(),
   addProvider: vi.fn(),
+  addCustomProvider: vi.fn(),
   listModels: vi.fn(),
   providerSetup: vi.fn(),
   openExternal: vi.fn(),
@@ -31,9 +35,11 @@ vi.mock('../lib/bridge', () => ({
   api: {
     SettingsSnapshot: settingsSnapshot,
     ProviderCatalog: providerCatalog,
+    ProviderDrivers: providerDrivers,
     PeggLogin: peggLogin,
     PeggCancel: peggCancel,
     AddProvider: addProvider,
+    AddCustomProvider: addCustomProvider,
     ListModels: listModels,
     ProviderSetup: providerSetup,
     OpenExternal: openExternal,
@@ -93,6 +99,8 @@ beforeEach(() => {
   peggLogin.mockResolvedValue({ state: 'starting', logs: [], configured: false, provider: 'pegg-forever' });
   peggCancel.mockResolvedValue({ state: 'idle', logs: [], configured: false, provider: 'pegg-forever' });
   addProvider.mockResolvedValue(undefined);
+  addCustomProvider.mockResolvedValue(undefined);
+  providerDrivers.mockResolvedValue(['claude', 'gemini', 'openai']);
   providerSetup.mockResolvedValue({ configured: true, dismissed: false });
   listModels.mockResolvedValue({ models: [] });
   openExternal.mockResolvedValue(undefined);
@@ -148,15 +156,47 @@ describe('Settings provider onboarding', () => {
     await waitFor(() => expect(providerCatalog).toHaveBeenCalled());
 
     const dialog = screen.getByRole('dialog', { name: 'Add provider' });
+    expect(within(dialog).queryByText('Base URL')).toBeNull();
     const key = screen.getByPlaceholderText('sk-…') as HTMLInputElement;
     fireEvent.change(key, { target: { value: 'vsk_live_test' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add provider' }));
 
+    await waitFor(() => expect(addProvider).toHaveBeenCalledWith('pegg-forever', 'vsk_live_test', ''));
+  });
+
+  it('adds a custom endpoint with name, driver, base URL and API key', async () => {
+    render(<Settings />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Add provider/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /Add provider/ }));
+    await waitFor(() => expect(providerCatalog).toHaveBeenCalled());
+
+    const dialog = screen.getByRole('dialog', { name: 'Add provider' });
+    const provider = within(dialog).getByRole('combobox') as HTMLSelectElement;
+    fireEvent.change(provider, { target: { value: '__custom__' } });
+
+    await waitFor(() => {
+      const driver = within(dialog).getAllByRole('combobox')[1] as HTMLSelectElement;
+      expect(driver.value).toBe('openai');
+    });
+
+    fireEvent.change(within(dialog).getByPlaceholderText('my-gateway'), {
+      target: { value: 'my-gateway' },
+    });
+    fireEvent.change(within(dialog).getByPlaceholderText('https://api.example.com/v1'), {
+      target: { value: 'https://gateway.example.com/v1' },
+    });
+    fireEvent.change(within(dialog).getByPlaceholderText('sk-… (optional)'), {
+      target: { value: 'sk-custom' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add provider' }));
+
     await waitFor(() =>
-      expect(addProvider).toHaveBeenCalledWith(
-        'pegg-forever',
-        'vsk_live_test',
-        'https://forever.pegg.dev/v1',
+      expect(addCustomProvider).toHaveBeenCalledWith(
+        'my-gateway',
+        'openai',
+        'sk-custom',
+        'https://gateway.example.com/v1',
       ),
     );
   });
