@@ -326,8 +326,13 @@ func (m *MemoryConfig) GateValue() string {
 
 func GateModes() []string { return gateModes }
 
+type OnboardingConfig struct {
+	ProviderSetupDismissed bool `json:"provider_setup_dismissed,omitempty"`
+}
+
 type Config struct {
 	Providers       []LLMConfig                     `json:"providers"`
+	Onboarding      *OnboardingConfig               `json:"onboarding,omitempty"`
 	Logger          LoggerConfig                    `json:"logger"`
 	Cache           CacheConfig                     `json:"cache"`
 	Session         SessionConfig                   `json:"session"`
@@ -351,11 +356,8 @@ type Config struct {
 
 func DefaultConfig() *Config {
 	return &Config{
-		Providers: []LLMConfig{
-			{
-				Provider: "opencode-zen",
-			},
-		},
+		Providers:  []LLMConfig{},
+		Onboarding: &OnboardingConfig{},
 		Logger: LoggerConfig{
 			Driver:      "sqlite",
 			MaxLogCount: 1000,
@@ -440,6 +442,61 @@ func DefaultConfig() *Config {
 		MCPServers:      make(map[string]MCPServerConfig),
 		LanguageServers: make(map[string]LanguageServerConfig),
 	}
+}
+
+func HasConfiguredProvider(cfg *Config) bool {
+	if cfg == nil {
+		return false
+	}
+	for _, provider := range cfg.Providers {
+		if providerConfigured(provider) {
+			return true
+		}
+	}
+	return false
+}
+
+func NeedsProviderSetup(cfg *Config) bool {
+	if cfg != nil && cfg.Onboarding != nil && cfg.Onboarding.ProviderSetupDismissed {
+		return false
+	}
+	return !HasConfiguredProvider(cfg)
+}
+
+func DismissProviderSetup() error {
+	return Update(func(cfg *Config) error {
+		if cfg.Onboarding == nil {
+			cfg.Onboarding = &OnboardingConfig{}
+		}
+		cfg.Onboarding.ProviderSetupDismissed = true
+		return nil
+	})
+}
+
+const (
+	placeholderProvider = "opencode-zen"
+	peggForeverProvider = "pegg-forever"
+)
+
+func providerConfigured(provider LLMConfig) bool {
+	if provider.Provider == peggForeverProvider && strings.TrimSpace(provider.APIKey) == "" {
+		return false
+	}
+	if isPlaceholderProvider(provider) {
+		return false
+	}
+	return provider.APIKey != "" ||
+		provider.BaseURL != "" ||
+		len(provider.Headers) > 0 ||
+		len(provider.Models) > 0
+}
+
+func isPlaceholderProvider(provider LLMConfig) bool {
+	return provider.Provider == placeholderProvider &&
+		provider.APIKey == "" &&
+		provider.BaseURL == "" &&
+		len(provider.Headers) == 0 &&
+		len(provider.Models) == 0
 }
 
 func GetConfigDir() (string, error) {

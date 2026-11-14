@@ -17,7 +17,7 @@ models and keys you already trust.
 [![Go 1.26.5+](https://img.shields.io/badge/go-1.26.5%2B-00ADD8?style=flat-square&logo=go&logoColor=white)](go.mod)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-black?style=flat-square)](#install)
 
-<sub><strong>36</strong> providers · <strong>26</strong> themes · <strong>5</strong> permission modes · <strong>1</strong> binary · <strong>0</strong> runtime deps</sub>
+<sub><strong>237</strong> providers · <strong>26</strong> themes · <strong>5</strong> permission modes · <strong>1</strong> binary · <strong>0</strong> runtime deps</sub>
 
 **Install in one line**
 
@@ -60,8 +60,9 @@ $ pegg
 
 ### Your models, your keys
 
-36 providers, custom endpoints, local runtimes, and your existing Claude Code,
-Codex, Cline, or ClinePass subscription. No hosted model proxy.
+37 providers, custom endpoints, local runtimes, and your existing Claude Code,
+Codex, Cline, or ClinePass subscription. BYOK requests go direct; Pegg Forever is
+an optional first-party gateway.
 
 </td>
 <td width="50%" valign="top">
@@ -271,19 +272,20 @@ Double-`Esc` cancels the run and every subagent.
 <div align="center">
 <sub>05 · MODELS</sub>
 
-## 36 providers. Zero proxy.
+## 37 providers. Zero mandatory proxy.
 </div>
 
-Pegg talks directly to provider APIs with your credentials.
+Pegg talks directly to provider APIs with your credentials. Pegg Forever is an
+optional first-party gateway for `pegg-forever`.
 
 <table>
 <tr>
 <td width="50%" valign="top">
 
-**32 API-key providers**
+**33 API-key providers**
 
 Anthropic, OpenAI, Google, xAI, Mistral, Cohere, DeepSeek, Groq, Cerebras,
-Fireworks, Together, OpenRouter, NVIDIA, Perplexity, and more.
+Fireworks, Together, OpenRouter, NVIDIA, Perplexity, Pegg Forever, and more.
 
 **4 subscription providers**
 

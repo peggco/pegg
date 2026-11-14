@@ -13,6 +13,7 @@ import (
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
 	"github.com/peggco/pegg/internal/agent/tool"
+	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/llm"
@@ -69,8 +70,12 @@ func newChatApp(t *testing.T, a *agent.Agent) (*App, event.Bus) {
 	bus := event.New()
 	ctx, cancel := context.WithCancel(context.Background())
 	app := &App{
-		bus:         bus,
-		deps:        settings.Deps{Agent: a, Bus: bus},
+		bus: bus,
+		deps: settings.Deps{
+			Agent:  a,
+			Bus:    bus,
+			Config: &config.Config{Providers: []config.LLMConfig{{Provider: "test-provider", APIKey: "sk-test"}}},
+		},
 		agent:       a,
 		screen:      newTestScreen(t),
 		subs:        make(map[string]*agentTranscript),

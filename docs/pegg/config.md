@@ -55,7 +55,7 @@ Configured LLM providers. See [Providers & Models](providers-and-models.md).
 | `provider` | string | — | Name of a registered provider (for example `"openai"`). Wins over `driver` |
 | `driver` | string | — | Raw wire protocol: `"openai"`, `"claude"`, or `"gemini"`. Requires `base_url` |
 | `api_key` | string | — | API key, stored in plaintext |
-| `base_url` | string | — | Override the endpoint. Required for raw drivers, ignored by named providers |
+| `base_url` | string | — | Override the endpoint. Required for raw drivers. Named providers use their built-in default unless they explicitly support an override; `pegg-forever`, `claude`, `codex`, and `cline` honor this field |
 | `timeout` | int | `120` | HTTP timeout in seconds for one-shot requests (model list sync, non-streaming calls). Streaming responses are never cut off by this — a model may reason for minutes before emitting the first token; stop a run with `Esc` |
 | `max_retries` | int | — | Reserved; currently not read by the runtime |
 | `headers` | object | — | Extra HTTP headers merged onto the driver defaults |

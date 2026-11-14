@@ -122,6 +122,7 @@ func (c *CLI) registerDefaultCommands() {
 		return append(cmds,
 			c.newLoginCommand(),
 			c.newLogoutCommand(),
+			c.newForeverCommand(),
 			c.newLogsCommand(),
 			c.newFilesCommand(),
 			c.newCacheCommand(),

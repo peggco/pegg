@@ -9,10 +9,27 @@ named, preconfigured endpoint; a **driver** is the wire protocol it speaks.
 
 ## Providers
 
-236 providers are registered out of the box. Every provider exposes a model list
+237 providers are registered out of the box. Every provider exposes a model list
 that Pegg fetches at startup and caches locally. See the
 [Provider catalog](provider-catalog.md) for the full list of built-in providers,
 their drivers, and default base URLs.
+
+### Pegg Forever
+
+`pegg-forever` is the first-party Pegg provider. Its default base URL is
+`https://forever.pegg.dev/v1`, and it speaks the OpenAI wire protocol. You can add it
+in two ways:
+
+- **Browser login** — run `pegg login-pegg`, or choose **Login to Pegg** in the
+  TUI or desktop first-run screen. Pegg opens the website, asks you to approve a
+  device, creates a revocable API key assigned to your user, and stores the
+  provider in `~/.pegg/pegg.json`.
+- **API key** — paste an existing Pegg API key with `pegg login-pegg --token`,
+  or use **Use API key** in the first-run screen.
+
+The provider is also available under **Settings → General → Provider → pegg-forever**
+after setup, where both login methods are offered. A failed `/models` check does
+not block saving; Pegg keeps the provider and retries model discovery later.
 
 ### Team providers
 
@@ -70,8 +87,10 @@ Requests also send `HTTP-Referer: https://github.com/peggco/pegg` and
 
 Some providers use an existing **subscription** instead of an API key, reusing the
 OAuth credentials that the official CLI already stored after you signed in with it.
-Pegg never performs the OAuth login itself and never writes to those files except
-to refresh an expiring token.
+For these subscription providers, Pegg never performs the OAuth login itself and
+never writes to those files except to refresh an expiring token. Pegg Forever is
+different: `pegg login-pegg` performs its own browser approval flow and stores a
+regular API key for the `pegg-forever` provider.
 
 | Provider | Signs in with | Credentials |
 |---|---|---|

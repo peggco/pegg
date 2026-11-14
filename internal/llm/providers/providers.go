@@ -158,6 +158,7 @@ import (
 	_ "github.com/peggco/pegg/internal/llm/providers/orcarouter"
 	_ "github.com/peggco/pegg/internal/llm/providers/ovhcloud"
 	_ "github.com/peggco/pegg/internal/llm/providers/pareto"
+	_ "github.com/peggco/pegg/internal/llm/providers/pegg-forever"
 	_ "github.com/peggco/pegg/internal/llm/providers/pendra"
 	_ "github.com/peggco/pegg/internal/llm/providers/perplexity"
 	_ "github.com/peggco/pegg/internal/llm/providers/perplexity-agent"
