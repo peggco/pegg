@@ -72,16 +72,23 @@ func TestAppSelectPreferredAtStartup(t *testing.T) {
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if a.model.provider != "" {
+		a.chatMu.Lock()
+		selected := a.model.provider != ""
+		a.chatMu.Unlock()
+		if selected {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if a.model.provider != "tui-mock" || a.model.model.ID != "mock-1" {
-		t.Fatalf("preferred selection = %+v", a.model)
+	a.chatMu.Lock()
+	model := a.model
+	display := a.modelDisplay()
+	a.chatMu.Unlock()
+	if model.provider != "tui-mock" || model.model.ID != "mock-1" {
+		t.Fatalf("preferred selection = %+v", model)
 	}
-	if got := a.modelDisplay(); got != "tui-mock/Mock One" {
-		t.Errorf("modelDisplay = %q, want tui-mock/Mock One", got)
+	if display != "tui-mock/Mock One" {
+		t.Errorf("modelDisplay = %q, want tui-mock/Mock One", display)
 	}
 }
 
@@ -207,7 +214,11 @@ func TestAppSessionLoadUpdatesHome(t *testing.T) {
 		t.Fatalf("append message: %v", err)
 	}
 
-	a := &App{screen: newTestScreen(t), deps: settings.Deps{Sessions: mgr, Bus: bus}}
+	a := &App{screen: newTestScreen(t), deps: settings.Deps{
+		Sessions: mgr,
+		Bus:      bus,
+		Config:   &config.Config{Providers: []config.LLMConfig{{Provider: "test-provider", APIKey: "sk-test"}}},
+	}}
 	a.build()
 	if a.root == nil {
 		t.Fatal("home page not built")

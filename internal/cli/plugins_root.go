@@ -116,6 +116,7 @@ func (c *CLI) newPluginsInfoCommand() *cobra.Command {
 			fmt.Fprintf(cmd.OutOrStdout(), "Tools:       %d\n", len(p.Tools))
 			fmt.Fprintf(cmd.OutOrStdout(), "Skills:      %d\n", len(p.Skills))
 			fmt.Fprintf(cmd.OutOrStdout(), "Commands:    %d\n", len(p.Commands))
+			fmt.Fprintf(cmd.OutOrStdout(), "TUI pages:   %d\n", len(p.TUIPages))
 
 			return nil
 		},

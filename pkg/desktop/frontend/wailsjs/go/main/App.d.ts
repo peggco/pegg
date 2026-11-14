@@ -46,6 +46,8 @@ export function CurrentSession():Promise<main.SessionInfo>;
 
 export function DeleteSession(arg1:string):Promise<void>;
 
+export function DismissProviderSetup():Promise<void>;
+
 export function DownloadDesktopUpdate():Promise<selfupdate.Status>;
 
 export function FindBinary():Promise<binary.Status>;
@@ -88,13 +90,29 @@ export function OpenPath(arg1:string):Promise<void>;
 
 export function OpenWorkspace(arg1:string):Promise<string>;
 
+export function PeggCancel():Promise<main.ForeverStatus>;
+
+export function PeggLogin():Promise<main.ForeverStatus>;
+
+export function PeggLogout():Promise<main.ForeverStatus>;
+
+export function PeggStatus():Promise<main.ForeverStatus>;
+
 export function PickBinary():Promise<string>;
 
 export function PickWorkspace():Promise<string>;
 
 export function Platform():Promise<string>;
 
+export function PluginSettingsAction(arg1:string,arg2:string,arg3:string,arg4:Record<string, string>):Promise<main.PluginSettingResult>;
+
+export function PluginSettingsPages():Promise<Array<main.PluginSettingPage>>;
+
+export function PluginSettingsRefresh():Promise<Array<main.PluginSettingPage>>;
+
 export function ProviderCatalog():Promise<Array<main.ProviderCatalogEntry>>;
+
+export function ProviderSetup():Promise<main.ProviderSetupInfo>;
 
 export function ReadAttachment(arg1:string):Promise<workspace.Attachment>;
 

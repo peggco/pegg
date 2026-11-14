@@ -1,7 +1,9 @@
 package settings
 
 import (
+	"context"
 	"fmt"
+	"sync"
 
 	"github.com/gdamore/tcell/v2"
 
@@ -42,7 +44,10 @@ func tabNames() []string {
 	}
 }
 
-const tabKindCount = 9
+const (
+	builtinTabCount = 9
+	tabKindCount    = builtinTabCount
+)
 
 type settingsFocus int
 
@@ -86,9 +91,14 @@ type Settings struct {
 
 	active *SessionInfo
 
-	sub    components.Component
-	model  selectedModel
-	errMsg string
+	extTabs []*extTab
+
+	sub       components.Component
+	model     selectedModel
+	errMsg    string
+	noticeMsg string
+
+	extActionRunner extActionRunnerFunc
 
 	reasoningEffort string
 
@@ -105,12 +115,21 @@ type Settings struct {
 	onThemeChange           func()
 	onLanguageChange        func()
 	onSTTChange             func()
+	onProviderChange        func()
+
+	asyncMu     sync.Mutex
+	postUI      func(func())
+	loginGen    int
+	loginCancel context.CancelFunc
+	closed      bool
 }
 
 var _ components.MouseComponent = (*Settings)(nil)
 
 func New(deps Deps) *Settings {
-	s := &Settings{deps: deps, tabs: components.NewTabs(tabNames())}
+	s := &Settings{deps: deps}
+	s.reloadExtTabs()
+	s.tabs = components.NewTabs(s.tabLabels())
 	s.tabs.SetFocused(true)
 	s.general = newGeneral(s)
 	s.mcp = newMCP(s)
@@ -203,6 +222,91 @@ func (s *Settings) SetOnLanguageChange(fn func()) { s.onLanguageChange = fn }
 
 func (s *Settings) SetOnSTTChange(fn func()) { s.onSTTChange = fn }
 
+func (s *Settings) SetOnProviderChange(fn func()) { s.onProviderChange = fn }
+
+func (s *Settings) SetPostUI(fn func(func())) {
+	s.asyncMu.Lock()
+	s.postUI = fn
+	s.asyncMu.Unlock()
+}
+
+func (s *Settings) dispatch(fn func()) {
+	if fn == nil {
+		return
+	}
+	s.asyncMu.Lock()
+	post := s.postUI
+	s.asyncMu.Unlock()
+	if post != nil {
+		post(fn)
+		return
+	}
+	fn()
+}
+
+func (s *Settings) beginPeggLogin(cancel context.CancelFunc) int {
+	s.asyncMu.Lock()
+	if s.loginCancel != nil {
+		s.loginCancel()
+	}
+	s.loginCancel = cancel
+	s.loginGen++
+	gen := s.loginGen
+	s.asyncMu.Unlock()
+	return gen
+}
+
+func (s *Settings) loginAlive(gen int) bool {
+	s.asyncMu.Lock()
+	defer s.asyncMu.Unlock()
+	return !s.closed && gen == s.loginGen
+}
+
+func (s *Settings) completePeggLogin(gen int) bool {
+	s.asyncMu.Lock()
+	defer s.asyncMu.Unlock()
+	if s.closed || gen != s.loginGen {
+		return false
+	}
+	s.loginCancel = nil
+	return true
+}
+
+func (s *Settings) cancelPeggLogin() {
+	s.asyncMu.Lock()
+	s.loginGen++
+	cancel := s.loginCancel
+	s.loginCancel = nil
+	s.asyncMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+func (s *Settings) CancelAsync() {
+	s.asyncMu.Lock()
+	s.closed = true
+	s.loginGen++
+	cancel := s.loginCancel
+	s.loginCancel = nil
+	s.asyncMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+func (s *Settings) isClosed() bool {
+	s.asyncMu.Lock()
+	defer s.asyncMu.Unlock()
+	return s.closed
+}
+
+func (s *Settings) notifyProviderChange() {
+	if s.onProviderChange != nil {
+		s.onProviderChange()
+	}
+}
+
 func (s *Settings) SetOnRequestUpdate(fn func()) { s.onRequestUpdate = fn }
 
 func (s *Settings) SetRequestRedraw(fn func()) { s.requestRedraw = fn }
@@ -210,26 +314,43 @@ func (s *Settings) SetRequestRedraw(fn func()) { s.requestRedraw = fn }
 func (s *Settings) CloseRequested() bool { return false }
 
 func (s *Settings) nextTab() {
-	s.tab = tabKind((int(s.tab) + 1) % tabKindCount)
+	count := s.tabs.Count()
+	if count == 0 {
+		return
+	}
+	s.tab = tabKind((int(s.tab) + 1) % count)
 	s.tabs.SetActive(int(s.tab))
 }
 
 func (s *Settings) prevTab() {
-	s.tab = tabKind((int(s.tab) - 1 + tabKindCount) % tabKindCount)
+	count := s.tabs.Count()
+	if count == 0 {
+		return
+	}
+	s.tab = tabKind((int(s.tab) - 1 + count) % count)
 	s.tabs.SetActive(int(s.tab))
 }
 
 func (s *Settings) rebuildTabs() {
 	active := s.tabs.Active()
 	focused := s.tabs.Focused()
-	s.tabs = components.NewTabs(tabNames())
-	s.tabs.SetActive(active)
+	s.tabs = components.NewTabs(s.tabLabels())
+	if active < s.tabs.Count() {
+		s.tabs.SetActive(active)
+	}
 	s.tabs.SetFocused(focused)
 }
 
 func (s *Settings) back() { s.sub = nil }
 
 func (s *Settings) openSub(c components.Component) { s.sub = c }
+
+func (s *Settings) OpenProviders() {
+	s.tab = tabGeneral
+	s.tabs.SetActive(int(tabGeneral))
+	s.focus = settingsFocusContent
+	s.openProviders()
+}
 
 func (s *Settings) openTools(server string) {
 	l := components.NewList(i18n.Tf("settings.mcp.toolsTitle", server))
@@ -282,25 +403,29 @@ func (s *Settings) HandleKey(ev *tcell.EventKey) bool {
 	}
 
 	handled := false
-	switch s.tab {
-	case tabGeneral:
-		handled = s.general.HandleKey(ev)
-	case tabSession:
-		handled = s.session.HandleKey(ev)
-	case tabMCP:
-		handled = s.mcp.HandleKey(ev)
-	case tabSkills:
-		handled = s.skills.HandleKey(ev)
-	case tabRules:
-		handled = s.rules.HandleKey(ev)
-	case tabPlugins:
-		handled = s.plugins.HandleKey(ev)
-	case tabPermissions:
-		handled = s.permissions.HandleKey(ev)
-	case tabMemory:
-		handled = s.memory.HandleKey(ev)
-	case tabSystem:
-		handled = s.system.HandleKey(ev)
+	if tab := s.extTabAt(int(s.tab)); tab != nil {
+		handled = tab.HandleKey(ev)
+	} else {
+		switch s.tab {
+		case tabGeneral:
+			handled = s.general.HandleKey(ev)
+		case tabSession:
+			handled = s.session.HandleKey(ev)
+		case tabMCP:
+			handled = s.mcp.HandleKey(ev)
+		case tabSkills:
+			handled = s.skills.HandleKey(ev)
+		case tabRules:
+			handled = s.rules.HandleKey(ev)
+		case tabPlugins:
+			handled = s.plugins.HandleKey(ev)
+		case tabPermissions:
+			handled = s.permissions.HandleKey(ev)
+		case tabMemory:
+			handled = s.memory.HandleKey(ev)
+		case tabSystem:
+			handled = s.system.HandleKey(ev)
+		}
 	}
 
 	if !handled && ev.Key() == tcell.KeyUp && s.focus == settingsFocusContent {
@@ -351,35 +476,42 @@ func (s *Settings) Draw(screen tcell.Screen, bounds layout.Region, focused bool)
 
 	content := layout.Region{Left: inner.Left, Top: inner.Top + 2, Width: inner.Width, Height: inner.Height - 3}
 	contentFocused := s.focus == settingsFocusContent
-	switch s.tab {
-	case tabGeneral:
-		s.general.Draw(screen, content, contentFocused)
-	case tabSession:
-		s.session.Draw(screen, content, contentFocused)
-	case tabMCP:
-		s.mcp.Draw(screen, content, contentFocused)
-	case tabSkills:
-		s.skills.Draw(screen, content, contentFocused)
-	case tabRules:
-		s.rules.Draw(screen, content, contentFocused)
-	case tabPlugins:
-		s.plugins.Draw(screen, content, contentFocused)
-	case tabPermissions:
-		s.permissions.Draw(screen, content, contentFocused)
-	case tabMemory:
-		s.memory.Draw(screen, content, contentFocused)
-	case tabSystem:
-		s.system.Draw(screen, content, contentFocused)
+	if tab := s.extTabAt(int(s.tab)); tab != nil {
+		tab.Draw(screen, content, contentFocused)
+	} else {
+		switch s.tab {
+		case tabGeneral:
+			s.general.Draw(screen, content, contentFocused)
+		case tabSession:
+			s.session.Draw(screen, content, contentFocused)
+		case tabMCP:
+			s.mcp.Draw(screen, content, contentFocused)
+		case tabSkills:
+			s.skills.Draw(screen, content, contentFocused)
+		case tabRules:
+			s.rules.Draw(screen, content, contentFocused)
+		case tabPlugins:
+			s.plugins.Draw(screen, content, contentFocused)
+		case tabPermissions:
+			s.permissions.Draw(screen, content, contentFocused)
+		case tabMemory:
+			s.memory.Draw(screen, content, contentFocused)
+		case tabSystem:
+			s.system.Draw(screen, content, contentFocused)
+		}
 	}
 
-	if s.errMsg != "" {
+	if s.noticeMsg != "" {
+		components.DrawText(screen, inner.Left+1, content.Bottom(), components.TruncateTo(s.noticeMsg, inner.Width-2),
+			th.Base().Foreground(th.Success).Background(th.InputBg))
+	} else if s.errMsg != "" {
 		components.DrawText(screen, inner.Left+1, content.Bottom(), components.TruncateTo(s.errMsg, inner.Width-2),
 			th.Base().Foreground(tcell.ColorRed).Background(th.InputBg))
 	}
 	if s.focus == settingsFocusTabs {
-		components.DrawFooter(screen, inner, i18n.T("common.footer.settings.tabs"))
+		components.DrawFooterRight(screen, inner, i18n.T("common.footer.settings.tabs"))
 	} else {
-		components.DrawFooter(screen, inner, i18n.T("common.footer.settings.body"))
+		components.DrawFooterRight(screen, inner, i18n.T("common.footer.settings.body"))
 	}
 }
 
@@ -414,6 +546,9 @@ func (s *Settings) HandleMouse(x, y int, buttons tcell.ButtonMask) bool {
 	}
 
 	content := s.contentRegion()
+	if tab := s.extTabAt(int(s.tab)); tab != nil {
+		return tab.HandleMouse(x, y, buttons)
+	}
 	switch s.tab {
 	case tabGeneral:
 		return s.general.HandleMouse(x, y, content, buttons)

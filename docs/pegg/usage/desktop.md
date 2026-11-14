@@ -86,6 +86,16 @@ Resolution order:
 
 If nothing is found, Settings → Agent and the first-run screen offer **Download Pegg**. Downloads go to `~/.pegg/bin` and are verified against the release `checksums.txt` with SHA-256.
 
+## Provider setup
+
+When no provider is configured, the desktop shows a first-run provider screen with three choices:
+
+- **Login to Pegg** — opens the website, asks you to approve this computer, creates a revocable API key assigned to your user, and saves the `pegg-forever` provider (`https://forever.pegg.dev/v1`).
+- **Use API key** — paste an existing Pegg API key and save the same provider.
+- **I'll configure myself** — dismiss the screen and open Settings → General → Providers.
+
+The screen appears after the agent binary is available. Choose explicitly to continue; `Esc` does not dismiss it. The same two setup actions are available later from Settings → General → Providers by selecting `pegg-forever`. Saving succeeds even if the immediate `/models` check fails; model discovery is retried later.
+
 ## Composer
 
 - **`@` file mentions** — type `@` and a filename to search the workspace. Selecting a file inserts its path and attaches it to the message so the agent receives the content.
@@ -136,6 +146,7 @@ The desktop settings page mirrors the TUI settings layout, backed by the same `~
 - **Skills** — global, project, and plugin-provided skills with reveal actions; the same list feeds the composer `/` skill menu. Plugin skills appear after the agent has loaded the plugin, so restart the desktop once after installing a plugin.
 - **Rules** — global/project Markdown rules with a preview.
 - **Plugins** — installed plugins with per-plugin enable/disable.
+- **Plugin pages** — plugins that expose a TUI page (for example Kanban and Notify) appear as their own sidebar entries. Each page renders the plugin's sections, status badges, and actions; actions with fields open a form, and destructive actions ask for confirmation. Pages are loaded through the same generic hook the TUI uses, so no plugin-specific desktop code is required.
 - **System** — desktop/agent versions, binary resolution and updates, runtime paths, and logs.
 
 Theme and model changes apply immediately; section edits have an explicit save action so presets can be reviewed before writing.

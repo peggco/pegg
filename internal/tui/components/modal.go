@@ -48,3 +48,14 @@ func DrawFooter(s tcell.Screen, bounds layout.Region, text string) {
 	DrawText(s, bounds.Left, bounds.Bottom()-1, TruncateTo(text, bounds.Width),
 		th.Base().Foreground(th.Hint).Background(th.InputBg))
 }
+
+func DrawFooterRight(s tcell.Screen, bounds layout.Region, text string) {
+	th := styles.Current()
+	text = TruncateTo(text, bounds.Width)
+	x := bounds.Right() - DisplayWidth(text)
+	if x < bounds.Left {
+		x = bounds.Left
+	}
+	DrawText(s, x, bounds.Bottom()-1, text,
+		th.Base().Foreground(th.Hint).Background(th.InputBg))
+}

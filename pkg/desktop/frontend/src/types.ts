@@ -242,6 +242,20 @@ export interface SelfUpdateStatus {
   agentTargetPath?: string;
 }
 
+export interface ProviderSetupInfo {
+  configured: boolean;
+  dismissed: boolean;
+}
+
+export interface ForeverStatus {
+  state: string;
+  url?: string;
+  error?: string;
+  logs: string[];
+  configured: boolean;
+  provider: string;
+}
+
 export interface BootstrapInfo {
   platform: string;
   arch: string;
@@ -256,6 +270,7 @@ export interface BootstrapInfo {
   logPath: string;
   language: string;
   nativeTitlebar: boolean;
+  providerSetup?: ProviderSetupInfo;
 }
 
 export interface Attachment {
@@ -583,4 +598,67 @@ export interface CatalogInstalled {
   skills: string[];
   mcp: string[];
   plugins: string[];
+}
+
+export interface PluginSettingField {
+  id: string;
+  label?: string;
+  placeholder?: string;
+  value?: string;
+  secret?: boolean;
+  required?: boolean;
+  options?: string[];
+}
+
+export interface PluginSettingAction {
+  id: string;
+  label: string;
+  description?: string;
+  confirm?: boolean;
+  fields?: PluginSettingField[];
+}
+
+export interface PluginSettingMetric {
+  label: string;
+  value: string;
+  detail?: string;
+  badge?: string;
+}
+
+export interface PluginSettingItem {
+  id?: string;
+  title: string;
+  detail?: string;
+  badge?: string;
+  disabled?: boolean;
+  fields?: PluginSettingField[];
+  action?: string;
+  column?: string;
+  meta?: Record<string, string>;
+}
+
+export interface PluginSettingSection {
+  title: string;
+  kind?: string;
+  items: PluginSettingItem[];
+  note?: string;
+}
+
+export interface PluginSettingPage {
+  id: string;
+  title: string;
+  description?: string;
+  owner: string;
+  layout?: string;
+  metrics?: PluginSettingMetric[];
+  sections: PluginSettingSection[];
+  actions: PluginSettingAction[];
+  settings?: PluginSettingField[];
+  saveAction?: string;
+  footer?: string;
+}
+
+export interface PluginSettingResult {
+  output?: string;
+  page?: PluginSettingPage;
 }

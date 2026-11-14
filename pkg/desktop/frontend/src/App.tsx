@@ -36,6 +36,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { Composer } from './components/Composer';
 import { AskPanel } from './components/AskPanel';
 import { Onboarding, StatusBanner, Toasts, Welcome } from './components/Welcome';
+import { ProviderOnboarding } from './components/ProviderOnboarding';
 import { Settings } from './components/Settings';
 import { Sidebar } from './components/Sidebar';
 import { CatalogModal } from './components/CatalogModal';
@@ -47,6 +48,7 @@ export function App() {
   const ready = useStore((s) => s.ready);
   const view = useStore((s) => s.view);
   const binary = useStore((s) => s.binary);
+  const providerSetup = useStore((s) => s.providerSetup);
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const prefs = useStore((s) => s.prefs);
   const subagentView = useStore((s) => s.subagentView);
@@ -176,6 +178,18 @@ export function App() {
         {showTitlebar ? <TitleBar /> : null}
         <div className="main-scroll">
           <Onboarding />
+        </div>
+        <Toasts />
+      </div>
+    );
+  }
+
+  if (providerSetup && !providerSetup.configured && !providerSetup.dismissed) {
+    return (
+      <div className="app" {...appAttrs}>
+        {showTitlebar ? <TitleBar /> : null}
+        <div className="main-scroll">
+          <ProviderOnboarding />
         </div>
         <Toasts />
       </div>

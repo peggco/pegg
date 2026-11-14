@@ -118,9 +118,10 @@ type App struct {
 	pasteActive bool
 	pasteBuffer strings.Builder
 
-	redrawPending atomic.Bool
-	uiMu          sync.Mutex
-	uiQueue       []func()
+	redrawPending    atomic.Bool
+	onboardingActive atomic.Bool
+	uiMu             sync.Mutex
+	uiQueue          []func()
 }
 
 type selectedModel struct {
@@ -421,6 +422,7 @@ func (a *App) build() {
 		}
 	}
 	a.refreshHomeLocked()
+	a.maybeShowProviderOnboarding()
 
 	th := styles.Current()
 	a.screen.SetStyle(th.Base())
@@ -428,6 +430,47 @@ func (a *App) build() {
 	a.screen.EnablePaste()
 	a.screen.EnableFocus()
 	a.draw()
+}
+
+func (a *App) maybeShowProviderOnboarding() {
+	if a.getOverlay() != nil {
+		return
+	}
+	if a.deps.Config == nil {
+		fresh, err := config.Load()
+		if err != nil {
+			return
+		}
+		a.deps.Config = fresh
+	}
+	if !config.NeedsProviderSetup(a.deps.Config) {
+		return
+	}
+	a.onboardingActive.Store(true)
+	a.setOverlay(newProviderOnboarding(a))
+}
+
+func (a *App) reloadConfig() {
+	fresh, err := config.Load()
+	if err != nil {
+		return
+	}
+	a.chatMu.Lock()
+	if a.deps.Config != nil {
+		*a.deps.Config = *fresh
+	} else {
+		a.deps.Config = fresh
+	}
+	a.refreshHomeLocked()
+	a.chatMu.Unlock()
+	a.requestRedraw()
+}
+
+func (a *App) providerAdded(cfg config.LLMConfig) {
+	if a.bus != nil {
+		a.bus.Publish(event.TopicProviderAdded, cfg)
+	}
+	a.reloadConfig()
 }
 
 func (a *App) checkForUpdates() {
@@ -462,6 +505,9 @@ func (a *App) checkForUpdates() {
 		os.Exit(0)
 	})
 
+	if a.onboardingActive.Load() {
+		return
+	}
 	a.setOverlay(modal)
 	a.requestRedraw()
 }
@@ -536,7 +582,11 @@ func (a *App) loop() error {
 				lastFullRepaint = now
 			}
 			if a.getOverlay() == nil {
-				if anim, ok := a.root.(components.Animator); ok && anim.Animate(now) {
+				a.chatMu.Lock()
+				anim, ok := a.root.(components.Animator)
+				changed := ok && anim.Animate(now)
+				a.chatMu.Unlock()
+				if changed {
 					a.redrawPending.Store(true)
 				}
 			}
@@ -723,10 +773,7 @@ func (a *App) copySelection() bool {
 	return true
 }
 
-func (a *App) openSettings() {
-	if a.getOverlay() != nil {
-		return
-	}
+func newSettingsOverlay(a *App) *settings.Settings {
 	s := settings.New(a.deps)
 	s.SetSelectedModel(a.model.provider, a.model.model)
 	s.SetOnModelChange(func(provider string, model llm.Model) {
@@ -767,7 +814,11 @@ func (a *App) openSettings() {
 		a.chatMu.Unlock()
 		a.requestRedraw()
 	})
-	s.SetOnClose(func() { a.setOverlay(nil) })
+	s.SetPostUI(a.postUI)
+	s.SetOnClose(func() {
+		s.CancelAsync()
+		a.setOverlay(nil)
+	})
 	s.SetOnSTTChange(func() {
 		if fresh, err := config.Load(); err == nil {
 			if a.deps.Config != nil {
@@ -818,8 +869,26 @@ func (a *App) openSettings() {
 		a.setOverlay(modal)
 		a.requestRedraw()
 	})
+	s.SetOnProviderChange(func() {
+		a.reloadConfig()
+	})
 	s.SetRequestRedraw(func() { a.requestRedraw() })
+	return s
+}
+
+func (a *App) openSettings() {
+	if a.getOverlay() != nil {
+		return
+	}
+	a.setOverlay(newSettingsOverlay(a))
+}
+
+func (a *App) openSettingsProviders() {
+	s := newSettingsOverlay(a)
+	s.OpenProviders()
+	a.onboardingActive.Store(false)
 	a.setOverlay(s)
+	a.requestRedraw()
 }
 
 func (a *App) escHandledLocally() bool {

@@ -7,6 +7,7 @@ import type {
   CatalogKind,
   ModelEntry,
   Prefs,
+  ProviderSetupInfo,
   Recent,
   SelfUpdateStatus,
   SessionListItem,
@@ -39,6 +40,8 @@ export interface UIState {
   status: AcpStatus;
   binary: BinaryStatus;
   selfUpdate: SelfUpdateStatus;
+  providerSetup?: ProviderSetupInfo;
+  settingsTab: string;
   installing: boolean;
   installProgress?: BinaryProgress;
   loadingSession?: string;
@@ -91,6 +94,8 @@ export const initialState: UIState = {
   status: { state: 'disconnected' },
   binary: { found: false },
   selfUpdate: { currentVersion: '', state: 'idle', available: false, supported: false, desktopAvailable: false, desktopReady: false, ready: false, progress: 0, agentAvailable: false, agentSupported: false, agentReady: false },
+  providerSetup: undefined,
+  settingsTab: 'general',
   installing: false,
   toasts: [],
   language: 'en',

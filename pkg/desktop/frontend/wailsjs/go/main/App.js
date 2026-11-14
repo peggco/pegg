@@ -78,6 +78,10 @@ export function DeleteSession(arg1) {
   return window['go']['main']['App']['DeleteSession'](arg1);
 }
 
+export function DismissProviderSetup() {
+  return window['go']['main']['App']['DismissProviderSetup']();
+}
+
 export function DownloadDesktopUpdate() {
   return window['go']['main']['App']['DownloadDesktopUpdate']();
 }
@@ -162,6 +166,22 @@ export function OpenWorkspace(arg1) {
   return window['go']['main']['App']['OpenWorkspace'](arg1);
 }
 
+export function PeggCancel() {
+  return window['go']['main']['App']['PeggCancel']();
+}
+
+export function PeggLogin() {
+  return window['go']['main']['App']['PeggLogin']();
+}
+
+export function PeggLogout() {
+  return window['go']['main']['App']['PeggLogout']();
+}
+
+export function PeggStatus() {
+  return window['go']['main']['App']['PeggStatus']();
+}
+
 export function PickBinary() {
   return window['go']['main']['App']['PickBinary']();
 }
@@ -174,8 +194,24 @@ export function Platform() {
   return window['go']['main']['App']['Platform']();
 }
 
+export function PluginSettingsAction(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['PluginSettingsAction'](arg1, arg2, arg3, arg4);
+}
+
+export function PluginSettingsPages() {
+  return window['go']['main']['App']['PluginSettingsPages']();
+}
+
+export function PluginSettingsRefresh() {
+  return window['go']['main']['App']['PluginSettingsRefresh']();
+}
+
 export function ProviderCatalog() {
   return window['go']['main']['App']['ProviderCatalog']();
+}
+
+export function ProviderSetup() {
+  return window['go']['main']['App']['ProviderSetup']();
 }
 
 export function ReadAttachment(arg1) {

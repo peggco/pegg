@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppWindow,
+  Bell,
   BookOpen,
   Brain,
   Download,
   FolderOpen,
   Info,
   KeyRound,
+  LogIn,
   MessageSquare,
   Palette,
   Plug,
@@ -14,11 +16,12 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  SquareKanban,
   Trash2,
   Users,
   X,
 } from 'lucide-react';
-import { api } from '../lib/bridge';
+import { api, onPeggStatus } from '../lib/bridge';
 import {
   changeModel,
   changeReasoning,
@@ -29,6 +32,7 @@ import {
   findBinary,
   installBinary,
   loadModels,
+  refreshProviderSetup,
   restartToUpdate,
   savePrefs,
   setTheme,
@@ -37,7 +41,13 @@ import {
 import { store, useStore } from '../state/store';
 import { useT } from '../lib/i18n';
 import { updateDownloads, updateSummary, updateUnsupportedAgent, updateUnsupportedDesktop } from '../lib/update';
-import type { ProviderCatalogEntry, STTProviderEntry, SettingsSnapshot } from '../types';
+import type {
+  ForeverStatus,
+  ProviderCatalogEntry,
+  STTProviderEntry,
+  SettingsSnapshot,
+  PluginSettingPage,
+} from '../types';
 import {
   MCPPanel,
   MemoryPanel,
@@ -48,10 +58,11 @@ import {
   SkillsPanel,
 } from './SettingsPanels';
 import { TeamPanel } from './TeamPanel';
+import { PluginPagePanel } from './PluginPagePanel';
 import { Card, Field, OptionCard, OptionGrid, PageHead, Range, Segmented } from './SettingsUI';
 import { ChatHistoryPreview, DirectionPreview, LayoutPreview, SidebarModePreview } from './AppearancePreviews';
 
-type Tab =
+type BuiltinTab =
   | 'general'
   | 'appearance'
   | 'session'
@@ -64,7 +75,20 @@ type Tab =
   | 'team'
   | 'system';
 
-const TAB_GROUPS: Array<{ label: string; tabs: Array<{ id: Tab; label: string; icon: typeof Settings2 }> }> = [
+type Tab = BuiltinTab | `plugin:${string}`;
+
+function pluginTabID(page: PluginSettingPage): Tab {
+  return `plugin:${page.owner}:${page.id}`;
+}
+
+function pluginIcon(page: PluginSettingPage) {
+  const key = `${page.owner} ${page.title}`.toLowerCase();
+  if (key.includes('kanban')) return SquareKanban;
+  if (key.includes('notify')) return Bell;
+  return Puzzle;
+}
+
+const TAB_GROUPS: Array<{ label: string; tabs: Array<{ id: BuiltinTab; label: string; icon: typeof Settings2 }> }> = [
   {
     label: 'settings.workspaceGroup',
     tabs: [
@@ -101,10 +125,13 @@ const TAB_GROUPS: Array<{ label: string; tabs: Array<{ id: Tab; label: string; i
 
 export function Settings() {
   const open = useStore((s) => s.settingsOpen);
-  const [tab, setTab] = useState<Tab>('general');
+  const requestedTab = useStore((s) => s.settingsTab);
+  const providerSetup = useStore((s) => s.providerSetup);
+  const [tab, setTab] = useState<Tab>((requestedTab as Tab) || 'general');
   const [snap, setSnap] = useState<SettingsSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pluginPages, setPluginPages] = useState<PluginSettingPage[]>([]);
   const t = useT();
   const models = useStore((state) => state.models);
 
@@ -120,6 +147,14 @@ export function Settings() {
     }
   }, []);
 
+  const refreshPlugins = useCallback(async () => {
+    try {
+      setPluginPages(await api.PluginSettingsPages());
+    } catch {
+      setPluginPages([]);
+    }
+  }, []);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -128,7 +163,26 @@ export function Settings() {
     if (!open) return;
     if (!snap) void refresh();
     if (!models.length) void loadModels();
-  }, [open, refresh, snap, models.length]);
+    void refreshPlugins();
+  }, [open, refresh, refreshPlugins, snap, models.length]);
+
+  useEffect(() => {
+    setTab((requestedTab as Tab) || 'general');
+  }, [requestedTab]);
+
+  useEffect(() => {
+    if (open) void refresh();
+  }, [providerSetup, open]);
+
+  useEffect(() => {
+    if (typeof requestedTab === 'string' && requestedTab.startsWith('plugin:')) {
+      if (!pluginPages.some((page) => pluginTabID(page) === requestedTab)) {
+        setTab('general');
+      }
+    }
+  }, [requestedTab, pluginPages]);
+
+  const activePluginPage = pluginPages.find((page) => pluginTabID(page) === tab) ?? null;
 
   return (
     <div
@@ -163,6 +217,25 @@ export function Settings() {
                   ))}
                 </div>
               ))}
+              {pluginPages.length ? (
+                <div>
+                  <div className="settings-nav-label">{t('settings.pluginPagesGroup')}</div>
+                  {pluginPages.map((page) => {
+                    const id = pluginTabID(page);
+                    const Icon = pluginIcon(page);
+                    return (
+                      <button
+                        key={id}
+                        className={`settings-nav-item${tab === id ? ' active' : ''}`}
+                        onClick={() => setTab(id)}
+                      >
+                        <Icon size={14} />
+                        {page.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </nav>
             <div className="settings-pane">
               {loading && !snap ? (
@@ -181,9 +254,22 @@ export function Settings() {
                   {tab === 'mcp' ? <MCPPanel snap={snap} refresh={refresh} /> : null}
                   {tab === 'skills' ? <SkillsPanel snap={snap} refresh={refresh} /> : null}
                   {tab === 'rules' ? <RulesPanel snap={snap} refresh={refresh} /> : null}
-                  {tab === 'plugins' ? <PluginsPanel snap={snap} refresh={refresh} /> : null}
+                  {tab === 'plugins' ? (
+                    <PluginsPanel snap={snap} refresh={refresh} onPluginsChanged={refreshPlugins} />
+                  ) : null}
                   {tab === 'team' ? <TeamPanel /> : null}
                   {tab === 'system' ? <SystemPanel snap={snap} /> : null}
+                  {activePluginPage ? (
+                    <PluginPagePanel
+                      page={activePluginPage}
+                      onRefresh={refreshPlugins}
+                      onPage={(page) =>
+                        setPluginPages((current) =>
+                          current.map((item) => (pluginTabID(item) === pluginTabID(page) ? page : item)),
+                        )
+                      }
+                    />
+                  ) : null}
                 </>
               ) : null}
             </div>
@@ -653,6 +739,7 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
           onClose={() => setAddProviderOpen(false)}
           onAdded={async () => {
             await refresh();
+            await refreshProviderSetup();
             void loadModels();
           }}
         />
@@ -675,11 +762,16 @@ function AddProviderModal({
   onClose: () => void;
   onAdded: () => Promise<void>;
 }) {
+  const t = useT();
   const [catalog, setCatalog] = useState<ProviderCatalogEntry[]>([]);
   const [name, setName] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [baseURL, setBaseURL] = useState('');
   const [saving, setSaving] = useState(false);
+  const [loginState, setLoginState] = useState<'idle' | 'login'>('idle');
+  const [forever, setForever] = useState<ForeverStatus | null>(null);
+  const [loginError, setLoginError] = useState('');
+  const finished = useRef(false);
 
   useEffect(() => {
     void api
@@ -692,8 +784,22 @@ function AddProviderModal({
       .catch((err) => store.toast('error', errorText(err)));
   }, []);
 
+  useEffect(() => {
+    if (loginState !== 'login') return;
+    return onPeggStatus((next) => {
+      setForever(next);
+      if (next.state === 'done' && !finished.current) {
+        finished.current = true;
+        void onAdded()
+          .then(onClose)
+          .catch((err) => setLoginError(errorText(err)));
+      }
+    });
+  }, [loginState, onAdded, onClose]);
+
   const entry = catalog.find((item) => item.name === name);
   const subscription = entry?.kind === 'subscription';
+  const isForever = name === 'pegg-forever';
 
   const add = async () => {
     if (!name) return;
@@ -703,7 +809,8 @@ function AddProviderModal({
     }
     setSaving(true);
     try {
-      await api.AddProvider(name, apiKey, baseURL);
+      const url = isForever && !baseURL.trim() ? 'https://forever.pegg.dev/v1' : baseURL;
+      await api.AddProvider(name, apiKey, url);
       await onAdded();
       store.toast('success', `${name} added`);
       onClose();
@@ -713,6 +820,49 @@ function AddProviderModal({
       setSaving(false);
     }
   };
+
+  const startLogin = async () => {
+    setLoginError('');
+    finished.current = false;
+    setForever({ state: 'starting', logs: [], configured: false, provider: 'pegg-forever' });
+    setLoginState('login');
+    try {
+      const next = await api.PeggLogin();
+      setForever(next);
+      if (next.state === 'done' && !finished.current) {
+        finished.current = true;
+        await onAdded();
+        onClose();
+      }
+    } catch (err) {
+      setLoginError(errorText(err));
+      setForever((current) => ({
+        ...(current ?? { logs: [], configured: false, provider: 'pegg-forever' }),
+        state: 'error',
+        error: errorText(err),
+      }));
+    }
+  };
+
+  const cancelLogin = async () => {
+    try {
+      await api.PeggCancel();
+    } catch (err) {
+      setLoginError(errorText(err));
+    }
+    setLoginState('idle');
+    setForever(null);
+    setLoginError('');
+  };
+
+  const loginLabel =
+    forever?.state === 'approving'
+      ? t('onboarding.approving')
+      : forever?.state === 'done'
+        ? t('onboarding.done')
+        : forever?.state === 'waiting'
+          ? t('onboarding.waiting')
+          : t('onboarding.starting');
 
   return (
     <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -761,10 +911,54 @@ function AddProviderModal({
           {entry?.kind === 'subscription' && entry.hint ? (
             <p className="settings-footnote">{entry.hint}</p>
           ) : null}
+          {isForever ? (
+            <p className="settings-footnote">
+              Sign in with your browser, or paste an API key below.
+            </p>
+          ) : null}
+          {isForever && loginState === 'login' ? (
+            <div className="settings-list" style={{ marginTop: 10 }}>
+              <div className="settings-list-row">
+                <div className="row-main">
+                  <div className="row-name">{loginLabel}</div>
+                  {forever?.url ? (
+                    <div className="row-desc" style={{ overflowWrap: 'anywhere' }}>
+                      <code>{forever.url}</code>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="row-side">
+                  {forever?.url ? (
+                    <button className="btn small" onClick={() => void api.OpenExternal(forever.url ?? '')}>
+                      {t('onboarding.openBrowser')}
+                    </button>
+                  ) : null}
+                  <button className="btn small" onClick={() => void cancelLogin()}>
+                    {t('onboarding.cancel')}
+                  </button>
+                </div>
+              </div>
+              {forever?.error || loginError ? (
+                <div className="notice error">
+                  {t('onboarding.error', { error: forever?.error || loginError })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="settings-save-bar">
             <button className="btn ghost" onClick={onClose}>Cancel</button>
+            {isForever && loginState !== 'login' ? (
+              <button className="btn" disabled={saving} onClick={() => void startLogin()}>
+                <LogIn size={13} />
+                {t('onboarding.login')}
+              </button>
+            ) : null}
             <span className="spacer" />
-            <button className="btn primary" disabled={saving || !name} onClick={() => void add()}>
+            <button
+              className="btn primary"
+              disabled={saving || !name || loginState === 'login'}
+              onClick={() => void add()}
+            >
               {saving ? 'Adding…' : 'Add provider'}
             </button>
           </div>
