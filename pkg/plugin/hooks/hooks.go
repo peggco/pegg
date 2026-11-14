@@ -26,7 +26,10 @@ const (
 
 const defaultTimeout = 30 * time.Second
 
-var ErrNestedDispatch = errors.New("hooks: nested hook dispatch is disabled")
+var (
+	ErrNestedDispatch = errors.New("hooks: nested hook dispatch is disabled")
+	ErrNoHandler      = errors.New("hooks: no handler registered")
+)
 
 type Client struct {
 	Binary  string
@@ -153,6 +156,9 @@ func (c *Client) applyOnce(ctx context.Context, req request) (Outcome, error) {
 			return Outcome{}, fmt.Errorf("decode response: %w", err)
 		}
 		if resp.Error != "" {
+			if strings.Contains(resp.Error, "no handler registered") {
+				return Outcome{}, ErrNoHandler
+			}
 			return Outcome{}, errors.New(resp.Error)
 		}
 		return Outcome{Value: resp.Value, Outputs: resp.Outputs, Errors: resp.Errors}, nil

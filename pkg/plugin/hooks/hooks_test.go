@@ -265,3 +265,16 @@ func TestNestedDispatchIsRefused(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestApplyReturnsNoHandlerSentinel(t *testing.T) {
+	dir := t.TempDir()
+	se := newScriptEnv(dir)
+	bin := writeScript(t, dir, serveScript(`{"error":"no handler registered"}`))
+	client := &Client{Binary: bin, Env: se.environ()}
+	defer client.Close()
+
+	_, err := client.Apply(context.Background(), "x", HookFilter, nil)
+	if !errors.Is(err, ErrNoHandler) {
+		t.Fatalf("error = %v", err)
+	}
+}
