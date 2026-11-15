@@ -8,10 +8,14 @@ Step-by-step guide to building Pegg plugins.
 
 ## Project structure
 
-A minimal plugin project:
+A minimal plugin project as created by `pegg plugins new`:
 
 ```
 my-plugin/
+├── .github/
+│   └── workflows/
+│       └── release.yml   # calls the shared Pegg release workflow
+├── .gitignore
 ├── main.go
 ├── go.mod
 └── go.sum
@@ -139,6 +143,67 @@ chmod +x ~/.pegg/plugins/my-plugin
 pegg plugins list
 pegg plugins info my-plugin
 ```
+
+## Step 5: Release
+
+`pegg plugins new` writes a thin `.github/workflows/release.yml` that delegates to
+the shared release workflow in the Pegg SDK repository:
+
+```yaml
+jobs:
+  release:
+    permissions:
+      contents: write
+    uses: peggco/pegg/.github/workflows/plugin-release.yml@v0.2.4
+    with:
+      binary: pegg-my-plugin
+      version: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Push a `v*` tag and that workflow builds linux, macOS, and Windows for amd64 and
+arm64 with goreleaser, packages each target as
+`pegg-<name>_<version>_<os>_<arch>.tar.gz` (zip on Windows), writes
+`checksums.txt`, and publishes a GitHub release with generated notes.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+You can also run the workflow manually from the Actions tab with a version input.
+The caller must grant `contents: write` and pass the token, because a reusable
+workflow cannot elevate permissions. Installed plugins are discovered by their
+`Name()`, so the archive name is cosmetic; keep the `pegg-<name>` prefix for
+consistency.
+
+The build uses the Pegg SDK version pinned in `go.mod` (currently `v0.2.4`), so
+every release compiles exactly the SDK it declares — CI never swaps in an
+unreleased branch behind your back. Bump the pin and commit both files before
+tagging:
+
+```bash
+go get github.com/peggco/pegg@latest
+go mod tidy
+git add go.mod go.sum
+git commit -m "chore: bump pegg sdk"
+```
+
+The `uses:` ref pins the workflow itself; the scaffold sets it to the same version
+as the `go.mod` pin. Bump both when you upgrade.
+
+The build log prints the resolved version (`go list -m github.com/peggco/pegg`),
+so a release record always shows which SDK it used.
+
+If your plugin needs a different build layout, add your own `.goreleaser.yml` to
+the repository root and the shared workflow uses it instead of the built-in
+defaults.
+
+For local SDK development, scaffold with `--replace` to write a
+`replace github.com/peggco/pegg => ../pegg` directive. Remove it before
+committing; CI does not rewrite `go.mod`, so a committed `replace` breaks the
+release build.
 
 ## Example: Provider checker plugin
 

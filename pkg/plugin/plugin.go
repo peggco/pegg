@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/rpc"
+	"sync/atomic"
 
 	goplugin "github.com/hashicorp/go-plugin"
 )
@@ -19,6 +20,7 @@ const (
 	CapabilityCommands    Capability = "commands"
 	CapabilityEvents      Capability = "events"
 	CapabilityTUI         Capability = "tui"
+	CapabilityHooks       Capability = "hooks"
 )
 
 var ErrNotSupported = errors.New("plugin: capability not supported")
@@ -28,6 +30,7 @@ type Deps struct {
 	Options    json.RawMessage
 	Workdir    string
 	PluginPath string
+	DispatchID uint32
 }
 
 type ToolSpec struct {
@@ -97,6 +100,56 @@ type CommandRequest struct {
 
 type CommandResult struct {
 	Output string
+}
+
+type HookKind string
+
+const (
+	HookFilter HookKind = "filter"
+	HookAction HookKind = "action"
+)
+
+type HookSpec struct {
+	Name        string
+	Kind        HookKind
+	Priority    int
+	Description string
+}
+
+type HookRequest struct {
+	Name      string
+	Kind      HookKind
+	Value     json.RawMessage
+	TimeoutMS int64
+	Origin    string
+}
+
+type HookResult struct {
+	Value   json.RawMessage
+	Handled bool
+	Outputs []json.RawMessage
+	Errors  []string
+}
+
+type HookDispatchFunc func(req HookRequest) (*HookResult, error)
+
+type hookDispatcherHolder struct{ fn HookDispatchFunc }
+
+var hookDispatcher atomic.Pointer[hookDispatcherHolder]
+
+func HostDispatcher() HookDispatchFunc {
+	if holder := hookDispatcher.Load(); holder != nil {
+		return holder.fn
+	}
+	return nil
+}
+
+func SetHostDispatcher(fn HookDispatchFunc) {
+	if fn == nil {
+		hookDispatcher.Store(nil)
+		return
+	}
+	hookDispatcher.Store(&hookDispatcherHolder{fn: fn})
 }
 
 type Event struct {
@@ -193,11 +246,13 @@ type Plugin interface {
 	Commands() ([]CommandSpec, error)
 	EventSubscriptions() ([]string, error)
 	TUIPages() ([]TUIPage, error)
+	Hooks() ([]HookSpec, error)
 
 	ExecuteTool(req ToolRequest) (*ToolResult, error)
 	RunCommand(req CommandRequest) (*CommandResult, error)
 	OnEvent(event Event) error
 	ExecuteTUIAction(req TUIActionRequest) (*TUIActionResult, error)
+	ExecuteHook(req HookRequest) (*HookResult, error)
 	Close() error
 }
 
@@ -214,13 +269,15 @@ func (Base) PermissionRules() (map[string]string, error)       { return nil, nil
 func (Base) Commands() ([]CommandSpec, error)                  { return nil, nil }
 func (Base) EventSubscriptions() ([]string, error)             { return nil, nil }
 func (Base) TUIPages() ([]TUIPage, error)                      { return nil, nil }
+func (Base) Hooks() ([]HookSpec, error)                        { return nil, nil }
 func (Base) ExecuteTool(ToolRequest) (*ToolResult, error)      { return nil, ErrNotSupported }
 func (Base) RunCommand(CommandRequest) (*CommandResult, error) { return nil, ErrNotSupported }
 func (Base) OnEvent(Event) error                               { return nil }
 func (Base) ExecuteTUIAction(TUIActionRequest) (*TUIActionResult, error) {
 	return nil, ErrNotSupported
 }
-func (Base) Close() error { return nil }
+func (Base) ExecuteHook(HookRequest) (*HookResult, error) { return nil, ErrNotSupported }
+func (Base) Close() error                                 { return nil }
 
 func Supports(capabilities []string, wanted Capability) bool {
 	if capabilities == nil {
@@ -254,19 +311,65 @@ func Serve(impl Plugin) {
 }
 
 type PeggPluginRPC struct {
-	Impl Plugin
+	Impl     Plugin
+	Dispatch HookDispatchFunc
 }
 
-func (p *PeggPluginRPC) Server(*goplugin.MuxBroker) (interface{}, error) {
-	return &PeggPluginRPCServer{impl: p.Impl}, nil
+func (p *PeggPluginRPC) Server(b *goplugin.MuxBroker) (interface{}, error) {
+	return &PeggPluginRPCServer{impl: p.Impl, broker: b}, nil
 }
 
 func (p *PeggPluginRPC) Client(b *goplugin.MuxBroker, c *rpc.Client) (interface{}, error) {
-	return &PeggPluginRPCClient{client: c}, nil
+	client := &PeggPluginRPCClient{client: c}
+	if p.Dispatch != nil && b != nil {
+		client.dispatchID = hookBrokerID(b)
+		go serveHookDispatch(b, client.dispatchID, p.Dispatch)
+	}
+	return client, nil
+}
+
+func hookBrokerID(b *goplugin.MuxBroker) uint32 {
+	return 0xF0000000 | (b.NextId() & 0x0FFFFFFF)
+}
+
+func serveHookDispatch(b *goplugin.MuxBroker, id uint32, dispatch HookDispatchFunc) {
+	conn, err := b.Accept(id)
+	if err != nil {
+		return
+	}
+	server := rpc.NewServer()
+	if err := server.RegisterName("Plugin", &hookDispatchService{dispatch: dispatch}); err != nil {
+		_ = conn.Close()
+		return
+	}
+	server.ServeConn(conn)
+}
+
+type hookDispatchService struct {
+	dispatch HookDispatchFunc
+}
+
+func (s *hookDispatchService) DispatchHook(args *HookRequest, resp *HookResult) error {
+	out, err := s.dispatch(*args)
+	if err != nil {
+		return err
+	}
+	if out == nil {
+		out = &HookResult{}
+	}
+	*resp = *out
+	return nil
+}
+
+func NewClientPluginMap(dispatch HookDispatchFunc) map[string]goplugin.Plugin {
+	return map[string]goplugin.Plugin{
+		"pegg": &PeggPluginRPC{Dispatch: dispatch},
+	}
 }
 
 type PeggPluginRPCServer struct {
-	impl Plugin
+	impl   Plugin
+	broker *goplugin.MuxBroker
 }
 
 func (s *PeggPluginRPCServer) Name(args interface{}, resp *string) error {
@@ -290,7 +393,28 @@ func (s *PeggPluginRPCServer) Capabilities(args interface{}, resp *[]string) err
 }
 
 func (s *PeggPluginRPCServer) Boot(args *Deps, resp *interface{}) error {
+	s.installHookDispatch(args)
 	return s.impl.Boot(*args)
+}
+
+func (s *PeggPluginRPCServer) installHookDispatch(args *Deps) {
+	if args == nil || args.DispatchID == 0 || s.broker == nil {
+		return
+	}
+	conn, err := s.broker.Dial(args.DispatchID)
+	if err != nil {
+		return
+	}
+	client := rpc.NewClient(conn)
+	origin := s.impl.Name()
+	SetHostDispatcher(func(req HookRequest) (*HookResult, error) {
+		req.Origin = origin
+		var out HookResult
+		if err := client.Call("Plugin.DispatchHook", &req, &out); err != nil {
+			return nil, err
+		}
+		return &out, nil
+	})
 }
 
 func (s *PeggPluginRPCServer) Tools(args interface{}, resp *[]ToolSpec) error {
@@ -331,6 +455,15 @@ func (s *PeggPluginRPCServer) Commands(args interface{}, resp *[]CommandSpec) er
 
 func (s *PeggPluginRPCServer) TUIPages(args interface{}, resp *[]TUIPage) error {
 	out, err := s.impl.TUIPages()
+	if err != nil {
+		return err
+	}
+	*resp = out
+	return nil
+}
+
+func (s *PeggPluginRPCServer) Hooks(args interface{}, resp *[]HookSpec) error {
+	out, err := s.impl.Hooks()
 	if err != nil {
 		return err
 	}
@@ -387,12 +520,25 @@ func (s *PeggPluginRPCServer) ExecuteTUIAction(args *TUIActionRequest, resp *TUI
 	return nil
 }
 
+func (s *PeggPluginRPCServer) ExecuteHook(args *HookRequest, resp *HookResult) error {
+	out, err := s.impl.ExecuteHook(*args)
+	if err != nil {
+		return err
+	}
+	if out == nil {
+		out = &HookResult{}
+	}
+	*resp = *out
+	return nil
+}
+
 func (s *PeggPluginRPCServer) Close(args interface{}, resp *interface{}) error {
 	return s.impl.Close()
 }
 
 type PeggPluginRPCClient struct {
-	client *rpc.Client
+	client     *rpc.Client
+	dispatchID uint32
 }
 
 func (c *PeggPluginRPCClient) Name() string {
@@ -428,6 +574,7 @@ func (c *PeggPluginRPCClient) Capabilities() []string {
 }
 
 func (c *PeggPluginRPCClient) Boot(deps Deps) error {
+	deps.DispatchID = c.dispatchID
 	var resp interface{}
 	return c.client.Call("Plugin.Boot", &deps, &resp)
 }
@@ -462,6 +609,12 @@ func (c *PeggPluginRPCClient) TUIPages() ([]TUIPage, error) {
 	return resp, err
 }
 
+func (c *PeggPluginRPCClient) Hooks() ([]HookSpec, error) {
+	var resp []HookSpec
+	err := c.client.Call("Plugin.Hooks", new(interface{}), &resp)
+	return resp, err
+}
+
 func (c *PeggPluginRPCClient) ExecuteTool(req ToolRequest) (*ToolResult, error) {
 	var resp ToolResult
 	if err := c.client.Call("Plugin.ExecuteTool", &req, &resp); err != nil {
@@ -492,6 +645,14 @@ func (c *PeggPluginRPCClient) OnEvent(event Event) error {
 func (c *PeggPluginRPCClient) ExecuteTUIAction(req TUIActionRequest) (*TUIActionResult, error) {
 	var resp TUIActionResult
 	if err := c.client.Call("Plugin.ExecuteTUIAction", &req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *PeggPluginRPCClient) ExecuteHook(req HookRequest) (*HookResult, error) {
+	var resp HookResult
+	if err := c.client.Call("Plugin.ExecuteHook", &req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

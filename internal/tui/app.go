@@ -118,6 +118,8 @@ type App struct {
 	pasteActive bool
 	pasteBuffer strings.Builder
 
+	viewHooks        *viewHooks
+	pluginItemsSig   string
 	redrawPending    atomic.Bool
 	onboardingActive atomic.Bool
 	uiMu             sync.Mutex
@@ -328,7 +330,9 @@ func (a *App) start() error {
 	defer a.cancel()
 	defer a.stopAttach()
 
+	a.viewHooks = newViewHooks(a)
 	a.build()
+	a.refreshViewHooks()
 	dispatchReady()
 	defer dispatchQuit()
 	return a.loop()
@@ -730,6 +734,10 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 		return true
 	}
 
+	if a.dispatchPluginBinding(kev) {
+		return true
+	}
+
 	if a.root != nil && a.root.HandleKey(kev) {
 		return true
 	}
@@ -738,6 +746,7 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 		a.quit = true
 	case ActionThemeNext:
 		styles.Next()
+		applyThemeHook()
 		a.chat.Invalidate()
 		if a.deps.Config != nil {
 			a.deps.Config.Theme = styles.Name()
@@ -995,6 +1004,7 @@ func (a *App) cycleMode() {
 }
 
 func (a *App) setMode(m agent.Mode) {
+	defer a.refreshViewHooks()
 	m = agent.NormalizeMode(m)
 	a.chatMu.Lock()
 	a.mode = m
@@ -1397,6 +1407,7 @@ func (a *App) validateMediaForModel(mediaType string) bool {
 }
 
 func (a *App) showError(msg string) {
+	msg = applyNoticeHook("error", msg, "error")
 	a.chatMu.Lock()
 	defer a.chatMu.Unlock()
 	if a.main != nil {

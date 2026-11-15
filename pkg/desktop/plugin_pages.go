@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/peggco/pegg/internal/core/config"
@@ -115,6 +116,7 @@ func (a *App) resetPluginManager() {
 	if mgr != nil {
 		mgr.Close()
 	}
+	a.refreshDesktopView()
 }
 
 func (a *App) PluginSettingsPages() ([]PluginSettingPage, error) {
@@ -149,6 +151,12 @@ func (a *App) PluginSettingsRefresh() ([]PluginSettingPage, error) {
 }
 
 func (a *App) PluginSettingsAction(owner, pageID, actionID string, values map[string]string) (PluginSettingResult, error) {
+	if owner == desktopViewOwner {
+		if a.viewHooks != nil {
+			a.viewHooks.saveSettings(strings.TrimPrefix(pageID, "view:"), values)
+		}
+		return PluginSettingResult{}, nil
+	}
 	mgr, err := a.pluginManager()
 	if err != nil {
 		return PluginSettingResult{}, err

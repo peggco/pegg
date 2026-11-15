@@ -19,6 +19,8 @@ type frontmatter struct {
 	Metadata      map[string]string `yaml:"metadata"`
 	AllowedTools  string            `yaml:"allowed-tools"`
 	Tools         string            `yaml:"tools"`
+	Mode          string            `yaml:"mode"`
+	DisableTools  string            `yaml:"disable-tools"`
 	WhenToUse     string            `yaml:"when_to_use"`
 	ArgumentHint  string            `yaml:"argument-hint"`
 	Arguments     []string          `yaml:"arguments"`
@@ -46,6 +48,8 @@ func parseSKILL(path, source string) (*Skill, error) {
 		Compatibility: fm.Compatibility,
 		Metadata:      fm.Metadata,
 		AllowedTools:  strings.Fields(fm.AllowedTools),
+		Mode:          fm.Mode,
+		DisableTools:  strings.Fields(fm.DisableTools),
 		WhenToUse:     fm.WhenToUse,
 		ArgumentHint:  fm.ArgumentHint,
 		Arguments:     fm.Arguments,

@@ -1,0 +1,139 @@
+name: Plugin release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Release tag to publish, for example v0.1.0"
+        required: true
+        type: string
+      binary:
+        description: "Binary and archive base name. Defaults to pegg-<repository>."
+        required: false
+        type: string
+        default: ""
+    secrets:
+      token:
+        description: "Token with contents:write on the calling repository."
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve plugin name
+        id: meta
+        env:
+          INPUT_BINARY: ${{ inputs.binary }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${INPUT_VERSION}" ]; then
+            echo "version input is required" >&2
+            exit 1
+          fi
+          binary="${INPUT_BINARY}"
+          if [ -z "${binary}" ]; then
+            repo="${GITHUB_REPOSITORY##*/}"
+            case "${repo}" in
+              pegg-*) binary="${repo}" ;;
+              *) binary="pegg-${repo}" ;;
+            esac
+          fi
+          echo "binary=${binary}" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Resolve Pegg SDK
+        run: go list -m github.com/peggco/pegg
+
+      - name: Select goreleaser config
+        id: config
+        env:
+          BINARY: ${{ steps.meta.outputs.binary }}
+        run: |
+          set -euo pipefail
+          for candidate in .goreleaser.yml .goreleaser.yaml; do
+            if [ -f "${candidate}" ]; then
+              echo "config=${PWD}/${candidate}" >> "${GITHUB_OUTPUT}"
+              echo "using repository ${candidate}"
+              exit 0
+            fi
+          done
+          config="${RUNNER_TEMP}/plugin.goreleaser.yml"
+          cat > "${config}" <<YAML
+          version: 2
+
+          project_name: ${BINARY}
+
+          builds:
+            - main: .
+              binary: ${BINARY}
+              env:
+                - CGO_ENABLED=0
+              flags:
+                - -trimpath
+                - -buildvcs=false
+              ldflags:
+                - -s -w
+              goos: [linux, darwin, windows]
+              goarch: [amd64, arm64]
+
+          archives:
+            - formats: ["tar.gz"]
+              name_template: >-
+                {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+              format_overrides:
+                - goos: windows
+                  formats: ["zip"]
+
+          checksum:
+            name_template: checksums.txt
+
+          changelog:
+            disable: true
+          YAML
+          echo "config=${config}" >> "${GITHUB_OUTPUT}"
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean --skip=publish --config ${{ steps.config.outputs.config }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.token }}
+          GORELEASER_CURRENT_TAG: ${{ inputs.version }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Drop build metadata
+        run: rm -f dist/metadata.json dist/artifacts.json
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
+          files: dist/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.token }}

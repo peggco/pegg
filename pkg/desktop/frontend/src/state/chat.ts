@@ -1,5 +1,6 @@
 import type {
   AskParams,
+  ViewLine,
   AttachmentInfo,
   ContentBlock,
   PermissionParams,
@@ -76,6 +77,7 @@ export type ChatItem = (
   | { kind: 'assistant'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
   | { kind: 'reasoning'; id: string; text: string; agentId?: string; agentName?: string; createdAt: number }
   | { kind: 'tool'; id: string; tool: ToolState; createdAt: number }
+  | { kind: 'plugin'; id: string; title?: string; badge?: string; lines: ViewLine[]; createdAt: number }
   | {
       kind: 'subagent';
       id: string;

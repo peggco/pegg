@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/pkg/desktop/internal/acpclient"
 	"github.com/peggco/pegg/pkg/desktop/internal/binary"
 	"github.com/peggco/pegg/pkg/desktop/internal/prefs"
@@ -172,6 +173,7 @@ func (a *App) flushUpdates() {
 		}
 		a.emit("acp:update", string(raw))
 	}
+	a.refreshDesktopView()
 }
 
 func (a *App) handleNotification(method string, params json.RawMessage) {
@@ -184,6 +186,7 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 }
 
 func (a *App) handleServerRequest(id, method string, params json.RawMessage) {
+	defer a.refreshDesktopView()
 	switch method {
 	case "session/request_permission":
 		a.sessionsMu.Lock()
@@ -211,6 +214,7 @@ func (a *App) handleServerRequest(id, method string, params json.RawMessage) {
 }
 
 func (a *App) clearPending() {
+	defer a.refreshDesktopView()
 	a.sessionsMu.Lock()
 	a.pending = map[string]pendingRequest{}
 	a.sessionsMu.Unlock()
@@ -449,6 +453,8 @@ func (a *App) NewSession(req NewSessionRequest) (*SessionInfo, error) {
 	a.rememberSession(info)
 	_ = a.prefs.TouchWorkspace(abs, workspace.Name(abs))
 	a.saveLastSession(info.PeggID)
+	corehook.ApplyAction(context.Background(), HookSession, SessionHook{Action: "create", SessionID: info.PeggID})
+	a.refreshDesktopView()
 	return info, nil
 }
 
@@ -515,6 +521,8 @@ func (a *App) LoadSession(req LoadSessionRequest) (*SessionInfo, error) {
 	a.rememberSession(info)
 	a.saveLastSession(info.PeggID)
 	_ = a.prefs.TouchWorkspace(abs, workspace.Name(abs))
+	corehook.ApplyAction(context.Background(), HookSession, SessionHook{Action: "load", SessionID: info.PeggID})
+	a.refreshDesktopView()
 	return info, nil
 }
 
@@ -665,6 +673,9 @@ func (a *App) SendPrompt(req PromptRequest) (acpclient.SessionPromptResult, erro
 	if err != nil {
 		return acpclient.SessionPromptResult{}, err
 	}
+	if hooked, errs := corehook.ApplyFilter(context.Background(), HookChatSend, ChatSendHook{SessionID: req.SessionID, Text: req.Text}); len(errs) == 0 {
+		req.Text = hooked.Text
+	}
 	blocks := promptBlocks(req.Text, req.Attachments)
 	if len(blocks) == 0 {
 		return acpclient.SessionPromptResult{}, errors.New("message is empty")
@@ -681,6 +692,7 @@ func (a *App) SendPrompt(req PromptRequest) (acpclient.SessionPromptResult, erro
 		return res, err
 	}
 	a.saveLastSession(info.PeggID)
+	a.refreshDesktopView()
 	return res, nil
 }
 

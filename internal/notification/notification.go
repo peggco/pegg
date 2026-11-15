@@ -1,11 +1,13 @@
 package notification
 
 import (
+	"context"
 	"strings"
 	"sync"
 
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/core/event"
+	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/core/logger"
 )
 
@@ -183,6 +185,10 @@ func (n *Notifier) notify(title, message string) {
 	}
 	if n.Focused() {
 		return
+	}
+	if notice, errs := corehook.ApplyFilter(context.Background(), corehook.CoreNotification, corehook.Notice{Title: title, Body: message}); len(errs) == 0 {
+		title = notice.Title
+		message = notice.Body
 	}
 	notif := Notification{Title: title, Message: message}
 	for _, d := range n.drivers {

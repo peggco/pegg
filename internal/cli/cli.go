@@ -30,25 +30,26 @@ import (
 )
 
 type CLI struct {
-	bus       event.Bus
-	cfg       *config.Config
-	log       *logger.Logger
-	sessions  *session.Manager
-	llmMgr    *llm.Manager
-	memMgr    *memory.Manager
-	decMgr    *decision.Manager
-	mcpMgr    *mcp.Manager
-	lspMgr    *lsp.Manager
-	fs        *vfs.VFS
-	cache     cache.Cache
-	pluginMgr *plugin.Manager
-	sched     *schedule.Manager
-	runCoord  *run.Coordinator
-	liveHub   *live.Hub
-	added     bool
-	root      *cobra.Command
-	commands  hook.Hook[[]*cobra.Command]
-	picker    func(items []string, label string) (int, error)
+	bus          event.Bus
+	cfg          *config.Config
+	log          *logger.Logger
+	sessions     *session.Manager
+	llmMgr       *llm.Manager
+	memMgr       *memory.Manager
+	decMgr       *decision.Manager
+	mcpMgr       *mcp.Manager
+	lspMgr       *lsp.Manager
+	fs           *vfs.VFS
+	cache        cache.Cache
+	pluginMgr    *plugin.Manager
+	hooksBackend func() (hookManager, error)
+	sched        *schedule.Manager
+	runCoord     *run.Coordinator
+	liveHub      *live.Hub
+	added        bool
+	root         *cobra.Command
+	commands     hook.Hook[[]*cobra.Command]
+	picker       func(items []string, label string) (int, error)
 }
 
 func New(bus event.Bus, cfg *config.Config, log *logger.Logger, vfs *vfs.VFS, sessions *session.Manager, llmMgr *llm.Manager, decMgr *decision.Manager, memMgr *memory.Manager, mcpMgr *mcp.Manager, lspMgr *lsp.Manager, cache cache.Cache, pluginMgr *plugin.Manager, sched *schedule.Manager, runCoord *run.Coordinator, liveHub *live.Hub) *CLI {
@@ -142,6 +143,7 @@ func (c *CLI) registerDefaultCommands() {
 			c.newServeCommand(),
 			c.newConnectCommand(),
 			c.newPluginsCommand(),
+			c.newHooksCommand(),
 			c.newVersionCommand(),
 			c.newUpdateCommand(),
 		)

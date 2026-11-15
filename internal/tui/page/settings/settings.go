@@ -91,7 +91,9 @@ type Settings struct {
 
 	active *SessionInfo
 
-	extTabs []*extTab
+	extTabs  []*extTab
+	hookTabs []*extTab
+	slots    []tabSlot
 
 	sub       components.Component
 	model     selectedModel
@@ -131,6 +133,7 @@ func New(deps Deps) *Settings {
 	s.reloadExtTabs()
 	s.tabs = components.NewTabs(s.tabLabels())
 	s.tabs.SetFocused(true)
+	s.reloadHookTabs()
 	s.general = newGeneral(s)
 	s.mcp = newMCP(s)
 	s.skills = newSkills(s)
@@ -405,8 +408,8 @@ func (s *Settings) HandleKey(ev *tcell.EventKey) bool {
 	handled := false
 	if tab := s.extTabAt(int(s.tab)); tab != nil {
 		handled = tab.HandleKey(ev)
-	} else {
-		switch s.tab {
+	} else if kind, ok := s.kindAt(int(s.tab)); ok {
+		switch kind {
 		case tabGeneral:
 			handled = s.general.HandleKey(ev)
 		case tabSession:
@@ -478,8 +481,8 @@ func (s *Settings) Draw(screen tcell.Screen, bounds layout.Region, focused bool)
 	contentFocused := s.focus == settingsFocusContent
 	if tab := s.extTabAt(int(s.tab)); tab != nil {
 		tab.Draw(screen, content, contentFocused)
-	} else {
-		switch s.tab {
+	} else if kind, ok := s.kindAt(int(s.tab)); ok {
+		switch kind {
 		case tabGeneral:
 			s.general.Draw(screen, content, contentFocused)
 		case tabSession:
@@ -549,7 +552,11 @@ func (s *Settings) HandleMouse(x, y int, buttons tcell.ButtonMask) bool {
 	if tab := s.extTabAt(int(s.tab)); tab != nil {
 		return tab.HandleMouse(x, y, buttons)
 	}
-	switch s.tab {
+	kind, ok := s.kindAt(int(s.tab))
+	if !ok {
+		return false
+	}
+	switch kind {
 	case tabGeneral:
 		return s.general.HandleMouse(x, y, content, buttons)
 	case tabSession:

@@ -22,6 +22,7 @@ import (
 	"github.com/peggco/pegg/internal/core/cache"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
+	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/lsp"
@@ -46,6 +47,10 @@ type Manager struct {
 	exclude     map[string]bool
 	commands    []PluginCommand
 	eventUnsubs []func() error
+	registry    *corehook.Registry
+
+	hookMu    sync.Mutex
+	hookDepth map[string]int
 }
 
 func (m *Manager) SetWorkspaceRoot(root string) {
@@ -76,6 +81,7 @@ type PluginInstance struct {
 	PermissionRules map[string]string
 	Commands        []pkgplugin.CommandSpec
 	TUIPages        []pkgplugin.TUIPage
+	Hooks           []pkgplugin.HookSpec
 
 	execMu  sync.Mutex
 	eventMu sync.Mutex
@@ -84,6 +90,20 @@ type PluginInstance struct {
 type PluginCommand struct {
 	Plugin string
 	Spec   pkgplugin.CommandSpec
+}
+
+type PluginHookSpec struct {
+	Plugin      string
+	Name        string
+	Kind        pkgplugin.HookKind
+	Priority    int
+	Description string
+}
+
+type HookOutcome struct {
+	Value   json.RawMessage   `json:"value"`
+	Outputs []json.RawMessage `json:"outputs"`
+	Errors  []string          `json:"errors"`
 }
 
 func NewManager(
@@ -98,13 +118,15 @@ func NewManager(
 	_ *lsp.Manager,
 ) *Manager {
 	return &Manager{
-		log:     log,
-		cfg:     cfg,
-		bus:     bus,
-		fs:      fs,
-		plugins: make(map[string]*PluginInstance),
-		clients: make(map[string]*goplugin.Client),
-		exclude: make(map[string]bool),
+		log:       log,
+		cfg:       cfg,
+		bus:       bus,
+		fs:        fs,
+		plugins:   make(map[string]*PluginInstance),
+		clients:   make(map[string]*goplugin.Client),
+		exclude:   make(map[string]bool),
+		registry:  corehook.Default().Registry(),
+		hookDepth: make(map[string]int),
 	}
 }
 
@@ -200,7 +222,7 @@ func (m *Manager) connectPlugin(path string) (*PluginInstance, error) {
 
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig:  pkgplugin.Handshake,
-		Plugins:          pkgplugin.PluginMap,
+		Plugins:          pkgplugin.NewClientPluginMap(m.dispatchHook),
 		Cmd:              pluginCmd(path),
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolNetRPC},
 		Logger: hclog.New(&hclog.LoggerOptions{
@@ -301,6 +323,7 @@ func (m *Manager) registerPlugin(instance *PluginInstance) error {
 	m.clients[instance.Name] = instance.Client
 	m.registerCapabilities(instance)
 	m.registerEventSubscriptions(instance)
+	m.registerHooks(instance)
 	m.mu.Unlock()
 
 	if pkgplugin.Supports(instance.Capabilities, pkgplugin.CapabilityTUI) {
@@ -351,6 +374,31 @@ func (m *Manager) fetchCapabilities(instance *PluginInstance) {
 			instance.TUIPages = pages
 		}
 	}
+	if caps != nil && pkgplugin.Supports(caps, pkgplugin.CapabilityHooks) {
+		if hooks, err := instance.Plugin.Hooks(); err != nil {
+			m.log.Fwarn("plugin: %s: hooks: %v", instance.Name, err)
+		} else {
+			instance.Hooks = normalizeHookSpecs(hooks)
+		}
+	}
+}
+
+func normalizeHookSpecs(specs []pkgplugin.HookSpec) []pkgplugin.HookSpec {
+	out := make([]pkgplugin.HookSpec, 0, len(specs))
+	for _, spec := range specs {
+		spec.Name = strings.TrimSpace(spec.Name)
+		if spec.Name == "" {
+			continue
+		}
+		if spec.Kind != pkgplugin.HookAction {
+			spec.Kind = pkgplugin.HookFilter
+		}
+		if spec.Priority == 0 {
+			spec.Priority = 10
+		}
+		out = append(out, spec)
+	}
+	return out
 }
 
 func (m *Manager) registerCapabilities(instance *PluginInstance) {
@@ -407,6 +455,66 @@ func (m *Manager) registerEventSubscriptions(instance *PluginInstance) {
 			return m.bus.Unsubscribe(topic, handler)
 		})
 		m.log.Finfo("plugin: %s subscribed to event %s", instance.Name, topic)
+	}
+}
+
+func (m *Manager) registerHooks(instance *PluginInstance) {
+	for _, spec := range instance.Hooks {
+		name := spec.Name
+		kind := spec.Kind
+		callback := func(ctx context.Context, value any) (any, error) {
+			raw, err := json.Marshal(value)
+			if err != nil {
+				return nil, fmt.Errorf("encode %s payload: %w", name, err)
+			}
+			timeoutMS, _ := ctx.Value(hookTimeoutKey{}).(int64)
+			if timeoutMS <= 0 {
+				timeoutMS = remainingMillis(ctx)
+			}
+			req := pkgplugin.HookRequest{
+				Name:      name,
+				Kind:      kind,
+				Value:     raw,
+				TimeoutMS: timeoutMS,
+			}
+			if !lockHookExec(ctx, instance) {
+				return nil, fmt.Errorf("%s: hook %s busy: %w", instance.Name, name, ctx.Err())
+			}
+			result, err := instance.Plugin.ExecuteHook(req)
+			instance.execMu.Unlock()
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", instance.Name, err)
+			}
+			if result == nil || len(result.Value) == 0 {
+				return nil, nil
+			}
+			if kind == pkgplugin.HookFilter && !result.Handled {
+				return nil, nil
+			}
+			var out any
+			if err := json.Unmarshal(result.Value, &out); err != nil {
+				return nil, fmt.Errorf("%s: decode %s result: %w", instance.Name, name, err)
+			}
+			return out, nil
+		}
+		if kind == pkgplugin.HookAction {
+			m.registry.AddActionFor(instance.Name, name, spec.Priority, callback)
+		} else {
+			m.registry.AddFilterFor(instance.Name, name, spec.Priority, callback)
+		}
+	}
+}
+
+func lockHookExec(ctx context.Context, instance *PluginInstance) bool {
+	for {
+		if instance.execMu.TryLock() {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(2 * time.Millisecond):
+		}
 	}
 }
 
@@ -663,6 +771,154 @@ func (m *Manager) ExecuteTUIAction(ctx context.Context, name string, req pkgplug
 	return res, nil
 }
 
+func (m *Manager) HookSpecs() []PluginHookSpec {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	out := make([]PluginHookSpec, 0)
+	for _, instance := range m.plugins {
+		for _, spec := range instance.Hooks {
+			out = append(out, PluginHookSpec{
+				Plugin:      instance.Name,
+				Name:        spec.Name,
+				Kind:        spec.Kind,
+				Priority:    spec.Priority,
+				Description: spec.Description,
+			})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		if out[i].Priority != out[j].Priority {
+			return out[i].Priority < out[j].Priority
+		}
+		return out[i].Plugin < out[j].Plugin
+	})
+	return out
+}
+
+func (m *Manager) ApplyHook(ctx context.Context, name string, kind pkgplugin.HookKind, value json.RawMessage, timeout time.Duration) (HookOutcome, error) {
+	return m.ApplyHookFrom(ctx, name, kind, value, timeout, "")
+}
+
+func (m *Manager) ApplyHookFrom(ctx context.Context, name string, kind pkgplugin.HookKind, value json.RawMessage, timeout time.Duration, skipPlugin string) (HookOutcome, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if kind == "" {
+		kind = pkgplugin.HookFilter
+	}
+	if kind != pkgplugin.HookFilter && kind != pkgplugin.HookAction {
+		return HookOutcome{}, fmt.Errorf("hook %q: unknown kind %q", name, kind)
+	}
+	if err := ctx.Err(); err != nil {
+		return HookOutcome{}, err
+	}
+	registryKind := corehook.Kind(kind)
+	if !m.registry.HasFor(name, registryKind, skipPlugin) {
+		return HookOutcome{}, fmt.Errorf("hook %q (%s): no handler registered", name, kind)
+	}
+	if timeout > 0 {
+		ctx = context.WithValue(ctx, hookTimeoutKey{}, timeout.Milliseconds())
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	var payload any
+	if len(value) > 0 {
+		if err := json.Unmarshal(value, &payload); err != nil {
+			return HookOutcome{}, fmt.Errorf("hook %q: decode payload: %w", name, err)
+		}
+	}
+	outcome := HookOutcome{Value: value}
+	switch kind {
+	case pkgplugin.HookFilter:
+		next, errs := m.registry.ApplyFiltersFrom(ctx, name, payload, skipPlugin)
+		if raw, err := json.Marshal(next); err == nil {
+			outcome.Value = raw
+		}
+		outcome.Errors = hookErrors(errs)
+	case pkgplugin.HookAction:
+		outputs, errs := m.registry.DoActionFrom(ctx, name, payload, skipPlugin)
+		for _, output := range outputs {
+			raw, err := json.Marshal(output)
+			if err != nil {
+				outcome.Errors = append(outcome.Errors, err.Error())
+				continue
+			}
+			outcome.Outputs = append(outcome.Outputs, raw)
+		}
+		outcome.Errors = append(outcome.Errors, hookErrors(errs)...)
+	}
+	return outcome, ctx.Err()
+}
+
+const maxHookDepth = 4
+
+func (m *Manager) dispatchHook(req pkgplugin.HookRequest) (*pkgplugin.HookResult, error) {
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, fmt.Errorf("hook name is required")
+	}
+	origin := strings.TrimSpace(req.Origin)
+	key := origin + "\x00" + name
+	if !m.enterHook(key) {
+		return nil, fmt.Errorf("hook %q recursion limit reached", name)
+	}
+	defer m.leaveHook(key)
+
+	timeout := time.Duration(req.TimeoutMS) * time.Millisecond
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	outcome, err := m.ApplyHookFrom(context.Background(), name, req.Kind, req.Value, timeout, origin)
+	if err != nil {
+		return nil, err
+	}
+	return &pkgplugin.HookResult{
+		Value:   outcome.Value,
+		Handled: true,
+		Outputs: outcome.Outputs,
+		Errors:  outcome.Errors,
+	}, nil
+}
+
+func (m *Manager) enterHook(key string) bool {
+	m.hookMu.Lock()
+	defer m.hookMu.Unlock()
+	if m.hookDepth[key] >= maxHookDepth {
+		return false
+	}
+	m.hookDepth[key]++
+	return true
+}
+
+func (m *Manager) leaveHook(key string) {
+	m.hookMu.Lock()
+	defer m.hookMu.Unlock()
+	m.hookDepth[key]--
+	if m.hookDepth[key] <= 0 {
+		delete(m.hookDepth, key)
+	}
+}
+
+type hookTimeoutKey struct{}
+
+func hookErrors(errs []error) []string {
+	out := make([]string, 0, len(errs))
+	for _, err := range errs {
+		if err != nil {
+			out = append(out, err.Error())
+		}
+	}
+	return out
+}
+
 func remainingMillis(ctx context.Context) int64 {
 	deadline, ok := ctx.Deadline()
 	if !ok {
@@ -722,6 +978,7 @@ func (m *Manager) Close() {
 	m.eventUnsubs = nil
 
 	for name, instance := range m.plugins {
+		m.registry.RemoveOwner(name)
 		done := make(chan struct{})
 		go func(p pkgplugin.Plugin) {
 			_ = p.Close()
@@ -754,5 +1011,7 @@ func GetPluginDir() (string, error) {
 }
 
 func pluginCmd(path string) *exec.Cmd {
-	return exec.Command(path)
+	cmd := exec.Command(path)
+	configurePluginCmd(cmd)
+	return cmd
 }

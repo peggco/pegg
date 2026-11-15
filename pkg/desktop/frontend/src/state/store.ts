@@ -5,6 +5,7 @@ import type {
   BinaryStatus,
   BootstrapInfo,
   CatalogKind,
+  DesktopViewState,
   ModelEntry,
   Prefs,
   ProviderSetupInfo,
@@ -48,6 +49,7 @@ export interface UIState {
   toasts: Toast[];
   language: string;
   view: 'welcome' | 'chat';
+  desktopView?: DesktopViewState;
   subagentView: string | null;
   sidebarCollapsed: boolean;
   settingsOpen: boolean;
@@ -100,6 +102,7 @@ export const initialState: UIState = {
   toasts: [],
   language: 'en',
   view: 'welcome',
+  desktopView: undefined,
   subagentView: null,
   sidebarCollapsed: false,
   settingsOpen: false,

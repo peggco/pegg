@@ -15,12 +15,14 @@ import (
 	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/builtin/middlewares/compaction"
 	"github.com/peggco/pegg/internal/core/event"
+	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/llm"
 	runpkg "github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/tui/components"
 	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/page/settings"
+	pkgplugin "github.com/peggco/pegg/pkg/plugin"
 )
 
 const maxToolPartial = 64 * 1024
@@ -186,6 +188,7 @@ func (a *App) onAgentInput(e agent.AgentInput) {
 }
 
 func (a *App) onAgentStarted(e agent.AgentStarted) {
+	defer a.refreshViewHooks()
 	a.chatMu.Lock()
 	defer a.chatMu.Unlock()
 	if !a.acceptAgentEventLocked(e.AgentID, e.ParentAgentID) {
@@ -302,6 +305,7 @@ func (a *App) onAgentMessage(e agent.AgentMessage) {
 	}
 
 	if text := messageContent(msg); text != "" {
+		text = applyMessageHook(e.AgentID, e.AgentName, string(msg.Role), text)
 		it := &components.ChatItem{Kind: components.ItemAssistant, ID: e.AgentID, Text: text}
 		a.appendItem(t, it)
 	}
@@ -496,6 +500,7 @@ func (a *App) onAgentToolResult(e agent.AgentToolResult) {
 }
 
 func (a *App) onAgentFinished(e agent.AgentFinished) {
+	defer a.refreshViewHooks()
 	a.chatMu.Lock()
 	defer a.chatMu.Unlock()
 	if !a.acceptAgentEventLocked(e.AgentID, "") {
@@ -549,6 +554,7 @@ func (a *App) onAgentFinished(e agent.AgentFinished) {
 }
 
 func (a *App) onAgentError(e agent.AgentError) {
+	defer a.refreshViewHooks()
 	a.chatMu.Lock()
 	defer a.chatMu.Unlock()
 	if !a.acceptAgentEventLocked(e.AgentID, "") {
@@ -781,6 +787,7 @@ func (a *App) onAgentUsage(e agent.AgentUsage) {
 }
 
 func (a *App) onSessionAttached(e session.SessionAttached) {
+	defer a.refreshViewHooks()
 	a.chatMu.Lock()
 	defer a.chatMu.Unlock()
 	if !a.acceptAgentEventLocked(e.AgentID, "") {
@@ -1266,6 +1273,23 @@ func (a *App) openUserMenu(it *components.ChatItem) {
 }
 
 func (a *App) showMenu(items []components.MenuItem) {
+	if corehook.HasFilter(HookMenuItems) {
+		callCtx, cancel := context.WithTimeout(context.Background(), viewHookTimeout)
+		hooked, errs := corehook.ApplyFilter(callCtx, HookMenuItems, pkgplugin.MenuHook{})
+		cancel()
+		if len(errs) == 0 {
+			for _, item := range hooked.Items {
+				entry := item
+				items = append(items, components.MenuItem{
+					Label: entry.Title,
+					OnSelect: func() {
+						a.closeMenu()
+						go corehook.ApplyAction(context.Background(), HookCommand, pkgplugin.CommandHook{ID: entry.ID})
+					},
+				})
+			}
+		}
+	}
 	menu := components.NewMenu(items, a.mouseX, a.mouseY)
 	menu.SetOnClose(func() {
 		a.setOverlay(nil)
@@ -1935,4 +1959,92 @@ func (a *App) onSessionDeleted(e session.SessionDeleted) {
 	a.refreshHomeLocked()
 	a.chatMu.Unlock()
 	a.requestRedraw()
+}
+
+func (a *App) decorateMessage(event agent.AgentMessage, text string) string {
+	if !corehook.HasFilter(HookMessageDecorate) {
+		return text
+	}
+	callCtx, cancel := context.WithTimeout(context.Background(), viewHookTimeout)
+	defer cancel()
+	decorated, errs := corehook.ApplyFilter(callCtx, HookMessageDecorate, pkgplugin.MessageDecorateHook{
+		AgentID:   event.AgentID,
+		AgentName: event.AgentName,
+		Role:      string(event.Message.Role),
+		Content:   text,
+	})
+	if len(errs) > 0 {
+		return text
+	}
+	return decorated.Prefix + text + decorated.Suffix
+}
+
+func (a *App) syncPluginChatItems(fragments []pkgplugin.ViewFragment) {
+	signature := pluginItemsSignature(fragments)
+	if a.pluginItemsSig == signature {
+		return
+	}
+	a.chatMu.Lock()
+	defer a.chatMu.Unlock()
+	transcript := a.main
+	if transcript == nil {
+		return
+	}
+	kept := make([]*components.ChatItem, 0, len(transcript.items)+len(fragments))
+	for _, item := range transcript.items {
+		if !strings.HasPrefix(item.ID, "plugin:") {
+			kept = append(kept, item)
+		}
+	}
+	items := append([]pkgplugin.ViewFragment(nil), fragments...)
+	sort.SliceStable(items, func(i, j int) bool { return items[i].Priority < items[j].Priority })
+	for _, fragment := range items {
+		if fragment.ID == "" {
+			continue
+		}
+		kept = append(kept, pluginChatItem(fragment))
+	}
+	transcript.items = kept
+	a.pluginItemsSig = signature
+	if a.viewID == transcript.id {
+		a.chat.SetItems(kept)
+	}
+	a.requestRedraw()
+}
+
+func pluginItemsSignature(fragments []pkgplugin.ViewFragment) string {
+	var builder strings.Builder
+	for _, fragment := range fragments {
+		builder.WriteString(fragment.ID)
+		builder.WriteByte('|')
+		builder.WriteString(fragment.Title)
+		builder.WriteByte('|')
+		for _, line := range fragment.Lines {
+			for _, span := range components.ViewLineSpans(line) {
+				builder.WriteString(span.Text)
+			}
+			builder.WriteByte('\n')
+		}
+		builder.WriteByte(';')
+	}
+	return builder.String()
+}
+
+func pluginChatItem(fragment pkgplugin.ViewFragment) *components.ChatItem {
+	var builder strings.Builder
+	if fragment.Title != "" {
+		builder.WriteString(fragment.Title)
+		builder.WriteString("\n")
+	}
+	for _, line := range fragment.Lines {
+		for _, span := range components.ViewLineSpans(line) {
+			builder.WriteString(span.Text)
+		}
+		builder.WriteString("\n")
+	}
+	return &components.ChatItem{
+		Kind: components.ItemNotice,
+		ID:   "plugin:" + fragment.ID,
+		Text: strings.TrimRight(builder.String(), "\n"),
+	}
 }

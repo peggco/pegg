@@ -10,6 +10,7 @@ import (
 	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/agent/reminder"
 	"github.com/peggco/pegg/internal/agent/tool"
+	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/llm"
 )
 
@@ -61,6 +62,7 @@ func (a *Agent) run(ctx context.Context, input string, stream StreamHandler) (*R
 	if a.Provider == nil {
 		return nil, a.fail(ctx, ErrNoProvider)
 	}
+	a.publishModelResolved(ctx, input)
 
 	ctx = WithAgent(ctx, a)
 	state := &runState{agent: a, stream: stream, maxTokens: a.maxOutputTokens()}
@@ -126,6 +128,7 @@ func (a *Agent) resume(ctx context.Context, input string, history []llm.Message,
 	if a.Provider == nil {
 		return nil, a.fail(ctx, ErrNoProvider)
 	}
+	a.publishModelResolved(ctx, input)
 
 	ctx = WithAgent(ctx, a)
 	state := &runState{agent: a, stream: stream, maxTokens: a.maxOutputTokens()}
@@ -197,6 +200,7 @@ func (a *Agent) loop(ctx context.Context, state *runState, prov llm.Provider) (*
 		a.syncDynamicTools()
 		msg, calls, err := a.iterate(ctx, state, prov)
 		if err != nil {
+			a.publishHookError(ctx, err)
 			if msg.Role == llm.RoleAssistant && !emptyAssistantMessage(msg) {
 				state.history = append(state.history, msg)
 			}
@@ -500,6 +504,7 @@ func (a *Agent) iterate(ctx context.Context, state *runState, prov llm.Provider)
 	if err := a.chain.BeforeLLM(ctx, req); err != nil {
 		return llm.Message{}, nil, err
 	}
+	a.applyRequestHook(ctx, req)
 	ctx = a.withSession(ctx)
 	if state.stream != nil {
 		return a.iterateStream(ctx, state, prov, req)
@@ -512,14 +517,10 @@ func (a *Agent) iterate(ctx context.Context, state *runState, prov llm.Provider)
 	if err := a.chain.AfterLLM(ctx, req, resp); err != nil {
 		return llm.Message{}, nil, err
 	}
+	resp = a.applyResponseHook(ctx, req, resp)
 
 	state.accumulateUsage(resp.Usage)
-	a.publish(TopicAgentUsage, AgentUsage{
-		AgentID:   a.ID,
-		AgentName: a.Name,
-		Model:     a.Model,
-		Usage:     state.usage,
-	})
+	a.publishUsage(ctx, state)
 	state.output = resp.GetContent()
 	state.finishReason = resp.GetFinishReason()
 
@@ -537,15 +538,11 @@ func (a *Agent) iterate(ctx context.Context, state *runState, prov llm.Provider)
 func (a *Agent) iterateStream(ctx context.Context, state *runState, prov llm.Provider, req *llm.Request) (llm.Message, []llm.ToolCall, error) {
 	acc := newStreamAccumulator()
 	err := a.chain.InvokeLLMStream(ctx, req, func(chunk llm.StreamChunk) error {
+		chunk = a.applyChunkHook(ctx, a.Model.ID, chunk)
 		acc.append(chunk)
 		if chunk.Usage != nil {
 			state.accumulateUsage(*chunk.Usage)
-			a.publish(TopicAgentUsage, AgentUsage{
-				AgentID:   a.ID,
-				AgentName: a.Name,
-				Model:     a.Model,
-				Usage:     state.usage,
-			})
+			a.publishUsage(ctx, state)
 		}
 		if chunk.FinishReason != "" {
 			state.finishReason = chunk.FinishReason
@@ -617,6 +614,14 @@ func (a *Agent) iterateStream(ctx context.Context, state *runState, prov llm.Pro
 	if err := a.chain.AfterLLM(ctx, req, resp); err != nil {
 		return llm.Message{}, nil, err
 	}
+	resp = a.applyResponseHook(ctx, req, resp)
+	if len(resp.Choices) > 0 && resp.Choices[0].Message != nil {
+		msg = *resp.Choices[0].Message
+		state.output = llm.MessageText(msg)
+		if len(msg.ToolCalls) > 0 {
+			calls = msg.ToolCalls
+		}
+	}
 
 	for _, call := range calls {
 		callCopy := call
@@ -655,10 +660,42 @@ func (a *Agent) runTool(ctx context.Context, state *runState, call llm.ToolCall)
 	start := time.Now()
 	defer func() { res.duration = time.Since(start) }()
 
+	if a.IsToolDisabled(call.Function.Name) {
+		res.output = fmt.Sprintf("Error: tool %q is disabled for this run", call.Function.Name)
+		res.toolErr = fmt.Errorf("%w: %s", tool.ErrDisabled, call.Function.Name)
+		_ = a.chain.AfterTool(ctx, call, res.output, res.toolErr)
+		return res
+	}
+
 	if err := a.chain.BeforeTool(ctx, call); err != nil {
 		res.output = fmt.Sprintf("Error: tool call aborted by middleware: %v", err)
 		res.toolErr = err
 		return res
+	}
+
+	before, errs := corehook.ApplyFilter(ctx, HookToolBefore, ToolBeforeHook{
+		AgentID:   a.ID,
+		AgentName: a.Name,
+		CallID:    call.ID,
+		Tool:      call.Function.Name,
+		Arguments: call.Function.Arguments,
+	})
+	if len(errs) > 0 {
+		a.debugf("agent %q tool.before hook: %v", a.Name, errs)
+	}
+	if before.Blocked {
+		reason := strings.TrimSpace(before.Reason)
+		if reason == "" {
+			reason = "blocked by tool.before hook"
+		}
+		res.output = "Error: " + reason
+		res.toolErr = fmt.Errorf("%w: %s", ErrToolExecutionFailed, reason)
+		_ = a.chain.AfterTool(ctx, call, res.output, res.toolErr)
+		return res
+	}
+	if before.Arguments != call.Function.Arguments {
+		call.Function.Arguments = before.Arguments
+		res.call = call
 	}
 
 	t, ok := a.Tools.Get(call.Function.Name)
@@ -709,8 +746,29 @@ func (a *Agent) runTool(ctx context.Context, state *runState, call llm.ToolCall)
 		res.attachments = sink.Attachments()
 	}
 
+	if after, errs := corehook.ApplyFilter(ctx, HookToolAfter, ToolAfterHook{
+		AgentID:   a.ID,
+		AgentName: a.Name,
+		CallID:    call.ID,
+		Tool:      call.Function.Name,
+		Arguments: call.Function.Arguments,
+		Output:    res.output,
+		Error:     toolErrorString(res.toolErr),
+	}); len(errs) > 0 {
+		a.debugf("agent %q tool.after hook: %v", a.Name, errs)
+	} else if after.Output != res.output {
+		res.output = after.Output
+	}
+
 	_ = a.chain.AfterTool(ctx, call, res.output, res.toolErr)
 	return res
+}
+
+func toolErrorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func (a *Agent) executeTools(ctx context.Context, state *runState, calls []llm.ToolCall) {
@@ -805,12 +863,16 @@ func (a *Agent) buildRequest(state *runState) *llm.Request {
 
 func (a *Agent) visibleTools() []llm.Tool {
 	tools := a.Tools.LLMTools()
-	if len(tools) == 0 || a.planToolsEnabled() {
+	if len(tools) == 0 {
 		return tools
 	}
+	planEnabled := a.planToolsEnabled()
 	out := tools[:0]
 	for _, t := range tools {
-		if isPlanTool(t.Function.Name) {
+		if a.IsToolDisabled(t.Function.Name) {
+			continue
+		}
+		if !planEnabled && isPlanTool(t.Function.Name) {
 			continue
 		}
 		out = append(out, t)

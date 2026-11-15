@@ -42,6 +42,7 @@ See the [Quickstart Guide](quickstart.md) for a step-by-step tutorial.
 | [Quickstart](quickstart.md) | Build your first plugin in 5 minutes |
 | [Interface](interface.md) | Plugin interface, types, and method signatures |
 | [Development Guide](development.md) | Step-by-step plugin development |
+| [Hooks](hooks.md) | Handle hooks or dispatch them to other plugins |
 
 ## Configuration
 

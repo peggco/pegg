@@ -76,53 +76,11 @@ func main() {
 }
 `, opts.pegg)
 
-	pluginGo := fmt.Sprintf(`package main
+	pluginGo := renderPluginGo(opts.pegg, opts.name)
 
-import (
-	"fmt"
+	commandsGo := pluginCommandsTemplate
 
-	peggplugin "%s/pkg/plugin"
-)
-
-type Plugin struct {
-	peggplugin.Base
-}
-
-func (p *Plugin) Name() string        { return %q }
-func (p *Plugin) Version() string     { return "0.1.0" }
-func (p *Plugin) Description() string { return "A Pegg plugin" }
-
-func (p *Plugin) Capabilities() []string {
-	return []string{string(peggplugin.CapabilityTools)}
-}
-
-func (p *Plugin) Tools() ([]peggplugin.ToolSpec, error) {
-	schema := "{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}},\"required\":[\"text\"]}"
-	return []peggplugin.ToolSpec{{
-		Name:        %q,
-		Description: "Example tool. Replace this with your plugin's tool.",
-		Parameters:  schema,
-		Bundle:      "example",
-		Group:       "Example",
-		ReadOnly:    true,
-	}}, nil
-}
-
-func (p *Plugin) ExecuteTool(req peggplugin.ToolRequest) (*peggplugin.ToolResult, error) {
-	if req.Name != %q {
-		return nil, fmt.Errorf("unknown tool %%q", req.Name)
-	}
-	return &peggplugin.ToolResult{Output: "hello from %s"}, nil
-}
-`, opts.pegg, opts.name, opts.name+"_echo", opts.name+"_echo", opts.name)
-
-	commandsGo := `package main
-
-func runCLI(args []string) int {
-	println("This plugin has no CLI commands yet.")
-	return 0
-}
-`
+	binary := pluginBinaryName(opts.name)
 
 	readme := fmt.Sprintf(`# %s
 
@@ -138,22 +96,43 @@ cp bin/%s ~/.pegg/plugins/%s
 chmod +x ~/.pegg/plugins/%s
 ~~~
 
+## Release
+
+Tag a version and push it; the GitHub Action builds linux, macOS, and Windows
+(amd64 and arm64), then attaches tarballs, zips, and checksums to the release.
+It delegates to the shared plugin-release workflow in the Pegg SDK repository,
+so release.yml only pins which version of that workflow to call.
+The build uses the Pegg SDK version pinned in go.mod, so bump it and commit
+go.mod and go.sum before tagging:
+
+~~~bash
+go get %s@latest
+go mod tidy
+git tag v0.1.0
+git push origin v0.1.0
+~~~
+
 ## Use
 
 Load a skill whose frontmatter contains `+"`tools: example`"+`, then call the
 `+"`%s_echo`"+` tool.
-`, opts.name, opts.name, opts.name, opts.name, opts.name, opts.name)
+`, opts.name, binary, binary, binary, binary, opts.pegg, opts.name)
 
 	files := map[string]string{
-		"go.mod":      goMod,
-		"main.go":     mainGo,
-		"plugin.go":   pluginGo,
-		"commands.go": commandsGo,
-		"README.md":   readme,
-		".gitignore":  "bin/\n",
+		"go.mod":                        goMod,
+		"main.go":                       mainGo,
+		"plugin.go":                     pluginGo,
+		"commands.go":                   commandsGo,
+		"README.md":                     readme,
+		".gitignore":                    renderPluginGitignore(binary),
+		".github/workflows/release.yml": renderPluginReleaseWorkflow(binary, opts.pegg, opts.version),
 	}
 	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(opts.dir, name), []byte(content), 0o644); err != nil {
+		path := filepath.Join(opts.dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			return err
 		}
 	}

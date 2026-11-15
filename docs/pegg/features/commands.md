@@ -7,8 +7,9 @@ icon: lucide/square-terminal
 Pegg's slash commands are implemented as **skills**: type `/name` in the input
 and Pegg issues a `loadskill` tool call, so the skill's instructions arrive as a
 tool result (or run as a background subagent for `context: fork` skills). The
-built-in commands are `/init`, `/batch`, `/orchestrate`, `/review`, `/rule`, and
-`/skillify` — and you can [add your own](../configurations/skills.md#creating-your-own)
+built-in commands are `/init`, `/batch`, `/orchestrate`, `/goal`, `/review`,
+`/rule`, and `/skillify` — and you can
+[add your own](../configurations/skills.md#creating-your-own)
 with a `SKILL.md` file.
 
 In the TUI and the [VS Code extension](../usage/vscode.md), type `/` in the input to
@@ -99,6 +100,24 @@ Unlike `/batch` (a bulk change decomposed into many independent work units),
 `/orchestrate` is the general plan-first contract for any large project. It
 replaces the former planner subagent: the orchestrator writes the plan and todo
 hierarchy itself.
+
+## `/goal`
+
+Runs a stated goal autonomously from planning through implementation. Use it when
+you want Pegg to finish a concrete objective in one run without asking clarifying
+questions or stopping for approval.
+
+When the skill loads it:
+
+- Switches the agent to `auto` mode.
+- Disables the `askuserquestion` tool for that agent.
+- Instructs the model to call `enterplanmode`, research the codebase, write a plan
+  under `.pegg/plans/<goal-slug>.md`, call `exitplanmode`, implement, verify, and
+  report.
+
+`/goal` does not change permission rules. The plan tools keep their configured
+permission behavior (the default is `ask`), so set them to `allow` if you want a
+fully unattended run.
 
 ## `/review`
 

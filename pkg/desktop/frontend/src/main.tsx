@@ -17,6 +17,7 @@ import './styles/markdown.css';
 import './styles/overlays.css';
 import './styles/settings.css';
 import './styles/tools.css';
+import './styles/view.css';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error?: Error }> {
   state: { error?: Error } = {};

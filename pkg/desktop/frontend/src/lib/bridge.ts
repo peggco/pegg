@@ -1,6 +1,7 @@
 import * as GoApp from '../../wailsjs/go/main/App';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
 import type {
+  DesktopViewState,
   AcpStatus,
   AskRequest,
   Attachment,
@@ -102,7 +103,9 @@ const App = GoApp as unknown as {
   SettingsSnapshot(): Promise<SettingsSnapshot>;
   SlashCommands(): Promise<SlashCommand[]>;
   ProviderCatalog(): Promise<ProviderCatalogEntry[]>;
+  ProviderDrivers(): Promise<string[]>;
   AddProvider(name: string, apiKey: string, baseURL: string): Promise<void>;
+  AddCustomProvider(name: string, driver: string, apiKey: string, baseURL: string): Promise<void>;
   RemoveProvider(name: string): Promise<void>;
   AddSTTProvider(name: string, apiKey: string, baseURL: string): Promise<void>;
   RemoveSTTProvider(name: string): Promise<void>;
@@ -121,6 +124,9 @@ const App = GoApp as unknown as {
     actionId: string,
     values: Record<string, string>,
   ): Promise<PluginSettingResult>;
+  ViewState(): Promise<DesktopViewState>;
+  SaveViewSettings(tab: string, values: Record<string, string>): Promise<void>;
+  RunViewCommand(id: string): Promise<void>;
   SetReasoningEffort(sessionId: string, provider: string, model: string, effort: string): Promise<SessionInfo>;
   Version(): Promise<string>;
   LogPath(): Promise<string>;
@@ -285,6 +291,10 @@ export function onPeggStatus(cb: (status: ForeverStatus) => void): Unsubscribe {
 
 export function onPeggLog(cb: (line: string) => void): Unsubscribe {
   return on<string>('pegg:log', cb);
+}
+
+export function onDesktopView(cb: (view: DesktopViewState) => void): Unsubscribe {
+  return on<DesktopViewState>('desktop:view', cb);
 }
 
 export function offAll(events: string[]): void {

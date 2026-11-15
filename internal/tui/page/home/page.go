@@ -14,6 +14,7 @@ import (
 	"github.com/peggco/pegg/internal/tui/i18n"
 	"github.com/peggco/pegg/internal/tui/layout"
 	"github.com/peggco/pegg/internal/tui/styles"
+	pkgplugin "github.com/peggco/pegg/pkg/plugin"
 )
 
 type focusTarget int
@@ -55,6 +56,12 @@ type Page struct {
 	onHubSearch  func(query string)
 	onHubInstall func(source, skillID, name string)
 
+	headerLines       []pkgplugin.ViewLine
+	footerHint        string
+	footerLines       []pkgplugin.ViewLine
+	emptyFragments    []pkgplugin.ViewFragment
+	promptPlaceholder string
+
 	voiceMu       sync.RWMutex
 	voiceState    string
 	voiceElapsed  int
@@ -94,6 +101,22 @@ func (p *Page) SetSkills(items []components.ListItem) {
 }
 
 func (p *Page) SetOnHubSearch(fn func(query string)) { p.onHubSearch = fn }
+
+func (p *Page) StatusBar() *components.StatusBar { return p.status }
+
+func (p *Page) SetViewChrome(header []pkgplugin.ViewLine, footer pkgplugin.FooterHook) {
+	p.headerLines = header
+	p.footerHint = footer.Hint
+	p.footerLines = footer.Lines
+}
+
+func (p *Page) SetEmptyFragments(fragments []pkgplugin.ViewFragment) {
+	p.emptyFragments = fragments
+}
+
+func (p *Page) SetPromptPlaceholder(placeholder string) {
+	p.promptPlaceholder = placeholder
+}
 
 func (p *Page) SetOnHubInstall(fn func(source, skillID, name string)) { p.onHubInstall = fn }
 
@@ -669,6 +692,14 @@ func (p *Page) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 		Height: chatBottom - bounds.Top,
 	}
 
+	headerH := len(p.headerLines)
+	if headerH > 0 && headerH < topArea.Height {
+		base := th.Base().Background(th.Background)
+		components.DrawViewLines(s, bounds.Left+2, bounds.Top, bounds.Width-4, headerH, p.headerLines, base)
+		topArea.Top += headerH
+		topArea.Height -= headerH
+	}
+
 	if p.chat.HasItems() {
 		chatRegion := layout.Region{
 			Left:   topArea.Left + 1,
@@ -680,6 +711,7 @@ func (p *Page) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 	} else {
 		logoRegion := layout.CenterIn(topArea, p.logo.Width, p.logo.Height)
 		p.logo.Draw(s, logoRegion, false)
+		p.drawEmptyFragments(s, topArea, logoRegion)
 	}
 
 	if attachH > 0 {
@@ -689,6 +721,7 @@ func (p *Page) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 	if p.askPicker.Active() {
 		p.askPicker.Draw(s, inputRegion)
 	} else {
+		p.input.Placeholder = p.promptPlaceholder
 		p.input.Draw(s, inputRegion, focused && p.focus == focusInput)
 		p.drawVoiceButton(s, inputRegion)
 	}
@@ -766,7 +799,12 @@ func (p *Page) drawVoiceButton(s tcell.Screen, inputRegion layout.Region) {
 }
 
 func (p *Page) drawHint(s tcell.Screen, bounds, inputRegion layout.Region) {
-	if p.hint == "" || !p.input.Empty() || p.chat.HasItems() || p.attachmentBar.Count() > 0 || p.askPicker.Active() {
+	hint := p.hint
+	if p.footerHint != "" {
+		hint = p.footerHint
+	}
+	p.drawFooterLines(s, bounds, inputRegion)
+	if hint == "" || !p.input.Empty() || p.chat.HasItems() || p.attachmentBar.Count() > 0 || p.askPicker.Active() {
 		return
 	}
 	y := inputRegion.Top - 1
@@ -781,7 +819,49 @@ func (p *Page) drawHint(s tcell.Screen, bounds, inputRegion layout.Region) {
 	x := bounds.Left + (bounds.Width-textW)/2
 	th := styles.Current()
 	components.DrawText(s, x, y, bullet, th.Base().Foreground(th.AccentDim).Background(th.Background))
-	components.DrawText(s, x+components.DisplayWidth(bullet), y, p.hint, th.Base().Foreground(th.Muted).Background(th.Background))
+	components.DrawText(s, x+components.DisplayWidth(bullet), y, hint, th.Base().Foreground(th.Muted).Background(th.Background))
+}
+
+func (p *Page) drawFooterLines(s tcell.Screen, bounds, inputRegion layout.Region) {
+	if len(p.footerLines) == 0 {
+		return
+	}
+	height := len(p.footerLines)
+	y := inputRegion.Top - 1 - height
+	if y < bounds.Top {
+		return
+	}
+	width := bounds.Width - 4
+	if width < 1 {
+		return
+	}
+	components.DrawViewLines(s, bounds.Left+2, y, width, height, p.footerLines, styles.Current().Base().Background(styles.Current().Background))
+}
+
+func (p *Page) drawEmptyFragments(s tcell.Screen, topArea, logoRegion layout.Region) {
+	if len(p.emptyFragments) == 0 {
+		return
+	}
+	height := components.ViewFragmentsHeight(p.emptyFragments)
+	if height == 0 {
+		return
+	}
+	y := logoRegion.Bottom() + 1
+	if y+height > topArea.Bottom() {
+		return
+	}
+	width := topArea.Width - 8
+	if width < 10 {
+		return
+	}
+	if width > 72 {
+		width = 72
+	}
+	x := topArea.Left + (topArea.Width-width)/2
+	base := styles.Current().Base().Background(styles.Current().Background)
+	for _, fragment := range p.emptyFragments {
+		y += components.DrawViewFragment(s, x, y, width, fragment, base)
+	}
 }
 
 func Fill(s tcell.Screen, bounds layout.Region, th styles.Theme) {

@@ -347,3 +347,26 @@ func TestDismissProviderSetupRoundTrip(t *testing.T) {
 		t.Fatal("dismissal should survive Save/Load")
 	}
 }
+
+func TestHooksDefaults(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Hooks == nil || !cfg.Hooks.Active() || cfg.Hooks.TimeoutSeconds != 5 {
+		t.Fatalf("hooks defaults: %#v", cfg.Hooks)
+	}
+
+	cfg.Hooks = nil
+	normalizeHooks(cfg)
+	if cfg.Hooks == nil || cfg.Hooks.TimeoutSeconds != 5 {
+		t.Fatalf("normalized: %#v", cfg.Hooks)
+	}
+
+	disabled := false
+	cfg.Hooks = &HooksConfig{Enabled: &disabled, TimeoutSeconds: 120}
+	normalizeHooks(cfg)
+	if cfg.Hooks.Active() {
+		t.Fatal("expected hooks to be disabled")
+	}
+	if cfg.Hooks.TimeoutSeconds != 60 {
+		t.Fatalf("timeout = %d", cfg.Hooks.TimeoutSeconds)
+	}
+}

@@ -62,6 +62,8 @@ import { PluginPagePanel } from './PluginPagePanel';
 import { Card, Field, OptionCard, OptionGrid, PageHead, Range, Segmented } from './SettingsUI';
 import { ChatHistoryPreview, DirectionPreview, LayoutPreview, SidebarModePreview } from './AppearancePreviews';
 
+const CUSTOM_PROVIDER = '__custom__';
+
 type BuiltinTab =
   | 'general'
   | 'appearance'
@@ -134,6 +136,17 @@ export function Settings() {
   const [pluginPages, setPluginPages] = useState<PluginSettingPage[]>([]);
   const t = useT();
   const models = useStore((state) => state.models);
+  const desktopView = useStore((state) => state.desktopView);
+  const viewPages = desktopView?.settingsPages ?? [];
+  const pages = useMemo(() => {
+    const merged = [...pluginPages];
+    for (const page of viewPages) {
+      if (!merged.some((candidate) => candidate.owner === page.owner && candidate.id === page.id)) {
+        merged.push(page);
+      }
+    }
+    return merged;
+  }, [pluginPages, viewPages]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -176,13 +189,13 @@ export function Settings() {
 
   useEffect(() => {
     if (typeof requestedTab === 'string' && requestedTab.startsWith('plugin:')) {
-      if (!pluginPages.some((page) => pluginTabID(page) === requestedTab)) {
+      if (!pages.some((page) => pluginTabID(page) === requestedTab)) {
         setTab('general');
       }
     }
-  }, [requestedTab, pluginPages]);
+  }, [requestedTab, pages]);
 
-  const activePluginPage = pluginPages.find((page) => pluginTabID(page) === tab) ?? null;
+  const activePluginPage = pages.find((page) => pluginTabID(page) === tab) ?? null;
 
   return (
     <div
@@ -217,10 +230,10 @@ export function Settings() {
                   ))}
                 </div>
               ))}
-              {pluginPages.length ? (
+              {pages.length ? (
                 <div>
                   <div className="settings-nav-label">{t('settings.pluginPagesGroup')}</div>
-                  {pluginPages.map((page) => {
+                  {pages.map((page) => {
                     const id = pluginTabID(page);
                     const Icon = pluginIcon(page);
                     return (
@@ -766,6 +779,9 @@ function AddProviderModal({
   const [catalog, setCatalog] = useState<ProviderCatalogEntry[]>([]);
   const [name, setName] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [customName, setCustomName] = useState('');
+  const [driver, setDriver] = useState('');
+  const [drivers, setDrivers] = useState<string[]>([]);
   const [baseURL, setBaseURL] = useState('');
   const [saving, setSaving] = useState(false);
   const [loginState, setLoginState] = useState<'idle' | 'login'>('idle');
@@ -780,6 +796,16 @@ function AddProviderModal({
         setCatalog(items);
         const first = items.find((item) => !item.configured) ?? items[0];
         if (first) setName(first.name);
+      })
+      .catch((err) => store.toast('error', errorText(err)));
+  }, []);
+
+  useEffect(() => {
+    void api
+      .ProviderDrivers()
+      .then((items) => {
+        setDrivers(items);
+        setDriver((current) => current || (items.includes('openai') ? 'openai' : items[0]) || '');
       })
       .catch((err) => store.toast('error', errorText(err)));
   }, []);
@@ -800,8 +826,39 @@ function AddProviderModal({
   const entry = catalog.find((item) => item.name === name);
   const subscription = entry?.kind === 'subscription';
   const isForever = name === 'pegg-forever';
+  const isCustom = name === CUSTOM_PROVIDER;
+  const canAdd = isCustom
+    ? Boolean(customName.trim() && driver && baseURL.trim())
+    : Boolean(name);
 
   const add = async () => {
+    if (isCustom) {
+      if (!customName.trim()) {
+        store.toast('warn', 'A provider name is required');
+        return;
+      }
+      if (!driver) {
+        store.toast('warn', 'A driver is required for custom providers');
+        return;
+      }
+      if (!baseURL.trim()) {
+        store.toast('warn', 'A base URL is required for custom providers');
+        return;
+      }
+      setSaving(true);
+      try {
+        const custom = customName.trim();
+        await api.AddCustomProvider(custom, driver, apiKey, baseURL.trim());
+        await onAdded();
+        store.toast('success', `${custom} added`);
+        onClose();
+      } catch (err) {
+        store.toast('error', errorText(err));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     if (!name) return;
     if (!subscription && !apiKey.trim()) {
       store.toast('warn', 'An API key is required for this provider');
@@ -809,8 +866,7 @@ function AddProviderModal({
     }
     setSaving(true);
     try {
-      const url = isForever && !baseURL.trim() ? 'https://forever.pegg.dev/v1' : baseURL;
-      await api.AddProvider(name, apiKey, url);
+      await api.AddProvider(name, apiKey, '');
       await onAdded();
       store.toast('success', `${name} added`);
       onClose();
@@ -884,32 +940,70 @@ function AddProviderModal({
                     {item.configured ? ' (configured)' : ''}
                   </option>
                 ))}
+                <option value={CUSTOM_PROVIDER}>Custom endpoint…</option>
               </select>
             </Field>
-            <Field label="API key" hint={subscription ? 'Optional for subscription providers.' : 'Stored in ~/.pegg/pegg.json.'}>
-              <input
-                className="input"
-                type="password"
-                autoComplete="off"
-                value={apiKey}
-                placeholder={entry?.kind === 'subscription' ? 'Use pegg login if not signed in' : 'sk-…'}
-                onChange={(event) => setApiKey(event.target.value)}
-              />
-            </Field>
-            <Field label="Base URL" hint="Optional. Leave empty for the provider default.">
-              <input
-                className="input"
-                value={baseURL}
-                placeholder="https://api.example.com/v1"
-                onChange={(event) => setBaseURL(event.target.value)}
-              />
-            </Field>
-            <Field label="Type">
-              <div className="settings-row-value">{entry?.kind === 'subscription' ? 'Subscription / OAuth' : 'API key'}</div>
-            </Field>
+            {isCustom ? (
+              <>
+                <Field label="Name" hint="Unique name for this endpoint.">
+                  <input
+                    className="input"
+                    value={customName}
+                    placeholder="my-gateway"
+                    onChange={(event) => setCustomName(event.target.value)}
+                  />
+                </Field>
+                <Field label="Driver" hint="Protocol used to reach the endpoint.">
+                  <select className="select" value={driver} onChange={(event) => setDriver(event.target.value)}>
+                    {drivers.map((item) => (
+                      <option key={item} value={item}>{item}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Base URL" hint="Required for custom endpoints.">
+                  <input
+                    className="input"
+                    value={baseURL}
+                    placeholder="https://api.example.com/v1"
+                    onChange={(event) => setBaseURL(event.target.value)}
+                  />
+                </Field>
+                <Field label="API key" hint="Optional for local or keyless endpoints.">
+                  <input
+                    className="input"
+                    type="password"
+                    autoComplete="off"
+                    value={apiKey}
+                    placeholder="sk-… (optional)"
+                    onChange={(event) => setApiKey(event.target.value)}
+                  />
+                </Field>
+              </>
+            ) : (
+              <>
+                <Field label="API key" hint={subscription ? 'Optional for subscription providers.' : 'Stored in ~/.pegg/pegg.json.'}>
+                  <input
+                    className="input"
+                    type="password"
+                    autoComplete="off"
+                    value={apiKey}
+                    placeholder={entry?.kind === 'subscription' ? 'Use pegg login if not signed in' : 'sk-…'}
+                    onChange={(event) => setApiKey(event.target.value)}
+                  />
+                </Field>
+                <Field label="Type">
+                  <div className="settings-row-value">{entry?.kind === 'subscription' ? 'Subscription / OAuth' : 'API key'}</div>
+                </Field>
+              </>
+            )}
           </div>
           {entry?.kind === 'subscription' && entry.hint ? (
             <p className="settings-footnote">{entry.hint}</p>
+          ) : null}
+          {isCustom ? (
+            <p className="settings-footnote">
+              Custom endpoints require a driver and base URL. Add a name you can recognize in the model picker.
+            </p>
           ) : null}
           {isForever ? (
             <p className="settings-footnote">
@@ -956,7 +1050,7 @@ function AddProviderModal({
             <span className="spacer" />
             <button
               className="btn primary"
-              disabled={saving || !name || loginState === 'login'}
+              disabled={saving || !canAdd || loginState === 'login'}
               onClick={() => void add()}
             >
               {saving ? 'Adding…' : 'Add provider'}
@@ -979,7 +1073,6 @@ function AddSTTProviderModal({
 }) {
   const [name, setName] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [baseURL, setBaseURL] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -998,7 +1091,7 @@ function AddSTTProviderModal({
     }
     setSaving(true);
     try {
-      await api.AddSTTProvider(name, apiKey, baseURL);
+      await api.AddSTTProvider(name, apiKey, '');
       await onAdded();
       store.toast('success', `${name} added`);
       onClose();
@@ -1039,14 +1132,6 @@ function AddSTTProviderModal({
                 value={apiKey}
                 placeholder="Paste provider key…"
                 onChange={(event) => setApiKey(event.target.value)}
-              />
-            </Field>
-            <Field label="Base URL" hint="Optional. Leave empty for the provider default.">
-              <input
-                className="input"
-                value={baseURL}
-                placeholder="https://api.example.com/v1"
-                onChange={(event) => setBaseURL(event.target.value)}
               />
             </Field>
             <Field label="Models">

@@ -12,5 +12,6 @@ func All() map[string]func() *prompt.Prompt {
 		"orchestrate": OrchestrateSkill,
 		"rule":        RuleSkill,
 		"skillify":    SkillifySkill,
+		"goal":        GoalSkill,
 	}
 }

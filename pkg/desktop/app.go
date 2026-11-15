@@ -17,6 +17,7 @@ import (
 	goruntime "runtime"
 
 	"github.com/peggco/pegg/internal/core/config"
+	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/plugin"
 	"github.com/peggco/pegg/pkg/desktop/internal/acpclient"
 	"github.com/peggco/pegg/pkg/desktop/internal/binary"
@@ -117,6 +118,9 @@ type App struct {
 
 	pluginMu  sync.Mutex
 	pluginMgr *plugin.Manager
+
+	viewHooks  *desktopViewHooks
+	viewCancel context.CancelFunc
 }
 
 func NewApp() *App {
@@ -138,6 +142,17 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	viewCtx, viewCancel := context.WithCancel(ctx)
+	a.viewCancel = viewCancel
+	a.viewHooks = newDesktopViewHooks(a)
+	a.refreshDesktopView()
+	go func() {
+		if _, err := a.pluginManager(); err != nil {
+			a.logf("plugin: %v", err)
+		}
+		a.refreshDesktopView()
+	}()
+	go a.desktopViewLoop(viewCtx)
 	a.flushOnce.Do(func() { go a.flushLoop(ctx) })
 	if a.prefs != nil {
 		p := a.prefs.Get()
@@ -157,6 +172,9 @@ func (a *App) beforeClose(ctx context.Context) bool {
 func (a *App) shutdown(ctx context.Context) {
 	a.mu.Lock()
 	a.closing = true
+	if a.viewCancel != nil {
+		a.viewCancel()
+	}
 	c := a.client
 	a.mu.Unlock()
 	if c != nil {
@@ -197,6 +215,14 @@ func (a *App) emit(name string, data any) {
 	if a.ctx == nil {
 		return
 	}
+	if corehook.HasFilter(HookEmit) {
+		if raw, err := json.Marshal(data); err == nil {
+			if hooked, errs := corehook.ApplyFilter(context.Background(), HookEmit, EmitHook{Name: name, Data: raw}); len(errs) == 0 {
+				name = hooked.Name
+				data = json.RawMessage(hooked.Data)
+			}
+		}
+	}
 	wailsruntime.EventsEmit(a.ctx, name, data)
 }
 
@@ -219,7 +245,7 @@ func (a *App) Bootstrap() (BootstrapInfo, error) {
 		a.binary = binary.Resolve(context.Background(), p.BinaryPath, ws)
 	}
 	providerSetup, _ := a.ProviderSetup()
-	return BootstrapInfo{
+	info := BootstrapInfo{
 		Platform:         goruntime.GOOS,
 		Arch:             goruntime.GOARCH,
 		Version:          appVersion,
@@ -234,7 +260,21 @@ func (a *App) Bootstrap() (BootstrapInfo, error) {
 		Language:         currentLanguage(),
 		NativeTitlebar:   nativeTitlebar(),
 		ProviderSetup:    providerSetup,
-	}, nil
+	}
+	if hooked, errs := corehook.ApplyFilter(context.Background(), HookBootstrap, BootstrapHook{
+		Platform:  info.Platform,
+		Version:   info.Version,
+		Workspace: info.Workspace,
+		Language:  info.Language,
+	}); len(errs) == 0 {
+		if hooked.Workspace != "" {
+			info.Workspace = hooked.Workspace
+		}
+		if hooked.Language != "" {
+			info.Language = hooked.Language
+		}
+	}
+	return normalizeBootstrapInfo(info), nil
 }
 
 func (a *App) Log(message string) {
@@ -373,6 +413,7 @@ func (a *App) SavePrefs(p prefs.Prefs) (prefs.Prefs, error) {
 			cur.ChatHistoryMode = p.ChatHistoryMode
 		}
 	})
+	a.refreshDesktopView()
 	return a.prefs.Get(), err
 }
 
@@ -380,7 +421,11 @@ func (a *App) SetTheme(name, mode string) prefs.Prefs {
 	if name == "" && mode == "" {
 		return a.prefs.Get()
 	}
+	if hooked, errs := corehook.ApplyFilter(context.Background(), HookTheme, ThemeHook{Name: name, Mode: mode}); len(errs) == 0 {
+		name, mode = hooked.Name, hooked.Mode
+	}
 	_ = a.prefs.SetTheme(name, mode)
+	a.refreshDesktopView()
 	return a.prefs.Get()
 }
 

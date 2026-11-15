@@ -182,3 +182,13 @@ nav:
       - Quickstart: plugin/quickstart.md
       - Interface: plugin/interface.md
       - Development Guide: plugin/development.md
+      - Hooks: plugin/hooks.md
+  - Hooks:
+      - Overview: hooks/index.md
+      - Core: hooks/core.md
+      - LLM: hooks/llm.md
+      - Sessions: hooks/session.md
+      - Tools: hooks/tools.md
+      - TUI: hooks/tui.md
+      - Desktop: hooks/desktop.md
+      - View hooks: hooks/view.md

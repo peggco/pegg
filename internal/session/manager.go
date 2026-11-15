@@ -1,11 +1,13 @@
 package session
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/peggco/pegg/internal/core/event"
+	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/utils/query"
@@ -25,6 +27,12 @@ func NewManager(store Store, bus event.Bus, log *logger.Logger) *Manager {
 }
 
 func (m *Manager) Create(opts CreateOptions) (*Session, error) {
+	if opts.Title == "" {
+		opts.Title = defaultSessionTitle()
+	}
+	if hooked, errs := corehook.ApplyFilter(context.Background(), HookCreate, createHookFromOptions(opts)); len(errs) == 0 {
+		opts = hooked.applyTo(opts)
+	}
 	if opts.Title == "" {
 		opts.Title = defaultSessionTitle()
 	}
@@ -86,6 +94,7 @@ func (m *Manager) Delete(id string) error {
 	m.mu.Unlock()
 	m.publish(TopicSessionDeleted, SessionDeleted{SessionID: id})
 	m.persistChange(SessionEventDeleted, id, map[string]any{"id": id})
+	corehook.ApplyAction(context.Background(), HookDelete, DeleteHook{SessionID: id})
 	return nil
 }
 
@@ -118,6 +127,9 @@ func (m *Manager) SetTitle(id, title string) error {
 	s, err := m.store.Get(id)
 	if err != nil {
 		return err
+	}
+	if hooked, errs := corehook.ApplyFilter(context.Background(), HookTitle, TitleHook{SessionID: id, Title: title}); len(errs) == 0 && hooked.Title != "" {
+		title = hooked.Title
 	}
 	s.Title = title
 	s.UpdatedAt = time.Now()
@@ -170,6 +182,10 @@ func (m *Manager) AppendMessage(sessionID string, msg llm.Message) (*Message, er
 func (m *Manager) AppendMessageWithDuration(sessionID string, msg llm.Message, duration time.Duration) (*Message, error) {
 	if _, err := m.store.Get(sessionID); err != nil {
 		return nil, err
+	}
+	if hooked, errs := corehook.ApplyFilter(context.Background(), HookMessageAppend, MessageAppendHook{SessionID: sessionID, Message: msg}); len(errs) == 0 {
+		msg = hooked.Message
+		msg.Normalize()
 	}
 	msgs, err := m.store.Messages(sessionID)
 	if err != nil {
@@ -274,6 +290,7 @@ func (m *Manager) Fork(sourceID, atMessageID string) (*Session, error) {
 		ParentMessageID: atMessageID,
 	})
 	m.persistChange(SessionEventCreated, fork.ID, map[string]any{"id": fork.ID, "parent_id": src.ID})
+	corehook.ApplyAction(context.Background(), HookFork, ForkHook{SourceID: src.ID, NewID: fork.ID, AtMessageID: atMessageID})
 	return &fork, nil
 }
 
@@ -324,6 +341,7 @@ func (m *Manager) ForkBefore(sourceID, atMessageID string) (*Session, error) {
 		ParentMessageID: atMessageID,
 	})
 	m.persistChange(SessionEventCreated, fork.ID, map[string]any{"id": fork.ID, "parent_id": src.ID})
+	corehook.ApplyAction(context.Background(), HookFork, ForkHook{SourceID: src.ID, NewID: fork.ID, AtMessageID: atMessageID, BeforeMessage: true})
 	return &fork, nil
 }
 
@@ -471,6 +489,12 @@ func (m *Manager) CompactSession(sourceID string, compactedMessages []llm.Messag
 	if err != nil {
 		return nil, err
 	}
+	if hooked, errs := corehook.ApplyFilter(context.Background(), HookCompact, CompactHook{SourceID: sourceID, Messages: compactedMessages, Strategy: strategy}); len(errs) == 0 {
+		compactedMessages = hooked.Messages
+		for i := range compactedMessages {
+			compactedMessages[i].Normalize()
+		}
+	}
 
 	now := time.Now()
 	newSess := *src
@@ -526,6 +550,9 @@ func (m *Manager) SetCurrent(id string) error {
 	m.current = id
 	m.mu.Unlock()
 	m.publish(TopicSessionCurrentChanged, SessionCurrentChanged{SessionID: id})
+	if id != "" {
+		corehook.ApplyAction(context.Background(), HookOpen, OpenHook{SessionID: id})
+	}
 	return nil
 }
 

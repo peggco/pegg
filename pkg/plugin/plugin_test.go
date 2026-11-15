@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/rpc"
 	"testing"
+
+	goplugin "github.com/hashicorp/go-plugin"
 )
 
 type testPlugin struct {
@@ -52,6 +54,18 @@ func (p *testPlugin) TUIPages() ([]TUIPage, error) {
 		}},
 		Actions: []TUIAction{{ID: "test", Label: "Send test"}},
 	}}, nil
+}
+
+func (p *testPlugin) Hooks() ([]HookSpec, error) {
+	return []HookSpec{{Name: "test.filter", Kind: HookFilter, Priority: 5, Description: "test filter"}}, nil
+}
+
+func (p *testPlugin) ExecuteHook(req HookRequest) (*HookResult, error) {
+	if req.Name != "test.filter" || req.Kind != HookFilter {
+		return &HookResult{}, nil
+	}
+	out, _ := json.Marshal("hooked:" + string(req.Value))
+	return &HookResult{Value: out, Handled: true}, nil
 }
 
 func (p *testPlugin) ExecuteTUIAction(req TUIActionRequest) (*TUIActionResult, error) {
@@ -133,6 +147,19 @@ func TestRPCProtocol(t *testing.T) {
 	if len(impl.tuiActions) != 1 || impl.tuiActions[0].ActionID != "test" {
 		t.Fatalf("tui actions: %#v", impl.tuiActions)
 	}
+	hooks, err := plugin.Hooks()
+	if err != nil || len(hooks) != 1 || hooks[0].Name != "test.filter" || hooks[0].Kind != HookFilter {
+		t.Fatalf("hooks: %#v %v", hooks, err)
+	}
+	hookResult, err := plugin.ExecuteHook(HookRequest{
+		Name:      "test.filter",
+		Kind:      HookFilter,
+		Value:     json.RawMessage(`"v"`),
+		TimeoutMS: 250,
+	})
+	if err != nil || !hookResult.Handled || string(hookResult.Value) != `"hooked:\"v\""` {
+		t.Fatalf("hook result: %#v %v", hookResult, err)
+	}
 	if err := plugin.Close(); err != nil || !impl.closed {
 		t.Fatalf("close: %v %t", err, impl.closed)
 	}
@@ -154,5 +181,66 @@ func TestBaseDefaults(t *testing.T) {
 	}
 	if err := base.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestHookDispatchServiceRoundTrip(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	server := rpc.NewServer()
+	service := &hookDispatchService{dispatch: func(req HookRequest) (*HookResult, error) {
+		if req.Name != "kanban.providers" || req.Origin != "kanban" {
+			t.Errorf("request: %#v", req)
+		}
+		return &HookResult{Value: json.RawMessage(`"ok"`), Handled: true}, nil
+	}}
+	if err := server.RegisterName("Plugin", service); err != nil {
+		t.Fatal(err)
+	}
+	go server.ServeConn(serverConn)
+	client := rpc.NewClient(clientConn)
+	defer client.Close()
+
+	var out HookResult
+	req := HookRequest{Name: "kanban.providers", Kind: HookFilter, Origin: "kanban", Value: json.RawMessage(`[]`)}
+	if err := client.Call("Plugin.DispatchHook", &req, &out); err != nil {
+		t.Fatal(err)
+	}
+	if string(out.Value) != `"ok"` || !out.Handled {
+		t.Fatalf("result: %#v", out)
+	}
+}
+
+func TestClientBootInjectsDispatchID(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	server := rpc.NewServer()
+	received := make(chan Deps, 1)
+	if err := server.RegisterName("Plugin", &bootRecorder{deps: received}); err != nil {
+		t.Fatal(err)
+	}
+	go server.ServeConn(serverConn)
+
+	client := &PeggPluginRPCClient{client: rpc.NewClient(clientConn), dispatchID: 0xF0000001}
+	defer client.client.Close()
+	if err := client.Boot(Deps{Workdir: "/tmp"}); err != nil {
+		t.Fatal(err)
+	}
+	deps := <-received
+	if deps.DispatchID != 0xF0000001 || deps.Workdir != "/tmp" {
+		t.Fatalf("deps: %#v", deps)
+	}
+}
+
+type bootRecorder struct {
+	deps chan<- Deps
+}
+
+func (b *bootRecorder) Boot(args *Deps, resp *interface{}) error {
+	b.deps <- *args
+	return nil
+}
+
+func TestHookBrokerIDUsesReservedRange(t *testing.T) {
+	if got := hookBrokerID(&goplugin.MuxBroker{}); got&0xF0000000 != 0xF0000000 {
+		t.Fatalf("id: %#x", got)
 	}
 }

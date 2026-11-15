@@ -422,6 +422,25 @@ child process, saving every run as a session. See [Scheduling](features/scheduli
 | `store_dir` | string | `~/.pegg` | Directory holding `schedules.json` and `schedule_runs/` |
 | `history_limit` | int | `50` | Maximum run records kept per schedule |
 
+### `hooks`
+
+Plugin hook bus. Controls whether plugins receive filter/action hooks and how long
+each hook may run. See [Hooks](../hooks/index.md) for the full catalog.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Master switch for all plugin hooks |
+| `disabled` | string[] | `[]` | Hook names to skip, for example `llm.stream.chunk` |
+| `timeout_seconds` | int | `5` | Default per-hook budget, clamped to `1`–`60` |
+
+```json
+"hooks": {
+  "enabled": true,
+  "disabled": ["llm.stream.chunk", "tui.key"],
+  "timeout_seconds": 5
+}
+```
+
 ### `mcp_servers`
 
 Map of server name to [MCP server config](configurations/mcp.md).
@@ -529,6 +548,11 @@ Map of server name to [language server config](configurations/lsp.md).
   "scheduler": {
     "enabled": true,
     "history_limit": 50
+  },
+  "hooks": {
+    "enabled": true,
+    "disabled": ["llm.stream.chunk"],
+    "timeout_seconds": 5
   },
   "mcp_servers": {
     "db": {

@@ -72,7 +72,15 @@ function toPromptAttachment(att: Attachment): PromptAttachment {
   };
 }
 
-export function Composer({ autoFocus = false, compact = false }: { autoFocus?: boolean; compact?: boolean }) {
+export function Composer({
+  autoFocus = false,
+  compact = false,
+  placeholder,
+}: {
+  autoFocus?: boolean;
+  compact?: boolean;
+  placeholder?: string;
+}) {
   const running = useStore((s) => s.chat.running);
   const mode = useStore((s) => s.chat.mode);
   const provider = useStore((s) => s.chat.provider);
@@ -87,6 +95,7 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
   const workspace = useStore((s) => s.workspace);
 
   const t = useT();
+  const placeholderText = placeholder?.trim() || (compact ? t('composer.reply') : t('composer.placeholder'));
   const [text, setText] = useState('');
   const [caret, setCaret] = useState(0);
   const [chipCount, setChipCount] = useState(0);
@@ -525,11 +534,11 @@ export function Composer({ autoFocus = false, compact = false }: { autoFocus?: b
         className="composer-input"
         role="textbox"
         aria-multiline="true"
-        aria-label={compact ? t('composer.reply') : t('composer.placeholder')}
+        aria-label={placeholderText}
         contentEditable
         suppressContentEditableWarning
         spellCheck
-        data-placeholder={compact ? t('composer.reply') : t('composer.placeholder')}
+        data-placeholder={placeholderText}
         data-empty="true"
         onInput={onEditorInput}
         onBeforeInput={onEditorBeforeInput}

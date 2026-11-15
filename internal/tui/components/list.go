@@ -80,6 +80,18 @@ func (l *List) SelectedIndex() int {
 	return l.filtered[l.index]
 }
 
+func (l *List) SelectItem(match func(ListItem) bool) bool {
+	for i, abs := range l.filtered {
+		item := l.all[abs]
+		if item.Disabled || !match(item) {
+			continue
+		}
+		l.index = i
+		return true
+	}
+	return false
+}
+
 func (l *List) rebuild() {
 	idxs := make([]int, len(l.all))
 	for i := range idxs {

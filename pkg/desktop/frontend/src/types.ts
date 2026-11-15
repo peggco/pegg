@@ -662,3 +662,51 @@ export interface PluginSettingResult {
   output?: string;
   page?: PluginSettingPage;
 }
+
+export interface ViewSpan {
+  text: string;
+  style?: string;
+}
+
+export interface ViewLine {
+  text?: string;
+  spans?: ViewSpan[];
+}
+
+export interface ViewFragment {
+  id?: string;
+  title?: string;
+  badge?: string;
+  style?: string;
+  lines?: ViewLine[];
+  priority?: number;
+}
+
+export interface ViewKeyBinding {
+  id: string;
+  key: string;
+  label: string;
+  description?: string;
+}
+
+export interface ViewMenuItem {
+  id: string;
+  title: string;
+  detail?: string;
+  badge?: string;
+  disabled?: boolean;
+}
+
+export interface DesktopViewState {
+  header?: ViewLine[];
+  footer?: ViewLine[];
+  statusLeft?: ViewSpan[];
+  statusRight?: ViewSpan[];
+  replaceStatus?: boolean;
+  chatItems?: ViewFragment[];
+  emptyItems?: ViewFragment[];
+  placeholder?: string;
+  menuItems?: ViewMenuItem[];
+  keyBindings?: ViewKeyBinding[];
+  settingsPages?: PluginSettingPage[];
+}

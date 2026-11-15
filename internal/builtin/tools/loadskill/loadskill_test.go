@@ -172,6 +172,38 @@ Deploy the application.
 	}
 }
 
+func TestLoadSkillAppliesRuntimePolicy(t *testing.T) {
+	setupTestSkill(t, "runtime-skill", `---
+name: runtime-skill
+description: Applies runtime policy
+mode: build
+disable-tools: askuserquestion
+---
+# Runtime
+Do the work.
+`)
+
+	parent := agent.New("runtime-parent")
+	ctx := agent.WithAgent(context.Background(), parent)
+	tt, _ := tools.Get("loadskill")
+	out, err := tt.Execute(ctx, `{"name": "runtime-skill"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parent.CurrentMode() != agent.ModeBuild {
+		t.Fatalf("mode = %q, want build", parent.CurrentMode())
+	}
+	if !parent.IsToolDisabled("askuserquestion") {
+		t.Fatal("askuserquestion should be disabled on the loading agent")
+	}
+	if !contains(t, out, "Agent mode: build") {
+		t.Errorf("expected agent mode status, got:\n%s", out)
+	}
+	if !contains(t, out, "Disabled tools: askuserquestion") {
+		t.Errorf("expected disabled tools status, got:\n%s", out)
+	}
+}
+
 func TestLoadSkillPartialArgs(t *testing.T) {
 	setupTestSkill(t, "partial-skill", `---
 name: partial-skill

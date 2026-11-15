@@ -908,6 +908,54 @@ func (a *App) ProviderCatalog() []ProviderCatalogEntry {
 	return out
 }
 
+func (a *App) ProviderDrivers() []string {
+	return llm.ListDrivers()
+}
+
+func (a *App) AddCustomProvider(name, driver, apiKey, baseURL string) error {
+	name = strings.TrimSpace(name)
+	driver = strings.ToLower(strings.TrimSpace(driver))
+	baseURL = strings.TrimSpace(baseURL)
+	if name == "" {
+		return errProviderName
+	}
+	if llm.HasProvider(name) {
+		return fmt.Errorf("%q is a registered provider; choose a different name for a custom endpoint", name)
+	}
+	if driver == "" {
+		return errors.New("driver is required for custom providers")
+	}
+	if !llm.HasDriver(driver) {
+		return fmt.Errorf("unknown driver %q (available: %s)", driver, strings.Join(llm.ListDrivers(), ", "))
+	}
+	if baseURL == "" {
+		return errors.New("base URL is required for custom providers")
+	}
+	current := config.LLMConfig{
+		Provider: name,
+		Driver:   driver,
+		APIKey:   strings.TrimSpace(apiKey),
+		BaseURL:  baseURL,
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	for _, existing := range cfg.Providers {
+		if existing.Provider != name {
+			continue
+		}
+		if existing.SystemFirstOnly != nil {
+			current.SystemFirstOnly = existing.SystemFirstOnly
+		}
+		if len(existing.Models) > 0 {
+			current.Models = existing.Models
+		}
+		break
+	}
+	return config.UpsertProvider(current)
+}
+
 func (a *App) AddProvider(name, apiKey, baseURL string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {

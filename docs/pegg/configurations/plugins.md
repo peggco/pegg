@@ -155,7 +155,7 @@ pegg plugins new my-plugin --module github.com/me/my-plugin
 ```
 
 The scaffold creates a working plugin module with the public SDK, an example tool,
-and build/install instructions.
+build/install instructions, a tag-driven GitHub release workflow, and a `.gitignore`.
 
 ## Troubleshooting
 
