@@ -198,6 +198,19 @@ provider with the default base URL `https://forever.pegg.dev/v1`.
 | `--no-browser` | Print the approval URL instead of opening a browser |
 | `--port` | Local callback port; `0` chooses a free port |
 | `--device` | Device name shown on the website and used in the key name |
+| `--defaults` | Apply the recommended defaults without asking |
+| `--no-defaults` | Skip the recommended defaults |
+| `--defaults-url` | Override the recommended defaults endpoint |
+
+The same credentials are also registered for speech-to-text under
+`stt.providers`, and the decision-model provider reuses the `pegg-forever` entry,
+so no separate login is needed for STT or decisions.
+
+After the provider is saved, Pegg fetches the recommended defaults document
+from `https://cdn.pegg.dev/defaults.json`, prints the proposed changes, and asks
+before writing them. In a non-interactive session it prints the changes and
+skips unless `--defaults` is set. See
+[Forever defaults](../features/forever-defaults.md) for the document format.
 
 The command still saves the provider when the `GET /models` check fails; it
 prints a warning and Pegg retries model discovery later. The aliases `pegg

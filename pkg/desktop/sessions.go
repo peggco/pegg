@@ -923,7 +923,7 @@ func (a *App) ListModels(provider string) (acpclient.ModelListResult, error) {
 	if err != nil {
 		return acpclient.ModelListResult{}, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	params := map[string]string{}
 	if provider != "" {

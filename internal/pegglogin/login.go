@@ -238,6 +238,7 @@ func Apply(cfg *Config) error {
 	}
 	normalized := normalizeConfig(*cfg)
 	return config.Update(func(peggCfg *config.Config) error {
+		replaced := false
 		for i := range peggCfg.Providers {
 			if peggCfg.Providers[i].Provider != ProviderName {
 				continue
@@ -250,17 +251,35 @@ func Apply(cfg *Config) error {
 			}
 			existing.Timeout = normalized.Timeout
 			peggCfg.Providers[i] = existing
-			return nil
+			replaced = true
+			break
 		}
-		peggCfg.Providers = append(peggCfg.Providers, config.LLMConfig{
-			Provider: ProviderName,
-			Driver:   normalized.Driver,
-			BaseURL:  normalized.BaseURL,
-			APIKey:   normalized.APIKey,
-			Timeout:  normalized.Timeout,
-		})
+		if !replaced {
+			peggCfg.Providers = append(peggCfg.Providers, config.LLMConfig{
+				Provider: ProviderName,
+				Driver:   normalized.Driver,
+				BaseURL:  normalized.BaseURL,
+				APIKey:   normalized.APIKey,
+				Timeout:  normalized.Timeout,
+			})
+		}
+		upsertSTTProvider(peggCfg, normalized)
 		return nil
 	})
+}
+
+func upsertSTTProvider(peggCfg *config.Config, cfg Config) {
+	if peggCfg.STT == nil {
+		peggCfg.STT = &config.STTConfig{MaxDurationSecs: config.DefaultSTTMaxDurationSecs}
+	}
+	entry, _ := peggCfg.STT.ProviderConfig(ProviderName)
+	entry.Provider = ProviderName
+	entry.Driver = cfg.Driver
+	entry.BaseURL = cfg.BaseURL
+	if cfg.APIKey != "" {
+		entry.APIKey = cfg.APIKey
+	}
+	peggCfg.STT.UpsertProvider(entry)
 }
 
 func Verify(ctx context.Context, baseURL, apiKey string, client *http.Client) error {

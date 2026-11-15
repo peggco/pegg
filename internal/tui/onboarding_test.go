@@ -118,6 +118,12 @@ func TestOnboardingAPIKeySavesPeggForever(t *testing.T) {
 	}
 	t.Cleanup(func() { verifyOnboardingKey = oldVerify })
 
+	oldDefaults := fetchOnboardingDefaults
+	fetchOnboardingDefaults = func(context.Context, string, *http.Client) (*pegglogin.Defaults, error) {
+		return nil, errors.New("no defaults in test")
+	}
+	t.Cleanup(func() { fetchOnboardingDefaults = oldDefaults })
+
 	for _, r := range "vsk_test_key" {
 		o.HandleKey(tcell.NewEventKey(tcell.KeyRune, r, 0))
 	}
@@ -140,4 +146,55 @@ func TestOnboardingAPIKeySavesPeggForever(t *testing.T) {
 		return
 	}
 	t.Fatal("pegg-forever provider was not saved")
+}
+
+func TestOnboardingDefaultsApply(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Providers = []config.LLMConfig{{
+		Provider: pegglogin.ProviderName,
+		Driver:   "openai",
+		BaseURL:  pegglogin.DefaultBaseURL,
+		APIKey:   "vsk_test_key",
+		Timeout:  pegglogin.DefaultTimeout,
+	}}
+	t.Setenv("HOME", t.TempDir())
+	if err := config.Save(cfg); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	a := &App{deps: settings.Deps{Config: cfg}, screen: newTestScreen(t)}
+	o := newProviderOnboarding(a)
+	a.setOverlay(o)
+	o.pending = config.LLMConfig{
+		Provider: pegglogin.ProviderName,
+		Driver:   "openai",
+		BaseURL:  pegglogin.DefaultBaseURL,
+		APIKey:   "vsk_test_key",
+		Timeout:  pegglogin.DefaultTimeout,
+	}
+
+	o.showDefaults(&pegglogin.Defaults{
+		Version: 1,
+		Agents: map[string]pegglogin.AgentDefaults{
+			"orchestrator": {Provider: pegglogin.ProviderName, Model: "deepseek-v4-flash"},
+		},
+	}, nil)
+
+	if o.state != onboardingDefaults {
+		t.Fatalf("state = %v, want onboardingDefaults", o.state)
+	}
+	if o.defaultsList == nil || len(o.defaultsList.Items()) != 2 {
+		t.Fatalf("defaults choices = %+v", o.defaultsList)
+	}
+
+	o.defaultsList.HandleKey(tcell.NewEventKey(tcell.KeyEnter, 0, 0))
+
+	loaded, err := config.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	agent := loaded.AgentDefaults["orchestrator"]
+	if agent.Provider != pegglogin.ProviderName || agent.Model != "deepseek-v4-flash" {
+		t.Fatalf("agent defaults = %#v", agent)
+	}
 }

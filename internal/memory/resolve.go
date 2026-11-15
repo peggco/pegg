@@ -18,6 +18,18 @@ func (m *Manager) observerModel() (llm.Provider, llm.Model, error) {
 		return nil, llm.Model{}, errNoLLM
 	}
 	cfg := m.cfg
+	if cfg != nil && cfg.Observer != nil && cfg.Observer.Model != "" {
+		res := m.deps.LLM.Select(llm.SelectRequest{
+			Mode:     llm.SelectModeExact,
+			Provider: cfg.Observer.Provider,
+			Model:    cfg.Observer.Model,
+		})
+		if res.Err == nil && res.Model.ID != "" {
+			if prov, err := m.deps.LLM.Provider(res.Provider); err == nil {
+				return prov, res.Model, nil
+			}
+		}
+	}
 	if cfg != nil && cfg.Provider != "" && cfg.Model != "" && !decisionapi.HasProvider(cfg.Provider) {
 		prov, err := m.deps.LLM.Provider(cfg.Provider)
 		if err == nil {
@@ -47,6 +59,17 @@ func (m *Manager) decider() (decisionapi.Provider, string, bool) {
 		return nil, "", false
 	}
 	cfg := m.cfg
+	if cfg != nil && cfg.Relevance != nil && cfg.Relevance.Provider != "" {
+		prov, err := m.deps.Decision.Provider(cfg.Relevance.Provider)
+		if err == nil {
+			return prov, cfg.Relevance.Model, true
+		}
+		prov, err = m.deps.Decision.Preferred()
+		if err != nil {
+			return nil, "", false
+		}
+		return prov, "", true
+	}
 	if cfg != nil && cfg.Provider != "" && decisionapi.HasProvider(cfg.Provider) {
 		prov, err := m.deps.Decision.Provider(cfg.Provider)
 		if err != nil {

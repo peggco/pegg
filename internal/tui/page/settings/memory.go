@@ -20,6 +20,7 @@ const (
 	memoryFocusEnabled memoryFocus = iota
 	memoryFocusObserver
 	memoryFocusGate
+	memoryFocusRelevance
 	memoryFocusThreshold
 	memoryFocusBudget
 	memoryFocusMaxResults
@@ -41,6 +42,8 @@ type memoryTab struct {
 	enabled     bool
 	provider    string
 	model       string
+	relProvider string
+	relModel    string
 	gate        string
 	threshold   float64
 	budget      int
@@ -69,8 +72,20 @@ func (t *memoryTab) loadIfNeeded() {
 	if t.settings.deps.Config != nil && t.settings.deps.Config.Memory != nil {
 		m := t.settings.deps.Config.Memory
 		t.enabled = m.Enabled
-		t.provider = m.Provider
-		t.model = m.Model
+		if m.Observer != nil {
+			t.provider = m.Observer.Provider
+			t.model = m.Observer.Model
+		} else if m.Provider != "" && !decision.HasProvider(m.Provider) {
+			t.provider = m.Provider
+			t.model = m.Model
+		}
+		if m.Relevance != nil {
+			t.relProvider = m.Relevance.Provider
+			t.relModel = m.Relevance.Model
+		} else if m.Provider != "" && decision.HasProvider(m.Provider) {
+			t.relProvider = m.Provider
+			t.relModel = m.Model
+		}
 		t.gate = m.GateValue()
 		t.threshold = m.ThresholdValue()
 		t.budget = m.BudgetValue()
@@ -99,7 +114,7 @@ func (t *memoryTab) decisionAvailable() bool {
 	if t.settings.deps.Config == nil {
 		return false
 	}
-	if t.provider != "" && decision.HasProvider(t.provider) {
+	if t.relProvider != "" && decision.HasProvider(t.relProvider) {
 		return true
 	}
 	for _, p := range t.settings.deps.Config.Providers {
@@ -200,6 +215,8 @@ func (t *memoryTab) HandleKey(ev *tcell.EventKey) bool {
 			t.save()
 		case memoryFocusObserver:
 			t.openObserverModels()
+		case memoryFocusRelevance:
+			t.openRelevanceModels()
 		case memoryFocusGate:
 			t.cycleGate(1)
 			t.save()
@@ -283,7 +300,7 @@ func (t *memoryTab) HandleMouse(x, y int, bounds layout.Region, buttons tcell.Bu
 		return true
 	}
 
-	if row >= 0 && row < 7 {
+	if row >= 0 && row < 8 {
 		f := memoryFocus(row)
 		t.focus = f
 		if wheel {
@@ -291,8 +308,12 @@ func (t *memoryTab) HandleMouse(x, y int, bounds layout.Region, buttons tcell.Bu
 			return true
 		}
 		if buttons&tcell.ButtonPrimary != 0 {
-			if f == memoryFocusObserver {
+			switch f {
+			case memoryFocusObserver:
 				t.openObserverModels()
+				return true
+			case memoryFocusRelevance:
+				t.openRelevanceModels()
 				return true
 			}
 			adjust(f)
@@ -300,13 +321,13 @@ func (t *memoryTab) HandleMouse(x, y int, bounds layout.Region, buttons tcell.Bu
 		return true
 	}
 	switch row {
-	case 9:
+	case 10:
 		t.focus = memoryFocusEntries
 		return true
-	case 10:
+	case 11:
 		t.focus = memoryFocusLastEntry
 		return true
-	case 11:
+	case 12:
 		t.focus = memoryFocusClear
 		if buttons&tcell.ButtonPrimary != 0 {
 			t.openClearConfirm()
@@ -327,6 +348,7 @@ func (t *memoryTab) Draw(screen tcell.Screen, bounds layout.Region, focused bool
 		{i18n.T("settings.memory.enabled"), t.boolLabel(t.enabled)},
 		{i18n.T("settings.memory.observer"), t.observerDisplay()},
 		{i18n.T("settings.memory.gate"), t.gateDisplay()},
+		{i18n.T("settings.memory.relevanceModel"), t.relevanceDisplay()},
 		{i18n.T("settings.memory.threshold"), t.thresholdDisplay()},
 		{i18n.T("settings.memory.budget"), i18n.Tf("settings.memory.chars", t.budget)},
 		{i18n.T("settings.memory.maxResults"), fmt.Sprintf("%d", t.maxResults)},
@@ -406,6 +428,16 @@ func (t *memoryTab) observerDisplay() string {
 	return i18n.Tf("common.defaultSuffix", t.provider)
 }
 
+func (t *memoryTab) relevanceDisplay() string {
+	if t.relProvider == "" {
+		return i18n.T("settings.memory.relevanceDefault")
+	}
+	if t.relModel != "" {
+		return t.relProvider + "/" + t.relModel
+	}
+	return i18n.Tf("common.defaultSuffix", t.relProvider)
+}
+
 func (t *memoryTab) gateDisplay() string {
 	switch t.gate {
 	case config.GateDecision:
@@ -469,8 +501,18 @@ func (t *memoryTab) save() {
 		mem = config.DefaultConfig().Memory
 	}
 	mem.Enabled = t.enabled
-	mem.Provider = t.provider
-	mem.Model = t.model
+	if t.provider != "" {
+		mem.Observer = &config.ModelRef{Provider: t.provider, Model: t.model}
+	} else {
+		mem.Observer = nil
+	}
+	mem.Provider = ""
+	mem.Model = ""
+	if t.relProvider != "" {
+		mem.Relevance = &config.ModelRef{Provider: t.relProvider, Model: t.relModel}
+	} else {
+		mem.Relevance = nil
+	}
 	mem.Gate = t.gate
 	mem.ContextBudget = t.budget
 	mem.MaxResults = t.maxResults
@@ -493,29 +535,11 @@ func (t *memoryTab) save() {
 }
 
 func (t *memoryTab) openObserverModels() {
+	t.settings.ensureModels()
 	l := components.NewList(i18n.T("settings.memory.selectObserver"))
 	l.SetSearchable(true)
 
 	var items []components.ListItem
-	var decisionItems []components.ListItem
-	if t.settings.deps.Config != nil {
-		for _, p := range t.settings.deps.Config.Providers {
-			if p.APIKey == "" || !decision.HasProvider(p.Provider) {
-				continue
-			}
-			model := decision.DefaultModel(p.Provider)
-			if model == "" {
-				model = "default"
-			}
-			decisionItems = append(decisionItems, components.ListItem{
-				Label:  model,
-				Detail: i18n.Tf("common.decisionDetail", p.Provider),
-				Marked: t.provider == p.Provider && t.model == model,
-				Data:   memoryPick{provider: p.Provider, model: model},
-			})
-		}
-	}
-
 	var llmItems []components.ListItem
 	if t.settings.deps.LLM != nil && t.settings.deps.Config != nil {
 		for _, p := range t.settings.deps.Config.Providers {
@@ -544,10 +568,6 @@ func (t *memoryTab) openObserverModels() {
 		Marked: t.provider == "",
 		Data:   memoryPick{provider: "", model: ""},
 	})
-	if len(decisionItems) > 0 {
-		items = append(items, components.ListItem{Label: i18n.T("common.decisions"), Disabled: true})
-		items = append(items, decisionItems...)
-	}
 	if len(llmItems) > 0 {
 		items = append(items, components.ListItem{Label: i18n.T("common.llmModels"), Disabled: true})
 		items = append(items, llmItems...)
@@ -569,6 +589,69 @@ func (t *memoryTab) openObserverModels() {
 		t.settings.back()
 	})
 	t.settings.openSub(&listModal{title: i18n.T("settings.memory.observerTitle"), list: l, onBack: t.settings.back})
+}
+
+func (t *memoryTab) openRelevanceModels() {
+	l := components.NewList(i18n.T("settings.memory.selectRelevance"))
+	l.SetSearchable(true)
+
+	var items []components.ListItem
+	var decisionItems []components.ListItem
+	if t.settings.deps.Config != nil {
+		for _, p := range t.settings.deps.Config.Providers {
+			if p.APIKey == "" || !decision.HasProvider(p.Provider) {
+				continue
+			}
+			model := decision.DefaultModel(p.Provider)
+			if model == "" {
+				model = "default"
+			}
+			marked := t.relProvider == p.Provider &&
+				(t.relModel == model || t.relModel == "")
+			decisionItems = append(decisionItems, components.ListItem{
+				Label:  model,
+				Detail: i18n.Tf("common.decisionDetail", p.Provider),
+				Marked: marked,
+				Data:   memoryPick{provider: p.Provider, model: model},
+			})
+			if t.relProvider == p.Provider && t.relModel != "" && t.relModel != model {
+				decisionItems = append(decisionItems, components.ListItem{
+					Label:  t.relModel,
+					Detail: i18n.Tf("common.decisionDetail", p.Provider),
+					Marked: true,
+					Data:   memoryPick{provider: p.Provider, model: t.relModel},
+				})
+			}
+		}
+	}
+
+	items = append(items, components.ListItem{
+		Label:  i18n.T("settings.memory.relevanceDefault"),
+		Detail: i18n.T("settings.memory.relevanceDetail"),
+		Marked: t.relProvider == "",
+		Data:   memoryPick{provider: "", model: ""},
+	})
+	if len(decisionItems) > 0 {
+		items = append(items, components.ListItem{Label: i18n.T("common.decisions"), Disabled: true})
+		items = append(items, decisionItems...)
+	}
+	if len(items) == 1 {
+		items = append(items, components.ListItem{Label: i18n.T("common.noModels")})
+	}
+
+	l.SetItems(items)
+	l.SetOnSelect(func(_ int, item components.ListItem) {
+		if item.Disabled {
+			return
+		}
+		if pick, ok := item.Data.(memoryPick); ok {
+			t.relProvider = pick.provider
+			t.relModel = pick.model
+			t.save()
+		}
+		t.settings.back()
+	})
+	t.settings.openSub(&listModal{title: i18n.T("settings.memory.relevanceTitle"), list: l, onBack: t.settings.back})
 }
 
 func (t *memoryTab) openClearConfirm() {

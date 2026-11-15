@@ -60,8 +60,10 @@ type teamModelConfig struct {
 }
 
 type teamAgentDefault struct {
-	Model    string `json:"model,omitempty"`
-	Fallback string `json:"fallback,omitempty"`
+	Provider         string `json:"provider,omitempty"`
+	Model            string `json:"model,omitempty"`
+	FallbackProvider string `json:"fallback_provider,omitempty"`
+	Fallback         string `json:"fallback,omitempty"`
 }
 
 type teamRouterAgent struct {
@@ -82,10 +84,37 @@ type teamSTT struct {
 	StreamingModel string `json:"streaming_model,omitempty"`
 }
 
+type teamModelRef struct {
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model,omitempty"`
+}
+
+type teamJudge struct {
+	Provider  string   `json:"provider,omitempty"`
+	Model     string   `json:"model,omitempty"`
+	Threshold *float64 `json:"threshold,omitempty"`
+}
+
+type teamMemory struct {
+	Enabled   *bool         `json:"enabled,omitempty"`
+	Gate      string        `json:"gate,omitempty"`
+	Threshold *float64      `json:"threshold,omitempty"`
+	Observer  *teamModelRef `json:"observer,omitempty"`
+	Relevance *teamModelRef `json:"relevance,omitempty"`
+}
+
+type teamCompaction struct {
+	SummarizerProvider string `json:"summarizer_provider,omitempty"`
+	SummarizerModel    string `json:"summarizer_model,omitempty"`
+}
+
 type teamDefaults struct {
 	Agents      map[string]teamAgentDefault `json:"agents,omitempty"`
 	SmartRouter *teamSmartRouter            `json:"smart_router,omitempty"`
 	STT         *teamSTT                    `json:"stt,omitempty"`
+	Judge       *teamJudge                  `json:"judge,omitempty"`
+	Memory      *teamMemory                 `json:"memory,omitempty"`
+	Compaction  *teamCompaction             `json:"compaction,omitempty"`
 }
 
 type teamConfig struct {
@@ -417,6 +446,13 @@ func applyTeamConfig(peggCfg *config.Config, cfg *teamConfig) {
 			providerName += " " + cfg.Team.Name
 		}
 	}
+	resolveProvider := func(name string) string {
+		name = strings.TrimSpace(name)
+		if name == "" || name == "pegg-forever" {
+			return providerName
+		}
+		return name
+	}
 	driver := firstNonEmpty(cfg.Provider.Driver, "openai")
 	timeout := cfg.Provider.Timeout
 	if timeout <= 0 {
@@ -451,10 +487,15 @@ func applyTeamConfig(peggCfg *config.Config, cfg *teamConfig) {
 			if def.Model == "" && def.Fallback == "" {
 				continue
 			}
+			agentProvider := resolveProvider(def.Provider)
+			fallbackProvider := resolveProvider(def.FallbackProvider)
+			if strings.TrimSpace(def.FallbackProvider) == "" {
+				fallbackProvider = agentProvider
+			}
 			peggCfg.AgentDefaults[agent] = config.AgentModelDefault{
-				Provider:         providerName,
+				Provider:         agentProvider,
 				Model:            def.Model,
-				FallbackProvider: providerName,
+				FallbackProvider: fallbackProvider,
 				FallbackModel:    def.Fallback,
 			}
 		}
@@ -496,6 +537,67 @@ func applyTeamConfig(peggCfg *config.Config, cfg *teamConfig) {
 			peggCfg.STT.StreamingModel = cfg.Defaults.STT.StreamingModel
 		}
 	}
+
+	if judge := cfg.Defaults.Judge; judge != nil && (judge.Model != "" || judge.Threshold != nil) {
+		if peggCfg.Permission == nil {
+			peggCfg.Permission = &config.PermissionConfig{Default: "semi-ask"}
+		}
+		peggCfg.Permission.JudgeProvider = resolveProvider(judge.Provider)
+		peggCfg.Permission.JudgeModel = judge.Model
+		if judge.Threshold != nil {
+			peggCfg.Permission.JudgeThreshold = judge.Threshold
+		}
+	}
+
+	if memory := cfg.Defaults.Memory; memory != nil &&
+		(memory.Enabled != nil || memory.Gate != "" || memory.Threshold != nil ||
+			(memory.Observer != nil && memory.Observer.Model != "") ||
+			(memory.Relevance != nil && memory.Relevance.Model != "")) {
+		if peggCfg.Memory == nil {
+			peggCfg.Memory = &config.MemoryConfig{}
+		}
+		if cfg.Defaults.Memory.Enabled != nil {
+			peggCfg.Memory.Enabled = *cfg.Defaults.Memory.Enabled
+		}
+		if cfg.Defaults.Memory.Gate != "" {
+			peggCfg.Memory.Gate = cfg.Defaults.Memory.Gate
+		}
+		if cfg.Defaults.Memory.Threshold != nil {
+			peggCfg.Memory.Threshold = cfg.Defaults.Memory.Threshold
+		}
+		if ref := cfg.Defaults.Memory.Observer; ref != nil && ref.Model != "" {
+			peggCfg.Memory.Observer = &config.ModelRef{
+				Provider: resolveProvider(ref.Provider),
+				Model:    ref.Model,
+			}
+		}
+		if ref := cfg.Defaults.Memory.Relevance; ref != nil && ref.Model != "" {
+			peggCfg.Memory.Relevance = &config.ModelRef{
+				Provider: resolveProvider(ref.Provider),
+				Model:    ref.Model,
+			}
+		}
+	}
+
+	if cfg.Defaults.Compaction != nil && cfg.Defaults.Compaction.SummarizerModel != "" {
+		if peggCfg.Compaction == nil {
+			peggCfg.Compaction = &config.CompactionConfig{}
+		}
+		peggCfg.Compaction.SummarizerProvider = resolveProvider(cfg.Defaults.Compaction.SummarizerProvider)
+		peggCfg.Compaction.SummarizerModel = cfg.Defaults.Compaction.SummarizerModel
+		if !teamContains(peggCfg.Compaction.Strategy, "summarization") {
+			peggCfg.Compaction.Strategy = append(peggCfg.Compaction.Strategy, "summarization")
+		}
+	}
+}
+
+func teamContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func exchangeTeamCode(apiURL, code, verifier string) (*teamConfig, error) {

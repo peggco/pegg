@@ -94,6 +94,11 @@ When no provider is configured, the desktop shows a first-run provider screen wi
 - **Use API key** — paste an existing Pegg API key and save the same provider.
 - **I'll configure myself** — dismiss the screen and open Settings → General → Providers.
 
+Both Pegg options also register the same credentials for speech-to-text. After
+the provider is saved, the desktop fetches the
+[recommended defaults](../features/forever-defaults.md), shows the changes, and
+lets you apply or skip them.
+
 The screen appears after the agent binary is available. Choose explicitly to continue; `Esc` does not dismiss it. The same two setup actions are available later from Settings → General → Providers by selecting `pegg-forever`. Saving succeeds even if the immediate `/models` check fails; model discovery is retried later.
 
 ## Composer

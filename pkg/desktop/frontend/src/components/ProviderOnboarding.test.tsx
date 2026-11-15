@@ -1,5 +1,12 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   peggLogin,
@@ -10,6 +17,8 @@ const {
   listModels,
   openExternal,
   onPeggStatus,
+  fetchRecommendedDefaults,
+  applyRecommendedDefaults,
 } = vi.hoisted(() => ({
   peggLogin: vi.fn(),
   peggCancel: vi.fn(),
@@ -19,9 +28,11 @@ const {
   listModels: vi.fn(),
   openExternal: vi.fn(),
   onPeggStatus: vi.fn(),
+  fetchRecommendedDefaults: vi.fn(),
+  applyRecommendedDefaults: vi.fn(),
 }));
 
-vi.mock('../lib/bridge', () => ({
+vi.mock("../lib/bridge", () => ({
   api: {
     PeggLogin: peggLogin,
     PeggCancel: peggCancel,
@@ -30,23 +41,25 @@ vi.mock('../lib/bridge', () => ({
     ProviderSetup: providerSetup,
     ListModels: listModels,
     OpenExternal: openExternal,
+    FetchRecommendedDefaults: fetchRecommendedDefaults,
+    ApplyRecommendedDefaults: applyRecommendedDefaults,
   },
   onPeggStatus,
   hasWails: false,
 }));
 
-import { ProviderOnboarding } from './ProviderOnboarding';
-import { store } from '../state/store';
-import type { ForeverStatus } from '../types';
+import { ProviderOnboarding } from "./ProviderOnboarding";
+import { store } from "../state/store";
+import type { ForeverStatus } from "../types";
 
 let statusListener: ((status: ForeverStatus) => void) | undefined;
 
 function forever(overrides: Partial<ForeverStatus> = {}): ForeverStatus {
   return {
-    state: 'starting',
+    state: "starting",
     logs: [],
     configured: false,
-    provider: 'pegg-forever',
+    provider: "pegg-forever",
     ...overrides,
   };
 }
@@ -61,16 +74,24 @@ beforeEach(() => {
     };
   });
   peggLogin.mockResolvedValue(forever());
-  peggCancel.mockResolvedValue(forever({ state: 'idle' }));
+  peggCancel.mockResolvedValue(forever({ state: "idle" }));
   addProvider.mockResolvedValue(undefined);
   dismissProviderSetup.mockResolvedValue(undefined);
   providerSetup.mockResolvedValue({ configured: true, dismissed: false });
-  listModels.mockResolvedValue({ models: [] });
+  listModels.mockResolvedValue({
+    models: [{ provider: "pegg-forever", model: { id: "GLM-5.3" } }],
+  });
   openExternal.mockResolvedValue(undefined);
+  fetchRecommendedDefaults.mockResolvedValue({
+    available: false,
+    changes: [],
+    skipped: [],
+  });
+  applyRecommendedDefaults.mockResolvedValue(undefined);
   store.set({
-    language: 'en',
+    language: "en",
     settingsOpen: false,
-    settingsTab: 'general',
+    settingsTab: "general",
     providerSetup: { configured: false, dismissed: false },
     models: [],
     modelsLoading: false,
@@ -81,56 +102,69 @@ afterEach(() => {
   cleanup();
 });
 
-describe('ProviderOnboarding', () => {
-  it('offers exactly the three setup choices', () => {
+describe("ProviderOnboarding", () => {
+  it("offers exactly the three setup choices", () => {
     render(<ProviderOnboarding />);
 
-    expect(screen.getByRole('button', { name: /Login to Pegg/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Use API key/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /configure myself/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Login to Pegg/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Use API key/ })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /configure myself/ }),
+    ).toBeTruthy();
   });
 
-  it('shows login progress, the approval URL, and completes on done', async () => {
+  it("shows login progress, the approval URL, and completes on done", async () => {
     render(<ProviderOnboarding />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Login to Pegg/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Login to Pegg/ }));
     await waitFor(() => expect(peggLogin).toHaveBeenCalled());
     await waitFor(() => expect(statusListener).toBeDefined());
 
-    act(() => statusListener?.(forever({ state: 'waiting', url: 'https://pegg.dev/approve' })));
-    expect(screen.getAllByText('Waiting for browser approval…').length).toBeGreaterThan(0);
-    expect(screen.getByText('https://pegg.dev/approve')).toBeTruthy();
+    act(() =>
+      statusListener?.(
+        forever({ state: "waiting", url: "https://pegg.dev/approve" }),
+      ),
+    );
+    expect(
+      screen.getAllByText("Waiting for browser approval…").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("https://pegg.dev/approve")).toBeTruthy();
 
-    act(() => statusListener?.(forever({ state: 'done', configured: true })));
+    act(() => statusListener?.(forever({ state: "done", configured: true })));
 
     await waitFor(() => expect(providerSetup).toHaveBeenCalled());
     await waitFor(() => expect(listModels).toHaveBeenCalled());
-    expect(store.get().providerSetup).toEqual({ configured: true, dismissed: false });
+    expect(store.get().providerSetup).toEqual({
+      configured: true,
+      dismissed: false,
+    });
   });
 
-  it('cancels a browser login and returns to the choices', async () => {
+  it("cancels a browser login and returns to the choices", async () => {
     render(<ProviderOnboarding />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Login to Pegg/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Login to Pegg/ }));
     await waitFor(() => expect(peggLogin).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     await waitFor(() => expect(peggCancel).toHaveBeenCalled());
-    expect(screen.getByRole('button', { name: /Use API key/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Use API key/ })).toBeTruthy();
   });
 
-  it('saves a Pegg Forever API key and clears onboarding', async () => {
+  it("saves a Pegg Forever API key and clears onboarding", async () => {
     render(<ProviderOnboarding />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Use API key/ }));
-    fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'vsk_live_test' } });
-    fireEvent.click(screen.getByRole('button', { name: /Save key/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Use API key/ }));
+    fireEvent.change(screen.getByLabelText("API key"), {
+      target: { value: "vsk_live_test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save key/ }));
 
     await waitFor(() =>
       expect(addProvider).toHaveBeenCalledWith(
-        'pegg-forever',
-        'vsk_live_test',
-        'https://forever.pegg.dev/v1',
+        "pegg-forever",
+        "vsk_live_test",
+        "https://forever.pegg.dev/v1",
       ),
     );
     await waitFor(() => expect(providerSetup).toHaveBeenCalled());
@@ -138,24 +172,58 @@ describe('ProviderOnboarding', () => {
     expect(store.get().providerSetup?.configured).toBe(true);
   });
 
-  it('dismisses onboarding and opens provider settings', async () => {
+  it("dismisses onboarding and opens provider settings", async () => {
     render(<ProviderOnboarding />);
 
-    fireEvent.click(screen.getByRole('button', { name: /configure myself/ }));
+    fireEvent.click(screen.getByRole("button", { name: /configure myself/ }));
 
     await waitFor(() => expect(dismissProviderSetup).toHaveBeenCalled());
-    expect(store.get().providerSetup).toEqual({ configured: false, dismissed: true });
+    expect(store.get().providerSetup).toEqual({
+      configured: false,
+      dismissed: true,
+    });
     expect(store.get().settingsOpen).toBe(true);
-    expect(store.get().settingsTab).toBe('general');
+    expect(store.get().settingsTab).toBe("general");
   });
 
-  it('requires a key before saving', async () => {
+  it("requires a key before saving", async () => {
     render(<ProviderOnboarding />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Use API key/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Save key/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Use API key/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Save key/ }));
 
     expect(addProvider).not.toHaveBeenCalled();
-    expect(screen.getByText('Something went wrong: Enter an API key.')).toBeTruthy();
+    expect(
+      screen.getByText("Something went wrong: Enter an API key."),
+    ).toBeTruthy();
+  });
+
+  it("shows recommended defaults and applies them", async () => {
+    fetchRecommendedDefaults.mockResolvedValue({
+      available: true,
+      changes: ["orchestrator: pegg-forever/deepseek-v4-flash"],
+      skipped: ['memory.relevance: provider "openrouter" is not configured'],
+    });
+    render(<ProviderOnboarding />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Use API key/ }));
+    fireEvent.change(screen.getByLabelText("API key"), {
+      target: { value: "vsk_live_test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save key/ }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Recommended defaults")).toBeTruthy(),
+    );
+    expect(
+      screen.getByText("orchestrator: pegg-forever/deepseek-v4-flash"),
+    ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Apply recommended defaults/ }),
+    );
+
+    await waitFor(() => expect(applyRecommendedDefaults).toHaveBeenCalled());
+    await waitFor(() => expect(providerSetup).toHaveBeenCalled());
   });
 });

@@ -162,6 +162,7 @@ nav:
         - Notifications: pegg/features/notifications.md
         - Voice input: pegg/features/voice.md
         - Team AI: pegg/features/team-ai.md
+        - Forever defaults: pegg/features/forever-defaults.md
         - Connect: pegg/features/connect.md
   - Sdk:
       - Get Started: sdk/index.md

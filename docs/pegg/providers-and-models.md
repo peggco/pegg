@@ -272,28 +272,30 @@ it and fetches from the network.
 
 Alongside chat models, Pegg can use **decision models** — models that answer
 typed questions (yes/no, choice, or an ordered score) about a piece of state
-instead of generating text. The first supported decision model is
-**JEV** (`typesafe/jev-1.13`) from TypeSafe, served through OpenRouter's
-Decisions API (`https://openrouter.ai/api/alpha/decisions`).
+instead of generating text. The supported decision model is **JEV**
+(`typesafe/jev-1.14`) from TypeSafe, served by both Pegg Forever
+(`https://forever.pegg.dev/v1/chat/decisions`) and OpenRouter
+(`https://openrouter.ai/api/alpha/decisions`).
 
-Decision models reuse the regular provider configuration: the `openrouter`
-provider entry and its API key are shared, so one login covers both chat and
-decisions. There is no separate model list to fetch — the model ID is passed
-per request.
+Decision models reuse the regular provider configuration: the `pegg-forever` or
+`openrouter` provider entry and its API key are shared, so one login covers both
+chat and decisions. There is no separate model list to fetch — the model ID is
+passed per request.
 
-Pegg currently uses decision models for the **permission judge**: when an
-OpenRouter API key is configured, the judge uses JEV by default (even without
-`judge_provider` set), and falls back to the judge LLM on any error. Configure
-the behavior with `judge_provider`, `judge_model`, and `judge_threshold` — see
+Pegg uses decision models for the **permission judge**, the **smart router**,
+and **memory relevance gating**. When a decision-capable provider has an API
+key, the judge uses JEV by default (even without `judge_provider` set), and
+falls back to the judge LLM on any error. Configure the behavior with
+`judge_provider`, `judge_model`, and `judge_threshold` — see
 [Permissions](features/permissions.md#the-judge-flow) and
 [Config](config.md#permission).
 
 ```json
 {
-  "providers": [{ "provider": "openrouter", "api_key": "sk-or-..." }],
+  "providers": [{ "provider": "pegg-forever", "api_key": "vsk_live_..." }],
   "permission": {
-    "judge_provider": "openrouter",
-    "judge_model": "typesafe/jev-1.13",
+    "judge_provider": "pegg-forever",
+    "judge_model": "typesafe/jev-1.14",
     "judge_threshold": 0.8
   }
 }

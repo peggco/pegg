@@ -33,6 +33,11 @@ type AgentModelDefault struct {
 	FallbackModel    string `json:"fallback_model,omitempty"`
 }
 
+type ModelRef struct {
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model,omitempty"`
+}
+
 type LoggerConfig struct {
 	Driver      string `json:"driver"`
 	MaxLogCount int    `json:"max_log_count"`
@@ -259,15 +264,17 @@ func (s *SchedulerConfig) HistoryLimitValue() int {
 }
 
 type MemoryConfig struct {
-	Enabled       bool     `json:"enabled"`
-	Provider      string   `json:"provider,omitempty"`
-	Model         string   `json:"model,omitempty"`
-	Gate          string   `json:"gate,omitempty"`
-	Threshold     *float64 `json:"threshold,omitempty"`
-	ContextBudget int      `json:"context_budget,omitempty"`
-	MaxResults    int      `json:"max_results,omitempty"`
-	Consolidate   *bool    `json:"consolidate,omitempty"`
-	SkipTools     []string `json:"skip_tools,omitempty"`
+	Enabled       bool      `json:"enabled"`
+	Provider      string    `json:"provider,omitempty"`
+	Model         string    `json:"model,omitempty"`
+	Observer      *ModelRef `json:"observer,omitempty"`
+	Relevance     *ModelRef `json:"relevance,omitempty"`
+	Gate          string    `json:"gate,omitempty"`
+	Threshold     *float64  `json:"threshold,omitempty"`
+	ContextBudget int       `json:"context_budget,omitempty"`
+	MaxResults    int       `json:"max_results,omitempty"`
+	Consolidate   *bool     `json:"consolidate,omitempty"`
+	SkipTools     []string  `json:"skip_tools,omitempty"`
 }
 
 const (

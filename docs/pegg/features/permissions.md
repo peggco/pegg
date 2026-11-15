@@ -42,8 +42,8 @@ MCP tools default to `permission.default`. Override any tool with the
   "permission": {
     "default": "semi-ask",
     "rules": { "bash": "ask", "write": "allow" },
-    "judge_provider": "openrouter",
-    "judge_model": "typesafe/jev-1.13",
+    "judge_provider": "pegg-forever",
+    "judge_model": "typesafe/jev-1.14",
     "judge_threshold": 0.8
   }
 }
@@ -122,8 +122,8 @@ allow/deny verdict. Two judge engines are available:
 Which engine runs is resolved in this order:
 
 1. **Explicit config** — `judge_provider` is set:
-   - a decision-capable provider (currently `openrouter`) → decision model, using
-     `judge_model` if given, otherwise the default (`typesafe/jev-1.13`);
+   - a decision-capable provider (`openrouter` or `pegg-forever`) → decision model, using
+     `judge_model` if given, otherwise the default (`typesafe/jev-1.14`);
    - any other provider → judge LLM with `judge_model`.
 2. **Default decision** — no `judge_provider`: if any configured provider with an
    API key supports decisions (an OpenRouter key is enough), the decision model is

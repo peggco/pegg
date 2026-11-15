@@ -475,6 +475,24 @@ func (a *App) providerAdded(cfg config.LLMConfig) {
 		a.bus.Publish(event.TopicProviderAdded, cfg)
 	}
 	a.reloadConfig()
+	if a.deps.LLM == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+		defer cancel()
+		a.deps.LLM.EnsureProviders(ctx, []config.LLMConfig{cfg})
+		a.deps.LLM.RefreshEmptyProviders(ctx, []config.LLMConfig{cfg})
+		a.postUI(func() {
+			a.reloadConfig()
+			a.chatMu.Lock()
+			hasModel := a.model.model.ID != ""
+			a.chatMu.Unlock()
+			if !hasModel {
+				a.selectPreferred()
+			}
+		})
+	}()
 }
 
 func (a *App) checkForUpdates() {

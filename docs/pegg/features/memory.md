@@ -263,13 +263,13 @@ Memory is configured under the `memory` key in `~/.peggco/pegg.json`:
 {
   "memory": {
     "enabled": true,
-    "provider": "openrouter",
-    "model": "deepseek/deepseek-chat",
-    "gate": "auto",
+    "gate": "decision",
     "threshold": 0.6,
     "context_budget": 8000,
     "max_results": 5,
     "consolidate": true,
+    "observer": { "provider": "pegg-forever", "model": "deepseek-v4-flash" },
+    "relevance": { "provider": "pegg-forever", "model": "typesafe/jev-1.14" },
     "skip_tools": ["websearch"]
   }
 }
@@ -278,8 +278,10 @@ Memory is configured under the `memory` key in `~/.peggco/pegg.json`:
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | bool | `true` | Master switch for capture, storage, and panel injection |
-| `provider` | string | — | Provider for the observer/summarizer/librarian LLM calls. Empty uses the running agent's model (recommended) |
-| `model` | string | — | Model for memory LLM calls (only read when `provider` is set) |
+| `observer` | object | — | `{ "provider": "...", "model": "..." }` for the observer/summarizer/librarian LLM calls. Empty uses the running agent's model (recommended) |
+| `relevance` | object | — | `{ "provider": "...", "model": "..." }` for decision-model relevance gating. Empty uses the preferred decision provider |
+| `provider` | string | — | Legacy observer provider. Prefer `observer.provider` |
+| `model` | string | — | Legacy observer model. Prefer `observer.model` |
 | `gate` | string | `"auto"` | Relevance gate for `mem-search`: `auto`, `decision`, `llm`, `score`, or `off` |
 | `threshold` | number | `0.6` | Minimum decision-model relevance for `decision` gating |
 | `context_budget` | int | `8000` | Max chars of the injected memory panel |
@@ -287,10 +289,16 @@ Memory is configured under the `memory` key in `~/.peggco/pegg.json`:
 | `consolidate` | bool | `true` | Run the librarian to keep curated files up to date |
 | `skip_tools` | string[] | — | Additional tools whose results are never captured |
 
-The observer provider is resolved with preference for the configured `provider`/`model`
-pair; otherwise the agent's current model is used. If `provider` names a
-decision-model provider (e.g. OpenRouter's JEV), it is used for **relevance gating**;
-the observation/summarization LLM calls fall back to the agent's preferred model.
+The observer and relevance models are independent. The observer uses an LLM model
+for observation, summarization and librarian calls; the relevance model uses a
+decision provider (e.g. JEV through `pegg-forever` or OpenRouter) for `decision` gating. If `relevance` is
+unset, the preferred decision provider is used. If the configured relevance
+provider is unavailable, gating falls back to the preferred decision provider
+rather than disabling filtering.
+
+The legacy `provider`/`model` pair still works: a non-decision provider is used
+for the observer, and a decision provider is used for relevance gating. New
+configs should use `observer` and `relevance`.
 
 ## TUI settings
 
@@ -300,8 +308,9 @@ Open Settings with ++ctrl+p++ and switch to the **Memory** tab. Navigate with
 | Row | Description |
 |---|---|
 | **Enabled** | Master switch (on/off) |
-| **Observer** | Provider/model for memory LLM calls, or "default (agent model)". Opens a searchable picker with decision providers and LLM models |
+| **Observer** | LLM provider/model for memory LLM calls, or "default (agent model)". Opens a searchable picker with LLM models |
 | **Relevance gating** | Cycle `auto` → `decision` → `llm` → `score` → `off` |
+| **Relevance model** | Decision provider/model used for `decision` gating, or the preferred decision model |
 | **Relevance threshold** | `0.05`–`1.0` (only active for decision gating) |
 | **Context budget** | `500`–`100000` chars |
 | **Max results** | `1`–`10` |

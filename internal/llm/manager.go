@@ -266,6 +266,30 @@ func (m *Manager) EnsureProviders(ctx context.Context, cfgs []config.LLMConfig) 
 	}
 }
 
+func (m *Manager) RefreshEmptyProviders(ctx context.Context, cfgs []config.LLMConfig) {
+	for _, cfg := range cfgs {
+		name := providerName(cfg)
+		if name == "" {
+			continue
+		}
+
+		m.mu.RLock()
+		entry, ok := m.entries[name]
+		m.mu.RUnlock()
+		if ok && entry.err == nil {
+			if models, err := m.Models(name); err == nil && len(models) > 0 {
+				continue
+			}
+		}
+
+		m.log.Fdebug("llm: refreshing provider %q with no models", name)
+		m.mu.Lock()
+		delete(m.entries, name)
+		m.mu.Unlock()
+		m.loadProvider(ctx, cfg)
+	}
+}
+
 func (m *Manager) handleProviderAdded(cfg config.LLMConfig) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -395,7 +419,7 @@ func (m *Manager) storeEntry(name string, cfg config.LLMConfig, prov Provider, m
 }
 
 func (m *Manager) saveCachedModels(name string, models []Model) {
-	if m.cacheStore == nil {
+	if m.cacheStore == nil || len(models) == 0 {
 		return
 	}
 	data, err := json.Marshal(models)
@@ -419,6 +443,9 @@ func (m *Manager) loadCachedModels(name string) ([]Model, bool) {
 	var models []Model
 	if err := json.Unmarshal(data, &models); err != nil {
 		m.log.Fwarn("llm: unmarshal cached models for %q: %v", name, err)
+		return nil, false
+	}
+	if len(models) == 0 {
 		return nil, false
 	}
 	return models, true

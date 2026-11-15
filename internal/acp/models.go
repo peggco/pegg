@@ -14,7 +14,8 @@ type modelListParams struct {
 }
 
 type modelListResult struct {
-	Models []modelEntry `json:"models"`
+	Models    []modelEntry `json:"models"`
+	Preferred *modelEntry  `json:"preferred,omitempty"`
 }
 
 type modelEntry struct {
@@ -48,6 +49,7 @@ func (s *Server) handleListModels(ctx context.Context, params json.RawMessage) (
 		cfg = fresh
 	}
 	s.llmMgr.EnsureProviders(ctx, cfg.Providers)
+	s.llmMgr.RefreshEmptyProviders(ctx, cfg.Providers)
 
 	providers := make([]string, 0, len(cfg.Providers))
 	seen := make(map[string]bool, len(cfg.Providers))
@@ -76,7 +78,50 @@ func (s *Server) handleListModels(ctx context.Context, params json.RawMessage) (
 			out = append(out, modelEntry{Provider: name, Model: mdl})
 		}
 	}
-	return modelListResult{Models: out}, nil
+	return modelListResult{Models: out, Preferred: preferredModelEntry(cfg, s.llmMgr, out)}, nil
+}
+
+func preferredModelEntry(cfg *config.Config, mgr *llm.Manager, out []modelEntry) *modelEntry {
+	if cfg == nil || mgr == nil {
+		return nil
+	}
+	find := func(provider, id string) *modelEntry {
+		for i := range out {
+			if out[i].Provider == provider && out[i].Model.ID == id {
+				return &out[i]
+			}
+		}
+		return nil
+	}
+	try := func(provider, model string) *modelEntry {
+		if model == "" {
+			return nil
+		}
+		res := mgr.Select(llm.SelectRequest{Mode: llm.SelectModeExact, Provider: provider, Model: model})
+		if res.Err != nil {
+			return nil
+		}
+		if entry := find(res.Provider, res.Model.ID); entry != nil {
+			return entry
+		}
+		return &modelEntry{Provider: res.Provider, Model: res.Model}
+	}
+	if def, ok := cfg.AgentDefaults["orchestrator"]; ok {
+		if entry := try(def.Provider, def.Model); entry != nil {
+			return entry
+		}
+		if entry := try(def.FallbackProvider, def.FallbackModel); entry != nil {
+			return entry
+		}
+	}
+	res := mgr.Select(llm.SelectRequest{Mode: llm.SelectModePreferred})
+	if res.Err != nil {
+		return nil
+	}
+	if entry := find(res.Provider, res.Model.ID); entry != nil {
+		return entry
+	}
+	return &modelEntry{Provider: res.Provider, Model: res.Model}
 }
 
 func (s *Server) handleSessionSetModel(ctx context.Context, params json.RawMessage) (any, error) {

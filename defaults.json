@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "updated_at": "2026-11-15T00:00:00Z",
+  "agents": {
+    "orchestrator": {
+      "provider": "pegg-forever",
+      "model": "GLM-5.3",
+      "fallback_provider": "pegg-forever",
+      "fallback": "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+    },
+    "explorer": {
+      "provider": "pegg-forever",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "fallback_provider": "pegg-forever",
+      "fallback": "zai-org/GLM-5.3-Flash"
+    },
+    "developer": {
+      "provider": "pegg-forever",
+      "model": "GLM-5.3",
+      "fallback_provider": "pegg-forever",
+      "fallback": "moonshotai/Kimi-K3"
+    }
+  },
+  "smart_router": {
+    "enabled": true,
+    "provider": "pegg-forever",
+    "decision_model": "typesafe/jev-1.14",
+    "agents": {
+      "orchestrator": {
+        "default": [
+          "GLM-5.3",
+          "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "moonshotai/Kimi-K3"
+        ],
+        "difficulty": {
+          "trivial": [
+            "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+            "zai-org/GLM-5.3-Flash"
+          ],
+          "moderate": [
+            "GLM-5.3",
+            "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+          ],
+          "complex": [
+            "moonshotai/Kimi-K3",
+            "GLM-5.3",
+            "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+          ]
+        },
+        "images": [
+          "moonshotai/Kimi-K3",
+          "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "Qwen/Qwen3.8-27B"
+        ]
+      },
+      "explorer": {
+        "default": [
+          "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "zai-org/GLM-5.3-Flash"
+        ],
+        "difficulty": {
+          "trivial": [
+            "zai-org/GLM-5.3-Flash",
+            "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+          ],
+          "moderate": [
+            "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+            "zai-org/GLM-5.3-Flash"
+          ],
+          "complex": [
+            "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+            "GLM-5.3"
+          ]
+        }
+      },
+      "developer": {
+        "default": [
+          "GLM-5.3",
+          "moonshotai/Kimi-K3",
+          "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+        ],
+        "difficulty": {
+          "trivial": [
+            "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+            "zai-org/GLM-5.3-Flash"
+          ],
+          "moderate": [
+            "GLM-5.3",
+            "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+          ],
+          "complex": [
+            "GLM-5.3",
+            "moonshotai/Kimi-K3",
+            "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+          ]
+        }
+      }
+    }
+  },
+  "stt": {
+    "provider": "pegg-forever",
+    "model": "whisper-large-v3-turbo"
+  },
+  "judge": {
+    "provider": "pegg-forever",
+    "model": "typesafe/jev-1.14",
+    "threshold": 0.6
+  },
+  "memory": {
+    "enabled": true,
+    "gate": "decision",
+    "threshold": 0.6,
+    "observer": {
+      "provider": "pegg-forever",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+    },
+    "relevance": {
+      "provider": "pegg-forever",
+      "model": "typesafe/jev-1.14"
+    }
+  },
+  "compaction": {
+    "summarizer_provider": "pegg-forever",
+    "summarizer_model": "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+  }
+}

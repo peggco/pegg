@@ -101,7 +101,12 @@ func TestApplyTeamConfig(t *testing.T) {
 		},
 		Defaults: teamDefaults{
 			Agents: map[string]teamAgentDefault{
-				"orchestrator": {Model: "gpt-4.1", Fallback: "gpt-4.1-mini"},
+				"orchestrator": {
+					Provider:         "pegg-forever",
+					Model:            "gpt-4.1",
+					FallbackProvider: "pegg-forever",
+					Fallback:         "gpt-4.1-mini",
+				},
 			},
 			SmartRouter: &teamSmartRouter{
 				Enabled:       true,
@@ -118,6 +123,20 @@ func TestApplyTeamConfig(t *testing.T) {
 			STT: &teamSTT{
 				Model:          "whisper-large-v3",
 				StreamingModel: "whisper-large-v3",
+			},
+			Judge: &teamJudge{
+				Model:     "gpt-4.1",
+				Threshold: newFloat64(0.7),
+			},
+			Memory: &teamMemory{
+				Enabled:   newBool(true),
+				Gate:      "decision",
+				Threshold: newFloat64(0.6),
+				Observer:  &teamModelRef{Provider: "pegg-forever", Model: "gpt-4.1"},
+				Relevance: &teamModelRef{Provider: "openrouter", Model: "typesafe/jev-1.13"},
+			},
+			Compaction: &teamCompaction{
+				SummarizerModel: "gpt-4.1",
 			},
 		},
 	}
@@ -139,7 +158,7 @@ func TestApplyTeamConfig(t *testing.T) {
 	if len(provider.Models) != 0 {
 		t.Fatalf("llm models must not be persisted: %+v", provider.Models)
 	}
-	if got := peggCfg.AgentDefaults["orchestrator"]; got.Model != "gpt-4.1" || got.Provider != "pegg-team Acme" {
+	if got := peggCfg.AgentDefaults["orchestrator"]; got.Model != "gpt-4.1" || got.Provider != "pegg-team Acme" || got.FallbackProvider != "pegg-team Acme" {
 		t.Fatalf("agent default = %#v", got)
 	}
 	if peggCfg.SmartRouter == nil || !peggCfg.SmartRouter.Enabled {
@@ -157,6 +176,27 @@ func TestApplyTeamConfig(t *testing.T) {
 	}
 	if entry.Driver != "openai" || len(entry.Models) != 1 || entry.Models[0].ID != "whisper-large-v3" {
 		t.Fatalf("stt entry = %+v", entry)
+	}
+	if peggCfg.Permission == nil || peggCfg.Permission.JudgeProvider != "pegg-team Acme" || peggCfg.Permission.JudgeModel != "gpt-4.1" {
+		t.Fatalf("judge = %+v", peggCfg.Permission)
+	}
+	if peggCfg.Permission.JudgeThresholdValue() != 0.7 {
+		t.Fatalf("judge threshold = %v", peggCfg.Permission.JudgeThresholdValue())
+	}
+	if peggCfg.Memory == nil || !peggCfg.Memory.Enabled || peggCfg.Memory.Gate != "decision" {
+		t.Fatalf("memory = %+v", peggCfg.Memory)
+	}
+	if peggCfg.Memory.Observer == nil || peggCfg.Memory.Observer.Provider != "pegg-team Acme" || peggCfg.Memory.Observer.Model != "gpt-4.1" {
+		t.Fatalf("memory observer = %+v", peggCfg.Memory.Observer)
+	}
+	if peggCfg.Memory.Relevance == nil || peggCfg.Memory.Relevance.Provider != "openrouter" || peggCfg.Memory.Relevance.Model != "typesafe/jev-1.13" {
+		t.Fatalf("memory relevance = %+v", peggCfg.Memory.Relevance)
+	}
+	if peggCfg.Compaction == nil || peggCfg.Compaction.SummarizerProvider != "pegg-team Acme" || peggCfg.Compaction.SummarizerModel != "gpt-4.1" {
+		t.Fatalf("compaction = %+v", peggCfg.Compaction)
+	}
+	if !teamContains(peggCfg.Compaction.Strategy, "summarization") {
+		t.Fatalf("compaction strategy = %v", peggCfg.Compaction.Strategy)
 	}
 }
 
@@ -271,3 +311,7 @@ func TestApplyTeamConfigSTTModelsWithoutDefault(t *testing.T) {
 		t.Fatalf("stt defaults should not be changed: %+v", peggCfg.STT)
 	}
 }
+
+func newBool(v bool) *bool { return &v }
+
+func newFloat64(v float64) *float64 { return &v }

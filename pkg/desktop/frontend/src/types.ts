@@ -1,4 +1,4 @@
-export type SessionMode = 'auto' | 'plan' | 'build';
+export type SessionMode = "auto" | "plan" | "build";
 
 export interface ContentBlock {
   type: string;
@@ -88,7 +88,7 @@ export interface SessionUpdate {
   used?: number;
   size?: number;
   cost?: { amount: number; currency: string };
-  severity?: 'info' | 'warning' | 'error';
+  severity?: "info" | "warning" | "error";
   description?: string;
   compactionId?: string;
   summary?: ContentBlock[];
@@ -102,7 +102,12 @@ export interface SessionListItem {
   provider?: string;
   model?: string;
   mode?: string;
-  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost?: number };
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    cost?: number;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -134,6 +139,7 @@ export interface ModelEntry {
 
 export interface ModelListResult {
   models: ModelEntry[];
+  preferred?: ModelEntry;
 }
 
 export interface PromptResult {
@@ -149,14 +155,19 @@ export interface PermissionOption {
 export interface PermissionParams {
   sessionId: string;
   _meta?: Record<string, unknown>;
-  toolCall?: { toolCallId?: string; title?: string; kind?: string; rawInput?: unknown };
+  toolCall?: {
+    toolCallId?: string;
+    title?: string;
+    kind?: string;
+    rawInput?: unknown;
+  };
   options?: PermissionOption[];
 }
 
 export interface AskQuestion {
   id: string;
   question: string;
-  type: 'text' | 'select' | 'multiselect' | 'boolean' | string;
+  type: "text" | "select" | "multiselect" | "boolean" | string;
   options?: string[];
   required?: boolean;
 }
@@ -188,14 +199,14 @@ export interface Recent {
   openedAt: string;
 }
 
-export type SidebarMode = 'sidebar' | 'inset' | 'floating';
-export type LayoutMode = 'default' | 'compact' | 'full';
-export type Direction = 'ltr' | 'rtl';
-export type ChatHistoryMode = 'detailed' | 'compact';
+export type SidebarMode = "sidebar" | "inset" | "floating";
+export type LayoutMode = "default" | "compact" | "full";
+export type Direction = "ltr" | "rtl";
+export type ChatHistoryMode = "detailed" | "compact";
 
 export interface Prefs {
   theme: string;
-  themeMode: 'auto' | 'light' | 'dark';
+  themeMode: "auto" | "light" | "dark";
   workspace: string;
   recents: Recent[];
   binaryPath: string;
@@ -224,7 +235,14 @@ export interface BinaryStatus {
 export interface SelfUpdateStatus {
   currentVersion: string;
   latestVersion?: string;
-  state: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'unsupported' | 'error';
+  state:
+    | "idle"
+    | "checking"
+    | "available"
+    | "downloading"
+    | "ready"
+    | "unsupported"
+    | "error";
   available: boolean;
   supported: boolean;
   desktopAvailable: boolean;
@@ -254,6 +272,13 @@ export interface ForeverStatus {
   logs: string[];
   configured: boolean;
   provider: string;
+}
+
+export interface RecommendedDefaults {
+  available: boolean;
+  changes: string[];
+  skipped: string[];
+  error?: string;
 }
 
 export interface BootstrapInfo {
@@ -299,7 +324,7 @@ export interface BinaryProgress {
 }
 
 export interface AcpStatus {
-  state: 'connected' | 'exited' | 'error' | string;
+  state: "connected" | "exited" | "error" | string;
   message?: string;
   code?: number;
 }
@@ -547,7 +572,7 @@ export interface SkillMutationResult {
   commands?: SlashCommand[];
 }
 
-export type CatalogKind = 'skills' | 'mcp' | 'plugins';
+export type CatalogKind = "skills" | "mcp" | "plugins";
 
 export interface CatalogItem {
   kind: CatalogKind;

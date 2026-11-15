@@ -245,6 +245,13 @@ func TestApplyWritesProvider(t *testing.T) {
 	if provider.APIKey != "vsk_live_test" || provider.Timeout != DefaultTimeout {
 		t.Fatalf("unexpected provider: %#v", provider)
 	}
+	sttProvider, ok := peggCfg.STT.ProviderConfig(ProviderName)
+	if !ok {
+		t.Fatal("pegg-forever stt provider not saved")
+	}
+	if sttProvider.Driver != "openai" || sttProvider.BaseURL != DefaultBaseURL || sttProvider.APIKey != "vsk_live_test" {
+		t.Fatalf("unexpected stt provider: %#v", sttProvider)
+	}
 }
 
 func TestApplyPreservesExistingFields(t *testing.T) {
@@ -260,6 +267,16 @@ func TestApplyPreservesExistingFields(t *testing.T) {
 		Headers:  map[string]string{"X-Test": "1"},
 		Models:   []config.Model{{ID: "kept-model"}},
 	})
+	existing.STT = &config.STTConfig{
+		MaxDurationSecs: config.DefaultSTTMaxDurationSecs,
+		Providers: []config.STTProviderConfig{{
+			Provider: ProviderName,
+			Driver:   "custom",
+			BaseURL:  "https://old.example/v1",
+			APIKey:   "old-key",
+			Models:   []config.STTModel{{ID: "kept-stt"}},
+		}},
+	}
 	if err := config.Save(existing); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
@@ -283,6 +300,16 @@ func TestApplyPreservesExistingFields(t *testing.T) {
 	}
 	if len(provider.Models) != 1 || provider.Models[0].ID != "kept-model" {
 		t.Fatalf("models not preserved: %#v", provider.Models)
+	}
+	sttProvider, ok := peggCfg.STT.ProviderConfig(ProviderName)
+	if !ok {
+		t.Fatal("pegg-forever stt provider not saved")
+	}
+	if sttProvider.APIKey != "new-key" || sttProvider.Driver != "openai" || sttProvider.BaseURL != DefaultBaseURL {
+		t.Fatalf("stt provider fields not updated: %#v", sttProvider)
+	}
+	if len(sttProvider.Models) != 1 || sttProvider.Models[0].ID != "kept-stt" {
+		t.Fatalf("stt models not preserved: %#v", sttProvider.Models)
 	}
 }
 
