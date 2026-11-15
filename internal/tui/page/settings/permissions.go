@@ -620,6 +620,7 @@ func (t *permissionsTab) saveThreshold() {
 }
 
 func (t *permissionsTab) openJudgeModels() {
+	t.settings.ensureModels()
 	l := components.NewList(i18n.T("settings.permissions.selectJudge"))
 	l.SetSearchable(true)
 

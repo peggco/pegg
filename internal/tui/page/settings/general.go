@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 
@@ -486,7 +487,18 @@ type modelData struct {
 	model    llm.Model
 }
 
+func (s *Settings) ensureModels() {
+	if s.deps.LLM == nil || s.deps.Config == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	s.deps.LLM.EnsureProviders(ctx, s.deps.Config.Providers)
+	s.deps.LLM.RefreshEmptyProviders(ctx, s.deps.Config.Providers)
+}
+
 func (s *Settings) openModels() {
+	s.ensureModels()
 	l := components.NewList(i18n.T("settings.model.selectTitle"))
 	l.SetSearchable(true)
 
