@@ -88,7 +88,9 @@ BYOK request goes straight from your machine to the provider. **Pegg Forever**
 - **Bring your own key** — add providers with `pegg login`, the TUI settings page,
   or directly in `~/.pegg/pegg.json`.
 - **Pegg Forever** — sign in with `pegg login-pegg` or paste an API key; the desktop
-  and TUI first-run screens offer both.
+  and TUI first-run screens offer both. After login, Pegg can apply recommended
+  models and settings from the [Forever defaults](features/forever-defaults.md)
+  document after showing you the changes.
 - **Custom endpoints** — use the generic `openai`, `claude`, or `gemini` driver with a
   `base_url` to target any compatible gateway.
 - **Local runtimes** — anything speaking the OpenAI chat-completions API works, for

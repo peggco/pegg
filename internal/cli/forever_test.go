@@ -23,10 +23,20 @@ func stubForeverVerify(t *testing.T, fn func(context.Context, string, string, *h
 	t.Cleanup(func() { foreverVerify = original })
 }
 
+func stubForeverDefaults(t *testing.T, fn func(context.Context, string, *http.Client) (*pegglogin.Defaults, error)) {
+	t.Helper()
+	original := foreverDefaults
+	foreverDefaults = fn
+	t.Cleanup(func() { foreverDefaults = original })
+}
+
 func TestForeverTokenSavesProviderAndPublishesEvent(t *testing.T) {
 	c, bus := newTestCLI(t)
 	registerTestProvider(t, pegglogin.ProviderName, llm.Model{ID: "pegg-test-model"})
 	stubForeverVerify(t, func(context.Context, string, string, *http.Client) error { return nil })
+	stubForeverDefaults(t, func(context.Context, string, *http.Client) (*pegglogin.Defaults, error) {
+		return nil, errors.New("no defaults in test")
+	})
 
 	added := make(chan config.LLMConfig, 1)
 	if err := bus.Subscribe(event.TopicProviderAdded, func(cfg config.LLMConfig) { added <- cfg }); err != nil {
@@ -81,6 +91,9 @@ func TestForeverVerificationFailureStillSaves(t *testing.T) {
 	stubForeverVerify(t, func(context.Context, string, string, *http.Client) error {
 		return errors.New("invalid api key")
 	})
+	stubForeverDefaults(t, func(context.Context, string, *http.Client) (*pegglogin.Defaults, error) {
+		return nil, errors.New("no defaults in test")
+	})
 
 	var buf bytes.Buffer
 	c.root.SetOut(&buf)
@@ -129,10 +142,98 @@ func TestForeverCommandRegisteredWithAliases(t *testing.T) {
 			t.Fatalf("alias %q missing from %v", want, forever.Aliases)
 		}
 	}
-	for _, flag := range []string{"token", "no-browser", "port", "device"} {
+	for _, flag := range []string{"token", "no-browser", "port", "device", "defaults", "no-defaults", "defaults-url"} {
 		if forever.Flags().Lookup(flag) == nil {
 			t.Fatalf("flag --%s not registered", flag)
 		}
+	}
+}
+
+func TestForeverNoDefaultsSkips(t *testing.T) {
+	c, _ := newTestCLI(t)
+	registerTestProvider(t, pegglogin.ProviderName, llm.Model{ID: "pegg-test-model"})
+	stubForeverVerify(t, func(context.Context, string, string, *http.Client) error { return nil })
+	called := false
+	stubForeverDefaults(t, func(context.Context, string, *http.Client) (*pegglogin.Defaults, error) {
+		called = true
+		return nil, errors.New("should not be called")
+	})
+
+	var buf bytes.Buffer
+	c.root.SetOut(&buf)
+	if err := c.Execute([]string{"login-pegg", "--token", "vsk_live_test", "--no-defaults"}); err != nil {
+		t.Fatal(err)
+	}
+	if called {
+		t.Fatal("defaults should not be fetched with --no-defaults")
+	}
+	if !strings.Contains(buf.String(), "Skipped recommended defaults.") {
+		t.Fatalf("output = %q", buf.String())
+	}
+}
+
+func TestForeverDefaultsApplied(t *testing.T) {
+	c, _ := newTestCLI(t)
+	registerTestProvider(t, pegglogin.ProviderName, llm.Model{ID: "pegg-test-model"})
+	stubForeverVerify(t, func(context.Context, string, string, *http.Client) error { return nil })
+	stubForeverDefaults(t, func(context.Context, string, *http.Client) (*pegglogin.Defaults, error) {
+		return &pegglogin.Defaults{
+			Version: 1,
+			Agents: map[string]pegglogin.AgentDefaults{
+				"orchestrator": {Model: "deepseek-v4-flash", Fallback: "deepseek-v4-lite"},
+			},
+			Judge: &pegglogin.JudgeDefaults{Model: "typesafe/jev-1.13"},
+		}, nil
+	})
+
+	var buf bytes.Buffer
+	c.root.SetOut(&buf)
+	if err := c.Execute([]string{"login-pegg", "--token", "vsk_live_test", "--defaults"}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Recommended defaults:") || !strings.Contains(out, "Applied recommended defaults.") {
+		t.Fatalf("output = %q", out)
+	}
+
+	loaded, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := loaded.AgentDefaults["orchestrator"]
+	if agent.Provider != pegglogin.ProviderName || agent.Model != "deepseek-v4-flash" || agent.FallbackModel != "deepseek-v4-lite" {
+		t.Fatalf("unexpected agent defaults: %#v", agent)
+	}
+	if loaded.Permission == nil || loaded.Permission.JudgeProvider != pegglogin.ProviderName || loaded.Permission.JudgeModel != "typesafe/jev-1.13" {
+		t.Fatalf("unexpected judge defaults: %#v", loaded.Permission)
+	}
+}
+
+func TestForeverDefaultsFetchWarningKeepsLogin(t *testing.T) {
+	c, _ := newTestCLI(t)
+	registerTestProvider(t, pegglogin.ProviderName, llm.Model{ID: "pegg-test-model"})
+	stubForeverVerify(t, func(context.Context, string, string, *http.Client) error { return nil })
+	stubForeverDefaults(t, func(context.Context, string, *http.Client) (*pegglogin.Defaults, error) {
+		return nil, errors.New("cdn unavailable")
+	})
+
+	var buf bytes.Buffer
+	c.root.SetOut(&buf)
+	if err := c.Execute([]string{"login-pegg", "--token", "vsk_live_test", "--defaults"}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Warning: could not load recommended defaults: cdn unavailable") {
+		t.Fatalf("output = %q", out)
+	}
+	loaded, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lookupProvider(loaded, pegglogin.ProviderName) == nil {
+		t.Fatal("provider should still be saved when defaults fail")
 	}
 }
 
