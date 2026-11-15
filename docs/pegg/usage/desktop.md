@@ -203,15 +203,39 @@ applied only after you confirm and the app relaunches.
 
 `.github/workflows/release.yml` builds the desktop app on native runners for:
 
-- macOS Apple Silicon and Intel
-- Windows x64 and ARM64
-- Linux x64 (`.tar.gz`, `.deb`, `.rpm`)
+- macOS Apple Silicon (`macos-15`) and Intel (`macos-15-intel`)
+- Windows x64 (`windows-2022`) and ARM64 (`windows-11-arm`)
+- Linux x64 on `ubuntu-22.04` (`.tar.gz`, `.deb`, `.rpm`)
 
 Artifacts are attached to the GitHub release. Optional publishing steps are enabled by repository secrets:
 
 - `HOMEBREW_TAP_TOKEN` — pushes the generated cask to `peggco/homebrew-tap`
 - `AUR_SSH_PRIVATE_KEY` — publishes `packaging/aur/PKGBUILD` to the AUR
 - `CLOUDSMITH_API_KEY` — uploads `.deb`/`.rpm` packages to Cloudsmith for apt/dnf consumption
+
+### Re-running a release
+
+Pushing a `v*` tag runs the whole pipeline. To rebuild and republish only the desktop artifacts for
+an existing release (for example after a runner or packaging failure), dispatch the workflow
+manually from the default branch:
+
+```bash
+gh workflow run release.yml -f tag=v0.2.4
+```
+
+The `tag` input is the release to rebuild. Desktop binaries for every platform are rebuilt, uploaded
+to the release with `--clobber`, and the checksum, Homebrew, AUR and Cloudsmith jobs run again;
+`goreleaser`, npm, the VS Code Marketplace/Open VSX and JetBrains Marketplace publishing are skipped
+because those versioned artifacts cannot be overwritten. Set `publish_core=true` only on a version
+that has not been published to those registries yet:
+
+```bash
+gh workflow run release.yml -f tag=v0.2.4 -f publish_core=true
+```
+
+The manual trigger only appears once the workflow file exists on the default branch. Cloudsmith
+rejects a package version that is already published, so `publish-linux-repo` fails on a second run
+for the same tag; re-run the other jobs instead.
 
 The desktop binary receives the release version through `-X github.com/peggco/pegg/internal/core/config.AppVersion=...`, so the GUI and agent versions stay in sync.
 

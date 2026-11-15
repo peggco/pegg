@@ -4,22 +4,38 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to rebuild (e.g. v0.2.4)"
+        required: true
+        type: string
+      publish_core:
+        description: "Also run goreleaser, npm, VS Code and IntelliJ jobs (only when they have not published yet)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
 jobs:
   release:
+    if: ${{ github.event_name == 'push' || inputs.publish_core }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.5"
       - name: Validate release version
-        run: python3 scripts/release/set_version.py "${GITHUB_REF_NAME#v}" --check
+        run: python3 scripts/release/set_version.py "${RELEASE_TAG#v}" --check
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
@@ -29,11 +45,14 @@ jobs:
 
   publish-npm:
     needs: release
+    if: ${{ !cancelled() && (github.event_name == 'push' || inputs.publish_core) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -45,12 +64,14 @@ jobs:
 
   release-vscode:
     needs: release
+    if: ${{ !cancelled() && (github.event_name == 'push' || inputs.publish_core) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -67,7 +88,7 @@ jobs:
         run: npm run check
         working-directory: pkg/vscode
       - name: Package VSIX
-        run: npx @vscode/vsce package --out "pegg-vscode-${GITHUB_REF_NAME#v}.vsix"
+        run: npx @vscode/vsce package --out "pegg-vscode-${RELEASE_TAG#v}.vsix"
         working-directory: pkg/vscode
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
@@ -75,13 +96,13 @@ jobs:
           name: pegg-vscode
           path: pkg/vscode/*.vsix
       - name: Attach VSIX to GitHub release
-        run: gh release upload "$GITHUB_REF_NAME" pkg/vscode/*.vsix --clobber
+        run: gh release upload "$RELEASE_TAG" pkg/vscode/*.vsix --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish to VS Code Marketplace
         run: |
           if [ -n "$VSCE_PAT" ]; then
-            npx @vscode/vsce publish --packagePath "pegg-vscode-${GITHUB_REF_NAME#v}.vsix"
+            npx @vscode/vsce publish --packagePath "pegg-vscode-${RELEASE_TAG#v}.vsix"
           else
             echo "VSCE_PAT is not set; skipping Marketplace publish."
           fi
@@ -91,7 +112,7 @@ jobs:
       - name: Publish to Open VSX
         run: |
           if [ -n "$OVSX_PAT" ]; then
-            npx ovsx publish "pegg-vscode-${GITHUB_REF_NAME#v}.vsix"
+            npx ovsx publish "pegg-vscode-${RELEASE_TAG#v}.vsix"
           else
             echo "OVSX_PAT is not set; skipping Open VSX publish."
           fi
@@ -101,6 +122,7 @@ jobs:
 
   release-intellij:
     needs: release
+    if: ${{ !cancelled() && (github.event_name == 'push' || inputs.publish_core) }}
     runs-on: ubuntu-latest
     env:
       PUBLISH_TOKEN: ${{ secrets.JETBRAINS_PUBLISH_TOKEN }}
@@ -110,6 +132,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
@@ -153,7 +176,7 @@ jobs:
           path: pkg/intellij/build/distributions/*.zip
           if-no-files-found: error
       - name: Attach plugin to GitHub release
-        run: gh release upload "$GITHUB_REF_NAME" pkg/intellij/build/distributions/*.zip --clobber
+        run: gh release upload "$RELEASE_TAG" pkg/intellij/build/distributions/*.zip --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish to JetBrains Marketplace
@@ -167,6 +190,7 @@ jobs:
 
   release-desktop:
     needs: release
+    if: ${{ !cancelled() }}
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -174,11 +198,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             platform: darwin/arm64
             slug: darwin-arm64
             tags: gui
-          - os: macos-13
+          - os: macos-15-intel
             platform: darwin/amd64
             slug: darwin-amd64
             tags: gui
@@ -196,6 +220,8 @@ jobs:
             tags: gui webkit2_41
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.5"
@@ -217,7 +243,7 @@ jobs:
       - name: Build desktop app
         shell: bash
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ env.RELEASE_TAG }}
           GOFLAGS: -tags=gui
         run: |
           cd pkg/desktop
@@ -226,7 +252,7 @@ jobs:
       - name: Package macOS
         if: runner.os == 'macOS'
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ env.RELEASE_TAG }}
         run: |
           mkdir -p pkg/desktop/dist
           arch="$(echo '${{ matrix.platform }}' | cut -d/ -f2)"
@@ -236,7 +262,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ env.RELEASE_TAG }}
         run: |
           New-Item -ItemType Directory -Force -Path pkg/desktop/dist | Out-Null
           $arch = "${{ matrix.platform }}".Split('/')[1]
@@ -245,13 +271,13 @@ jobs:
       - name: Package Linux
         if: runner.os == 'Linux'
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ env.RELEASE_TAG }}
         run: ./scripts/release/package_desktop_linux.sh "${VERSION#v}" amd64 pkg/desktop/dist
       - name: Attach desktop artifacts to release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" pkg/desktop/dist/* --clobber
+        run: gh release upload "$RELEASE_TAG" pkg/desktop/dist/* --clobber
       - uses: actions/upload-artifact@v4
         with:
           name: pegg-desktop-${{ matrix.slug }}
@@ -259,6 +285,7 @@ jobs:
 
   release-desktop-checksums:
     needs: release-desktop
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -278,15 +305,18 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" dist/pegg-desktop_checksums.txt --clobber
+        run: gh release upload "$RELEASE_TAG" dist/pegg-desktop_checksums.txt --clobber
 
   publish-homebrew:
     needs: release-desktop
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/download-artifact@v4
         with:
           pattern: pegg-desktop-darwin-*
@@ -295,7 +325,7 @@ jobs:
       - name: Update Homebrew tap
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ env.RELEASE_TAG }}
         run: |
           if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then
             echo "HOMEBREW_TAP_TOKEN is not set; skipping Homebrew publish."
@@ -321,11 +351,14 @@ jobs:
 
   publish-aur:
     needs: release-desktop
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/download-artifact@v4
         with:
           pattern: pegg-desktop-linux-amd64
@@ -333,7 +366,7 @@ jobs:
           merge-multiple: true
       - name: Prepare AUR package
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ env.RELEASE_TAG }}
         run: |
           version="${VERSION#v}"
           sha="$(sha256sum "dist/pegg-desktop_${version}_linux_amd64.tar.gz" | cut -d' ' -f1)"
@@ -350,12 +383,13 @@ jobs:
           commit_username: pegg-release-bot
           commit_email: info@pegg.dev
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "pegg-desktop ${{ github.ref_name }}"
+          commit_message: "pegg-desktop ${{ env.RELEASE_TAG }}"
         env:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
 
   publish-linux-repo:
     needs: release-desktop
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
