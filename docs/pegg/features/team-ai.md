@@ -18,7 +18,7 @@ provider appears as **`pegg-team <team>`**, for example `pegg-team Acme`.
 |---|---|
 | `team.ai.providers.view` | See providers, models and the Models page |
 | `team.ai.providers.manage` | Add, edit, verify, sync or delete providers and models |
-| `team.ai.defaults.view` | See agent, smart-router and STT defaults |
+| `team.ai.defaults.view` | See agent, smart-router, STT, judge, memory and compaction defaults |
 | `team.ai.defaults.manage` | Change those defaults |
 
 Team owners always have every team permission.
@@ -45,7 +45,9 @@ short key hint is shown afterwards. Providers can be verified, enabled/disabled
 or deleted; deleting a provider removes its model entries.
 
 A provider can be marked **Decision** and expose decision models. The smart
-router uses those models as its decision model.
+router uses those models as its decision model. The provisioned `pegg-forever`
+provider is created as **LLM + STT + Decision**, so its synced catalog can
+include chat, Whisper and JEV models side by side.
 
 ### Models
 
@@ -65,15 +67,31 @@ models, the router falls back to the LLM model list.
 
 ### Defaults
 
-- **Agent defaults** — default and fallback model for `orchestrator`,
-  `developer` and `explorer`.
+- **Agent defaults** — provider, default and fallback model for `orchestrator`,
+  `developer` and `explorer`. The provider defaults to the team provider.
 - **Smart router** — enable it, choose a decision model, and pick preferred,
   vision and per-difficulty models. The model pickers are multi-select over all
   enabled LLM models.
+- **Judge** — the model used by the permission judge, plus the confidence
+  threshold.
+- **Memory** — enable memory, choose the relevance gate and threshold, and set
+  separate observer and relevance models.
+- **Compaction** — the model used to summarise compacted history.
 - **Speech to text** — default STT model and an optional streaming model.
 
 `pegg team` writes these into the global `~/.pegg/pegg.json`; projects can still
 override them.
+
+When a team is provisioned, the service seeds an empty defaults document from the
+shared [`defaults.json`](forever-defaults.md) CDN file. Model references that do
+not exist in the team's catalog are dropped, and defaults that an owner has
+already saved are never overwritten.
+
+Use the exact **model keys** from the Models tab (or the team AI models API) in
+the CDN file. A partial defaults response usually means one or more model keys
+were not found in the catalog or the decision model was not enabled. Auto-seeded
+(owner-less) defaults are refreshed when a CLI client connects with `pegg team`;
+owner-saved defaults are left untouched.
 
 ### Usage
 

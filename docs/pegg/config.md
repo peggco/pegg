@@ -175,8 +175,8 @@ Controls when tools may run. See [Permissions](features/permissions.md).
 |---|---|---|---|
 | `default` | string | `"semi-ask"` | Mode when no rule matches: `allow`, `semi-ask`, `ask`, `semi-judge`, `judge` |
 | `rules` | object | — | Per-tool mode overrides, for example `{"bash": "ask", "write": "allow"}` |
-| `judge_provider` | string | — | Provider used by the judge. Decision-capable providers (currently `openrouter`) use a [decision model](features/permissions.md#the-judge-flow); other providers use the judge LLM. Unset → a decision model is used automatically when any decision-capable provider has an API key |
-| `judge_model` | string | — | Model used by the judge. For decision providers, the decision model ID (for example `typesafe/jev-1.13`); otherwise the judge LLM model |
+| `judge_provider` | string | — | Provider used by the judge. Decision-capable providers (`openrouter`, `pegg-forever`) use a [decision model](features/permissions.md#the-judge-flow); other providers use the judge LLM. Unset → a decision model is used automatically when any decision-capable provider has an API key |
+| `judge_model` | string | — | Model used by the judge. For decision providers, the decision model ID (for example `typesafe/jev-1.14`); otherwise the judge LLM model |
 | `judge_threshold` | number | `0.6` | Minimum yes-probability for the decision judge to allow a call |
 
 ### `compaction`
@@ -255,8 +255,8 @@ for a single run.
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | bool | `false` | Master toggle. When on, the orchestrator and every subagent are routed |
-| `provider` | string | — | Decision provider used for routing (currently `openrouter`). Unset → any decision-capable provider with an API key |
-| `model` | string | — | Decision model used for routing (default `typesafe/jev-1.13`) |
+| `provider` | string | — | Decision provider used for routing (`openrouter` or `pegg-forever`). Unset → any decision-capable provider with an API key |
+| `model` | string | — | Decision model used for routing (default `typesafe/jev-1.14`) |
 | `agents` | object | — | Per-agent model preferences, keyed by agent name (`orchestrator`, `explorer`, `developer`, ...) |
 
 Each agent entry accepts:
@@ -295,14 +295,14 @@ available.
 
 ### `agent_defaults`
 
-Per-agent default and fallback models written by `pegg team`. They are applied to
-the orchestrator at TUI startup and to subagents at spawn unless the smart router
-manages that agent.
+Per-agent default and fallback models written by `pegg team` or the recommended
+defaults applied after `pegg login-pegg`. They are applied to the orchestrator at
+TUI startup and to subagents at spawn unless the smart router manages that agent.
 
 | Key | Type | Description |
 |---|---|---|
 | `<agent>` | object | `orchestrator`, `developer` or `explorer` |
-| `.provider` | string | Provider name, normally `pegg-team <team>` |
+| `.provider` | string | Provider name, normally `pegg-forever` or `pegg-team <team>` |
 | `.model` | string | Default model key |
 | `.fallback_provider` | string | Fallback provider name |
 | `.fallback_model` | string | Fallback model key |
@@ -401,8 +401,10 @@ the full guide.
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | bool | `true` | Master switch for capture, storage, and panel injection |
-| `provider` | string | — | Provider for the observer/summarizer/librarian LLM calls. Unset → the running agent's model |
-| `model` | string | — | Model for memory LLM calls (only read when `provider` is set) |
+| `provider` | string | — | Legacy observer provider. Prefer `observer.provider` |
+| `model` | string | — | Legacy observer model. Prefer `observer.model` |
+| `observer` | object | — | `{ "provider": "...", "model": "..." }` for the observer/summarizer/librarian LLM calls. Unset → the running agent's model |
+| `relevance` | object | — | `{ "provider": "...", "model": "..." }` for decision-model relevance gating. Unset → the preferred decision provider |
 | `gate` | string | `"auto"` | Relevance gate for `mem-search`: `auto`, `decision`, `llm`, `score`, or `off` |
 | `threshold` | number | `0.6` | Minimum decision-model relevance for `decision` gating |
 | `context_budget` | int | `8000` | Max chars of the injected memory panel |
@@ -504,8 +506,8 @@ Map of server name to [language server config](configurations/lsp.md).
   "theme": "dark",
   "permission": {
     "default": "semi-ask",
-    "judge_provider": "openrouter",
-    "judge_model": "typesafe/jev-1.13",
+    "judge_provider": "pegg-forever",
+    "judge_model": "typesafe/jev-1.14",
     "judge_threshold": 0.8,
     "rules": { "bash": "ask", "write": "allow" }
   },
@@ -539,11 +541,13 @@ Map of server name to [language server config](configurations/lsp.md).
   },
   "memory": {
     "enabled": true,
-    "gate": "auto",
+    "gate": "decision",
     "threshold": 0.6,
     "context_budget": 8000,
     "max_results": 5,
-    "consolidate": true
+    "consolidate": true,
+    "observer": { "provider": "pegg-forever", "model": "deepseek-v4-flash" },
+    "relevance": { "provider": "pegg-forever", "model": "typesafe/jev-1.14" }
   },
   "scheduler": {
     "enabled": true,
