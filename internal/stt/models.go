@@ -7,11 +7,12 @@ import (
 )
 
 var providerBaseURLs = map[string]string{
-	"assemblyai": "https://api.assemblyai.com",
-	"openai":     "https://api.openai.com/v1",
-	"groq":       "https://api.groq.com/openai/v1",
-	"together":   "https://api.together.xyz/v1",
-	"fireworks":  "https://api.fireworks.ai/inference/v1",
+	"assemblyai":   "https://api.assemblyai.com",
+	"openai":       "https://api.openai.com/v1",
+	"groq":         "https://api.groq.com/openai/v1",
+	"together":     "https://api.together.xyz/v1",
+	"fireworks":    "https://api.fireworks.ai/inference/v1",
+	"pegg-forever": "https://forever.pegg.dev/v1",
 }
 
 var providerModels = map[string][]Model{
@@ -38,6 +39,9 @@ var providerModels = map[string][]Model{
 	},
 	"fireworks": {
 		{Provider: "fireworks", ID: "whisper-v3", Name: "Whisper v3"},
+	},
+	"pegg-forever": {
+		{Provider: "pegg-forever", ID: "whisper-large-v3-turbo", Name: "Whisper Large v3 Turbo"},
 	},
 }
 

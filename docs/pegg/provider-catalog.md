@@ -11,7 +11,9 @@ variable name used by the upstream SDK, for reference.
 
 The first-party `pegg-forever` provider points at `https://forever.pegg.dev/v1`.
 Add it with an API key or sign in through the browser with `pegg login-pegg`;
-see [Pegg Forever](providers-and-models.md#pegg-forever).
+see [Pegg Forever](providers-and-models.md#pegg-forever). It also serves decision
+models (`typesafe/jev-1.14` at `/chat/decisions`) and speech-to-text
+(`whisper-large-v3-turbo` at `/audio/transcriptions`).
 
 Base URLs containing `${VAR}` are resolved from the environment when the
 provider is configured; Pegg reports an error if the variable is unset.
