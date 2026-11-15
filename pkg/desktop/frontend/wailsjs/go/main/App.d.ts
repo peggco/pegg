@@ -150,6 +150,8 @@ export function RevealPath(arg1:string):Promise<void>;
 
 export function RevertSession(arg1:string,arg2:string,arg3:number):Promise<acpclient.SessionRevertResult>;
 
+export function RunViewCommand(arg1:string):Promise<void>;
+
 export function SaveCompactionSettings(arg1:main.CompactionSettings):Promise<void>;
 
 export function SaveConnectSettings(arg1:main.ConnectSettings):Promise<main.ConnectSettings>;
@@ -165,6 +167,8 @@ export function SavePermissionSettings(arg1:main.PermissionsSettings):Promise<vo
 export function SavePrefs(arg1:prefs.Prefs):Promise<prefs.Prefs>;
 
 export function SavePrefsOnly(arg1:prefs.Prefs):Promise<prefs.Prefs>;
+
+export function SaveViewSettings(arg1:string,arg2:Record<string, string>):Promise<void>;
 
 export function SearchCatalog(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number):Promise<main.CatalogSearchResult>;
 
@@ -209,6 +213,8 @@ export function Themes():Promise<Array<themes.Theme>>;
 export function TogglePluginSettings(arg1:string):Promise<boolean>;
 
 export function Version():Promise<string>;
+
+export function ViewState():Promise<main.DesktopViewState>;
 
 export function WindowClose():Promise<void>;
 

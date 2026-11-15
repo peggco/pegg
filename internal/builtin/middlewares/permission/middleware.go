@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/peggco/pegg/internal/agent"
 	agentmw "github.com/peggco/pegg/internal/agent/middleware"
 	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/core/config"
+	corehook "github.com/peggco/pegg/internal/core/hook"
 	decisionapi "github.com/peggco/pegg/internal/decision"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/vfs"
@@ -120,6 +122,13 @@ func (m *Middleware) InvokeTool(ctx context.Context, call llm.ToolCall, next age
 	name := call.Function.Name
 	mode := m.modeFor(name)
 
+	if decided, allow, reason := m.hookDecision(ctx, call); decided {
+		if allow {
+			return next(WithUnrestricted(ctx), call)
+		}
+		return "", &DeniedError{ToolName: call.Function.Name, Reason: reason}
+	}
+
 	if AutoApprove(ctx) && (mode == ModeAsk || mode == ModeSemiAsk) {
 		return next(WithUnrestricted(ctx), call)
 	}
@@ -151,6 +160,32 @@ func (m *Middleware) InvokeTool(ctx context.Context, call llm.ToolCall, next age
 		return m.gate(ctx, call, next, mode, err)
 	}
 	return next(ctx, call)
+}
+
+func (m *Middleware) hookDecision(ctx context.Context, call llm.ToolCall) (bool, bool, string) {
+	agentID := ""
+	if a := agent.FromContext(ctx); a != nil {
+		agentID = a.ID
+	}
+	permHook, errs := corehook.ApplyFilter(ctx, agent.HookToolPermission, agent.ToolPermissionHook{
+		AgentID:   agentID,
+		Tool:      call.Function.Name,
+		Arguments: call.Function.Arguments,
+	})
+	if len(errs) > 0 {
+		return false, false, ""
+	}
+	switch strings.ToLower(strings.TrimSpace(permHook.Decision)) {
+	case "allow":
+		return true, true, ""
+	case "deny", "reject":
+		reason := strings.TrimSpace(permHook.Reason)
+		if reason == "" {
+			reason = "denied by tool.permission hook"
+		}
+		return true, false, reason
+	}
+	return false, false, ""
 }
 
 func (m *Middleware) isPermissionError(ctx context.Context, call llm.ToolCall, err error) bool {

@@ -136,6 +136,17 @@ export function Settings() {
   const [pluginPages, setPluginPages] = useState<PluginSettingPage[]>([]);
   const t = useT();
   const models = useStore((state) => state.models);
+  const desktopView = useStore((state) => state.desktopView);
+  const viewPages = desktopView?.settingsPages ?? [];
+  const pages = useMemo(() => {
+    const merged = [...pluginPages];
+    for (const page of viewPages) {
+      if (!merged.some((candidate) => candidate.owner === page.owner && candidate.id === page.id)) {
+        merged.push(page);
+      }
+    }
+    return merged;
+  }, [pluginPages, viewPages]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -178,13 +189,13 @@ export function Settings() {
 
   useEffect(() => {
     if (typeof requestedTab === 'string' && requestedTab.startsWith('plugin:')) {
-      if (!pluginPages.some((page) => pluginTabID(page) === requestedTab)) {
+      if (!pages.some((page) => pluginTabID(page) === requestedTab)) {
         setTab('general');
       }
     }
-  }, [requestedTab, pluginPages]);
+  }, [requestedTab, pages]);
 
-  const activePluginPage = pluginPages.find((page) => pluginTabID(page) === tab) ?? null;
+  const activePluginPage = pages.find((page) => pluginTabID(page) === tab) ?? null;
 
   return (
     <div
@@ -219,10 +230,10 @@ export function Settings() {
                   ))}
                 </div>
               ))}
-              {pluginPages.length ? (
+              {pages.length ? (
                 <div>
                   <div className="settings-nav-label">{t('settings.pluginPagesGroup')}</div>
-                  {pluginPages.map((page) => {
+                  {pages.map((page) => {
                     const id = pluginTabID(page);
                     const Icon = pluginIcon(page);
                     return (

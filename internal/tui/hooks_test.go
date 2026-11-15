@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	"github.com/gdamore/tcell/v2"
@@ -66,5 +67,74 @@ func TestResolveGlobal(t *testing.T) {
 		if got := resolveGlobal(ev); got != c.want {
 			t.Errorf("resolveGlobal(%v, %q) = %v, want %v", c.key, c.rune, got, c.want)
 		}
+	}
+}
+
+func withPluginHooks(t *testing.T) {
+	t.Helper()
+	hook.SetDefault(hook.NewBus())
+	t.Cleanup(hook.ResetDefault)
+}
+
+func TestPluginSubmitHookRewritesMessage(t *testing.T) {
+	withPluginHooks(t)
+	hook.Default().Registry().AddFilterFor("test", HookSubmit, 10, func(ctx context.Context, value any) (any, error) {
+		payload := value.(map[string]any)
+		payload["message"] = "hooked: " + payload["message"].(string)
+		return payload, nil
+	})
+	if got := dispatchSubmit("hello"); got != "hooked: hello" {
+		t.Fatalf("dispatchSubmit = %q", got)
+	}
+}
+
+func TestPluginKeyHookConsumes(t *testing.T) {
+	withPluginHooks(t)
+	hook.Default().Registry().AddFilterFor("test", HookKey, 10, func(ctx context.Context, value any) (any, error) {
+		payload := value.(map[string]any)
+		payload["consumed"] = true
+		return payload, nil
+	})
+	ke := dispatchKey(tcell.NewEventKey(tcell.KeyCtrlK, 0, tcell.ModCtrl))
+	if !ke.Consumed {
+		t.Fatal("plugin hook should consume the key")
+	}
+}
+
+func TestPluginMessageAndNoticeHooks(t *testing.T) {
+	withPluginHooks(t)
+	hook.Default().Registry().AddFilterFor("test", HookMessage, 10, func(ctx context.Context, value any) (any, error) {
+		payload := value.(map[string]any)
+		payload["content"] = "redacted"
+		return payload, nil
+	})
+	hook.Default().Registry().AddFilterFor("test", HookNotice, 10, func(ctx context.Context, value any) (any, error) {
+		payload := value.(map[string]any)
+		payload["body"] = "friendly error"
+		return payload, nil
+	})
+	if got := applyMessageHook("a", "assistant", "", "secret"); got != "redacted" {
+		t.Fatalf("message = %q", got)
+	}
+	if got := applyNoticeHook("error", "raw", "error"); got != "friendly error" {
+		t.Fatalf("notice = %q", got)
+	}
+}
+
+func TestPluginLifecycleActions(t *testing.T) {
+	withPluginHooks(t)
+	var ready, quit int
+	hook.Default().Registry().AddActionFor("test", HookReady, 10, func(ctx context.Context, value any) (any, error) {
+		ready++
+		return nil, nil
+	})
+	hook.Default().Registry().AddActionFor("test", HookQuit, 10, func(ctx context.Context, value any) (any, error) {
+		quit++
+		return nil, nil
+	})
+	dispatchReady()
+	dispatchQuit()
+	if ready != 1 || quit != 1 {
+		t.Fatalf("ready=%d quit=%d", ready, quit)
 	}
 }

@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { PanelLeft } from 'lucide-react';
 import {
+  api,
   onAsk,
   onBinaryProgress,
+  onDesktopView,
   onDesktopUpdate,
   onFileDrop,
   onLoading,
@@ -43,10 +45,13 @@ import { CatalogModal } from './components/CatalogModal';
 import { Thread } from './components/Thread';
 import { TitleBar } from './components/TitleBar';
 import { UpdateBanner } from './components/UpdateBanner';
+import { ViewEmpty, ViewLines, ViewStatusBar } from './components/ViewChrome';
+import { matchViewBinding } from './lib/view';
 
 export function App() {
   const ready = useStore((s) => s.ready);
   const view = useStore((s) => s.view);
+  const desktopView = useStore((s) => s.desktopView);
   const binary = useStore((s) => s.binary);
   const providerSetup = useStore((s) => s.providerSetup);
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
@@ -72,6 +77,13 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    void api
+      .ViewState()
+      .then((state) => store.set({ desktopView: state }))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     const preventDefault = (event: DragEvent) => {
       event.preventDefault();
     };
@@ -92,6 +104,7 @@ export function App() {
       onLoading(handleLoading),
       onPendingClear(clearPending),
       onSessionsChanged(handleSessionsChanged),
+      onDesktopView((state) => store.set({ desktopView: state })),
       onBinaryProgress(setBinaryProgress),
       onDesktopUpdate(setSelfUpdate),
       onFileDrop((paths) => {
@@ -130,6 +143,14 @@ export function App() {
         toggleSettings(true);
         return;
       }
+
+      const binding = matchViewBinding(event, store.get().desktopView?.keyBindings);
+      if (binding) {
+        event.preventDefault();
+        void api.RunViewCommand(binding.id);
+        return;
+      }
+
       if (event.key === 'Escape') {
         const state = store.get();
         if (state.paletteOpen) togglePalette(false);
@@ -214,17 +235,21 @@ export function App() {
         ) : null}
         <Sidebar />
         <main className="main">
+          <ViewLines lines={desktopView?.header} className="view-header" />
           {view === 'welcome' ? (
             <div className="main-scroll">
               <Welcome />
+              <ViewEmpty items={desktopView?.emptyItems} />
             </div>
           ) : (
             <>
               <Thread />
+              <ViewStatusBar view={desktopView} />
               <div className={`composer-dock${subagentView && !asks.length ? ' hidden' : ''}`}>
                 {asks.length ? <AskPanel key={asks[0].requestId} ask={asks[0]} /> : null}
                 <div className={asks.length ? 'composer-hidden' : undefined} aria-hidden={asks.length ? true : undefined}>
-                  <Composer compact />
+                  <Composer compact placeholder={desktopView?.placeholder} />
+                  <ViewLines lines={desktopView?.footer} className="view-footer" />
                   <div className="composer-hint">
                     Type @ for files · / for commands · Pegg can run commands and edit files.
                   </div>

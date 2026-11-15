@@ -160,3 +160,29 @@ func (r *Registry) Reset() {
 	r.actions = map[string][]callback{}
 	r.next = 0
 }
+
+func (r *Registry) RemoveOwner(owner string) {
+	if owner == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.removeOwner(r.filters, owner)
+	r.removeOwner(r.actions, owner)
+}
+
+func (r *Registry) removeOwner(target map[string][]callback, owner string) {
+	for name, list := range target {
+		kept := make([]callback, 0, len(list))
+		for _, entry := range list {
+			if entry.owner != owner {
+				kept = append(kept, entry)
+			}
+		}
+		if len(kept) == 0 {
+			delete(target, name)
+			continue
+		}
+		target[name] = kept
+	}
+}

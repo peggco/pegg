@@ -2,7 +2,7 @@
 icon: lucide/webhook
 ---
 
-# Hooks
+# Plugin hooks
 
 Hooks let plugins cooperate without depending on each other: an integration plugin
 handles a named hook, and another plugin dispatches it. Pegg is only the broker.
@@ -13,6 +13,10 @@ There are two directions:
 |---|---|---|
 | Handle | Pegg host calls the plugin | `Hooks()` + `ExecuteHook()` |
 | Dispatch | Plugin calls the host | `pkg/plugin/hooks` client |
+
+The host also calls plugins at fixed points in the agent loop, LLM layer, sessions,
+tools, TUI, and desktop app. See the [hook catalog](../hooks/index.md) for every
+name, payload, and call site.
 
 ## Handling hooks
 

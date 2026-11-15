@@ -24,6 +24,7 @@ import { ToolCard, ToolIcon, bashCommand, classify, computeRows, outputText, wri
 import { PermissionCard, SubagentCard } from './Cards';
 import { planEntriesFromInput, filterTodoTools } from '../lib/plan';
 import { TaskCard } from './TaskCard';
+import { PluginCard, ViewEmpty } from './ViewChrome';
 
 export function Thread() {
   const mainItems = useStore((s) => s.chat.items);
@@ -38,8 +39,21 @@ export function Thread() {
   const activeAgent = useStore((s) => s.subagentView);
   const activeRun = activeAgent ? subagents[activeAgent] : undefined;
   const items = activeRun?.items ?? mainItems;
+  const desktopView = useStore((s) => s.desktopView);
+  const viewItems = useMemo<ChatItem[]>(
+    () =>
+      (activeAgent ? [] : desktopView?.chatItems ?? []).map((fragment, index) => ({
+        kind: 'plugin' as const,
+        id: `view:${fragment.id ?? index}`,
+        title: fragment.title,
+        badge: fragment.badge,
+        lines: fragment.lines ?? [],
+        createdAt: index,
+      })),
+    [activeAgent, desktopView?.chatItems],
+  );
   const historyMode = useStore((s) => s.prefs.chatHistoryMode);
-  const visibleItems = useMemo(() => filterTodoTools(items), [items]);
+  const visibleItems = useMemo(() => filterTodoTools([...items, ...viewItems]), [items, viewItems]);
   const rows = useMemo(() => buildHistoryRows(visibleItems, historyMode), [visibleItems, historyMode]);
   const activeGroupKey = activeActivityKey(rows, activeAgent ? activeRun?.status === 'running' : running);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
@@ -337,6 +351,8 @@ export function Thread() {
             </div>
           ) : null}
 
+          {visibleItems.length === 0 && !loading ? <ViewEmpty items={desktopView?.emptyItems} /> : null}
+
           {permissions.map((permission) => (
             <PermissionCard key={permission.requestId} request={permission} />
           ))}
@@ -384,6 +400,17 @@ function Item({
       );
     case 'reasoning':
       return <Reasoning item={item} />;
+    case 'plugin':
+      return (
+        <PluginCard
+          fragment={{
+            id: item.id,
+            title: item.title,
+            badge: item.badge,
+            lines: item.lines,
+          }}
+        />
+      );
     case 'tool':
       if (item.tool.task) {
         const task = item.tool.task;

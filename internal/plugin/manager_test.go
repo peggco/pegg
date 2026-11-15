@@ -11,6 +11,7 @@ import (
 	pkgplugin "github.com/peggco/pegg/pkg/plugin"
 
 	"github.com/peggco/pegg/internal/core/config"
+	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/core/logger"
 )
 
@@ -41,6 +42,8 @@ func (p *hookPlugin) ExecuteHook(req pkgplugin.HookRequest) (*pkgplugin.HookResu
 
 func newHookTestManager(t *testing.T, impls ...*hookPlugin) *Manager {
 	t.Helper()
+	corehook.ResetDefault()
+	t.Cleanup(corehook.ResetDefault)
 	mgr := NewManager(logger.New(logger.LevelError), config.DefaultConfig(), nil, nil, nil, nil, nil, nil, nil)
 	for _, impl := range impls {
 		instance := &PluginInstance{

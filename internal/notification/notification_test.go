@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
+	corehook "github.com/peggco/pegg/internal/core/hook"
 )
 
 func newTestNotifier(t *testing.T, enabled bool) (*Notifier, *fakeDriver, event.Bus) {
@@ -320,5 +322,32 @@ func TestTruncateRunes(t *testing.T) {
 	}
 	if !strings.HasSuffix(got, "...") {
 		t.Fatalf("expected ellipsis suffix, got %q", got[len(got)-3:])
+	}
+}
+
+func TestNotifierHookRewritesMessage(t *testing.T) {
+	corehook.SetDefault(corehook.NewBus())
+	t.Cleanup(corehook.ResetDefault)
+	corehook.Default().Registry().AddFilterFor("test", corehook.CoreNotification, 10, func(ctx context.Context, value any) (any, error) {
+		payload := value.(map[string]any)
+		payload["body"] = "hooked notification"
+		return payload, nil
+	})
+
+	n, fake, bus := newTestNotifier(t, true)
+	n.SetFocused(false)
+	bus.Publish(agent.TopicAgentAsk, agent.AgentAsk{
+		AgentID:   "a1",
+		AgentName: "coder",
+		Questions: []agent.AskQuestion{{ID: "q", Question: "Allow?"}},
+	})
+	bus.WaitAsync()
+
+	got := fake.notifications()
+	if len(got) != 1 {
+		t.Fatalf("notifications: %d", len(got))
+	}
+	if got[0].Message != "hooked notification" {
+		t.Fatalf("message = %q", got[0].Message)
 	}
 }

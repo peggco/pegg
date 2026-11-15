@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/peggco/pegg/internal/agent/wake"
 	"github.com/peggco/pegg/internal/builtin"
@@ -14,6 +15,7 @@ import (
 	"github.com/peggco/pegg/internal/core/cache"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
+	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/decision"
 	_ "github.com/peggco/pegg/internal/decision/providers"
@@ -37,6 +39,15 @@ import (
 	"github.com/peggco/pegg/internal/vfs"
 )
 
+func configureHooks(cfg *config.Config) {
+	bus := corehook.Default()
+	if cfg == nil || cfg.Hooks == nil {
+		bus.Configure(true, nil, 5*time.Second)
+		return
+	}
+	bus.Configure(cfg.Hooks.Active(), cfg.Hooks.Disabled, time.Duration(cfg.Hooks.TimeoutSeconds)*time.Second)
+}
+
 func Run(args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -46,6 +57,8 @@ func Run(args []string) error {
 	if err := config.SaveIfNotExists(cfg); err != nil {
 		return fmt.Errorf("bootstrap: save default config: %w", err)
 	}
+
+	configureHooks(cfg)
 
 	if os.Getenv("PEGG_SCHEDULE_RUN") == "1" && cfg.Permission != nil {
 		schedule.ApplyScheduledPermissions(cfg.Permission)
@@ -192,7 +205,31 @@ func Run(args []string) error {
 		defer pluginMgr.Close()
 	}
 
+	providers := make([]string, 0, len(cfg.Providers))
+	for _, p := range cfg.Providers {
+		if p.Provider != "" {
+			providers = append(providers, p.Provider)
+		}
+	}
+	corehook.ApplyAction(context.Background(), corehook.CoreConfigLoaded, corehook.ConfigLoaded{
+		Version:   config.AppVersion,
+		Theme:     cfg.Theme,
+		Language:  cfg.Language,
+		Providers: providers,
+	})
+	corehook.ApplyAction(context.Background(), corehook.CoreStartup, corehook.Startup{
+		Version:   config.AppVersion,
+		Workspace: fs.Root(),
+	})
+	defer func() {
+		corehook.ApplyAction(context.Background(), corehook.CoreShutdown, corehook.Shutdown{Reason: "exit"})
+	}()
+
 	log.Info("application started")
+
+	if command, errs := corehook.ApplyFilter(context.Background(), corehook.CoreCommand, corehook.Command{Args: args}); len(errs) == 0 {
+		args = command.Args
+	}
 
 	app := cli.New(bus, cfg, log, fs, sess, mgr, decMgr, memMgr, mcpMgr, lspMgr, cacheStore, pluginMgr, sched, runCoord, liveHub)
 	if err := app.Execute(args); err != nil {

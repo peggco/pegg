@@ -25,6 +25,8 @@ type extTab struct {
 	drawTop        int
 	drawHeight     int
 	settingsValues map[string]string
+	hook           bool
+	hookTab        string
 }
 
 func newExtTab(s *Settings, page pkgplugin.TUIPage) *extTab {
@@ -405,6 +407,10 @@ func (t *extTab) cycleItemOption(hit *extHit, delta int) bool {
 }
 
 func (t *extTab) saveSettings() {
+	if t.hook {
+		t.settings.saveHookValues(t)
+		return
+	}
 	if t.page.SaveAction == "" {
 		return
 	}
@@ -557,22 +563,33 @@ func (s *Settings) reloadExtTabs() {
 	for _, page := range pages {
 		s.extTabs = append(s.extTabs, newExtTab(s, page))
 	}
+	s.rebuildSlots()
 }
 
 func (s *Settings) tabLabels() []string {
-	labels := tabNames()
-	for _, tab := range s.extTabs {
-		labels = append(labels, tab.Title())
+	labels := make([]string, 0, len(s.slots))
+	for _, slot := range s.slots {
+		if slot.ext != nil {
+			labels = append(labels, slot.ext.Title())
+			continue
+		}
+		labels = append(labels, builtinTabTitle(slot.kind))
 	}
 	return labels
 }
 
 func (s *Settings) extTabAt(index int) *extTab {
-	idx := index - builtinTabCount
-	if idx < 0 || idx >= len(s.extTabs) {
+	if index < 0 || index >= len(s.slots) {
 		return nil
 	}
-	return s.extTabs[idx]
+	return s.slots[index].ext
+}
+
+func (s *Settings) kindAt(index int) (tabKind, bool) {
+	if index < 0 || index >= len(s.slots) || s.slots[index].ext != nil {
+		return 0, false
+	}
+	return s.slots[index].kind, true
 }
 
 func (s *Settings) refreshExtPage(tab *extTab) {

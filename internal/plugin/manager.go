@@ -125,7 +125,7 @@ func NewManager(
 		plugins:   make(map[string]*PluginInstance),
 		clients:   make(map[string]*goplugin.Client),
 		exclude:   make(map[string]bool),
-		registry:  corehook.NewRegistry(),
+		registry:  corehook.Default().Registry(),
 		hookDepth: make(map[string]int),
 	}
 }
@@ -978,6 +978,7 @@ func (m *Manager) Close() {
 	m.eventUnsubs = nil
 
 	for name, instance := range m.plugins {
+		m.registry.RemoveOwner(name)
 		done := make(chan struct{})
 		go func(p pkgplugin.Plugin) {
 			_ = p.Close()

@@ -286,6 +286,10 @@ export function RevertSession(arg1, arg2, arg3) {
   return window['go']['main']['App']['RevertSession'](arg1, arg2, arg3);
 }
 
+export function RunViewCommand(arg1) {
+  return window['go']['main']['App']['RunViewCommand'](arg1);
+}
+
 export function SaveCompactionSettings(arg1) {
   return window['go']['main']['App']['SaveCompactionSettings'](arg1);
 }
@@ -316,6 +320,10 @@ export function SavePrefs(arg1) {
 
 export function SavePrefsOnly(arg1) {
   return window['go']['main']['App']['SavePrefsOnly'](arg1);
+}
+
+export function SaveViewSettings(arg1, arg2) {
+  return window['go']['main']['App']['SaveViewSettings'](arg1, arg2);
 }
 
 export function SearchCatalog(arg1, arg2, arg3, arg4, arg5) {
@@ -404,6 +412,10 @@ export function TogglePluginSettings(arg1) {
 
 export function Version() {
   return window['go']['main']['App']['Version']();
+}
+
+export function ViewState() {
+  return window['go']['main']['App']['ViewState']();
 }
 
 export function WindowClose() {

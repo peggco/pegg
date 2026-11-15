@@ -348,10 +348,39 @@ type Config struct {
 	Memory          *MemoryConfig                   `json:"memory,omitempty"`
 	Scheduler       *SchedulerConfig                `json:"scheduler,omitempty"`
 	Plugins         PluginConfig                    `json:"plugins,omitempty"`
+	Hooks           *HooksConfig                    `json:"hooks,omitempty"`
 	Connect         *ConnectConfig                  `json:"connect,omitempty"`
 	STT             *STTConfig                      `json:"stt,omitempty"`
 	MCPServers      map[string]MCPServerConfig      `json:"mcp_servers,omitempty"`
 	LanguageServers map[string]LanguageServerConfig `json:"language_servers,omitempty"`
+}
+
+type HooksConfig struct {
+	Enabled        *bool    `json:"enabled,omitempty"`
+	Disabled       []string `json:"disabled,omitempty"`
+	TimeoutSeconds int      `json:"timeout_seconds,omitempty"`
+}
+
+func (h *HooksConfig) Active() bool {
+	if h == nil {
+		return true
+	}
+	return h.Enabled == nil || *h.Enabled
+}
+
+func normalizeHooks(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.Hooks == nil {
+		cfg.Hooks = &HooksConfig{}
+	}
+	if cfg.Hooks.TimeoutSeconds <= 0 {
+		cfg.Hooks.TimeoutSeconds = 5
+	}
+	if cfg.Hooks.TimeoutSeconds > 60 {
+		cfg.Hooks.TimeoutSeconds = 60
+	}
 }
 
 func DefaultConfig() *Config {
@@ -406,6 +435,9 @@ func DefaultConfig() *Config {
 		},
 		Plugins: PluginConfig{
 			Enabled: true,
+		},
+		Hooks: &HooksConfig{
+			TimeoutSeconds: 5,
 		},
 		Connect: &ConnectConfig{
 			Enabled:        false,
@@ -537,6 +569,7 @@ func Load() (*Config, error) {
 	}
 
 	normalizeSTTDrivers(config)
+	normalizeHooks(config)
 
 	return config, nil
 }

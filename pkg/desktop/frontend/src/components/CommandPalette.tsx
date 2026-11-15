@@ -49,6 +49,20 @@ export function CommandPalette() {
     }
   }, [open]);
 
+  const desktopView = useStore((s) => s.desktopView);
+  const viewActions = useMemo<Item[]>(
+    () =>
+      (desktopView?.menuItems ?? []).map((item) => ({
+        id: `view:${item.id}`,
+        label: item.title,
+        hint: item.badge,
+        keywords: item.detail,
+        icon: Terminal,
+        run: () => void api.RunViewCommand(item.id),
+      })),
+    [desktopView?.menuItems],
+  );
+
   const actions = useMemo<Item[]>(() => {
     const items: Item[] = [
       {
@@ -124,7 +138,7 @@ export function CommandPalette() {
   }, []);
 
   const all = useMemo<Item[]>(() => {
-    const items = [...actions];
+    const items = [...actions, ...viewActions];
     for (const session of sessions.slice(0, 30)) {
       items.push({
         id: `session-${session.id}`,
@@ -136,7 +150,7 @@ export function CommandPalette() {
       });
     }
     return items;
-  }, [actions, sessions]);
+  }, [actions, sessions, viewActions]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

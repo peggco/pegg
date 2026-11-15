@@ -621,6 +621,268 @@ export namespace main {
 		}
 	}
 	
+	export class PluginSettingAction {
+	    id: string;
+	    label: string;
+	    description?: string;
+	    confirm?: boolean;
+	    fields?: PluginSettingField[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PluginSettingAction(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.description = source["description"];
+	        this.confirm = source["confirm"];
+	        this.fields = this.convertValues(source["fields"], PluginSettingField);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class PluginSettingField {
+	    id: string;
+	    label?: string;
+	    placeholder?: string;
+	    value?: string;
+	    secret?: boolean;
+	    required?: boolean;
+	    options?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PluginSettingField(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.placeholder = source["placeholder"];
+	        this.value = source["value"];
+	        this.secret = source["secret"];
+	        this.required = source["required"];
+	        this.options = source["options"];
+	    }
+	}
+	export class PluginSettingItem {
+	    id?: string;
+	    title: string;
+	    detail?: string;
+	    badge?: string;
+	    disabled?: boolean;
+	    fields?: PluginSettingField[];
+	    action?: string;
+	    column?: string;
+	    meta?: Record<string, string>;
+	
+	    static createFrom(source: any = {}) {
+	        return new PluginSettingItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.detail = source["detail"];
+	        this.badge = source["badge"];
+	        this.disabled = source["disabled"];
+	        this.fields = this.convertValues(source["fields"], PluginSettingField);
+	        this.action = source["action"];
+	        this.column = source["column"];
+	        this.meta = source["meta"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class PluginSettingSection {
+	    title: string;
+	    kind?: string;
+	    items: PluginSettingItem[];
+	    note?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PluginSettingSection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
+	        this.kind = source["kind"];
+	        this.items = this.convertValues(source["items"], PluginSettingItem);
+	        this.note = source["note"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class PluginSettingMetric {
+	    label: string;
+	    value: string;
+	    detail?: string;
+	    badge?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PluginSettingMetric(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.value = source["value"];
+	        this.detail = source["detail"];
+	        this.badge = source["badge"];
+	    }
+	}
+	export class PluginSettingPage {
+	    id: string;
+	    title: string;
+	    description?: string;
+	    owner: string;
+	    layout?: string;
+	    metrics?: PluginSettingMetric[];
+	    sections: PluginSettingSection[];
+	    actions: PluginSettingAction[];
+	    settings?: PluginSettingField[];
+	    saveAction?: string;
+	    footer?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PluginSettingPage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.owner = source["owner"];
+	        this.layout = source["layout"];
+	        this.metrics = this.convertValues(source["metrics"], PluginSettingMetric);
+	        this.sections = this.convertValues(source["sections"], PluginSettingSection);
+	        this.actions = this.convertValues(source["actions"], PluginSettingAction);
+	        this.settings = this.convertValues(source["settings"], PluginSettingField);
+	        this.saveAction = source["saveAction"];
+	        this.footer = source["footer"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DesktopViewState {
+	    header?: plugin.ViewLine[];
+	    footer?: plugin.ViewLine[];
+	    statusLeft?: plugin.ViewSpan[];
+	    statusRight?: plugin.ViewSpan[];
+	    replaceStatus?: boolean;
+	    chatItems?: plugin.ViewFragment[];
+	    emptyItems?: plugin.ViewFragment[];
+	    placeholder?: string;
+	    menuItems?: plugin.ViewMenuItem[];
+	    keyBindings?: plugin.ViewKeyBinding[];
+	    settingsPages?: PluginSettingPage[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DesktopViewState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.header = this.convertValues(source["header"], plugin.ViewLine);
+	        this.footer = this.convertValues(source["footer"], plugin.ViewLine);
+	        this.statusLeft = this.convertValues(source["statusLeft"], plugin.ViewSpan);
+	        this.statusRight = this.convertValues(source["statusRight"], plugin.ViewSpan);
+	        this.replaceStatus = source["replaceStatus"];
+	        this.chatItems = this.convertValues(source["chatItems"], plugin.ViewFragment);
+	        this.emptyItems = this.convertValues(source["emptyItems"], plugin.ViewFragment);
+	        this.placeholder = source["placeholder"];
+	        this.menuItems = this.convertValues(source["menuItems"], plugin.ViewMenuItem);
+	        this.keyBindings = this.convertValues(source["keyBindings"], plugin.ViewKeyBinding);
+	        this.settingsPages = this.convertValues(source["settingsPages"], PluginSettingPage);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ForeverStatus {
 	    state: string;
 	    url?: string;
@@ -1086,219 +1348,11 @@ export namespace main {
 	        this.status = source["status"];
 	    }
 	}
-	export class PluginSettingField {
-	    id: string;
-	    label?: string;
-	    placeholder?: string;
-	    value?: string;
-	    secret?: boolean;
-	    required?: boolean;
-	    options?: string[];
 	
-	    static createFrom(source: any = {}) {
-	        return new PluginSettingField(source);
-	    }
 	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.label = source["label"];
-	        this.placeholder = source["placeholder"];
-	        this.value = source["value"];
-	        this.secret = source["secret"];
-	        this.required = source["required"];
-	        this.options = source["options"];
-	    }
-	}
-	export class PluginSettingAction {
-	    id: string;
-	    label: string;
-	    description?: string;
-	    confirm?: boolean;
-	    fields?: PluginSettingField[];
 	
-	    static createFrom(source: any = {}) {
-	        return new PluginSettingAction(source);
-	    }
 	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.label = source["label"];
-	        this.description = source["description"];
-	        this.confirm = source["confirm"];
-	        this.fields = this.convertValues(source["fields"], PluginSettingField);
-	    }
 	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	
-	export class PluginSettingItem {
-	    id?: string;
-	    title: string;
-	    detail?: string;
-	    badge?: string;
-	    disabled?: boolean;
-	    fields?: PluginSettingField[];
-	    action?: string;
-	    column?: string;
-	    meta?: Record<string, string>;
-	
-	    static createFrom(source: any = {}) {
-	        return new PluginSettingItem(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.title = source["title"];
-	        this.detail = source["detail"];
-	        this.badge = source["badge"];
-	        this.disabled = source["disabled"];
-	        this.fields = this.convertValues(source["fields"], PluginSettingField);
-	        this.action = source["action"];
-	        this.column = source["column"];
-	        this.meta = source["meta"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class PluginSettingMetric {
-	    label: string;
-	    value: string;
-	    detail?: string;
-	    badge?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new PluginSettingMetric(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.label = source["label"];
-	        this.value = source["value"];
-	        this.detail = source["detail"];
-	        this.badge = source["badge"];
-	    }
-	}
-	export class PluginSettingSection {
-	    title: string;
-	    kind?: string;
-	    items: PluginSettingItem[];
-	    note?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new PluginSettingSection(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.title = source["title"];
-	        this.kind = source["kind"];
-	        this.items = this.convertValues(source["items"], PluginSettingItem);
-	        this.note = source["note"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class PluginSettingPage {
-	    id: string;
-	    title: string;
-	    description?: string;
-	    owner: string;
-	    layout?: string;
-	    metrics?: PluginSettingMetric[];
-	    sections: PluginSettingSection[];
-	    actions: PluginSettingAction[];
-	    settings?: PluginSettingField[];
-	    saveAction?: string;
-	    footer?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new PluginSettingPage(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.title = source["title"];
-	        this.description = source["description"];
-	        this.owner = source["owner"];
-	        this.layout = source["layout"];
-	        this.metrics = this.convertValues(source["metrics"], PluginSettingMetric);
-	        this.sections = this.convertValues(source["sections"], PluginSettingSection);
-	        this.actions = this.convertValues(source["actions"], PluginSettingAction);
-	        this.settings = this.convertValues(source["settings"], PluginSettingField);
-	        this.saveAction = source["saveAction"];
-	        this.footer = source["footer"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 	export class PluginSettingResult {
 	    output?: string;
 	    page?: PluginSettingPage;
@@ -1798,6 +1852,136 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace plugin {
+	
+	export class ViewSpan {
+	    text: string;
+	    style?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ViewSpan(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.style = source["style"];
+	    }
+	}
+	export class ViewLine {
+	    text?: string;
+	    spans?: ViewSpan[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ViewLine(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.spans = this.convertValues(source["spans"], ViewSpan);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ViewFragment {
+	    id?: string;
+	    title?: string;
+	    badge?: string;
+	    style?: string;
+	    lines?: ViewLine[];
+	    priority?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ViewFragment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.badge = source["badge"];
+	        this.style = source["style"];
+	        this.lines = this.convertValues(source["lines"], ViewLine);
+	        this.priority = source["priority"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ViewKeyBinding {
+	    id: string;
+	    key: string;
+	    label: string;
+	    description?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ViewKeyBinding(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.key = source["key"];
+	        this.label = source["label"];
+	        this.description = source["description"];
+	    }
+	}
+	
+	export class ViewMenuItem {
+	    id: string;
+	    title: string;
+	    detail?: string;
+	    badge?: string;
+	    disabled?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ViewMenuItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.detail = source["detail"];
+	        this.badge = source["badge"];
+	        this.disabled = source["disabled"];
+	    }
 	}
 
 }
