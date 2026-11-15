@@ -34,12 +34,14 @@ type Deps struct {
 }
 
 type ToolSpec struct {
-	Name        string
-	Description string
-	Parameters  string
-	Bundle      string
-	Group       string
-	ReadOnly    bool
+	Name            string
+	Description     string
+	Parameters      string
+	Bundle          string
+	Group           string
+	ReadOnly        bool
+	AlwaysAvailable bool
+	Agents          []string
 }
 
 type ToolRequest struct {

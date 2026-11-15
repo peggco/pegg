@@ -18,6 +18,7 @@ import (
 	"github.com/peggco/pegg/internal/llm/subscription"
 	"github.com/peggco/pegg/internal/mcp"
 	"github.com/peggco/pegg/internal/pegglogin"
+	"github.com/peggco/pegg/internal/plugin"
 	"github.com/peggco/pegg/internal/skill"
 	"github.com/peggco/pegg/internal/stt"
 	"github.com/peggco/pegg/internal/tui/i18n"
@@ -220,7 +221,7 @@ func (a *App) SettingsSnapshot() (SettingsSnapshot, error) {
 	snap.General = buildGeneralSettings(cfg, a)
 	snap.Session = buildSessionSettings(a)
 	snap.Compaction = buildCompactionSettings(cfg)
-	snap.Permissions = buildPermissionSettings(cfg)
+	snap.Permissions = buildPermissionSettings(cfg, a.pluginMgr)
 	snap.Memory = buildMemorySettings(cfg, globalDir)
 	snap.MCP = buildMCPSettings(cfg)
 	snap.Skills = a.buildSkillSettings(ws, globalDir)
@@ -412,7 +413,7 @@ func buildCompactionSettings(cfg *config.Config) CompactionSettings {
 	return out
 }
 
-func buildPermissionSettings(cfg *config.Config) PermissionsSettings {
+func buildPermissionSettings(cfg *config.Config, manager *plugin.Manager) PermissionsSettings {
 	out := PermissionsSettings{
 		Default:        "semi-ask",
 		Modes:          []string{"allow", "semi-ask", "ask", "semi-judge", "judge"},
@@ -451,6 +452,19 @@ func buildPermissionSettings(cfg *config.Config) PermissionsSettings {
 		}
 		out.Tools = append(out.Tools, ToolPermission{Name: tool.Name, Mode: mode, Group: tool.Group})
 		seenTools[tool.Name] = true
+	}
+	if manager != nil {
+		for _, name := range manager.ToolNames() {
+			if seenTools[name] {
+				continue
+			}
+			mode := rules[name]
+			if mode == "" {
+				mode = out.Default
+			}
+			out.Tools = append(out.Tools, ToolPermission{Name: name, Mode: mode, Group: "Plugins"})
+			seenTools[name] = true
+		}
 	}
 	for _, registered := range agenttools.List() {
 		name := registered.Name()

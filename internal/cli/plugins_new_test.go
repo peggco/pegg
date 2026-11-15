@@ -26,6 +26,7 @@ func TestScaffoldPlugin(t *testing.T) {
 		"go.mod",
 		"main.go",
 		"plugin.go",
+		"skill.go",
 		"commands.go",
 		"README.md",
 		".gitignore",
@@ -42,6 +43,12 @@ func TestScaffoldPlugin(t *testing.T) {
 	pluginGo, _ := os.ReadFile(filepath.Join(dir, "plugin.go"))
 	if !strings.Contains(string(pluginGo), "peggplugin.Base") || !strings.Contains(string(pluginGo), "demo_echo") {
 		t.Fatalf("plugin.go: %s", pluginGo)
+	}
+	skillGo, _ := os.ReadFile(filepath.Join(dir, "skill.go"))
+	for _, want := range []string{"ToolBundles", `"example"`, "demo_echo", "AllowedTools"} {
+		if !strings.Contains(string(skillGo), want) {
+			t.Fatalf("skill.go missing %q:\n%s", want, skillGo)
+		}
 	}
 	gitignore, _ := os.ReadFile(filepath.Join(dir, ".gitignore"))
 	if !strings.Contains(string(gitignore), "/pegg-demo") || !strings.Contains(string(gitignore), "/bin/") {
@@ -73,11 +80,11 @@ func TestScaffoldPlugin(t *testing.T) {
 
 func TestPluginBinaryName(t *testing.T) {
 	cases := map[string]string{
-		"demo":            "pegg-demo",
-		"Demo":            "pegg-demo",
-		"my plugin":       "pegg-my-plugin",
-		"google-calendar": "pegg-google-calendar",
-		"  ":              "pegg-plugin",
+		"demo":      "pegg-demo",
+		"Demo":      "pegg-demo",
+		"my plugin": "pegg-my-plugin",
+		"usage":     "pegg-usage",
+		"  ":        "pegg-plugin",
 	}
 	for input, want := range cases {
 		if got := pluginBinaryName(input); got != want {

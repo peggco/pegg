@@ -154,8 +154,24 @@ still available.
 pegg plugins new my-plugin --module github.com/me/my-plugin
 ```
 
-The scaffold creates a working plugin module with the public SDK, an example tool,
-build/install instructions, a tag-driven GitHub release workflow, and a `.gitignore`.
+The scaffold creates a working plugin module with the public SDK, an example tool and
+skill, build/install instructions, a tag-driven GitHub release workflow, and a
+`.gitignore`.
+
+Keep plugin tools behind a skill: declare a `Bundle` on each `ToolSpec`, list that
+bundle in the skill's `ToolBundles`, and load the skill when the tools are needed.
+Pegg registers plugin tools lazily, so an agent only receives them after the skill is
+loaded. This keeps the base tool list and context small.
+
+### Always-available tools
+
+A plugin can opt a tool out of skill gating with `AlwaysAvailable: true` on its
+`ToolSpec`. An empty `Agents` list adds it to every agent and subagent. Set `Agents` to
+agent names (for example `["orchestrator", "developer"]`) to scope it.
+
+Always-available tools are registered globally and injected into matching agents on
+every run. Skill-gated tools remain bundle-only. Permission settings still list all
+plugin tools, whether or not a skill is loaded.
 
 ## Troubleshooting
 

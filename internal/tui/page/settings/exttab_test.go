@@ -144,7 +144,7 @@ func TestExtTabTilesAndToolbar(t *testing.T) {
 	page := pkgplugin.TUIPage{
 		ID:      "p",
 		Title:   "Kanban",
-		Metrics: []pkgplugin.TUIMetric{{Label: "Cards", Value: "1"}, {Label: "GitHub", Value: "ready", Detail: "via pegg-github"}},
+		Metrics: []pkgplugin.TUIMetric{{Label: "Cards", Value: "1"}, {Label: "GitHub", Value: "ready", Detail: "via pegg-kanban-github"}},
 		Actions: []pkgplugin.TUIAction{
 			{ID: "start", Label: "Start server"},
 			{ID: "open", Label: "Open board"},

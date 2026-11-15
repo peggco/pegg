@@ -504,6 +504,9 @@ func (a *Agent) syncDynamicTools() {
 		if !ok || !dynamic.IsDynamic() {
 			continue
 		}
+		if scoped, ok := t.(tool.AgentScopedDynamic); ok && !scoped.AvailableForAgent(a.Name) {
+			continue
+		}
 		active[t.Name()] = true
 		if _, exists := a.Tools.Get(t.Name()); exists {
 			a.Tools.Unregister(t.Name())

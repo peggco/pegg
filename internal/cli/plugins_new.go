@@ -114,14 +114,16 @@ git push origin v0.1.0
 
 ## Use
 
-Load a skill whose frontmatter contains `+"`tools: example`"+`, then call the
-`+"`%s_echo`"+` tool.
-`, opts.name, binary, binary, binary, binary, opts.pegg, opts.name)
+Load the `+"`%s`"+` skill (it activates the `+"`example`"+` tool bundle), then call the
+`+"`%s_echo`"+` tool. The plugin's tools are only added to an agent when the skill is
+loaded, so keep tools behind skills to preserve context.
+`, opts.name, binary, binary, binary, binary, opts.pegg, opts.name, opts.name)
 
 	files := map[string]string{
 		"go.mod":                        goMod,
 		"main.go":                       mainGo,
 		"plugin.go":                     pluginGo,
+		"skill.go":                      renderPluginSkill(opts.pegg, opts.name),
 		"commands.go":                   commandsGo,
 		"README.md":                     readme,
 		".gitignore":                    renderPluginGitignore(binary),
