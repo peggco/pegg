@@ -2,9 +2,16 @@ name: Documentation
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 permissions:
   contents: read
