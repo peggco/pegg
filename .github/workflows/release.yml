@@ -305,6 +305,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: gh release upload "$RELEASE_TAG" dist/pegg-desktop_checksums.txt --clobber
 
   publish-homebrew:
@@ -407,6 +408,6 @@ jobs:
             echo "CLOUDSMITH_API_KEY is not set; skipping apt/rpm publish."
             exit 0
           fi
-          pip install --quiet cloudsmith-cli
-          cloudsmith push deb peggco/pegg any-distro/any-version dist/*.deb
-          cloudsmith push rpm peggco/pegg any-distro/any-version dist/*.rpm
+          pip install --quiet "cloudsmith-cli==1.31.1"
+          cloudsmith push deb peggco/pegg/any-distro/any-version dist/*.deb
+          cloudsmith push rpm peggco/pegg/any-distro/any-version dist/*.rpm
