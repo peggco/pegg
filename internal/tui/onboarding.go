@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 
@@ -20,9 +21,14 @@ const (
 	onboardingChoice onboardingState = iota
 	onboardingAPIKey
 	onboardingWaiting
+	onboardingDefaultsLoading
+	onboardingDefaults
+	onboardingModelsLoading
 )
 
 var verifyOnboardingKey = pegglogin.Verify
+
+var fetchOnboardingDefaults = pegglogin.FetchDefaults
 
 type providerOnboarding struct {
 	app   *App
@@ -36,6 +42,12 @@ type providerOnboarding struct {
 	message   string
 	inner     layout.Region
 	cancelHit layout.Region
+
+	pending        config.LLMConfig
+	defaults       *pegglogin.Defaults
+	defaultsReport pegglogin.Report
+	defaultsList   *components.List
+	defaultsRegion layout.Region
 }
 
 var _ components.MouseComponent = (*providerOnboarding)(nil)
@@ -119,7 +131,7 @@ func (o *providerOnboarding) saveAPIKey(key string) {
 		APIKey:   loginCfg.APIKey,
 		Timeout:  loginCfg.Timeout,
 	}
-	o.finish(lc)
+	o.beginDefaults(lc)
 	verify := verifyOnboardingKey
 	go func() {
 		if err := verify(context.Background(), loginCfg.BaseURL, loginCfg.APIKey, nil); err != nil {
@@ -188,14 +200,58 @@ func (o *providerOnboarding) finishLogin(id int, cfg *pegglogin.Config, err erro
 		APIKey:   cfg.APIKey,
 		Timeout:  cfg.Timeout,
 	}
-	o.finish(lc)
+	o.beginDefaults(lc)
 }
 
 func (o *providerOnboarding) finish(lc config.LLMConfig) {
-	o.app.onboardingActive.Store(false)
+	o.pending = lc
+	if o.app.deps.LLM == nil {
+		o.closeAfterModels()
+		return
+	}
 	o.app.providerAdded(lc)
-	o.app.setOverlay(nil)
+	o.state = onboardingModelsLoading
+	o.message = i18n.T("onboarding.loadingModels")
+	o.app.requestRedraw()
+
+	o.app.reloadConfig()
+	o.app.chatMu.Lock()
+	providers := []config.LLMConfig{lc}
+	if o.app.deps.Config != nil && len(o.app.deps.Config.Providers) > 0 {
+		providers = append([]config.LLMConfig(nil), o.app.deps.Config.Providers...)
+	}
+	o.app.chatMu.Unlock()
+
+	go func() {
+		ready := false
+		deadline := time.Now().Add(60 * time.Second)
+		for {
+			if models, err := o.app.deps.LLM.Models(lc.Provider); err == nil && len(models) > 0 {
+				ready = true
+				break
+			}
+			if time.Now().After(deadline) {
+				break
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			o.app.deps.LLM.EnsureProviders(ctx, providers)
+			o.app.deps.LLM.RefreshEmptyProviders(ctx, providers)
+			cancel()
+			time.Sleep(750 * time.Millisecond)
+		}
+		o.app.postUI(func() {
+			if !ready {
+				o.app.errorMsg = i18n.T("onboarding.modelsTimeout")
+			}
+			o.closeAfterModels()
+		})
+	}()
+}
+
+func (o *providerOnboarding) closeAfterModels() {
+	o.app.onboardingActive.Store(false)
 	o.app.selectPreferred()
+	o.app.setOverlay(nil)
 	o.app.requestRedraw()
 }
 
@@ -225,6 +281,22 @@ func (o *providerOnboarding) HandleKey(ev *tcell.EventKey) bool {
 			o.cancelLogin()
 		}
 		return true
+	case onboardingDefaultsLoading:
+		if ev.Key() == tcell.KeyEsc {
+			o.finish(o.pending)
+		}
+		return true
+	case onboardingDefaults:
+		if ev.Key() == tcell.KeyEsc {
+			o.finish(o.pending)
+			return true
+		}
+		if o.defaultsList != nil {
+			return o.defaultsList.HandleKey(ev)
+		}
+		return true
+	case onboardingModelsLoading:
+		return true
 	}
 	return false
 }
@@ -249,6 +321,15 @@ func (o *providerOnboarding) HandleMouse(x, y int, buttons tcell.ButtonMask) boo
 			return true
 		}
 		return true
+	case onboardingDefaultsLoading:
+		return true
+	case onboardingDefaults:
+		if o.defaultsList != nil {
+			return o.defaultsList.HandleMouse(x, y, buttons)
+		}
+		return true
+	case onboardingModelsLoading:
+		return true
 	}
 	return false
 }
@@ -258,13 +339,21 @@ func (o *providerOnboarding) Draw(s tcell.Screen, bounds layout.Region, _ bool) 
 	components.DrawModalBackdrop(s, bounds)
 
 	w, h := 64, 16
+	title := i18n.T("onboarding.title")
+	if o.state == onboardingDefaults || o.state == onboardingDefaultsLoading {
+		w, h = 76, 24
+		title = i18n.T("onboarding.defaultsTitle")
+	}
+	if o.state == onboardingModelsLoading {
+		title = i18n.T("onboarding.modelsTitle")
+	}
 	if bounds.Width-8 < w {
 		w = bounds.Width - 8
 	}
 	if bounds.Height-4 < h {
 		h = bounds.Height - 4
 	}
-	inner := components.DrawCenteredBox(s, bounds, w, h, i18n.T("onboarding.title"))
+	inner := components.DrawCenteredBox(s, bounds, w, h, title)
 	o.inner = inner
 	bg := th.Base().Background(th.InputBg)
 
@@ -300,6 +389,14 @@ func (o *providerOnboarding) Draw(s tcell.Screen, bounds layout.Region, _ bool) 
 		components.DrawText(s, o.cancelHit.Left, o.cancelHit.Top, "[ "+i18n.T("onboarding.cancel")+" ]",
 			bg.Foreground(th.Accent))
 		components.DrawFooter(s, inner, i18n.T("common.enterSaveEscCancel"))
+	case onboardingDefaultsLoading:
+		components.DrawText(s, inner.Left, inner.Top, o.message, bg.Foreground(th.Accent))
+		components.DrawFooter(s, inner, i18n.T("common.escCancel"))
+	case onboardingDefaults:
+		o.drawDefaults(s, inner, th, bg)
+	case onboardingModelsLoading:
+		components.DrawText(s, inner.Left, inner.Top, o.message, bg.Foreground(th.Accent))
+		components.DrawFooter(s, inner, i18n.T("onboarding.loadingModelsHint"))
 	}
 }
 

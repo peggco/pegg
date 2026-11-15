@@ -277,7 +277,9 @@ to choose it, click the field to place the cursor, or click outside to go back.
 | **System** | App name, version, OS, architecture, and manual update check |
 
 - **Provider** — configure an existing provider again or add a new one by pasting an
-  API key into a masked field.
+  API key into a masked field. Logging in to Pegg Forever also registers the STT
+  provider and, after the login, shows the
+  [recommended defaults](../features/forever-defaults.md) for you to apply or skip.
 - **Model** — type to filter; the active model is marked with `●`. When the
   [smart router](../providers-and-models.md#smart-router) is enabled, a **Smart
   Router** entry appears at the top of the list: it auto-selects the best model
