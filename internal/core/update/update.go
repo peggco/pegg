@@ -3,6 +3,8 @@ package update
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"runtime"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/creativeprojects/go-selfupdate"
@@ -12,8 +14,16 @@ import (
 
 const repoSlug = "peggco/pegg"
 
-var agentAssets = []string{
-	`(?i)^pegg_(linux|darwin|windows)_(amd64|arm64)\.(tar\.gz|zip)$`,
+func AgentAssetName(goos, goarch string) string {
+	ext := "tar.gz"
+	if goos == "windows" {
+		ext = "zip"
+	}
+	return fmt.Sprintf("pegg_%s_%s.%s", goos, goarch, ext)
+}
+
+func agentAssetsFor(goos, goarch string) []string {
+	return []string{`(?i)^` + regexp.QuoteMeta(AgentAssetName(goos, goarch)) + `$`}
 }
 
 type Release struct {
@@ -21,7 +31,9 @@ type Release struct {
 }
 
 func newAgentUpdater() (*selfupdate.Updater, error) {
-	return selfupdate.NewUpdater(selfupdate.Config{Filters: agentAssets})
+	return selfupdate.NewUpdater(selfupdate.Config{
+		Filters: agentAssetsFor(runtime.GOOS, runtime.GOARCH),
+	})
 }
 
 func DetectLatest(ctx context.Context) (*Release, bool, error) {
