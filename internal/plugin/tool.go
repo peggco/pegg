@@ -31,6 +31,25 @@ func (t *pluginTool) Name() string {
 	return t.spec.Name
 }
 
+func (t *pluginTool) IsDynamic() bool {
+	return t.spec.AlwaysAvailable
+}
+
+func (t *pluginTool) AvailableForAgent(agentName string) bool {
+	if !t.spec.AlwaysAvailable {
+		return false
+	}
+	if len(t.spec.Agents) == 0 {
+		return true
+	}
+	for _, agent := range t.spec.Agents {
+		if strings.EqualFold(strings.TrimSpace(agent), strings.TrimSpace(agentName)) {
+			return true
+		}
+	}
+	return false
+}
+
 func (t *pluginTool) Description() string {
 	return t.spec.Description
 }

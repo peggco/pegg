@@ -18,6 +18,11 @@ type Dynamic interface {
 	IsDynamic() bool
 }
 
+type AgentScopedDynamic interface {
+	Dynamic
+	AvailableForAgent(agentName string) bool
+}
+
 type Spec struct {
 	name            string
 	description     string

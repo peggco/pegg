@@ -18,6 +18,7 @@ import (
 	pkgplugin "github.com/peggco/pegg/pkg/plugin"
 
 	"github.com/peggco/pegg/internal/agent/tool"
+	agenttools "github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/core/cache"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
@@ -544,6 +545,13 @@ func (m *Manager) registerToolSpecs(instance *PluginInstance) {
 			pluginName: instance.Name,
 			spec:       spec,
 			fs:         m.fs,
+		}
+		if spec.AlwaysAvailable {
+			if _, exists := agenttools.Get(spec.Name); !exists {
+				if err := agenttools.Register(adapter); err != nil {
+					m.log.Fwarn("plugin: %s: register always-available tool %s: %v", instance.Name, spec.Name, err)
+				}
+			}
 		}
 		byBundle[bundleName] = append(byBundle[bundleName], adapter)
 	}

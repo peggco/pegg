@@ -380,3 +380,58 @@ func TestPluginToolsAreBundleOnly(t *testing.T) {
 		t.Fatalf("bundle activation did not add the plugin tool: %v", a.Tools.Names())
 	}
 }
+
+func TestPluginToolAlwaysAvailableScopes(t *testing.T) {
+	tool := &pluginTool{spec: pkgplugin.ToolSpec{
+		Name:            "demo_auto",
+		Bundle:          "demo",
+		AlwaysAvailable: true,
+	}}
+	if !tool.IsDynamic() {
+		t.Fatal("always-available tool should be dynamic")
+	}
+	if !tool.AvailableForAgent("developer") {
+		t.Fatal("empty Agents should mean all agents")
+	}
+
+	tool.spec.Agents = []string{"orchestrator", "Explorer"}
+	if tool.AvailableForAgent("developer") {
+		t.Fatal("agent-scoped tool leaked to developer")
+	}
+	if !tool.AvailableForAgent("orchestrator") {
+		t.Fatal("orchestrator should be allowed")
+	}
+	if !tool.AvailableForAgent("explorer") {
+		t.Fatal("agent matching should be case-insensitive")
+	}
+
+	tool.spec.AlwaysAvailable = false
+	if tool.IsDynamic() {
+		t.Fatal("non-always-available tool should not be dynamic")
+	}
+	if tool.AvailableForAgent("orchestrator") {
+		t.Fatal("non-always-available tool should not be available")
+	}
+}
+
+func TestAlwaysAvailablePluginToolIsRegisteredGlobally(t *testing.T) {
+	const name = "demo_always_available"
+	agenttools.Unregister(name)
+	t.Cleanup(func() { agenttools.Unregister(name) })
+
+	mgr := NewManager(logger.New(logger.LevelError), config.DefaultConfig(), nil, nil, nil, nil, nil, nil, nil)
+	instance := &PluginInstance{
+		Name: "demo",
+		Tools: []pkgplugin.ToolSpec{{
+			Name:            name,
+			Description:     "always available",
+			Parameters:      `{"type":"object"}`,
+			Bundle:          "demo-bundle",
+			AlwaysAvailable: true,
+		}},
+	}
+	mgr.registerToolSpecs(instance)
+	if _, ok := agenttools.Get(name); !ok {
+		t.Fatal("always-available plugin tool was not registered globally")
+	}
+}
