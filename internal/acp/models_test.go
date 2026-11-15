@@ -67,4 +67,51 @@ func TestHandleListModelsReloadsConfiguredProviders(t *testing.T) {
 	if len(models.Models) != 1 || models.Models[0].Provider != providerName || models.Models[0].Model.ID != "team-model" {
 		t.Fatalf("models = %+v", models.Models)
 	}
+	if models.Preferred == nil || models.Preferred.Model.ID != "team-model" {
+		t.Fatalf("preferred = %+v", models.Preferred)
+	}
+}
+
+func TestHandleListModelsLoadsProviderAddedAfterStartup(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	const providerName = "acp-late-test"
+	llm.RegisterProvider(providerName, func(config.LLMConfig) (llm.Provider, error) {
+		return &listModelsProvider{name: providerName, models: []llm.Model{{ID: "late-model", Name: "Late Model"}}}, nil
+	})
+
+	cfg := config.DefaultConfig()
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	bus := event.New()
+	log := logger.New(logger.LevelError)
+	mgr := llm.NewManager(bus, log, nil)
+	if err := mgr.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(mgr.Shutdown)
+	mgr.Sync(context.Background(), nil)
+
+	sessMgr := session.NewManager(newMockStore(), bus, log)
+	s := New(cfg, bus, log, nil, sessMgr, mgr, nil, nil)
+
+	late := config.DefaultConfig()
+	late.Providers = []config.LLMConfig{{Provider: providerName}}
+	if err := config.Save(late); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := s.handleListModels(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	models, ok := result.(modelListResult)
+	if !ok {
+		t.Fatalf("result = %T, want modelListResult", result)
+	}
+	if len(models.Models) != 1 || models.Models[0].Provider != providerName || models.Models[0].Model.ID != "late-model" {
+		t.Fatalf("models = %+v", models.Models)
+	}
 }

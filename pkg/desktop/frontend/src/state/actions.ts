@@ -1,4 +1,4 @@
-import { api } from '../lib/bridge';
+import { api } from "../lib/bridge";
 import type {
   AcpStatus,
   Attachment,
@@ -9,7 +9,9 @@ import type {
   CatalogMutationResult,
   CatalogSearchResult,
   ForeverStatus,
+  RecommendedDefaults,
   ModelEntry,
+  ModelListResult,
   HubSearchResult,
   HubSkill,
   PromptAttachment,
@@ -19,9 +21,9 @@ import type {
   SkillMutationResult,
   SlashCommand,
   Theme,
-} from '../types';
-import { resolveTheme, applyTheme } from '../lib/theme';
-import { clampSidebarWidth } from '../lib/sidebar';
+} from "../types";
+import { resolveTheme, applyTheme } from "../lib/theme";
+import { clampSidebarWidth } from "../lib/sidebar";
 import {
   addAsk,
   addNotice,
@@ -38,20 +40,23 @@ import {
   settlePendingTools,
   type ChatItem,
   type ChatState,
-} from './chat';
-import { store, type UIState } from './store';
+} from "./chat";
+import { store, type UIState } from "./store";
 
 export function errorText(err: unknown): string {
   if (err instanceof Error) return err.message;
-  if (typeof err === 'string') return err;
+  if (typeof err === "string") return err;
   try {
     return JSON.stringify(err);
   } catch {
-    return 'Unknown error';
+    return "Unknown error";
   }
 }
 
-export function applyResolvedTheme(themes: Theme[], prefs: UIState['prefs']): Theme | undefined {
+export function applyResolvedTheme(
+  themes: Theme[],
+  prefs: UIState["prefs"],
+): Theme | undefined {
   const theme = resolveTheme(themes, prefs.theme, prefs.themeMode);
   if (!theme) return undefined;
   applyTheme(theme, prefs.fontScale || 1);
@@ -76,8 +81,8 @@ export async function bootstrap(): Promise<void> {
       selfUpdate: boot.selfUpdate,
       providerSetup: boot.providerSetup,
       sidebarCollapsed: prefs.sidebarCollapsed,
-      language: boot.language || 'en',
-      status: { state: boot.binary.found ? 'connecting' : 'disconnected' },
+      language: boot.language || "en",
+      status: { state: boot.binary.found ? "connecting" : "disconnected" },
     });
     applyResolvedTheme(themes, prefs);
     if (boot.binary.found) {
@@ -88,7 +93,7 @@ export async function bootstrap(): Promise<void> {
     void refreshSelfUpdateStatus();
   } catch (err) {
     store.set({ ready: true, error: errorText(err) });
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
@@ -97,13 +102,18 @@ export async function loadSessions(): Promise<void> {
   store.set({ sessionsLoading: true });
   void api.Log(`loadSessions workspace=${workspace}`).catch(() => undefined);
   try {
-    const res = await api.LoadSessionsPage(workspace, true, '');
-    store.set({ sessions: res.sessions ?? [], sessionsLoading: false, sessionsNextCursor: res.nextCursor });
+    const res = await api.LoadSessionsPage(workspace, true, "");
+    store.set({
+      sessions: res.sessions ?? [],
+      sessionsLoading: false,
+      sessionsNextCursor: res.nextCursor,
+    });
   } catch (err) {
     store.set({ sessionsLoading: false });
     const text = errorText(err);
     void api.Log(`loadSessions failed: ${text}`).catch(() => undefined);
-    if (!/not running|binary/i.test(text)) store.toast('warn', `Could not load sessions: ${text}`);
+    if (!/not running|binary/i.test(text))
+      store.toast("warn", `Could not load sessions: ${text}`);
   }
 }
 
@@ -112,7 +122,11 @@ export async function loadMoreSessions(): Promise<void> {
   if (state.sessionsLoading || !state.sessionsNextCursor) return;
   store.set({ sessionsLoading: true });
   try {
-    const res = await api.LoadSessionsPage(state.workspace, true, state.sessionsNextCursor);
+    const res = await api.LoadSessionsPage(
+      state.workspace,
+      true,
+      state.sessionsNextCursor,
+    );
     store.set((current) => {
       const seen = new Set(current.sessions.map((item) => item.id));
       const extra = (res.sessions ?? []).filter((item) => !seen.has(item.id));
@@ -125,7 +139,8 @@ export async function loadMoreSessions(): Promise<void> {
   } catch (err) {
     store.set({ sessionsLoading: false });
     const text = errorText(err);
-    if (!/not running|binary/i.test(text)) store.toast('warn', `Could not load sessions: ${text}`);
+    if (!/not running|binary/i.test(text))
+      store.toast("warn", `Could not load sessions: ${text}`);
   }
 }
 
@@ -152,23 +167,35 @@ export async function refreshSelfUpdateStatus(): Promise<void> {
 
 export async function checkDesktopUpdate(): Promise<void> {
   const current = store.get().selfUpdate;
-  store.set({ selfUpdate: { ...current, state: 'checking', error: '' } });
+  store.set({ selfUpdate: { ...current, state: "checking", error: "" } });
   try {
     store.set({ selfUpdate: await api.CheckDesktopUpdate() });
   } catch (err) {
-    store.set({ selfUpdate: { ...store.get().selfUpdate, state: 'error', error: errorText(err) } });
-    store.toast('error', errorText(err));
+    store.set({
+      selfUpdate: {
+        ...store.get().selfUpdate,
+        state: "error",
+        error: errorText(err),
+      },
+    });
+    store.toast("error", errorText(err));
   }
 }
 
 export async function downloadDesktopUpdate(): Promise<void> {
   const current = store.get().selfUpdate;
-  store.set({ selfUpdate: { ...current, state: 'downloading', error: '' } });
+  store.set({ selfUpdate: { ...current, state: "downloading", error: "" } });
   try {
     store.set({ selfUpdate: await api.DownloadDesktopUpdate() });
   } catch (err) {
-    store.set({ selfUpdate: { ...store.get().selfUpdate, state: 'error', error: errorText(err) } });
-    store.toast('error', errorText(err));
+    store.set({
+      selfUpdate: {
+        ...store.get().selfUpdate,
+        state: "error",
+        error: errorText(err),
+      },
+    });
+    store.toast("error", errorText(err));
   }
 }
 
@@ -176,7 +203,7 @@ export async function restartToUpdate(): Promise<void> {
   try {
     await api.RestartToUpdate();
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
@@ -194,26 +221,34 @@ export async function chooseWorkspace(): Promise<void> {
     if (!path) return;
     await setWorkspace(path);
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
 export async function setWorkspace(path: string): Promise<void> {
   try {
     const abs = await api.OpenWorkspace(path);
-    store.set({ workspace: abs, view: 'welcome', subagentView: null, chat: emptyChat() });
+    store.set({
+      workspace: abs,
+      view: "welcome",
+      subagentView: null,
+      chat: emptyChat(),
+    });
     await refreshRecents();
     await loadSessions();
     await loadCommandsCatalog();
     const prefs = await api.SavePrefs({ ...store.get().prefs, workspace: abs });
     store.set({ prefs });
-    store.toast('success', `Workspace: ${abs}`);
+    store.toast("success", `Workspace: ${abs}`);
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
-export async function setTheme(name: string, mode: 'auto' | 'light' | 'dark'): Promise<void> {
+export async function setTheme(
+  name: string,
+  mode: "auto" | "light" | "dark",
+): Promise<void> {
   const state = store.get();
   const prefs = { ...state.prefs, theme: name, themeMode: mode };
   store.set({ prefs });
@@ -222,41 +257,46 @@ export async function setTheme(name: string, mode: 'auto' | 'light' | 'dark'): P
     const saved = await api.SetTheme(name, mode);
     store.set({ prefs: saved });
   } catch (err) {
-    store.toast('warn', errorText(err));
+    store.toast("warn", errorText(err));
   }
 }
 
 export function toggleAppearance(): void {
   const dark = store.get().theme?.dark ?? true;
-  const target = dark ? 'light' : 'dark';
+  const target = dark ? "light" : "dark";
   void setTheme(target, target);
 }
 
-export async function savePrefs(patch: Partial<UIState['prefs']>): Promise<void> {
+export async function savePrefs(
+  patch: Partial<UIState["prefs"]>,
+): Promise<void> {
   const prefs = { ...store.get().prefs, ...patch };
   store.set({ prefs });
   try {
     const saved = await api.SavePrefs(prefs);
     store.set({ prefs: saved });
   } catch (err) {
-    store.toast('warn', errorText(err));
+    store.toast("warn", errorText(err));
   }
 }
 
 export async function installBinary(): Promise<void> {
-  store.set({ installing: true, installProgress: { stage: 'Starting', percent: 0 } });
+  store.set({
+    installing: true,
+    installProgress: { stage: "Starting", percent: 0 },
+  });
   try {
     const st = await api.InstallBinary();
     store.set({ binary: st, installing: false, installProgress: undefined });
     if (st.found) {
-      store.toast('success', `Pegg ${st.version ?? ''} installed`);
+      store.toast("success", `Pegg ${st.version ?? ""} installed`);
       await loadSessions();
     } else {
-      store.toast('error', st.error ?? 'Install failed');
+      store.toast("error", st.error ?? "Install failed");
     }
   } catch (err) {
     store.set({ installing: false, installProgress: undefined });
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
@@ -265,13 +305,13 @@ export async function findBinary(): Promise<void> {
     const st = await api.FindBinary();
     store.set({ binary: st });
     if (st.found) {
-      store.toast('success', `Found Pegg ${st.version ?? ''}`);
+      store.toast("success", `Found Pegg ${st.version ?? ""}`);
       await loadSessions();
     } else {
-      store.toast('warn', st.error ?? 'Pegg binary not found');
+      store.toast("warn", st.error ?? "Pegg binary not found");
     }
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
@@ -281,10 +321,10 @@ export async function chooseBinary(): Promise<void> {
     if (!path) return;
     const st = await api.SetBinaryPath(path);
     store.set({ binary: st });
-    store.toast('success', `Using Pegg ${st.version ?? ''}`);
+    store.toast("success", `Using Pegg ${st.version ?? ""}`);
     await loadSessions();
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
@@ -294,13 +334,15 @@ export function setBinaryProgress(p: BinaryProgress): void {
 
 export function setServerStatus(status: AcpStatus): void {
   store.set({ status });
-  if (status.state === 'exited' || status.state === 'error') {
+  if (status.state === "exited" || status.state === "error") {
     store.setChat((chat) =>
       chat.running
         ? addNotice(
             { ...chat, running: false },
-            status.message ? `Connection lost: ${status.message}` : 'Pegg server exited',
-            'error',
+            status.message
+              ? `Connection lost: ${status.message}`
+              : "Pegg server exited",
+            "error",
           )
         : chat,
     );
@@ -310,7 +352,7 @@ export function setServerStatus(status: AcpStatus): void {
 export function startNewChat(): void {
   void api.ResetSession().catch(() => undefined);
   store.set({
-    view: 'welcome',
+    view: "welcome",
     subagentView: null,
     chat: emptyChat(),
     composerFocus: store.get().composerFocus + 1,
@@ -322,9 +364,9 @@ function sessionListToChat(item: SessionListItem): ChatState {
     ...emptyChat(),
     acpId: item.id,
     peggId: item.id,
-    title: item.title || 'Session',
+    title: item.title || "Session",
     cwd: item.projectDir,
-    mode: (item.mode as ChatState['mode']) || 'auto',
+    mode: (item.mode as ChatState["mode"]) || "auto",
     provider: item.provider,
     model: item.model,
     loading: true,
@@ -340,7 +382,12 @@ function sessionListToChat(item: SessionListItem): ChatState {
 }
 
 export async function openSession(item: SessionListItem): Promise<void> {
-  store.set({ view: 'chat', subagentView: null, loadingSession: item.id, chat: sessionListToChat(item) });
+  store.set({
+    view: "chat",
+    subagentView: null,
+    loadingSession: item.id,
+    chat: sessionListToChat(item),
+  });
   try {
     const info = await api.LoadSession({
       peggId: item.id,
@@ -358,7 +405,7 @@ export async function openSession(item: SessionListItem): Promise<void> {
             peggId: info.peggId,
             cwd: info.cwd,
             title: info.title || chat.title,
-            mode: (info.mode as ChatState['mode']) || chat.mode,
+            mode: (info.mode as ChatState["mode"]) || chat.mode,
             provider: info.provider || chat.provider,
             model: info.model || chat.model,
             loading: false,
@@ -368,34 +415,45 @@ export async function openSession(item: SessionListItem): Promise<void> {
         : chat,
     );
   } catch (err) {
-    store.setChat((chat) => addNotice({ ...chat, loading: false }, errorText(err), 'error'));
-    store.toast('error', errorText(err));
+    store.setChat((chat) =>
+      addNotice({ ...chat, loading: false }, errorText(err), "error"),
+    );
+    store.toast("error", errorText(err));
   } finally {
     store.set({ loadingSession: undefined });
   }
 }
 
-export async function renameSession(item: SessionListItem, title: string): Promise<void> {
+export async function renameSession(
+  item: SessionListItem,
+  title: string,
+): Promise<void> {
   const clean = title.trim();
   if (!clean) return;
   try {
     await api.RenameSession(item.id, clean);
     store.set((s) => ({
-      sessions: s.sessions.map((x) => (x.id === item.id ? { ...x, title: clean } : x)),
+      sessions: s.sessions.map((x) =>
+        x.id === item.id ? { ...x, title: clean } : x,
+      ),
     }));
-    store.setChat((chat) => (chat.peggId === item.id ? { ...chat, title: clean } : chat));
+    store.setChat((chat) =>
+      chat.peggId === item.id ? { ...chat, title: clean } : chat,
+    );
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
 export async function deleteSession(item: SessionListItem): Promise<void> {
   try {
     await api.DeleteSession(item.id);
-    store.set((s) => ({ sessions: s.sessions.filter((x) => x.id !== item.id) }));
+    store.set((s) => ({
+      sessions: s.sessions.filter((x) => x.id !== item.id),
+    }));
     if (store.get().chat.peggId === item.id) startNewChat();
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
@@ -413,15 +471,19 @@ export async function forkMessage(ref: MessageRef): Promise<void> {
   const chat = store.get().chat;
   if (!chat.acpId || !hasMessageRef(ref)) return;
   if (chat.running) {
-    store.toast('warn', 'Wait for Pegg to finish before forking.');
+    store.toast("warn", "Wait for Pegg to finish before forking.");
     return;
   }
   try {
-    const res = await api.ForkSession(chat.acpId, ref.messageId ?? '', ref.userMessageIndex ?? -1);
+    const res = await api.ForkSession(
+      chat.acpId,
+      ref.messageId ?? "",
+      ref.userMessageIndex ?? -1,
+    );
     await loadSessions();
     await openSession({
       id: res.sessionId,
-      title: res.title || 'Forked session',
+      title: res.title || "Forked session",
       projectDir: chat.cwd,
       mode: chat.mode,
       provider: chat.provider,
@@ -429,9 +491,9 @@ export async function forkMessage(ref: MessageRef): Promise<void> {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
-    store.toast('success', 'Forked session');
+    store.toast("success", "Forked session");
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
@@ -439,23 +501,35 @@ export async function revertMessage(ref: MessageRef): Promise<void> {
   const chat = store.get().chat;
   if (!chat.acpId || !hasMessageRef(ref)) return;
   if (chat.running) {
-    store.toast('warn', 'Wait for Pegg to finish before reverting.');
+    store.toast("warn", "Wait for Pegg to finish before reverting.");
     return;
   }
   try {
-    const res = await api.RevertSession(chat.acpId, ref.messageId ?? '', ref.userMessageIndex ?? -1);
+    const res = await api.RevertSession(
+      chat.acpId,
+      ref.messageId ?? "",
+      ref.userMessageIndex ?? -1,
+    );
     const current = store.get().chat;
-    store.setChat((c) => ({ ...c, items: c.items.slice(0, Math.max(0, c.items.length - res.removed)) }));
+    store.setChat((c) => ({
+      ...c,
+      items: c.items.slice(0, Math.max(0, c.items.length - res.removed)),
+    }));
     if (current.acpId) {
       const item = store.get().sessions.find((s) => s.id === current.peggId);
       if (item) await openSession(item);
     }
     if (ref.text) {
-      window.dispatchEvent(new CustomEvent('pegg:composer-text', { detail: ref.text }));
+      window.dispatchEvent(
+        new CustomEvent("pegg:composer-text", { detail: ref.text }),
+      );
     }
-    store.toast('success', `Reverted ${res.removed} message${res.removed === 1 ? '' : 's'}`);
+    store.toast(
+      "success",
+      `Reverted ${res.removed} message${res.removed === 1 ? "" : "s"}`,
+    );
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
@@ -470,11 +544,11 @@ export async function sendPrompt(input: SendInput): Promise<void> {
   const text = input.text;
   if (!text.trim() && !input.attachments?.length) return;
   if (!state.workspace) {
-    store.toast('warn', 'Choose a project folder first');
+    store.toast("warn", "Choose a project folder first");
     return;
   }
 
-  store.set({ view: 'chat' });
+  store.set({ view: "chat" });
   let chat = store.get().chat;
   if (chat.running) return;
 
@@ -493,20 +567,23 @@ export async function sendPrompt(input: SendInput): Promise<void> {
         acpId: info.acpId,
         peggId: info.peggId,
         cwd: info.cwd,
-        title: info.title || 'New session',
-        mode: (info.mode as ChatState['mode']) || 'auto',
+        title: info.title || "New session",
+        mode: (info.mode as ChatState["mode"]) || "auto",
         provider: info.provider || store.get().chat.provider,
         model: info.model || store.get().chat.model,
-        reasoningEffort: info.reasoningEffort || store.get().chat.reasoningEffort,
+        reasoningEffort:
+          info.reasoningEffort || store.get().chat.reasoningEffort,
         permissionMode: info.permissionMode,
-        commands: info.commands?.length ? info.commands : store.get().chat.commands,
+        commands: info.commands?.length
+          ? info.commands
+          : store.get().chat.commands,
         loading: false,
         running: true,
       };
     } catch (err) {
       store.setChat((c) => ({ ...c, loading: false, running: false }));
-      store.setChat((c) => addNotice(c, errorText(err), 'error'));
-      store.toast('error', errorText(err));
+      store.setChat((c) => addNotice(c, errorText(err), "error"));
+      store.toast("error", errorText(err));
       return;
     }
   } else {
@@ -514,8 +591,10 @@ export async function sendPrompt(input: SendInput): Promise<void> {
   }
 
   const shownTitle =
-    chat.title === 'New session' || !chat.title
-      ? input.text.trim().slice(0, 64) || input.attachments?.[0]?.name || 'New session'
+    chat.title === "New session" || !chat.title
+      ? input.text.trim().slice(0, 64) ||
+        input.attachments?.[0]?.name ||
+        "New session"
       : chat.title;
   const attachmentInfos = input.attachments?.map((att) => ({
     name: att.name,
@@ -524,7 +603,12 @@ export async function sendPrompt(input: SendInput): Promise<void> {
     size: att.size,
     path: att.path,
   }));
-  chat = appendUser(chat, input.text, input.displayText ?? input.text, attachmentInfos);
+  chat = appendUser(
+    chat,
+    input.text,
+    input.displayText ?? input.text,
+    attachmentInfos,
+  );
   chat = { ...chat, title: shownTitle };
   store.setChat(() => chat);
 
@@ -534,20 +618,35 @@ export async function sendPrompt(input: SendInput): Promise<void> {
       text,
       attachments: input.attachments,
     });
-    const toolStatus = result?.stopReason === 'cancelled' ? 'cancelled' : 'completed';
-    store.setChat((c) => ({ ...settlePendingTools(c, toolStatus), running: false }));
-    if (result?.stopReason !== 'cancelled' && !document.hasFocus()) {
+    const toolStatus =
+      result?.stopReason === "cancelled" ? "cancelled" : "completed";
+    store.setChat((c) => ({
+      ...settlePendingTools(c, toolStatus),
+      running: false,
+    }));
+    if (result?.stopReason !== "cancelled" && !document.hasFocus()) {
       const lastAssistant = [...store.get().chat.items]
         .reverse()
-        .find((item): item is Extract<ChatItem, { kind: 'assistant' }> => item.kind === 'assistant' && item.text.trim().length > 0);
-      const summary = lastAssistant?.text.replace(/\s+/g, ' ').trim().slice(0, 140) || 'Task completed';
-      void api.Notify('Pegg finished', summary).catch(() => undefined);
+        .find(
+          (item): item is Extract<ChatItem, { kind: "assistant" }> =>
+            item.kind === "assistant" && item.text.trim().length > 0,
+        );
+      const summary =
+        lastAssistant?.text.replace(/\s+/g, " ").trim().slice(0, 140) ||
+        "Task completed";
+      void api.Notify("Pegg finished", summary).catch(() => undefined);
     }
     void loadSessions();
   } catch (err) {
     const message = errorText(err);
-    store.setChat((c) => addNotice({ ...settlePendingTools(c, 'failed'), running: false }, message, 'error'));
-    store.toast('error', message);
+    store.setChat((c) =>
+      addNotice(
+        { ...settlePendingTools(c, "failed"), running: false },
+        message,
+        "error",
+      ),
+    );
+    store.toast("error", message);
   }
 }
 
@@ -557,31 +656,38 @@ export async function cancelPrompt(): Promise<void> {
   try {
     await api.Cancel(chat.acpId);
   } catch (err) {
-    store.toast('warn', errorText(err));
+    store.toast("warn", errorText(err));
   }
 }
 
-export async function changeMode(mode: ChatState['mode']): Promise<void> {
+export async function changeMode(mode: ChatState["mode"]): Promise<void> {
   const chat = store.get().chat;
   store.setChat((c) => ({ ...c, mode }));
   if (!chat.acpId) return;
   try {
     const info = await api.SetMode(chat.acpId, mode);
-    store.setChat((c) => ({ ...c, mode: (info.mode as ChatState['mode']) || mode }));
+    store.setChat((c) => ({
+      ...c,
+      mode: (info.mode as ChatState["mode"]) || mode,
+    }));
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
-export async function changeModel(provider: string, model: string): Promise<void> {
+export async function changeModel(
+  provider: string,
+  model: string,
+  options: { silent?: boolean } = {},
+): Promise<void> {
   store.setChat((c) => ({ ...c, provider, model }));
   const acpId = store.get().chat.acpId;
   if (!acpId) return;
   try {
     await api.SetModel(acpId, provider, model);
-    store.toast('success', `Model: ${model}`);
+    if (!options.silent) store.toast("success", `Model: ${model}`);
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
@@ -590,46 +696,132 @@ export async function changeReasoning(effort: string): Promise<void> {
   store.setChat((c) => ({ ...c, reasoningEffort: effort }));
   if (!chat.acpId) return;
   try {
-    const info = await api.SetReasoningEffort(chat.acpId, chat.provider ?? '', chat.model ?? '', effort);
-    store.setChat((c) => ({ ...c, reasoningEffort: info.reasoningEffort || effort }));
+    const info = await api.SetReasoningEffort(
+      chat.acpId,
+      chat.provider ?? "",
+      chat.model ?? "",
+      effort,
+    );
+    store.setChat((c) => ({
+      ...c,
+      reasoningEffort: info.reasoningEffort || effort,
+    }));
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
+  }
+}
+
+let modelsReloadPending = false;
+
+function applyModelList(res: ModelListResult): void {
+  const models: ModelEntry[] = res.models ?? [];
+  store.set({ models, modelsLoading: false });
+  if (!models.length) return;
+
+  const chat = store.get().chat;
+  if (chat.running) return;
+  const exists = models.some(
+    (entry) =>
+      entry.provider === chat.provider && entry.model.id === chat.model,
+  );
+  if (exists) return;
+
+  const pick =
+    res.preferred ??
+    models.find((entry) => entry.provider === "pegg-forever") ??
+    models[0];
+  if (!pick) return;
+  if (chat.acpId) {
+    void changeModel(pick.provider, pick.model.id, { silent: true });
+  } else {
+    store.setChat((current) => ({
+      ...current,
+      provider: pick.provider,
+      model: pick.model.id,
+    }));
   }
 }
 
 export async function loadModels(): Promise<void> {
-  if (store.get().modelsLoading) return;
+  if (store.get().modelsLoading) {
+    modelsReloadPending = true;
+    return;
+  }
   store.set({ modelsLoading: true });
   try {
-    const res = await api.ListModels('');
-    const models: ModelEntry[] = res.models ?? [];
-    store.set({ models, modelsLoading: false });
-    if (!models.length) store.toast('warn', 'No models configured. Add a provider in Pegg settings.');
+    const res = await api.ListModels("");
+    applyModelList(res);
+    if (!(res.models ?? []).length) {
+      const setup = store.get().providerSetup;
+      const onboardingActive = setup && !setup.configured && !setup.dismissed;
+      if (!onboardingActive) {
+        store.toast(
+          "warn",
+          "No models configured. Add a provider in Pegg settings.",
+        );
+      }
+    }
   } catch (err) {
     store.set({ modelsLoading: false });
-    store.toast('warn', errorText(err));
+    store.toast("warn", errorText(err));
+  } finally {
+    if (modelsReloadPending) {
+      modelsReloadPending = false;
+      void loadModels();
+    }
   }
 }
 
-export async function respondPermission(requestId: string, optionId: string): Promise<void> {
+export async function waitForModels(timeoutMs = 60000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  store.set({ modelsLoading: true });
+  try {
+    while (Date.now() < deadline) {
+      try {
+        const res = await api.ListModels("");
+        if ((res.models ?? []).length) {
+          applyModelList(res);
+          return true;
+        }
+      } catch {
+        // retry until the deadline
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    return false;
+  } finally {
+    store.set({ modelsLoading: false });
+  }
+}
+
+export async function respondPermission(
+  requestId: string,
+  optionId: string,
+): Promise<void> {
   store.setChat((c) => resolvePermission(c, requestId));
   try {
     await api.RespondPermission(requestId, optionId);
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
-export async function respondAsk(requestId: string, answers: Record<string, string>): Promise<void> {
+export async function respondAsk(
+  requestId: string,
+  answers: Record<string, string>,
+): Promise<void> {
   store.setChat((c) => resolveAsk(c, requestId));
   try {
     await api.RespondAsk(requestId, answers);
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
-export function answerAsk(requestId: string, answers: Record<string, string>): void {
+export function answerAsk(
+  requestId: string,
+  answers: Record<string, string>,
+): void {
   store.setChat((c) => setAskAnswer(c, requestId, answers));
 }
 
@@ -637,7 +829,7 @@ export async function attachFiles(): Promise<Attachment[]> {
   try {
     return await api.AttachFiles();
   } catch (err) {
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
     return [];
   }
 }
@@ -648,7 +840,7 @@ export async function readDropped(paths: string[]): Promise<Attachment[]> {
     try {
       out.push(await api.ReadAttachment(path));
     } catch (err) {
-      store.toast('warn', `${path}: ${errorText(err)}`);
+      store.toast("warn", `${path}: ${errorText(err)}`);
     }
   }
   return out;
@@ -661,29 +853,37 @@ export async function toggleRecording(): Promise<void> {
     if (!recording) {
       await api.RecordStart();
       recording = true;
-      store.toast('info', 'Listening… press the mic again to stop');
+      store.toast("info", "Listening… press the mic again to stop");
     } else {
       recording = false;
       const res = await api.RecordStop();
       if (res?.text) {
-        window.dispatchEvent(new CustomEvent('pegg:transcript', { detail: res.text }));
+        window.dispatchEvent(
+          new CustomEvent("pegg:transcript", { detail: res.text }),
+        );
       }
     }
   } catch (err) {
     recording = false;
-    store.toast('error', errorText(err));
+    store.toast("error", errorText(err));
   }
 }
 
-export function handleUpdates(sessionId: string, updates: SessionUpdate[]): void {
+export function handleUpdates(
+  sessionId: string,
+  updates: SessionUpdate[],
+): void {
   const chat = store.get().chat;
   if (!chat.acpId) {
-    const commands = updates.filter((update) => update.sessionUpdate === 'available_commands_update');
+    const commands = updates.filter(
+      (update) => update.sessionUpdate === "available_commands_update",
+    );
     if (commands.length) store.setChat((c) => applyUpdates(c, commands));
     return;
   }
   if (sessionId !== chat.acpId && sessionId !== chat.peggId) return;
-  const isHistory = (u: SessionUpdate) => u._meta?.['com.pegg/historyPage'] === true;
+  const isHistory = (u: SessionUpdate) =>
+    u._meta?.["com.pegg/historyPage"] === true;
   const history = updates.filter(isHistory);
   const live = updates.filter((u) => !isHistory(u));
   store.setChat((c) => {
@@ -701,10 +901,20 @@ export function handleUpdates(sessionId: string, updates: SessionUpdate[]): void
       };
     }
     if (!history.length && next.stickToBottom) next = pruneChat(next);
-    if (updates.some((u) => u.sessionUpdate === 'agent_message_chunk' || u.sessionUpdate === 'user_message_chunk')) {
-      next = settlePendingTools(next, 'completed');
+    if (
+      updates.some(
+        (u) =>
+          u.sessionUpdate === "agent_message_chunk" ||
+          u.sessionUpdate === "user_message_chunk",
+      )
+    ) {
+      next = settlePendingTools(next, "completed");
     }
-    if (updates.some((u) => u.sessionUpdate === 'notice' && u.severity === 'error')) {
+    if (
+      updates.some(
+        (u) => u.sessionUpdate === "notice" && u.severity === "error",
+      )
+    ) {
       next = { ...next, running: false };
     }
     return next;
@@ -725,12 +935,18 @@ export async function loadOlderMessages(): Promise<void> {
   const chat = store.get().chat;
   if (!chat.acpId || !chat.historyHasMore || chat.historyLoading) return;
   const requestId = chat.historyRequestId + 1;
-  store.setChat((c) => ({ ...c, historyLoading: true, historyRequestId: requestId }));
+  store.setChat((c) => ({
+    ...c,
+    historyLoading: true,
+    historyRequestId: requestId,
+  }));
   clearHistoryTimeout();
   historyTimeout = window.setTimeout(() => {
     historyTimeout = undefined;
     store.setChat((c) =>
-      c.historyRequestId === requestId && c.historyLoading ? { ...c, historyLoading: false } : c,
+      c.historyRequestId === requestId && c.historyLoading
+        ? { ...c, historyLoading: false }
+        : c,
     );
   }, 4000);
   try {
@@ -753,20 +969,30 @@ export async function loadOlderMessages(): Promise<void> {
     if (!res.hasMore) clearHistoryTimeout();
   } catch (err) {
     clearHistoryTimeout();
-    store.setChat((c) => (c.historyRequestId === requestId ? { ...c, historyLoading: false } : c));
-    store.toast('error', errorText(err));
+    store.setChat((c) =>
+      c.historyRequestId === requestId ? { ...c, historyLoading: false } : c,
+    );
+    store.toast("error", errorText(err));
   }
 }
 
 export function setStickToBottom(stick: boolean): void {
-  store.setChat((c) => (c.stickToBottom === stick ? c : { ...c, stickToBottom: stick }));
+  store.setChat((c) =>
+    c.stickToBottom === stick ? c : { ...c, stickToBottom: stick },
+  );
 }
 
-export function handlePermission(requestId: string, params: Parameters<typeof addPermission>[2]): void {
+export function handlePermission(
+  requestId: string,
+  params: Parameters<typeof addPermission>[2],
+): void {
   store.setChat((c) => addPermission(c, requestId, params));
 }
 
-export function handleAsk(requestId: string, params: Parameters<typeof addAsk>[2]): void {
+export function handleAsk(
+  requestId: string,
+  params: Parameters<typeof addAsk>[2],
+): void {
   store.setChat((c) => addAsk(c, requestId, params));
 }
 
@@ -774,9 +1000,13 @@ export function clearPending(): void {
   store.setChat((c) => ({ ...c, permissions: [], asks: [] }));
 }
 
-export function handleLoading(payload: { sessionId: string; loading: boolean }): void {
+export function handleLoading(payload: {
+  sessionId: string;
+  loading: boolean;
+}): void {
   const chat = store.get().chat;
-  if (chat.peggId !== payload.sessionId && chat.acpId !== payload.sessionId) return;
+  if (chat.peggId !== payload.sessionId && chat.acpId !== payload.sessionId)
+    return;
   store.setChat((c) => ({ ...c, loading: payload.loading }));
   if (payload.loading) store.set({ loadingSession: payload.sessionId });
   else store.set({ loadingSession: undefined });
@@ -785,7 +1015,8 @@ export function handleLoading(payload: { sessionId: string; loading: boolean }):
 let sessionsRefreshTimer: number | undefined;
 
 export function handleSessionsChanged(): void {
-  if (sessionsRefreshTimer !== undefined) window.clearTimeout(sessionsRefreshTimer);
+  if (sessionsRefreshTimer !== undefined)
+    window.clearTimeout(sessionsRefreshTimer);
   sessionsRefreshTimer = window.setTimeout(() => {
     sessionsRefreshTimer = undefined;
     void loadSessions();
@@ -804,7 +1035,7 @@ export function toggleSettings(open?: boolean): void {
   store.set((s) => ({ settingsOpen: open ?? !s.settingsOpen }));
 }
 
-export function openSettings(tab = 'general'): void {
+export function openSettings(tab = "general"): void {
   store.set({ settingsOpen: true, settingsTab: tab });
 }
 
@@ -812,7 +1043,7 @@ export async function refreshProviderSetup(): Promise<void> {
   try {
     store.set({ providerSetup: await api.ProviderSetup() });
   } catch (err) {
-    store.toast('warn', errorText(err));
+    store.toast("warn", errorText(err));
   }
 }
 
@@ -822,6 +1053,14 @@ export async function peggLogin(): Promise<ForeverStatus> {
 
 export async function peggCancel(): Promise<ForeverStatus> {
   return api.PeggCancel();
+}
+
+export async function fetchRecommendedDefaults(): Promise<RecommendedDefaults> {
+  return api.FetchRecommendedDefaults();
+}
+
+export async function applyRecommendedDefaults(): Promise<void> {
+  await api.ApplyRecommendedDefaults();
 }
 
 export async function peggLogout(): Promise<ForeverStatus> {
@@ -834,7 +1073,10 @@ export async function peggLogout(): Promise<ForeverStatus> {
 export async function dismissProviderSetup(): Promise<void> {
   await api.DismissProviderSetup();
   store.set((s) => ({
-    providerSetup: { configured: s.providerSetup?.configured ?? false, dismissed: true },
+    providerSetup: {
+      configured: s.providerSetup?.configured ?? false,
+      dismissed: true,
+    },
   }));
 }
 
@@ -859,11 +1101,17 @@ export async function searchCatalog(
   return api.SearchCatalog(kind, query, filter, limit, cursor);
 }
 
-export async function fetchCatalogEntry(kind: CatalogKind, id: string): Promise<CatalogEntry> {
+export async function fetchCatalogEntry(
+  kind: CatalogKind,
+  id: string,
+): Promise<CatalogEntry> {
   return api.GetCatalogEntry(kind, id);
 }
 
-export async function fetchCatalogReadme(kind: CatalogKind, id: string): Promise<string> {
+export async function fetchCatalogReadme(
+  kind: CatalogKind,
+  id: string,
+): Promise<string> {
   return api.CatalogReadme(kind, id);
 }
 
@@ -873,12 +1121,12 @@ export async function fetchCatalogInstalled(): Promise<CatalogInstalled> {
 
 function applyCatalogMutation(res: CatalogMutationResult, label: string): void {
   applySkillCommands(res.commands);
-  store.toast('success', `Installed ${res.name || label}`);
+  store.toast("success", `Installed ${res.name || label}`);
   for (const warning of res.warnings ?? []) {
-    store.toast('warn', warning);
+    store.toast("warn", warning);
   }
   if (res.restartRequired) {
-    store.toast('warn', 'Restart Pegg Desktop to activate the change');
+    store.toast("warn", "Restart Pegg Desktop to activate the change");
   }
 }
 
@@ -893,13 +1141,19 @@ export async function installCatalogMCP(
   return res;
 }
 
-export async function installCatalogPlugin(source: string, name: string): Promise<CatalogMutationResult> {
+export async function installCatalogPlugin(
+  source: string,
+  name: string,
+): Promise<CatalogMutationResult> {
   const res = await api.InstallCatalogPlugin(source, name);
   applyCatalogMutation(res, name || source);
   return res;
 }
 
-export async function searchHubSkills(query: string, limit = 20): Promise<HubSkill[]> {
+export async function searchHubSkills(
+  query: string,
+  limit = 20,
+): Promise<HubSkill[]> {
   return api.SearchHubSkills(query, limit);
 }
 
@@ -928,7 +1182,7 @@ export async function installHubSkill(
 ): Promise<SkillMutationResult> {
   const res = await api.InstallHubSkill(source, skillId, scope);
   applySkillCommands(res.commands);
-  store.toast('success', `Installed ${skillId} (${scope})`);
+  store.toast("success", `Installed ${skillId} (${scope})`);
   return res;
 }
 
@@ -955,4 +1209,3 @@ export function saveSidebarWidth(width: number): void {
 export function focusComposer(): void {
   store.set((s) => ({ composerFocus: s.composerFocus + 1 }));
 }
-

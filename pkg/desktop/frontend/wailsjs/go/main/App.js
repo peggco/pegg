@@ -18,6 +18,10 @@ export function AddSTTProvider(arg1, arg2, arg3) {
   return window['go']['main']['App']['AddSTTProvider'](arg1, arg2, arg3);
 }
 
+export function ApplyRecommendedDefaults() {
+  return window['go']['main']['App']['ApplyRecommendedDefaults']();
+}
+
 export function ApplyWindowTheme(arg1) {
   return window['go']['main']['App']['ApplyWindowTheme'](arg1);
 }
@@ -88,6 +92,10 @@ export function DismissProviderSetup() {
 
 export function DownloadDesktopUpdate() {
   return window['go']['main']['App']['DownloadDesktopUpdate']();
+}
+
+export function FetchRecommendedDefaults() {
+  return window['go']['main']['App']['FetchRecommendedDefaults']();
 }
 
 export function FindBinary() {

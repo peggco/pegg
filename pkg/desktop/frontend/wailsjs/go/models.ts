@@ -51,6 +51,7 @@ export namespace acpclient {
 	
 	export class ModelListResult {
 	    models: ModelEntry[];
+	    preferred?: ModelEntry;
 	
 	    static createFrom(source: any = {}) {
 	        return new ModelListResult(source);
@@ -59,6 +60,7 @@ export namespace acpclient {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.models = this.convertValues(source["models"], ModelEntry);
+	        this.preferred = this.convertValues(source["preferred"], ModelEntry);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1462,6 +1464,24 @@ export namespace main {
 	}
 	
 	
+	export class RecommendedDefaults {
+	    available: boolean;
+	    changes: string[];
+	    skipped: string[];
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RecommendedDefaults(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.changes = source["changes"];
+	        this.skipped = source["skipped"];
+	        this.error = source["error"];
+	    }
+	}
 	export class RuleSetting {
 	    name: string;
 	    source: string;

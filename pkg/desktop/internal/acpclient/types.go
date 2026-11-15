@@ -354,7 +354,8 @@ type ModelInfo struct {
 }
 
 type ModelListResult struct {
-	Models []ModelEntry `json:"models"`
+	Models    []ModelEntry `json:"models"`
+	Preferred *ModelEntry  `json:"preferred,omitempty"`
 }
 
 type PermissionOption struct {

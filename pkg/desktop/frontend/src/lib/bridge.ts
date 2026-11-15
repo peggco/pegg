@@ -1,5 +1,5 @@
-import * as GoApp from '../../wailsjs/go/main/App';
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
+import * as GoApp from "../../wailsjs/go/main/App";
+import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import type {
   DesktopViewState,
   AcpStatus,
@@ -29,6 +29,7 @@ import type {
   TeamStatus,
   ProviderSetupInfo,
   ForeverStatus,
+  RecommendedDefaults,
   MCPServerInput,
   HubSearchResult,
   HubSkill,
@@ -40,7 +41,7 @@ import type {
   CatalogSearchResult,
   PluginSettingPage,
   PluginSettingResult,
-} from '../types';
+} from "../types";
 
 export interface NewSessionInput {
   cwd: string;
@@ -105,7 +106,12 @@ const App = GoApp as unknown as {
   ProviderCatalog(): Promise<ProviderCatalogEntry[]>;
   ProviderDrivers(): Promise<string[]>;
   AddProvider(name: string, apiKey: string, baseURL: string): Promise<void>;
-  AddCustomProvider(name: string, driver: string, apiKey: string, baseURL: string): Promise<void>;
+  AddCustomProvider(
+    name: string,
+    driver: string,
+    apiKey: string,
+    baseURL: string,
+  ): Promise<void>;
   RemoveProvider(name: string): Promise<void>;
   AddSTTProvider(name: string, apiKey: string, baseURL: string): Promise<void>;
   RemoveSTTProvider(name: string): Promise<void>;
@@ -127,7 +133,12 @@ const App = GoApp as unknown as {
   ViewState(): Promise<DesktopViewState>;
   SaveViewSettings(tab: string, values: Record<string, string>): Promise<void>;
   RunViewCommand(id: string): Promise<void>;
-  SetReasoningEffort(sessionId: string, provider: string, model: string, effort: string): Promise<SessionInfo>;
+  SetReasoningEffort(
+    sessionId: string,
+    provider: string,
+    model: string,
+    effort: string,
+  ): Promise<SessionInfo>;
   Version(): Promise<string>;
   LogPath(): Promise<string>;
   BinaryStatus(): Promise<BinaryStatus>;
@@ -160,17 +171,33 @@ const App = GoApp as unknown as {
   ResetSession(): Promise<void>;
   LoadSession(input: LoadSessionInput): Promise<SessionInfo>;
   ListSessions(cwd: string, all: boolean): Promise<SessionListResult>;
-  LoadSessionsPage(cwd: string, all: boolean, cursor: string): Promise<SessionListResult>;
+  LoadSessionsPage(
+    cwd: string,
+    all: boolean,
+    cursor: string,
+  ): Promise<SessionListResult>;
   LoadHistory(input: LoadHistoryInput): Promise<HistoryPageResult>;
   SendPrompt(input: PromptInput): Promise<PromptResult>;
   Cancel(sessionId: string): Promise<void>;
   SetMode(sessionId: string, mode: string): Promise<SessionInfo>;
-  SetModel(sessionId: string, provider: string, model: string): Promise<SessionInfo>;
+  SetModel(
+    sessionId: string,
+    provider: string,
+    model: string,
+  ): Promise<SessionInfo>;
   ListModels(provider: string): Promise<ModelListResult>;
   RenameSession(sessionId: string, title: string): Promise<void>;
   DeleteSession(sessionId: string): Promise<void>;
-  ForkSession(sessionId: string, messageId: string, userMessageIndex: number): Promise<ForkResult>;
-  RevertSession(sessionId: string, messageId: string, userMessageIndex: number): Promise<RevertResult>;
+  ForkSession(
+    sessionId: string,
+    messageId: string,
+    userMessageIndex: number,
+  ): Promise<ForkResult>;
+  RevertSession(
+    sessionId: string,
+    messageId: string,
+    userMessageIndex: number,
+  ): Promise<RevertResult>;
   RecordStart(): Promise<void>;
   RecordStop(): Promise<STTResult>;
   RespondPermission(requestId: string, optionId: string): Promise<void>;
@@ -192,10 +219,21 @@ const App = GoApp as unknown as {
   PeggLogin(): Promise<ForeverStatus>;
   PeggCancel(): Promise<ForeverStatus>;
   PeggLogout(): Promise<ForeverStatus>;
+  FetchRecommendedDefaults(): Promise<RecommendedDefaults>;
+  ApplyRecommendedDefaults(): Promise<void>;
   SearchHubSkills(query: string, limit: number): Promise<HubSkill[]>;
-  SearchHubSkillsFiltered(query: string, limit: number, filter: string, cursor: number): Promise<HubSearchResult>;
+  SearchHubSkillsFiltered(
+    query: string,
+    limit: number,
+    filter: string,
+    cursor: number,
+  ): Promise<HubSearchResult>;
   SkillReadme(source: string): Promise<string>;
-  InstallHubSkill(source: string, skillId: string, scope: string): Promise<SkillMutationResult>;
+  InstallHubSkill(
+    source: string,
+    skillId: string,
+    scope: string,
+  ): Promise<SkillMutationResult>;
   ReloadSkills(): Promise<SlashCommand[]>;
   SearchCatalog(
     kind: string,
@@ -212,13 +250,17 @@ const App = GoApp as unknown as {
     headers: Record<string, string>,
     scope: string,
   ): Promise<CatalogMutationResult>;
-  InstallCatalogPlugin(source: string, name: string): Promise<CatalogMutationResult>;
+  InstallCatalogPlugin(
+    source: string,
+    name: string,
+  ): Promise<CatalogMutationResult>;
   CatalogInstalled(): Promise<CatalogInstalled>;
 };
 
 export const api = App;
 
-export const hasWails = typeof window !== 'undefined' && typeof (window as any).go !== 'undefined';
+export const hasWails =
+  typeof window !== "undefined" && typeof (window as any).go !== "undefined";
 
 type Unsubscribe = () => void;
 
@@ -227,10 +269,15 @@ function on<T>(event: string, cb: (payload: T) => void): Unsubscribe {
   return EventsOn(event, (payload: T) => cb(payload));
 }
 
-export function onUpdate(cb: (sessionId: string, updates: unknown[]) => void): Unsubscribe {
-  return on<string>('acp:update', (raw) => {
+export function onUpdate(
+  cb: (sessionId: string, updates: unknown[]) => void,
+): Unsubscribe {
+  return on<string>("acp:update", (raw) => {
     try {
-      const payload = JSON.parse(raw) as { sessionId: string; updates: unknown[] };
+      const payload = JSON.parse(raw) as {
+        sessionId: string;
+        updates: unknown[];
+      };
       cb(payload.sessionId, payload.updates ?? []);
     } catch {
       /* ignore malformed frame */
@@ -238,63 +285,78 @@ export function onUpdate(cb: (sessionId: string, updates: unknown[]) => void): U
   });
 }
 
-export function onPermission(cb: (req: PermissionRequest) => void): Unsubscribe {
-  return on<PermissionRequest>('acp:permission', cb);
+export function onPermission(
+  cb: (req: PermissionRequest) => void,
+): Unsubscribe {
+  return on<PermissionRequest>("acp:permission", cb);
 }
 
 export function onAsk(cb: (req: AskRequest) => void): Unsubscribe {
-  return on<AskRequest>('acp:ask', cb);
+  return on<AskRequest>("acp:ask", cb);
 }
 
 export function onStatus(cb: (status: AcpStatus) => void): Unsubscribe {
-  return on<AcpStatus>('acp:status', cb);
+  return on<AcpStatus>("acp:status", cb);
 }
 
-export function onLoading(cb: (payload: { sessionId: string; loading: boolean }) => void): Unsubscribe {
-  return on('acp:loading', cb);
+export function onLoading(
+  cb: (payload: { sessionId: string; loading: boolean }) => void,
+): Unsubscribe {
+  return on("acp:loading", cb);
 }
 
 export function onPendingClear(cb: () => void): Unsubscribe {
-  return on('acp:pending-clear', cb);
+  return on("acp:pending-clear", cb);
 }
 
 export function onSessionsChanged(cb: () => void): Unsubscribe {
-  return on('sessions:changed', cb);
+  return on("sessions:changed", cb);
 }
 
-export function onBinaryProgress(cb: (progress: BinaryProgress) => void): Unsubscribe {
-  return on<BinaryProgress>('binary:progress', cb);
+export function onBinaryProgress(
+  cb: (progress: BinaryProgress) => void,
+): Unsubscribe {
+  return on<BinaryProgress>("binary:progress", cb);
 }
 
-export function onDesktopUpdate(cb: (status: SelfUpdateStatus) => void): Unsubscribe {
-  return on<SelfUpdateStatus>('desktop:update', cb);
+export function onDesktopUpdate(
+  cb: (status: SelfUpdateStatus) => void,
+): Unsubscribe {
+  return on<SelfUpdateStatus>("desktop:update", cb);
 }
 
 export function onFileDrop(cb: (paths: string[]) => void): Unsubscribe {
   if (!hasWails) return () => undefined;
-  return EventsOn('wails:file-drop', (_x: number, _y: number, paths: string[]) => {
-    if (Array.isArray(paths) && paths.length) cb(paths);
-  });
+  return EventsOn(
+    "wails:file-drop",
+    (_x: number, _y: number, paths: string[]) => {
+      if (Array.isArray(paths) && paths.length) cb(paths);
+    },
+  );
 }
 
-export function onConnectStatus(cb: (status: ConnectStatus) => void): Unsubscribe {
-  return on<ConnectStatus>('connect:status', cb);
+export function onConnectStatus(
+  cb: (status: ConnectStatus) => void,
+): Unsubscribe {
+  return on<ConnectStatus>("connect:status", cb);
 }
 
 export function onTeamStatus(cb: (status: TeamStatus) => void): Unsubscribe {
-  return on<TeamStatus>('team:status', cb);
+  return on<TeamStatus>("team:status", cb);
 }
 
 export function onPeggStatus(cb: (status: ForeverStatus) => void): Unsubscribe {
-  return on<ForeverStatus>('pegg:status', cb);
+  return on<ForeverStatus>("pegg:status", cb);
 }
 
 export function onPeggLog(cb: (line: string) => void): Unsubscribe {
-  return on<string>('pegg:log', cb);
+  return on<string>("pegg:log", cb);
 }
 
-export function onDesktopView(cb: (view: DesktopViewState) => void): Unsubscribe {
-  return on<DesktopViewState>('desktop:view', cb);
+export function onDesktopView(
+  cb: (view: DesktopViewState) => void,
+): Unsubscribe {
+  return on<DesktopViewState>("desktop:view", cb);
 }
 
 export function offAll(events: string[]): void {

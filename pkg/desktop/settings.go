@@ -17,6 +17,7 @@ import (
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/llm/subscription"
 	"github.com/peggco/pegg/internal/mcp"
+	"github.com/peggco/pegg/internal/pegglogin"
 	"github.com/peggco/pegg/internal/skill"
 	"github.com/peggco/pegg/internal/stt"
 	"github.com/peggco/pegg/internal/tui/i18n"
@@ -976,6 +977,15 @@ func (a *App) AddProvider(name, apiKey, baseURL string) error {
 	}
 	if entry.Kind != "subscription" && strings.TrimSpace(apiKey) == "" {
 		return fmt.Errorf("API key is required for %s", name)
+	}
+	if name == peggForeverProviderID {
+		return pegglogin.Apply(&pegglogin.Config{
+			Name:    name,
+			Driver:  "openai",
+			BaseURL: strings.TrimSpace(baseURL),
+			APIKey:  strings.TrimSpace(apiKey),
+			Timeout: pegglogin.DefaultTimeout,
+		})
 	}
 	cfg, err := config.Load()
 	if err != nil {

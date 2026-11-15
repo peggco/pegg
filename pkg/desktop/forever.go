@@ -126,7 +126,7 @@ func (a *App) PeggLogin() (ForeverStatus, error) {
 	if err != nil {
 		return ForeverStatus{}, err
 	}
-	cmd := exec.Command(bin, "login-pegg", "--no-browser")
+	cmd := exec.Command(bin, "login-pegg", "--no-browser", "--no-defaults")
 	cmd.Dir = a.currentWorkspace()
 	hideWindow(cmd)
 
@@ -231,6 +231,26 @@ func (a *App) PeggLogout() (ForeverStatus, error) {
 		if err := config.RemoveProvider(peggForeverProviderID); err != nil {
 			return a.PeggStatus(), err
 		}
+	}
+	if err := config.Update(func(cfg *config.Config) error {
+		if cfg.STT == nil {
+			return nil
+		}
+		kept := cfg.STT.Providers[:0]
+		for _, entry := range cfg.STT.Providers {
+			if entry.Provider != peggForeverProviderID {
+				kept = append(kept, entry)
+			}
+		}
+		cfg.STT.Providers = kept
+		if cfg.STT.Provider == peggForeverProviderID {
+			cfg.STT.Provider = ""
+			cfg.STT.Model = ""
+			cfg.STT.StreamingModel = ""
+		}
+		return nil
+	}); err != nil {
+		return a.PeggStatus(), err
 	}
 	a.peggMu.Lock()
 	a.peggState = ForeverStatus{

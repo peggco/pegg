@@ -16,6 +16,8 @@ export function AddProvider(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function AddSTTProvider(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function ApplyRecommendedDefaults():Promise<void>;
+
 export function ApplyWindowTheme(arg1:boolean):Promise<void>;
 
 export function AttachFiles():Promise<Array<workspace.Attachment>>;
@@ -51,6 +53,8 @@ export function DeleteSession(arg1:string):Promise<void>;
 export function DismissProviderSetup():Promise<void>;
 
 export function DownloadDesktopUpdate():Promise<selfupdate.Status>;
+
+export function FetchRecommendedDefaults():Promise<main.RecommendedDefaults>;
 
 export function FindBinary():Promise<binary.Status>;
 
