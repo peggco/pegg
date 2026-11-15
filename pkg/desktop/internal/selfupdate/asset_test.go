@@ -1,6 +1,7 @@
 package selfupdate
 
 import (
+	"fmt"
 	"regexp"
 	"testing"
 )
@@ -67,5 +68,79 @@ func TestBinaryName(t *testing.T) {
 func TestChecksumAssetName(t *testing.T) {
 	if got := ChecksumAssetName(); got != "pegg-desktop_checksums.txt" {
 		t.Fatalf("checksum asset = %q", got)
+	}
+}
+
+var releaseAssets = []string{
+	"checksums.txt",
+	"nfpm.yaml",
+	"pegg-desktop-0.2.4.amd64.rpm",
+	"pegg-desktop_0.2.4_amd64.deb",
+	"pegg-desktop_0.2.4_darwin_amd64.zip",
+	"pegg-desktop_0.2.4_darwin_arm64.zip",
+	"pegg-desktop_0.2.4_linux_amd64.tar.gz",
+	"pegg-desktop_0.2.4_windows_amd64.zip",
+	"pegg-desktop_0.2.4_windows_arm64.zip",
+	"pegg-desktop_checksums.txt",
+	"pegg-intellij-0.2.4-signed.zip",
+	"pegg-intellij-0.2.4.zip",
+	"pegg-vscode-0.2.4.vsix",
+	"pegg_darwin_amd64.tar.gz",
+	"pegg_darwin_arm64.tar.gz",
+	"pegg_linux_amd64.tar.gz",
+	"pegg_linux_arm64.tar.gz",
+	"pegg_windows_amd64.zip",
+	"pegg_windows_arm64.zip",
+}
+
+func TestAssetFilterMatchesExactlyOne(t *testing.T) {
+	for _, goos := range []string{"linux", "darwin", "windows"} {
+		for _, goarch := range []string{"amd64", "arm64"} {
+			if goos == "linux" && goarch == "arm64" {
+				continue
+			}
+			ext := "tar.gz"
+			if goos == "windows" || goos == "darwin" {
+				ext = "zip"
+			}
+			want := fmt.Sprintf("pegg-desktop_0.2.4_%s_%s.%s", goos, goarch, ext)
+			filter := regexp.MustCompile(AssetFilter(goos, goarch))
+			matches := 0
+			for _, name := range releaseAssets {
+				if !filter.MatchString(name) {
+					continue
+				}
+				matches++
+				if name != want {
+					t.Errorf("%s/%s filter matched %q, want %q", goos, goarch, name, want)
+				}
+			}
+			if matches != 1 {
+				t.Errorf("%s/%s filter matched %d assets, want exactly 1", goos, goarch, matches)
+			}
+			if filter.MatchString(AgentAssetName(goos, goarch)) {
+				t.Errorf("%s/%s filter matched the agent archive %q", goos, goarch, AgentAssetName(goos, goarch))
+			}
+		}
+	}
+}
+
+func TestAgentAssetName(t *testing.T) {
+	cases := []struct {
+		goos   string
+		goarch string
+		want   string
+	}{
+		{"linux", "amd64", "pegg_linux_amd64.tar.gz"},
+		{"linux", "arm64", "pegg_linux_arm64.tar.gz"},
+		{"darwin", "amd64", "pegg_darwin_amd64.tar.gz"},
+		{"darwin", "arm64", "pegg_darwin_arm64.tar.gz"},
+		{"windows", "amd64", "pegg_windows_amd64.zip"},
+		{"windows", "arm64", "pegg_windows_arm64.zip"},
+	}
+	for _, tc := range cases {
+		if got := AgentAssetName(tc.goos, tc.goarch); got != tc.want {
+			t.Errorf("AgentAssetName(%q, %q) = %q, want %q", tc.goos, tc.goarch, got, tc.want)
+		}
 	}
 }

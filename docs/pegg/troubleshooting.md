@@ -113,6 +113,21 @@ uses the same config and session database as the CLI.
     is empty. Run `pegg doctor` to see which providers fail, then retry. Passing
     `--provider` and `--model` explicitly skips the selection step.
 
+??? question "`update binary: executable not found in zip file: \"pegg\"`"
+
+    Builds older than `v0.2.4` have no release asset filter, so self-update on
+    macOS picks the desktop bundle (`pegg-desktop_*_darwin_*.zip`) instead of the
+    CLI archive. That zip only contains `pegg-desktop`, hence the error. Install
+    `v0.2.4` or newer once; later auto-updates select the right asset:
+
+    ```bash
+    curl -fsSL https://pegg.dev/install | sh
+    ```
+
+    The installer derives the asset name from `uname` (`pegg_<os>_<arch>.tar.gz`,
+    or `.zip` on Windows), so it never picks the desktop bundle. Pin a version
+    with `VERSION=v0.2.4` and choose a directory with `PREFIX=$HOME/.local/bin`.
+
 ??? question "`pegg team` browser cannot connect to 127.0.0.1"
 
     The team callback is a loopback URL on the machine running pegg. Over SSH you

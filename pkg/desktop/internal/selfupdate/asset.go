@@ -3,6 +3,8 @@ package selfupdate
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/peggco/pegg/internal/core/update"
 )
 
 func AssetFilter(goos, goarch string) string {
@@ -25,11 +27,7 @@ func ChecksumAssetName() string {
 }
 
 func AgentAssetName(goos, goarch string) string {
-	ext := "tar.gz"
-	if goos == "windows" {
-		ext = "zip"
-	}
-	return fmt.Sprintf("pegg_%s_%s.%s", goos, goarch, ext)
+	return update.AgentAssetName(goos, goarch)
 }
 
 func SupportedTarget(goos, dir string) bool {
