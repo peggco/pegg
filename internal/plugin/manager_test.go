@@ -10,9 +10,12 @@ import (
 
 	pkgplugin "github.com/peggco/pegg/pkg/plugin"
 
+	"github.com/peggco/pegg/internal/agent"
+	agenttools "github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/core/config"
 	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/core/logger"
+	"github.com/peggco/pegg/internal/plugin/bundle"
 )
 
 type hookPlugin struct {
@@ -344,4 +347,36 @@ func TestLockHookExecHonorsContext(t *testing.T) {
 		t.Fatal("did not acquire a free mutex")
 	}
 	instance.execMu.Unlock()
+}
+
+func TestPluginToolsAreBundleOnly(t *testing.T) {
+	mgr := NewManager(logger.New(logger.LevelError), config.DefaultConfig(), nil, nil, nil, nil, nil, nil, nil)
+	instance := &PluginInstance{
+		Name: "demo",
+		Tools: []pkgplugin.ToolSpec{{
+			Name:        "demo_echo",
+			Description: "echo",
+			Parameters:  `{"type":"object","properties":{}}`,
+			Bundle:      "demo-bundle",
+		}},
+	}
+
+	mgr.registerToolSpecs(instance)
+
+	if _, ok := agenttools.Get("demo_echo"); ok {
+		t.Fatal("plugin tool was registered in the global tool registry")
+	}
+	if !contains(bundle.Names(), "demo-bundle") {
+		t.Fatalf("bundle not registered: %v", bundle.Names())
+	}
+
+	a := agent.New("test")
+	ctx := agent.WithAgent(context.Background(), a)
+	status := bundle.Activate(ctx, bundle.Deps{}, []string{"demo-bundle"})
+	if len(status) == 0 {
+		t.Fatal("no activation status")
+	}
+	if _, ok := a.Tools.Get("demo_echo"); !ok {
+		t.Fatalf("bundle activation did not add the plugin tool: %v", a.Tools.Names())
+	}
 }

@@ -133,7 +133,10 @@ func (p *Plugin) Version() string     { return "0.1.0" }
 func (p *Plugin) Description() string { return "A Pegg plugin" }
 
 func (p *Plugin) Capabilities() []string {
-	return []string{string(peggplugin.CapabilityTools)}
+	return []string{
+		string(peggplugin.CapabilityTools),
+		string(peggplugin.CapabilitySkills),
+	}
 }
 
 func (p *Plugin) Tools() ([]peggplugin.ToolSpec, error) {
@@ -148,11 +151,32 @@ func (p *Plugin) Tools() ([]peggplugin.ToolSpec, error) {
 	}}, nil
 }
 
+func (p *Plugin) Skills() ([]peggplugin.SkillSpec, error) {
+	return []peggplugin.SkillSpec{pluginSkill()}, nil
+}
+
 func (p *Plugin) ExecuteTool(req peggplugin.ToolRequest) (*peggplugin.ToolResult, error) {
 	if req.Name != __TOOL_NAME__ {
 		return nil, fmt.Errorf("unknown tool %q", req.Name)
 	}
 	return &peggplugin.ToolResult{Output: "hello from __NAME__"}, nil
+}
+`
+
+const pluginSkillTemplate = `package main
+
+import peggplugin "__PEGG__/pkg/plugin"
+
+func pluginSkill() peggplugin.SkillSpec {
+	return peggplugin.SkillSpec{
+		Name:         __PLUGIN_NAME__,
+		Description:  "Use __NAME__ through the __NAME___* tools.",
+		WhenToUse:    "Load this skill before calling any __NAME___* tool.",
+		ToolBundles:  []string{"example"},
+		Context:      "inline",
+		AllowedTools: []string{__TOOL_NAME__},
+		Instructions: "# __NAME__\n\nDescribe when and how to use the __NAME___* tools here.\n\n1. Call the __NAME___echo tool to verify the plugin is configured.\n2. Replace this example with the real workflow for your plugin.\n",
+	}
 }
 `
 
@@ -171,4 +195,13 @@ func renderPluginGo(pegg, name string) string {
 		"__TOOL_NAME__", strconv.Quote(name+"_echo"),
 		"__NAME__", name,
 	).Replace(pluginGoTemplate)
+}
+
+func renderPluginSkill(pegg, name string) string {
+	return strings.NewReplacer(
+		"__PEGG__", pegg,
+		"__PLUGIN_NAME__", strconv.Quote(name),
+		"__TOOL_NAME__", strconv.Quote(name+"_echo"),
+		"__NAME__", name,
+	).Replace(pluginSkillTemplate)
 }

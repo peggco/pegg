@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/peggco/pegg/internal/agent"
+	agenttools "github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/plugin/bundle"
@@ -114,6 +115,62 @@ func TestBrowserUsePluginIntegration(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(workspace, ".pegg", "artifacts", "plugins", "browser-use")); err != nil {
 		t.Fatalf("artifact directory missing: %v", err)
+	}
+}
+
+func TestComputerUsePluginIntegration(t *testing.T) {
+	if os.Getenv("PEGG_PLUGIN_E2E") != "1" {
+		t.Skip("set PEGG_PLUGIN_E2E=1 to load computer-use from ~/.pegg/plugins")
+	}
+	dir, err := GetPluginDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "pegg-computer-use")); err != nil {
+		t.Skip("pegg-computer-use is not installed in ~/.pegg/plugins")
+	}
+	workspace := t.TempDir()
+	fs, err := vfs.New(workspace, vfs.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr := NewManager(logger.New(logger.LevelError), config.DefaultConfig(), nil, nil, nil, nil, fs, nil, nil)
+	if err := mgr.LoadPlugins(); err != nil {
+		t.Fatal(err)
+	}
+	defer mgr.Close()
+
+	p, ok := mgr.GetPlugin("computer-use")
+	if !ok {
+		t.Fatalf("computer-use not loaded")
+	}
+	if len(p.Tools) != 12 {
+		t.Fatalf("expected 12 tools, got %d", len(p.Tools))
+	}
+	if len(p.Skills) != 1 || p.Skills[0].Name != "computer-use" {
+		t.Fatalf("unexpected skills: %#v", p.Skills)
+	}
+	if !contains(bundle.Names(), "computer") {
+		t.Fatalf("computer bundle not registered: %v", bundle.Names())
+	}
+	if s, ok := skill.Get("computer-use"); !ok || len(s.ToolBundles) != 1 || s.ToolBundles[0] != "computer" {
+		t.Fatalf("computer-use skill missing or invalid: %#v", s)
+	}
+	if _, ok := agenttools.Get("computer_screenshot"); ok {
+		t.Fatal("plugin tool was registered in the global registry")
+	}
+	if got := mgr.cfg.Permission.Rules["computer_click"]; got != "semi-judge" {
+		t.Fatalf("plugin permission rule not merged: %q", got)
+	}
+
+	a := agent.New("test")
+	ctx := agent.WithAgent(context.Background(), a)
+	status := bundle.Activate(ctx, bundle.Deps{FS: fs}, []string{"computer"})
+	if len(status) == 0 {
+		t.Fatal("no activation status")
+	}
+	if _, ok := a.Tools.Get("computer_screenshot"); !ok {
+		t.Fatalf("computer tools not activated: %s", strings.Join(a.Tools.Names(), ","))
 	}
 }
 

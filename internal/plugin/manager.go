@@ -18,7 +18,6 @@ import (
 	pkgplugin "github.com/peggco/pegg/pkg/plugin"
 
 	"github.com/peggco/pegg/internal/agent/tool"
-	agenttools "github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/core/cache"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
@@ -546,11 +545,6 @@ func (m *Manager) registerToolSpecs(instance *PluginInstance) {
 			spec:       spec,
 			fs:         m.fs,
 		}
-		if _, exists := agenttools.Get(spec.Name); !exists {
-			if err := agenttools.Register(adapter); err != nil {
-				m.log.Fwarn("plugin: %s: register global tool %s: %v", instance.Name, spec.Name, err)
-			}
-		}
 		byBundle[bundleName] = append(byBundle[bundleName], adapter)
 	}
 	for bundleName, ts := range byBundle {
@@ -936,6 +930,24 @@ func (m *Manager) GetPlugin(name string) (*PluginInstance, bool) {
 	defer m.mu.RUnlock()
 	p, ok := m.plugins[name]
 	return p, ok
+}
+
+func (m *Manager) ToolNames() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	seen := map[string]bool{}
+	var names []string
+	for _, p := range m.plugins {
+		for _, spec := range p.Tools {
+			if spec.Name == "" || seen[spec.Name] {
+				continue
+			}
+			seen[spec.Name] = true
+			names = append(names, spec.Name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 func (m *Manager) ListPlugins() []*PluginInstance {

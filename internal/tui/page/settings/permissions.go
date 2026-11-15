@@ -444,10 +444,18 @@ func (t *permissionsTab) Draw(screen tcell.Screen, bounds layout.Region, focused
 func (t *permissionsTab) loadTools() {
 	cfg := t.settings.deps.Config
 	names := tools.Names()
+	if t.settings.deps.Plugin != nil {
+		names = append(names, t.settings.deps.Plugin.ToolNames()...)
+	}
 	sort.Strings(names)
 
+	seen := map[string]bool{}
 	t.tools = make([]toolPerm, 0, len(names))
 	for _, name := range names {
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
 		mode := t.resolveMode(cfg, name)
 		t.tools = append(t.tools, toolPerm{name: name, mode: mode})
 	}
