@@ -22,6 +22,8 @@ const (
 	maxOutbound     = 24 << 20
 	readBuffer      = 64 << 10
 	writeQueueDepth = 256
+
+	defaultCloseTimeout = 2 * time.Second
 )
 
 var (
@@ -73,8 +75,9 @@ type Client struct {
 	lastErr error
 	started bool
 
-	nextID atomic.Int64
-	exitCh chan struct{}
+	nextID    atomic.Int64
+	exitCh    chan struct{}
+	closeOnce sync.Once
 
 	termMu    sync.Mutex
 	terminals map[string]*terminalProcess
@@ -103,12 +106,14 @@ func (c *Client) Start(ctx context.Context) error {
 	}
 	c.closed = false
 	c.started = true
+	c.closeOnce = sync.Once{}
 	c.exitCh = make(chan struct{})
 	c.mu.Unlock()
 
 	cmd := exec.Command(c.opts.Binary, "serve", "--acp", "--stdio")
 	cmd.Dir = c.opts.Cwd
 	cmd.Env = append(os.Environ(), c.opts.Env...)
+	configureProcessGroup(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -513,6 +518,19 @@ func (c *Client) failAll(err error) {
 }
 
 func (c *Client) Close() {
+	c.CloseContext(context.Background())
+}
+
+func (c *Client) CloseContext(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultCloseTimeout)
+		defer cancel()
+	}
+
 	c.mu.Lock()
 	if !c.started {
 		c.mu.Unlock()
@@ -523,23 +541,52 @@ func (c *Client) Close() {
 	cmd := c.cmd
 	c.mu.Unlock()
 
-	c.closeTerminals()
-	close(c.writes)
-	if stdin != nil {
-		_ = stdin.Close()
-	}
+	start := time.Now()
+	c.closeOnce.Do(func() {
+		c.closeTerminals()
+		close(c.writes)
+		if stdin != nil {
+			_ = stdin.Close()
+		}
+	})
 	if cmd == nil {
 		return
 	}
-	done := make(chan struct{})
-	go func() {
-		<-c.exitCh
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		_ = cmd.Process.Kill()
-		<-done
+
+	remaining := func() time.Duration {
+		if deadline, ok := ctx.Deadline(); ok {
+			return time.Until(deadline)
+		}
+		return defaultCloseTimeout
+	}
+	waitExit := func(limit time.Duration) bool {
+		if limit <= 0 {
+			return false
+		}
+		timer := time.NewTimer(limit)
+		defer timer.Stop()
+		select {
+		case <-c.exitCh:
+			return true
+		case <-ctx.Done():
+			return false
+		case <-timer.C:
+			return false
+		}
+	}
+
+	_ = terminateProcessGroup(cmd)
+	exited := waitExit(remaining() / 2)
+	_ = killProcessGroup(cmd)
+	if !exited {
+		exited = waitExit(remaining())
+	}
+	elapsed := time.Since(start)
+	if c.opts.Logf != nil {
+		if exited {
+			c.opts.Logf("acp: client closed in %s", elapsed)
+		} else {
+			c.opts.Logf("acp: client close timed out after %s", elapsed)
+		}
 	}
 }

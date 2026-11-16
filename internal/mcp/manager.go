@@ -19,6 +19,8 @@ type connectHandle struct {
 	seq    uint64
 }
 
+const mcpCloseTimeout = 2 * time.Second
+
 type Manager struct {
 	mu         sync.Mutex
 	clients    map[string]*Client
@@ -255,8 +257,17 @@ func (m *Manager) Close() error {
 		m.unregisterServerTools(name)
 	}
 
-	m.wg.Wait()
-	m.log.Debug("mcp: all servers closed")
+	done := make(chan struct{})
+	go func() {
+		m.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		m.log.Debug("mcp: all servers closed")
+	case <-time.After(mcpCloseTimeout):
+		m.log.Fwarn("mcp: server shutdown timed out after %s", mcpCloseTimeout)
+	}
 	return nil
 }
 

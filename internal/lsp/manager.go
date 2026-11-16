@@ -571,10 +571,16 @@ func (m *Manager) Close() error {
 	}
 	m.mu.Unlock()
 
+	var wg sync.WaitGroup
 	for _, srv := range servers {
 		m.clearServerDiagnostics(srv)
-		srv.stop()
+		wg.Add(1)
+		go func(srv *Server) {
+			defer wg.Done()
+			srv.abort()
+		}(srv)
 	}
+	wg.Wait()
 	if m.log != nil {
 		m.log.Debug("lsp: all servers closed")
 	}

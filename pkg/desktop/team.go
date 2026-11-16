@@ -344,6 +344,12 @@ func (a *App) appendConnectLine(line string) {
 }
 
 func (a *App) ConnectStop() (ConnectStatus, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return a.connectStop(ctx)
+}
+
+func (a *App) connectStop(ctx context.Context) (ConnectStatus, error) {
 	a.connectMu.Lock()
 	cmd := a.connectCmd
 	done := a.connectDone
@@ -364,10 +370,11 @@ func (a *App) ConnectStop() (ConnectStatus, error) {
 	if done != nil {
 		select {
 		case <-done:
-		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
 			if cmd.Process != nil {
-				_ = cmd.Process.Kill()
+				_ = killProcess(cmd)
 			}
+			a.logf("connect: stop timed out: %v", ctx.Err())
 		}
 	}
 	a.connectMu.Lock()
@@ -558,6 +565,12 @@ func (a *App) appendTeamLine(line string) {
 }
 
 func (a *App) TeamCancel() (TeamStatus, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return a.teamCancel(ctx)
+}
+
+func (a *App) teamCancel(ctx context.Context) (TeamStatus, error) {
 	a.teamMu.Lock()
 	cmd := a.teamCmd
 	done := a.teamDone
@@ -568,10 +581,11 @@ func (a *App) TeamCancel() (TeamStatus, error) {
 	if done != nil {
 		select {
 		case <-done:
-		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
 			if cmd != nil && cmd.Process != nil {
-				_ = cmd.Process.Kill()
+				_ = killProcess(cmd)
 			}
+			a.logf("team: cancel timed out: %v", ctx.Err())
 		}
 	}
 	return a.TeamStatus(), nil

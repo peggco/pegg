@@ -32,6 +32,15 @@ The production binary is written to `pkg/desktop/build/bin/pegg-desktop`.
 
 On Linux the build uses `-tags "gui webkit2_41"` because Wails v2 defaults to WebKitGTK 4.0. The `gui` tag keeps the Wails entrypoint out of the normal `go test ./...` / `go vet ./...` runs. macOS and Windows use `-tags gui`.
 
+## Closing
+
+Closing the window returns control promptly. The desktop stops the ACP server,
+connect/team/pegg login processes, and the plugin manager in parallel under a
+short deadline instead of waiting on each cleanup step in turn. The ACP child
+runs in its own process group, so language servers, MCP servers, and plugin
+subprocesses are terminated with it rather than left behind. Shutdown timings
+are written to `desktop.log` for troubleshooting.
+
 ## Appearance
 
 The desktop ships exactly two palettes: **Light** and **Dark**.

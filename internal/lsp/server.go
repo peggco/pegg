@@ -156,6 +156,23 @@ func (s *Server) stop() {
 	s.mu.Unlock()
 }
 
+func (s *Server) abort() {
+	s.mu.Lock()
+	c := s.client
+	s.mu.Unlock()
+	if c == nil {
+		return
+	}
+	_ = c.Close()
+
+	s.mu.Lock()
+	s.client = nil
+	s.started = false
+	s.docs = make(map[string]*docState)
+	s.pending = make(map[string]bool)
+	s.mu.Unlock()
+}
+
 func extensionOf(path string) string {
 	i := strings.LastIndexByte(path, '.')
 	if i < 0 || i == len(path)-1 {

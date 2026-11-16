@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"os/exec"
 	"strings"
 	"time"
@@ -207,6 +208,12 @@ func (a *App) appendPeggLine(line string) {
 }
 
 func (a *App) PeggCancel() (ForeverStatus, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return a.peggCancel(ctx)
+}
+
+func (a *App) peggCancel(ctx context.Context) (ForeverStatus, error) {
 	a.peggMu.Lock()
 	cmd := a.peggCmd
 	done := a.peggDone
@@ -217,10 +224,11 @@ func (a *App) PeggCancel() (ForeverStatus, error) {
 	if done != nil {
 		select {
 		case <-done:
-		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
 			if cmd != nil && cmd.Process != nil {
-				_ = cmd.Process.Kill()
+				_ = killProcess(cmd)
 			}
+			a.logf("pegg: cancel timed out: %v", ctx.Err())
 		}
 	}
 	return a.PeggStatus(), nil

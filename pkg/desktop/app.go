@@ -29,7 +29,15 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const appVersion = config.AppVersion
+const (
+	appVersion       = config.AppVersion
+	shutdownDeadline = 2 * time.Second
+)
+
+type shutdownStep struct {
+	name string
+	run  func(context.Context)
+}
 
 type SessionInfo struct {
 	ACPID            string                   `json:"acpId"`
@@ -170,6 +178,7 @@ func (a *App) beforeClose(ctx context.Context) bool {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	start := time.Now()
 	a.mu.Lock()
 	a.closing = true
 	if a.viewCancel != nil {
@@ -177,18 +186,51 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 	c := a.client
 	a.mu.Unlock()
-	if c != nil {
-		c.Close()
-	}
-	_, _ = a.ConnectStop()
-	_, _ = a.TeamCancel()
-	_, _ = a.PeggCancel()
-	a.resetPluginManager()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownDeadline)
+	defer cancel()
+	a.runShutdownSteps(shutdownCtx, []shutdownStep{
+		{name: "acp", run: func(ctx context.Context) {
+			if c != nil {
+				c.CloseContext(ctx)
+			}
+		}},
+		{name: "connect", run: func(ctx context.Context) { _, _ = a.connectStop(ctx) }},
+		{name: "team", run: func(ctx context.Context) { _, _ = a.teamCancel(ctx) }},
+		{name: "pegg", run: func(ctx context.Context) { _, _ = a.peggCancel(ctx) }},
+		{name: "plugins", run: a.resetPluginManagerContext},
+	})
+	a.logf("shutdown: finished in %s", time.Since(start).Round(time.Millisecond))
 	a.logMu.Lock()
 	if a.log != nil {
 		_ = a.log.Close()
+		a.log = nil
 	}
 	a.logMu.Unlock()
+}
+
+func (a *App) runShutdownSteps(ctx context.Context, steps []shutdownStep) {
+	var wg sync.WaitGroup
+	for _, step := range steps {
+		step := step
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			step.run(ctx)
+			a.logf("shutdown: %s took %s", step.name, time.Since(start).Round(time.Millisecond))
+		}()
+	}
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		a.logf("shutdown: deadline %s exceeded", shutdownDeadline)
+	}
 }
 
 func (a *App) openLog(path string) {

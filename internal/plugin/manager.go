@@ -988,37 +988,71 @@ func (m *Manager) Commands() []PluginCommand {
 	return out
 }
 
-func (m *Manager) Close() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+const pluginCloseTimeout = 2 * time.Second
 
+func (m *Manager) Close() {
+	ctx, cancel := context.WithTimeout(context.Background(), pluginCloseTimeout)
+	defer cancel()
+	m.CloseContext(ctx)
+}
+
+func (m *Manager) CloseContext(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, pluginCloseTimeout)
+		defer cancel()
+	}
+	m.mu.Lock()
 	for _, unsub := range m.eventUnsubs {
 		_ = unsub()
 	}
 	m.eventUnsubs = nil
 
+	plugins := make([]*PluginInstance, 0, len(m.plugins))
 	for name, instance := range m.plugins {
 		m.registry.RemoveOwner(name)
-		done := make(chan struct{})
-		go func(p pkgplugin.Plugin) {
-			_ = p.Close()
-			close(done)
-		}(instance.Plugin)
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-			m.log.Fwarn("plugin: %s: close timed out", name)
-		}
+		plugins = append(plugins, instance)
 	}
-
+	type clientEntry struct {
+		name   string
+		client *goplugin.Client
+	}
+	clients := make([]clientEntry, 0, len(m.clients))
 	for name, client := range m.clients {
-		m.log.Finfo("plugin: shutting down %s", name)
-		client.Kill()
+		clients = append(clients, clientEntry{name: name, client: client})
 	}
 
 	m.plugins = make(map[string]*PluginInstance)
 	m.clients = make(map[string]*goplugin.Client)
 	m.commands = nil
+	m.mu.Unlock()
+
+	var wg sync.WaitGroup
+	for _, instance := range plugins {
+		wg.Add(1)
+		go func(p pkgplugin.Plugin) {
+			defer wg.Done()
+			_ = p.Close()
+		}(instance.Plugin)
+	}
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		m.log.Fwarn("plugin: close timed out: %v", ctx.Err())
+	}
+
+	for _, entry := range clients {
+		m.log.Finfo("plugin: shutting down %s", entry.name)
+		entry.client.Kill()
+	}
 	ext.Reset()
 }
 

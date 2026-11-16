@@ -109,12 +109,18 @@ func (a *App) pluginManager() (*plugin.Manager, error) {
 }
 
 func (a *App) resetPluginManager() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	a.resetPluginManagerContext(ctx)
+}
+
+func (a *App) resetPluginManagerContext(ctx context.Context) {
 	a.pluginMu.Lock()
 	mgr := a.pluginMgr
 	a.pluginMgr = nil
 	a.pluginMu.Unlock()
 	if mgr != nil {
-		mgr.Close()
+		mgr.CloseContext(ctx)
 	}
 	a.refreshDesktopView()
 }
