@@ -383,6 +383,55 @@ func TestProviderAddCustomEndpointInteractive(t *testing.T) {
 	}
 }
 
+func TestProviderAddCustomEndpointPromptOrder(t *testing.T) {
+	c, _ := newTestCLI(t)
+	registerTestDriver(t, "testdrv-order")
+
+	var order []string
+	p := stubPrompts(nil)
+	p.selectProvider = func() (string, error) {
+		order = append(order, "select provider")
+		return customEndpointOption, nil
+	}
+	p.selectDriver = func() (string, error) {
+		order = append(order, "select driver")
+		return "testdrv-order", nil
+	}
+	p.promptString = func(label string) (string, error) {
+		order = append(order, label)
+		switch label {
+		case "Provider name":
+			return "my-order-endpoint", nil
+		case "Base URL":
+			return "http://127.0.0.1:9/v1", nil
+		}
+		return "", nil
+	}
+	p.promptHeaders = func() (map[string]string, error) {
+		order = append(order, "headers")
+		return nil, nil
+	}
+	p.promptAPIKey = func() (string, error) {
+		order = append(order, "API key")
+		return "k", nil
+	}
+
+	var out bytes.Buffer
+	if err := c.runProviderAdd(&out, &providerAddFlags{}, p); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"select provider", "Provider name", "select driver", "Base URL", "headers", "API key"}
+	if len(order) != len(want) {
+		t.Fatalf("prompt order = %v, want %v", order, want)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("prompt order = %v, want %v", order, want)
+		}
+	}
+}
+
 func TestProviderAddCustomEndpointRequiresName(t *testing.T) {
 	c, _ := newTestCLI(t)
 	registerTestDriver(t, "testdrv-noname")

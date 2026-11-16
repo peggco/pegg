@@ -190,15 +190,6 @@ func (c *CLI) runProviderAdd(out io.Writer, f *providerAddFlags, p providerAddPr
 		return errors.New("cli: max-retries must be >= 0")
 	}
 
-	apiKey := strings.TrimSpace(f.apiKey)
-	if interactive && !f.apiKeySet {
-		k, err := p.promptAPIKey()
-		if err != nil {
-			return err
-		}
-		apiKey = k
-	}
-
 	baseURL := strings.TrimSpace(f.baseURL)
 	headers := f.headers
 	note := ""
@@ -224,6 +215,15 @@ func (c *CLI) runProviderAdd(out io.Writer, f *providerAddFlags, p providerAddPr
 		}
 	} else if baseURL != "" || driver != "" {
 		note = "note: named providers use built-in endpoints; base_url/driver are stored but ignored"
+	}
+
+	apiKey := strings.TrimSpace(f.apiKey)
+	if interactive && !f.apiKeySet {
+		k, err := p.promptAPIKey()
+		if err != nil {
+			return err
+		}
+		apiKey = k
 	}
 
 	cfg := config.LLMConfig{
