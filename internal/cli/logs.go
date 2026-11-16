@@ -54,11 +54,7 @@ func (c *CLI) showBufferedLogs(out io.Writer) error {
 		return nil
 	}
 	for _, r := range recs {
-		fmt.Fprintf(out, "[%s] [%-5s] %s\n",
-			r.Timestamp.Format("2006-01-02 15:04:05"),
-			r.Level.String(),
-			r.Message,
-		)
+		fmt.Fprintln(out, logger.FormatRecord(r))
 	}
 	return nil
 }
@@ -75,7 +71,7 @@ func (c *CLI) queryLogs(out io.Writer, lcfg config.LoggerConfig, search, level s
 	}
 	if search != "" {
 		q.Search = search
-		q.SearchColumns = []string{"message", "level"}
+		q.SearchColumns = []string{"message", "level", "fields"}
 	}
 	if level != "" {
 		q.Filters = append(q.Filters, query.Filter{
@@ -95,11 +91,7 @@ func (c *CLI) queryLogs(out io.Writer, lcfg config.LoggerConfig, search, level s
 		return nil
 	}
 	for _, r := range recs {
-		fmt.Fprintf(out, "[%s] [%-5s] %s\n",
-			r.Timestamp.Format("2006-01-02 15:04:05"),
-			r.Level.String(),
-			r.Message,
-		)
+		fmt.Fprintln(out, logger.FormatRecord(r))
 	}
 	fmt.Fprintf(out, "\nshowing %d of %d logs\n", len(recs), total)
 	return nil

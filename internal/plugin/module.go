@@ -25,7 +25,7 @@ func Module(
 ) (*Manager, error) {
 	pluginCfg := cfg.Plugins
 	if !pluginCfg.Enabled {
-		log.Info("plugin: system disabled")
+		log.Debug("plugin: system disabled")
 		return NewManager(log, cfg, bus, cacheStore, llmMgr, sess, fs, mcpMgr, lspMgr), nil
 	}
 
@@ -38,9 +38,9 @@ func Module(
 
 	plugins := mgr.ListPlugins()
 	if len(plugins) > 0 {
-		log.Finfo("plugin: loaded %d plugins", len(plugins))
+		log.Fdebug("plugin: loaded %d plugins", len(plugins))
 		for _, p := range plugins {
-			log.Finfo("plugin:   - %s v%s", p.Name, p.Version)
+			log.Fdebug("plugin:   - %s v%s", p.Name, p.Version)
 		}
 	}
 

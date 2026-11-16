@@ -21,7 +21,7 @@ func Module(global map[string]config.LanguageServerConfig, fs *vfs.VFS, log *log
 	if len(servers) == 0 {
 		log.Debug("lsp: no language servers configured")
 	} else {
-		log.Finfo("lsp: registered %d language server(s)", len(servers))
+		log.Fdebug("lsp: registered %d language server(s)", len(servers))
 	}
 	return mgr, nil
 }

@@ -29,8 +29,9 @@ If `logger.driver` is `console`, `pegg logs` prints only the current process's
 in-memory buffer instead. Switch back to `"sqlite"` in
 [Config](config.md#logger) to persist logs.
 
-To increase verbosity, set the logger driver to `sqlite` (the default already records
-debug-level events) and query with `--level DEBUG`.
+To increase verbosity, set `logger.level` to `"debug"` in
+[Config](config.md#logger), or run with `PEGG_DEBUG=1` for a single process. Then
+query with `pegg logs --level DEBUG`.
 
 ## Cache
 

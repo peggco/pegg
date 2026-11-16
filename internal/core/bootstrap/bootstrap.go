@@ -176,7 +176,6 @@ func Run(args []string) error {
 	if err := builtin.Create(fs, sess, builtin.Options{LLM: mgr, Decision: decMgr, Config: cfg, Bus: bus, Memory: memMgr, Scheduler: sched}); err != nil {
 		return fmt.Errorf("bootstrap: builtin: %w", err)
 	}
-	log.Finfo("vfs: workspace mounted at %s", fs.Root())
 
 	if os.Getenv("PEGG_SCHEDULER") != "0" {
 		if err := sched.Start(context.Background()); err != nil {
@@ -211,6 +210,10 @@ func Run(args []string) error {
 			providers = append(providers, p.Provider)
 		}
 	}
+	pluginCount := 0
+	if pluginMgr != nil {
+		pluginCount = len(pluginMgr.ListPlugins())
+	}
 	corehook.ApplyAction(context.Background(), corehook.CoreConfigLoaded, corehook.ConfigLoaded{
 		Version:   config.AppVersion,
 		Theme:     cfg.Theme,
@@ -225,7 +228,12 @@ func Run(args []string) error {
 		corehook.ApplyAction(context.Background(), corehook.CoreShutdown, corehook.Shutdown{Reason: "exit"})
 	}()
 
-	log.Info("application started")
+	log.InfoFields("pegg: ready", map[string]any{
+		"version":   config.AppVersion,
+		"workspace": fs.Root(),
+		"providers": len(providers),
+		"plugins":   pluginCount,
+	})
 
 	if command, errs := corehook.ApplyFilter(context.Background(), corehook.CoreCommand, corehook.Command{Args: args}); len(errs) == 0 {
 		args = command.Args
@@ -236,7 +244,7 @@ func Run(args []string) error {
 		return fmt.Errorf("bootstrap: cli: %w", err)
 	}
 
-	log.Info("application stopped")
+	log.Debug("application stopped")
 	return nil
 }
 

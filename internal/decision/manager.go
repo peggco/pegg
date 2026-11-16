@@ -42,7 +42,7 @@ func (m *Manager) Start() error {
 	if err := m.bus.Subscribe(event.TopicProviderRemoved, m.handleProviderRemoved); err != nil {
 		return fmt.Errorf("decision manager: subscribe %s: %w", event.TopicProviderRemoved, err)
 	}
-	m.log.Info("decision manager started")
+	m.log.Debug("decision manager started")
 	return nil
 }
 
@@ -74,7 +74,7 @@ func (m *Manager) handleProviderRemoved(name string) {
 	m.mu.Lock()
 	delete(m.entries, name)
 	m.mu.Unlock()
-	m.log.Finfo("decision: provider %q removed", name)
+	m.log.Fdebug("decision: provider %q removed", name)
 }
 
 func (m *Manager) loadProvider(cfg config.LLMConfig) {
@@ -92,7 +92,7 @@ func (m *Manager) loadProvider(cfg config.LLMConfig) {
 	m.mu.Lock()
 	m.entries[cfg.Provider] = &entry{cfg: cfg, provider: prov}
 	m.mu.Unlock()
-	m.log.Finfo("decision: provider %q ready", cfg.Provider)
+	m.log.Fdebug("decision: provider %q ready", cfg.Provider)
 }
 
 func (m *Manager) Provider(name string) (Provider, error) {

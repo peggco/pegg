@@ -2,6 +2,7 @@ package logger
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,7 +26,8 @@ CREATE TABLE IF NOT EXISTS logs (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	timestamp DATETIME,
 	level TEXT,
-	message TEXT
+	message TEXT,
+	fields TEXT
 );`
 
 type SQLiteHandler struct {
@@ -64,19 +66,65 @@ func newSQLiteHandler(db *sql.DB, maxLogCount int) (*SQLiteHandler, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := ensureFieldsColumn(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 
 	return &SQLiteHandler{
 		db:          db,
 		maxLogCount: maxLogCount,
 		insertCount: 0,
-		builder: query.NewBuilder("logs", "id", "timestamp", "level", "message").
+		builder: query.NewBuilder("logs", "id", "timestamp", "level", "message", "fields").
 			DefaultSort("timestamp", query.Desc),
 	}, nil
 }
 
+func ensureFieldsColumn(db *sql.DB) error {
+	rows, err := db.Query("PRAGMA table_info(logs)")
+	if err != nil {
+		return fmt.Errorf("logger: inspect logs table: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			columnTyp string
+			notNull   int
+			defaultV  sql.NullString
+			primary   int
+		)
+		if err := rows.Scan(&cid, &name, &columnTyp, &notNull, &defaultV, &primary); err != nil {
+			return fmt.Errorf("logger: inspect logs table: %w", err)
+		}
+		if name == "fields" {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("logger: inspect logs table: %w", err)
+	}
+
+	if _, err := db.Exec("ALTER TABLE logs ADD COLUMN fields TEXT"); err != nil {
+		return fmt.Errorf("logger: add fields column: %w", err)
+	}
+	return nil
+}
+
 func (s *SQLiteHandler) Write(rec Record) error {
-	_, err := s.db.Exec("INSERT INTO logs (timestamp, level, message) VALUES (?, ?, ?)",
-		rec.Timestamp, rec.Level.String(), rec.Message)
+	var fields any
+	if len(rec.Fields) > 0 {
+		data, err := json.Marshal(rec.Fields)
+		if err != nil {
+			return fmt.Errorf("logger: marshal fields: %w", err)
+		}
+		fields = string(data)
+	}
+
+	_, err := s.db.Exec("INSERT INTO logs (timestamp, level, message, fields) VALUES (?, ?, ?, ?)",
+		rec.Timestamp, rec.Level.String(), rec.Message, fields)
 	if err != nil {
 		return err
 	}
@@ -129,10 +177,14 @@ func (s *SQLiteHandler) Query(q query.Query) ([]Record, int, error) {
 	for rows.Next() {
 		var rec Record
 		var level string
-		if err := rows.Scan(&rec.ID, &rec.Timestamp, &level, &rec.Message); err != nil {
+		var fields sql.NullString
+		if err := rows.Scan(&rec.ID, &rec.Timestamp, &level, &rec.Message, &fields); err != nil {
 			return nil, 0, err
 		}
 		rec.Level = ParseLevel(level)
+		if fields.Valid && fields.String != "" {
+			_ = json.Unmarshal([]byte(fields.String), &rec.Fields)
+		}
 		records = append(records, rec)
 	}
 	if err := rows.Err(); err != nil {

@@ -3,6 +3,8 @@ package logger
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/peggco/pegg/internal/core/config"
@@ -38,7 +40,29 @@ func NewFromConfig(cfg config.LoggerConfig) (*Logger, error) {
 		return nil, err
 	}
 
-	return New(LevelDebug, h), nil
+	return New(resolveLevel(cfg), h), nil
+}
+
+func resolveLevel(cfg config.LoggerConfig) Level {
+	if debugEnabled(os.Getenv("PEGG_DEBUG")) {
+		return LevelDebug
+	}
+	if level := strings.TrimSpace(os.Getenv("PEGG_LOG_LEVEL")); level != "" {
+		return ParseLevel(level)
+	}
+	if cfg.Level != "" {
+		return ParseLevel(cfg.Level)
+	}
+	return ParseLevel(config.DefaultLoggerLevel)
+}
+
+func debugEnabled(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on", "debug":
+		return true
+	default:
+		return false
+	}
 }
 
 func LoggerModule(cfg config.LoggerConfig) (*Logger, error) {

@@ -2,6 +2,8 @@ package logger
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -30,26 +32,61 @@ func (l Level) String() string {
 	}
 }
 
-func ParseLevel(s string) Level {
-	switch s {
+func ParseLevelName(s string) (Level, bool) {
+	switch strings.ToUpper(strings.TrimSpace(s)) {
 	case "DEBUG":
-		return LevelDebug
+		return LevelDebug, true
 	case "INFO":
-		return LevelInfo
+		return LevelInfo, true
 	case "WARN":
-		return LevelWarn
+		return LevelWarn, true
 	case "ERROR":
-		return LevelError
+		return LevelError, true
 	default:
-		return LevelDebug
+		return LevelInfo, false
 	}
 }
 
+func ParseLevel(s string) Level {
+	if level, ok := ParseLevelName(s); ok {
+		return level
+	}
+	return LevelInfo
+}
+
 type Record struct {
-	ID        int64     `json:"id,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
-	Level     Level     `json:"level"`
-	Message   string    `json:"message"`
+	ID        int64          `json:"id,omitempty"`
+	Timestamp time.Time      `json:"timestamp"`
+	Level     Level          `json:"level"`
+	Message   string         `json:"message"`
+	Fields    map[string]any `json:"fields,omitempty"`
+}
+
+func FormatRecord(rec Record) string {
+	line := fmt.Sprintf("[%s] [%-5s] %s",
+		rec.Timestamp.Format("2006-01-02 15:04:05"),
+		rec.Level.String(),
+		rec.Message,
+	)
+	if len(rec.Fields) == 0 {
+		return line
+	}
+
+	keys := make([]string, 0, len(rec.Fields))
+	for key := range rec.Fields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	var b strings.Builder
+	b.WriteString(line)
+	for _, key := range keys {
+		b.WriteString(" ")
+		b.WriteString(key)
+		b.WriteString("=")
+		b.WriteString(fmt.Sprint(rec.Fields[key]))
+	}
+	return b.String()
 }
 
 type Handler interface {
@@ -80,7 +117,15 @@ func (l *Logger) AddHandler(h Handler) {
 	l.handlers = append(l.handlers, h)
 }
 
+func (l *Logger) MinLevel() Level {
+	return l.minLevel
+}
+
 func (l *Logger) log(level Level, msg string) {
+	l.logFields(level, msg, nil)
+}
+
+func (l *Logger) logFields(level Level, msg string, fields map[string]any) {
 	if level < l.minLevel {
 		return
 	}
@@ -89,6 +134,12 @@ func (l *Logger) log(level Level, msg string) {
 		Timestamp: time.Now(),
 		Level:     level,
 		Message:   msg,
+	}
+	if len(fields) > 0 {
+		rec.Fields = make(map[string]any, len(fields))
+		for key, value := range fields {
+			rec.Fields[key] = value
+		}
 	}
 
 	l.mu.Lock()
@@ -124,6 +175,11 @@ func (l *Logger) Fdebug(msg string, args ...any) { l.log(LevelDebug, fmt.Sprintf
 func (l *Logger) Finfo(msg string, args ...any)  { l.log(LevelInfo, fmt.Sprintf(msg, args...)) }
 func (l *Logger) Fwarn(msg string, args ...any)  { l.log(LevelWarn, fmt.Sprintf(msg, args...)) }
 func (l *Logger) Ferror(msg string, args ...any) { l.log(LevelError, fmt.Sprintf(msg, args...)) }
+
+func (l *Logger) DebugFields(msg string, fields map[string]any) { l.logFields(LevelDebug, msg, fields) }
+func (l *Logger) InfoFields(msg string, fields map[string]any)  { l.logFields(LevelInfo, msg, fields) }
+func (l *Logger) WarnFields(msg string, fields map[string]any)  { l.logFields(LevelWarn, msg, fields) }
+func (l *Logger) ErrorFields(msg string, fields map[string]any) { l.logFields(LevelError, msg, fields) }
 
 func (l *Logger) Close() error {
 	l.mu.Lock()

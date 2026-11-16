@@ -38,8 +38,11 @@ type ModelRef struct {
 	Model    string `json:"model,omitempty"`
 }
 
+const DefaultLoggerLevel = "info"
+
 type LoggerConfig struct {
 	Driver      string `json:"driver"`
+	Level       string `json:"level,omitempty"`
 	MaxLogCount int    `json:"max_log_count"`
 }
 
@@ -396,6 +399,7 @@ func DefaultConfig() *Config {
 		Onboarding: &OnboardingConfig{},
 		Logger: LoggerConfig{
 			Driver:      "sqlite",
+			Level:       DefaultLoggerLevel,
 			MaxLogCount: 1000,
 		},
 		Cache: CacheConfig{
