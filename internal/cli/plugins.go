@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -242,12 +243,17 @@ func (c *CLI) printPluginCatalogWarnings(ctx context.Context, out io.Writer, sou
 
 func (c *CLI) newPluginsInstallCommand() *cobra.Command {
 	var opts install.Options
+	var envFlags []string
 	cmd := &cobra.Command{
 		Use:   "install <owner/repo>",
 		Short: "Install a plugin from GitHub releases",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			source, err := install.ParseSource(args[0])
+			if err != nil {
+				return err
+			}
+			envValues, err := parseEnvPairs(envFlags)
 			if err != nil {
 				return err
 			}
@@ -276,6 +282,12 @@ func (c *CLI) newPluginsInstallCommand() *cobra.Command {
 					entry.Version, result.Version)
 			}
 			printInstallResult(cmd, result, false)
+			if len(envValues) > 0 {
+				if _, err := config.SetPluginEnv(result.Name, envValues); err != nil {
+					return fmt.Errorf("save plugin env: %w", err)
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "Environment: %d variable(s) configured for %s\n", len(envValues), result.Name)
+			}
 			return nil
 		},
 	}
@@ -286,7 +298,138 @@ func (c *CLI) newPluginsInstallCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Force, "force", false, "replace an existing plugin")
 	cmd.Flags().BoolVar(&opts.SkipChecksum, "skip-checksum", false, "skip checksum verification")
 	cmd.Flags().BoolVar(&opts.RequireChecksum, "require-checksum", false, "fail when no checksum is available")
+	cmd.Flags().StringArrayVar(&envFlags, "env", nil, "plugin environment variable KEY=VALUE (repeatable)")
 	return cmd
+}
+
+func (c *CLI) newPluginsEnvCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "env [name]",
+		Short: "Manage per-plugin environment variables",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return c.runPluginsEnvList(cmd, args)
+		},
+	}
+	cmd.AddCommand(
+		c.newPluginsEnvListCommand(),
+		c.newPluginsEnvSetCommand(),
+		c.newPluginsEnvUnsetCommand(),
+	)
+	return cmd
+}
+
+func (c *CLI) newPluginsEnvListCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list [name]",
+		Short: "List configured plugin environment variables with masked values",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return c.runPluginsEnvList(cmd, args)
+		},
+	}
+}
+
+func (c *CLI) runPluginsEnvList(cmd *cobra.Command, args []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if len(args) == 1 {
+		env := cfg.Plugins.EnvFor(args[0])
+		if len(env) == 0 {
+			fmt.Fprintf(cmd.OutOrStdout(), "No environment variables configured for %s.\n", args[0])
+			return nil
+		}
+		printMaskedEnv(cmd, env)
+		return nil
+	}
+	if len(cfg.Plugins.Env) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No plugin environment variables configured.")
+		return nil
+	}
+	keys := make([]string, 0, len(cfg.Plugins.Env))
+	for key := range cfg.Plugins.Env {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Fprintf(cmd.OutOrStdout(), "[%s]\n", key)
+		printMaskedEnv(cmd, cfg.Plugins.Env[key])
+	}
+	return nil
+}
+
+func (c *CLI) newPluginsEnvSetCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "set <name> KEY=VALUE...",
+		Short: "Set per-plugin environment variables",
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			values, err := parseEnvPairs(args[1:])
+			if err != nil {
+				return err
+			}
+			changed, err := config.SetPluginEnv(args[0], values)
+			if err != nil {
+				return err
+			}
+			if changed {
+				fmt.Fprintf(cmd.OutOrStdout(), "Updated environment for %s.\n", args[0])
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "Environment for %s is already up to date.\n", args[0])
+			}
+			return nil
+		},
+	}
+}
+
+func (c *CLI) newPluginsEnvUnsetCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "unset <name> KEY...",
+		Short: "Remove per-plugin environment variables",
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			changed, err := config.UnsetPluginEnv(args[0], args[1:]...)
+			if err != nil {
+				return err
+			}
+			if changed {
+				fmt.Fprintf(cmd.OutOrStdout(), "Removed environment variable(s) from %s.\n", args[0])
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "No matching environment variables for %s.\n", args[0])
+			}
+			return nil
+		},
+	}
+}
+
+func parseEnvPairs(values []string) (map[string]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(values))
+	for _, value := range values {
+		key, val, ok := strings.Cut(value, "=")
+		key = strings.TrimSpace(key)
+		if !ok || key == "" {
+			return nil, fmt.Errorf("invalid environment variable, expected KEY=VALUE")
+		}
+		out[key] = val
+	}
+	return out, nil
+}
+
+func printMaskedEnv(cmd *cobra.Command, env map[string]string) {
+	masked := plugin.MaskEnv(env)
+	keys := make([]string, 0, len(masked))
+	for key := range masked {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Fprintf(cmd.OutOrStdout(), "%s=%s\n", key, masked[key])
+	}
 }
 
 func (c *CLI) newPluginsUpdateCommand() *cobra.Command {

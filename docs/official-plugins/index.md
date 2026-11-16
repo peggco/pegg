@@ -77,6 +77,12 @@ Plugin options live under `plugins.options.<plugin-name>` in `~/.pegg/pegg.json`
       "kanban-github": {
         "repo": "acme/widgets"
       }
+    },
+    "env": {
+      "kanban-github": {
+        "PEGG_GITHUB_TOKEN": "...",
+        "PEGG_GITHUB_API": "https://github.example.com/api/v3"
+      }
     }
   }
 }
@@ -85,6 +91,12 @@ Plugin options live under `plugins.options.<plugin-name>` in `~/.pegg/pegg.json`
 Environment variables override the file for most plugins and use the plugin name as a
 prefix, for example `PEGG_BROWSER_HEADLESS`, `PEGG_GITHUB_TOKEN`, or `PEGG_USAGE_DB`.
 Each plugin page lists its own options and environment variables.
+
+Persist per-plugin values under `plugins.env.<plugin>` instead of exporting them in
+your shell. Pegg injects them only into that plugin's process, inherited values stay
+available, and configured values take precedence. Manage them with
+`pegg plugins env set <plugin> KEY=VALUE`, `pegg plugins env unset <plugin> KEY`, or
+`pegg plugins install <owner>/<repo> --env KEY=VALUE`.
 
 ## Version compatibility
 

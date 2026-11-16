@@ -375,8 +375,8 @@ exists, `doctor` asks `Do you want to update? (y/N)` and can install it.
 pegg config show
 ```
 
-`show` prints the resolved configuration as pretty JSON with API keys masked. It is
-the only `config` subcommand.
+`show` prints the resolved configuration as pretty JSON with API keys and plugin
+environment values masked. It is the only `config` subcommand.
 
 ## `pegg sessions`
 

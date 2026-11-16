@@ -41,7 +41,7 @@ stays separated per project. Pegg logs the relocation once at startup.
 pegg config show
 ```
 
-Prints the resolved configuration as pretty-printed JSON with every API key masked.
+Prints the resolved configuration as pretty-printed JSON with API keys and plugin environment values masked.
 There are no `config get` / `config set` subcommands — edit the file directly.
 
 ## Reference

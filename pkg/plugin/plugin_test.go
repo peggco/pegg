@@ -221,11 +221,11 @@ func TestClientBootInjectsDispatchID(t *testing.T) {
 
 	client := &PeggPluginRPCClient{client: rpc.NewClient(clientConn), dispatchID: 0xF0000001}
 	defer client.client.Close()
-	if err := client.Boot(Deps{Workdir: "/tmp"}); err != nil {
+	if err := client.Boot(Deps{Workdir: "/tmp", Env: map[string]string{"PEGG_TOKEN": "secret"}}); err != nil {
 		t.Fatal(err)
 	}
 	deps := <-received
-	if deps.DispatchID != 0xF0000001 || deps.Workdir != "/tmp" {
+	if deps.DispatchID != 0xF0000001 || deps.Workdir != "/tmp" || deps.Env["PEGG_TOKEN"] != "secret" {
 		t.Fatalf("deps: %#v", deps)
 	}
 }

@@ -21,6 +21,12 @@ Add plugin configuration to `~/.pegg/pegg.json`:
       "browser-use": {
         "headless": true
       }
+    },
+    "env": {
+      "Kanban GitHub": {
+        "PEGG_GITHUB_TOKEN": "...",
+        "PEGG_GITHUB_API": "https://github.example.com/api/v3"
+      }
     }
   }
 }
@@ -33,6 +39,41 @@ Add plugin configuration to `~/.pegg/pegg.json`:
 | `enabled` | boolean | `true` | Enable or disable the plugin system |
 | `exclude` | string[] | `[]` | Plugin names or binary names to skip during loading |
 | `options` | object | `{}` | Per-plugin configuration passed to the plugin |
+| `env` | object | `{}` | Per-plugin environment variables injected into the plugin process |
+
+### Environment variables
+
+`plugins.env.<plugin>` sets environment variables for one plugin process only.
+Pegg merges them over its own environment, so unset keys are still inherited.
+Configured values take precedence over inherited values:
+
+```json
+{
+  "plugins": {
+    "env": {
+      "kanban-github": { "PEGG_GITHUB_TOKEN": "ghp_example" }
+    }
+  }
+}
+```
+
+The map key can be the plugin name shown by `pegg plugins list`, the installed
+binary name, or a display name. Matching is case-insensitive and ignores a
+`pegg-` prefix and word separators, so `Kanban GitHub`, `kanban_github`, and
+`pegg-kanban-github` all refer to the same plugin.
+
+Values are persisted in `~/.pegg/pegg.json` (mode `0600`). Pegg only logs which
+keys were injected, and `pegg plugins env` masks values in its output.
+
+```bash
+pegg plugins install owner/repo --env PEGG_GITHUB_TOKEN=... --env PEGG_GITHUB_API=...
+pegg plugins env kanban-github                       # masked values
+pegg plugins env set kanban-github PEGG_GITHUB_TOKEN=...
+pegg plugins env unset kanban-github PEGG_GITHUB_TOKEN
+```
+
+Plugins that read `os.Getenv` pick up the values directly. SDK plugins can also
+read the injected map from `Deps.Env` in `Boot`.
 
 ### Plugin directory
 
@@ -142,8 +183,9 @@ still available.
    directory for executables.
 2. Each executable is launched as a separate process via
    [HashiCorp go-plugin](https://github.com/hashicorp/go-plugin).
-3. The plugin's `Boot` method receives the application config and its
-   `plugins.options` entry.
+3. The plugin process starts with `plugins.env.<plugin>` merged over Pegg's
+   environment, then its `Boot` method receives the application config, its
+   `plugins.options` entry, and the resolved `env` map.
 4. Tool bundles are activated lazily when a skill with `tools: <bundle>` is loaded.
 5. If a plugin fails to load, a warning is logged and Pegg continues normally.
 6. On shutdown, plugin processes receive a close request and are then terminated.

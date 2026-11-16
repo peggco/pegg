@@ -220,10 +220,11 @@ func (m *Manager) connectPlugin(path string) (*PluginInstance, error) {
 	m.log.Finfo("plugin: loading %s", name)
 	start := time.Now()
 
+	env := m.pluginEnv(name)
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig:  pkgplugin.Handshake,
 		Plugins:          pkgplugin.NewClientPluginMap(m.dispatchHook),
-		Cmd:              pluginCmd(path),
+		Cmd:              pluginCmd(path, env),
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolNetRPC},
 		Logger: hclog.New(&hclog.LoggerOptions{
 			Output: &logWriter{log: m.log},
@@ -286,6 +287,10 @@ func (m *Manager) connectPlugin(path string) (*PluginInstance, error) {
 		Options:    options,
 		Workdir:    m.workspaceRoot(),
 		PluginPath: path,
+		Env:        env,
+	}
+	if len(env) > 0 {
+		m.log.Finfo("plugin: %s: injecting environment variables: %s", instance.Name, strings.Join(envKeys(env), ", "))
 	}
 	if err := pluginImpl.Boot(deps); err != nil {
 		client.Kill()
@@ -640,6 +645,13 @@ func (m *Manager) workspaceRoot() string {
 		return wd
 	}
 	return ""
+}
+
+func (m *Manager) pluginEnv(names ...string) map[string]string {
+	if m.cfg == nil {
+		return nil
+	}
+	return m.cfg.Plugins.EnvFor(names...)
 }
 
 func (m *Manager) ExecuteTool(ctx context.Context, pluginName, toolName, args string) (*pkgplugin.ToolResult, error) {
@@ -1030,8 +1042,11 @@ func GetPluginDir() (string, error) {
 	return filepath.Join(home, ".pegg", "plugins"), nil
 }
 
-func pluginCmd(path string) *exec.Cmd {
+func pluginCmd(path string, env map[string]string) *exec.Cmd {
 	cmd := exec.Command(path)
+	if len(env) > 0 {
+		cmd.Env = mergePluginEnv(os.Environ(), env)
+	}
 	configurePluginCmd(cmd)
 	return cmd
 }

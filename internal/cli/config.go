@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/plugin"
 )
 
 func (c *CLI) newConfigCommand() *cobra.Command {
@@ -23,7 +24,7 @@ func (c *CLI) newConfigCommand() *cobra.Command {
 func (c *CLI) newConfigShowCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show",
-		Short: "Show resolved configuration (API keys masked)",
+		Short: "Show resolved configuration (sensitive values masked)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return c.runConfigShow(cmd.OutOrStdout())
@@ -44,6 +45,12 @@ func (c *CLI) runConfigShow(out io.Writer) error {
 	masked.Providers = append([]config.LLMConfig(nil), cfg.Providers...)
 	for i := range masked.Providers {
 		masked.Providers[i].APIKey = maskAPIKey(masked.Providers[i].APIKey)
+	}
+	if len(cfg.Plugins.Env) > 0 {
+		masked.Plugins.Env = make(map[string]map[string]string, len(cfg.Plugins.Env))
+		for name, env := range cfg.Plugins.Env {
+			masked.Plugins.Env[name] = plugin.MaskEnv(env)
+		}
 	}
 
 	data, err := json.MarshalIndent(masked, "", "  ")

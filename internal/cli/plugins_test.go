@@ -125,6 +125,79 @@ func TestPluginsUpdateCheck(t *testing.T) {
 	}
 }
 
+func TestPluginsEnvCommands(t *testing.T) {
+	c, _ := newTestCLI(t)
+	var out bytes.Buffer
+	c.root.SetOut(&out)
+	c.root.SetErr(&out)
+
+	if err := c.Execute([]string{"plugins", "env", "set", "demo", "PEGG_TOKEN=super-secret-token", "PEGG_EMPTY="}); err != nil {
+		t.Fatalf("env set: %v\n%s", err, out.String())
+	}
+	env, err := config.PluginEnv("demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env["PEGG_TOKEN"] != "super-secret-token" {
+		t.Fatalf("env not persisted: %#v", env)
+	}
+
+	out.Reset()
+	if err := c.Execute([]string{"plugins", "env", "demo"}); err != nil {
+		t.Fatalf("env list: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "PEGG_TOKEN=") || strings.Contains(out.String(), "super-secret-token") {
+		t.Fatalf("env list did not mask the value: %s", out.String())
+	}
+
+	out.Reset()
+	if err := c.Execute([]string{"plugins", "env"}); err != nil {
+		t.Fatalf("env list all: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "[demo]") {
+		t.Fatalf("env list all missing plugin: %s", out.String())
+	}
+
+	if err := c.Execute([]string{"plugins", "env", "set", "demo", "MISSING_VALUE"}); err == nil {
+		t.Fatal("expected invalid KEY=VALUE error")
+	}
+
+	if err := c.Execute([]string{"plugins", "env", "unset", "demo", "PEGG_TOKEN", "PEGG_EMPTY"}); err != nil {
+		t.Fatalf("env unset: %v\n%s", err, out.String())
+	}
+	env, _ = config.PluginEnv("demo")
+	if len(env) != 0 {
+		t.Fatalf("env not cleared: %#v", env)
+	}
+}
+
+func TestPluginsInstallEnvFlag(t *testing.T) {
+	server := pluginReleaseServer(t, "v1.0.0", []byte("plugin-v1"))
+	defer server.Close()
+	t.Setenv("PEGG_GITHUB_API", server.URL)
+	c, _ := newTestCLI(t)
+	var out bytes.Buffer
+	c.root.SetOut(&out)
+	c.root.SetErr(&out)
+
+	if err := c.Execute([]string{
+		"plugins", "install", "owner/repo", "--name", "testplug", "--skip-checksum",
+		"--env", "PEGG_API_URL=https://example.test", "--env", "PEGG_TOKEN=secret",
+	}); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	env, err := config.PluginEnv("testplug")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env["PEGG_API_URL"] != "https://example.test" || env["PEGG_TOKEN"] != "secret" {
+		t.Fatalf("install env: %#v", env)
+	}
+	if !strings.Contains(out.String(), "Environment: 2 variable(s)") {
+		t.Fatalf("install output: %s", out.String())
+	}
+}
+
 func containsString(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {

@@ -31,6 +31,7 @@ type Deps struct {
 	Workdir    string
 	PluginPath string
 	DispatchID uint32
+	Env        map[string]string
 }
 
 type ToolSpec struct {

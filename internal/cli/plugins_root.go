@@ -30,6 +30,7 @@ func (c *CLI) newPluginsCommand() *cobra.Command {
 		c.newPluginsRemoveCommand(),
 		c.newPluginsExcludeCommand(),
 		c.newPluginsIncludeCommand(),
+		c.newPluginsEnvCommand(),
 	)
 
 	return cmd

@@ -573,6 +573,31 @@ func TestConfigShowMasksAPIKey(t *testing.T) {
 	}
 }
 
+func TestConfigShowMasksPluginEnv(t *testing.T) {
+	c, _ := newTestCLI(t)
+
+	cfg := config.DefaultConfig()
+	cfg.Plugins.Env = map[string]map[string]string{
+		"demo": {"PEGG_TOKEN": "super-secret-token"},
+	}
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	c.root.SetOut(&buf)
+	if err := c.Execute([]string{"config", "show"}); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "PEGG_TOKEN") {
+		t.Fatalf("output = %q, want env key", out)
+	}
+	if strings.Contains(out, "super-secret-token") {
+		t.Fatalf("output = %q, must not contain raw env value", out)
+	}
+}
+
 func TestVersionCommand(t *testing.T) {
 	c, _ := newTestCLI(t)
 

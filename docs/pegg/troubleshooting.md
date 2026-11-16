@@ -10,7 +10,7 @@ icon: lucide/bug
 pegg version      # confirm what you are running
 pegg files        # where config, logs, cache, and sessions live
 pegg doctor       # test every configured provider and check for updates
-pegg config show  # print the resolved config (API keys masked)
+pegg config show  # print the resolved config (sensitive values masked)
 ```
 
 ## Logs
