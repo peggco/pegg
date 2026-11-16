@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/peggco/pegg/internal/agent/wake"
@@ -14,6 +15,7 @@ import (
 	"github.com/peggco/pegg/internal/cli"
 	"github.com/peggco/pegg/internal/core/cache"
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/core/env"
 	"github.com/peggco/pegg/internal/core/event"
 	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/core/logger"
@@ -69,6 +71,10 @@ func Run(args []string) error {
 		return fmt.Errorf("bootstrap: init logger: %w", err)
 	}
 	defer log.Close()
+
+	if changed := env.Apply(); len(changed) > 0 {
+		log.Fdebug("env: hydrated from login shell: %s", strings.Join(changed, ","))
+	}
 
 	if notice := config.ProjectRootNotice(); notice != "" {
 		log.Fwarn("%s", notice)

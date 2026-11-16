@@ -75,6 +75,13 @@ Environment: `PEGG_GITHUB_TOKEN`, `PEGG_GITHUB_REPO`, `PEGG_GITHUB_OWNER`,
 `PEGG_GITHUB_REPO_NAME`, `PEGG_GITHUB_API_URL`, `PEGG_GITHUB_WORKTREE_ROOT`,
 `PEGG_GITHUB_DEFAULT_BASE`, `PEGG_GITHUB_TIMEOUT_SECONDS`.
 
+When Pegg Desktop starts, it imports the login shell's `PATH` and the git-host
+credential variables above, so `gh auth token` and `GITHUB_TOKEN` resolve the same way
+they do in the TUI. If `gh` is installed somewhere the login shell does not expose, set
+`token` in `plugins.options["kanban-github"]` or export `PEGG_GITHUB_TOKEN` for the
+desktop session. Settings → Plugins shows the plugin's boot result and error, so a
+failing credential lookup is no longer silent.
+
 ## Behavior
 
 - `kanban.issues.fetch` maps GitHub issues to cards with `source=github`, the issue number,

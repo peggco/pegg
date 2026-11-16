@@ -1345,6 +1345,9 @@ export namespace main {
 	    path: string;
 	    enabled: boolean;
 	    status: string;
+	    runtime?: string;
+	    error?: string;
+	    hooks?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new PluginSetting(source);
@@ -1356,6 +1359,9 @@ export namespace main {
 	        this.path = source["path"];
 	        this.enabled = source["enabled"];
 	        this.status = source["status"];
+	        this.runtime = source["runtime"];
+	        this.error = source["error"];
+	        this.hooks = source["hooks"];
 	    }
 	}
 	

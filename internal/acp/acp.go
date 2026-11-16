@@ -14,10 +14,16 @@ import (
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/live"
 	"github.com/peggco/pegg/internal/llm"
+	"github.com/peggco/pegg/internal/plugin"
 	"github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/vfs"
 )
+
+type PluginRuntime interface {
+	RuntimeStatus() []plugin.RuntimeStatus
+	HookSpecs() []plugin.PluginHookSpec
+}
 
 type ACPSession struct {
 	ID        string
@@ -158,6 +164,7 @@ type Server struct {
 	fs       *vfs.VFS
 	runs     *run.Coordinator
 	live     *live.Hub
+	plugins  PluginRuntime
 
 	transport Transport
 	client    *Client
@@ -217,6 +224,10 @@ func New(
 	s.newAgentFn = s.newOrchestratorAgent
 	s.subscribeAsk()
 	return s
+}
+
+func (s *Server) SetPluginRuntime(plugins PluginRuntime) {
+	s.plugins = plugins
 }
 
 func (s *Server) Serve(ctx context.Context, transport Transport) error {
@@ -331,6 +342,8 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleSkillsSearch(ctx, params)
 	case "_pegg/skills/install":
 		result, handlerErr = s.handleSkillsInstall(ctx, params)
+	case "_pegg/plugins":
+		result, handlerErr = s.handlePluginsRuntime(ctx, params)
 	case "_pegg/stt/transcribe":
 		result, handlerErr = s.handleSTTTranscribe(ctx, params)
 	case "_pegg/stt/record/start":

@@ -262,6 +262,7 @@ func (a *App) InstallCatalogPlugin(source, name string) (CatalogMutationResult, 
 				entry.Version, result.Version))
 		}
 	}
+	a.resetClient()
 	return res, nil
 }
 
@@ -305,6 +306,9 @@ func (a *App) UpdateCatalogPlugin(source, name string) (CatalogMutationResult, e
 	}
 	if entryErr == nil {
 		res.CatalogVersion = entry.Version
+	}
+	if result.Updated {
+		a.resetClient()
 	}
 	return res, nil
 }

@@ -719,9 +719,14 @@ export function PluginsPanel({
                 <div className="row-main">
                   <div className="row-name">{plugin.name}</div>
                   <div className="row-desc">{plugin.path}</div>
+                  {plugin.error ? <div className="row-desc">{plugin.error}</div> : null}
+                  {plugin.hooks?.length ? (
+                    <div className="row-desc">{`Hooks: ${plugin.hooks.join(', ')}`}</div>
+                  ) : null}
                 </div>
                 <div className="row-side">
                   <span className="badge">{plugin.status}</span>
+                  {plugin.runtime ? <span className="badge">{plugin.runtime}</span> : null}
                   <Switch
                     checked={plugin.enabled}
                     onChange={() => void toggle(plugin.name)}

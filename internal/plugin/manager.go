@@ -48,6 +48,7 @@ type Manager struct {
 	commands    []PluginCommand
 	eventUnsubs []func() error
 	registry    *corehook.Registry
+	failures    []PluginLoadFailure
 
 	hookMu    sync.Mutex
 	hookDepth map[string]int
@@ -93,11 +94,35 @@ type PluginCommand struct {
 }
 
 type PluginHookSpec struct {
-	Plugin      string
-	Name        string
-	Kind        pkgplugin.HookKind
-	Priority    int
-	Description string
+	Plugin      string             `json:"plugin"`
+	Name        string             `json:"name"`
+	Kind        pkgplugin.HookKind `json:"kind"`
+	Priority    int                `json:"priority"`
+	Description string             `json:"description,omitempty"`
+}
+
+type PluginHookStatus struct {
+	Name     string `json:"name"`
+	Kind     string `json:"kind"`
+	Priority int    `json:"priority"`
+}
+
+type PluginLoadFailure struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+	Err  string `json:"error"`
+}
+
+type RuntimeStatus struct {
+	Name         string             `json:"name"`
+	Path         string             `json:"path"`
+	Version      string             `json:"version,omitempty"`
+	Capabilities []string           `json:"capabilities,omitempty"`
+	Tools        []string           `json:"tools,omitempty"`
+	Skills       []string           `json:"skills,omitempty"`
+	Hooks        []PluginHookStatus `json:"hooks,omitempty"`
+	Loaded       bool               `json:"loaded"`
+	Error        string             `json:"error,omitempty"`
 }
 
 type HookOutcome struct {
@@ -145,6 +170,7 @@ var errPluginSkipped = errors.New("plugin skipped")
 
 type pluginLoadResult struct {
 	instance *PluginInstance
+	path     string
 	err      error
 }
 
@@ -175,30 +201,73 @@ func (m *Manager) LoadPlugins() error {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			instance, err := m.connectPlugin(path)
-			results[i] = pluginLoadResult{instance: instance, err: err}
+			results[i] = pluginLoadResult{instance: instance, path: path, err: err}
 		}(i, path)
 	}
 	wg.Wait()
 
+	loaded, failed := 0, 0
 	for _, result := range results {
 		if result.err != nil {
-			if !errors.Is(result.err, errPluginSkipped) {
-				m.log.Fwarn("plugin: %v", result.err)
+			if errors.Is(result.err, errPluginSkipped) {
+				continue
 			}
+			failed++
+			m.recordFailure(result.path, result.err)
+			m.log.Fwarn("plugin: failed to load %s: %v", filepath.Base(result.path), result.err)
 			continue
 		}
 		if err := m.registerPlugin(result.instance); err != nil {
 			if errors.Is(err, errPluginSkipped) {
 				continue
 			}
-			m.log.Fwarn("plugin: failed to register %s: %v", result.instance.Name, err)
-			if result.instance.Client != nil {
+			failed++
+			path := result.path
+			name := filepath.Base(result.path)
+			if result.instance != nil {
+				path = result.instance.Path
+				name = result.instance.Name
+			}
+			m.recordFailure(path, err)
+			m.log.Fwarn("plugin: failed to register %s: %v", name, err)
+			if result.instance != nil && result.instance.Client != nil {
 				result.instance.Client.Kill()
 			}
+			continue
 		}
+		loaded++
 	}
+	m.log.Finfo("plugin: boot complete: %d loaded, %d failed", loaded, failed)
 
 	return nil
+}
+
+func (m *Manager) recordFailure(path string, err error) {
+	if err == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.failures = append(m.failures, failureFromError(path, err))
+}
+
+func failureFromError(path string, err error) PluginLoadFailure {
+	failure := PluginLoadFailure{Path: path, Err: err.Error()}
+	msg := err.Error()
+	for _, prefix := range []string{"connect to plugin ", "dispense plugin ", "boot plugin ", "plugin "} {
+		if strings.HasPrefix(msg, prefix) {
+			name := strings.TrimPrefix(msg, prefix)
+			if idx := strings.IndexByte(name, ':'); idx >= 0 {
+				name = name[:idx]
+			}
+			failure.Name = strings.TrimSpace(name)
+			break
+		}
+	}
+	if failure.Name == "" && path != "" {
+		failure.Name = filepath.Base(path)
+	}
+	return failure
 }
 
 func (m *Manager) pluginExcluded(name string) bool {
@@ -223,7 +292,7 @@ func (m *Manager) connectPlugin(path string) (*PluginInstance, error) {
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig:  pkgplugin.Handshake,
 		Plugins:          pkgplugin.NewClientPluginMap(m.dispatchHook),
-		Cmd:              pluginCmd(path),
+		Cmd:              pluginCmd(path, m.workspaceRoot()),
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolNetRPC},
 		Logger: hclog.New(&hclog.LoggerOptions{
 			Output: &logWriter{log: m.log},
@@ -293,6 +362,9 @@ func (m *Manager) connectPlugin(path string) (*PluginInstance, error) {
 	}
 
 	m.fetchCapabilities(instance)
+	m.log.Fdebug("plugin: %s booted path=%s workdir=%s capabilities=%s tools=%d skills=%d hooks=%d",
+		instance.Name, path, m.workspaceRoot(), strings.Join(instance.Capabilities, ","),
+		len(instance.Tools), len(instance.Skills), len(instance.Hooks))
 	m.log.Finfo("plugin: %s ready in %s", instance.Name, time.Since(start).Round(time.Millisecond))
 	return instance, nil
 }
@@ -502,6 +574,7 @@ func (m *Manager) registerHooks(instance *PluginInstance) {
 		} else {
 			m.registry.AddFilterFor(instance.Name, name, spec.Priority, callback)
 		}
+		m.log.Fdebug("plugin: %s registers %s hook %s (priority %d)", instance.Name, kind, name, spec.Priority)
 	}
 }
 
@@ -773,6 +846,70 @@ func (m *Manager) ExecuteTUIAction(ctx context.Context, name string, req pkgplug
 	return res, nil
 }
 
+func (m *Manager) RuntimeStatus() []RuntimeStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	out := make([]RuntimeStatus, 0, len(m.plugins)+len(m.failures))
+	for _, instance := range m.plugins {
+		status := RuntimeStatus{
+			Name:         instance.Name,
+			Path:         instance.Path,
+			Version:      instance.Version,
+			Capabilities: append([]string(nil), instance.Capabilities...),
+			Loaded:       true,
+		}
+		for _, spec := range instance.Tools {
+			if spec.Name != "" {
+				status.Tools = append(status.Tools, spec.Name)
+			}
+		}
+		sort.Strings(status.Tools)
+		for _, spec := range instance.Skills {
+			if spec.Name != "" {
+				status.Skills = append(status.Skills, spec.Name)
+			}
+		}
+		sort.Strings(status.Skills)
+		for _, spec := range instance.Hooks {
+			status.Hooks = append(status.Hooks, PluginHookStatus{
+				Name:     spec.Name,
+				Kind:     string(spec.Kind),
+				Priority: spec.Priority,
+			})
+		}
+		sort.SliceStable(status.Hooks, func(i, j int) bool {
+			if status.Hooks[i].Name != status.Hooks[j].Name {
+				return status.Hooks[i].Name < status.Hooks[j].Name
+			}
+			return status.Hooks[i].Kind < status.Hooks[j].Kind
+		})
+		out = append(out, status)
+	}
+	for _, failure := range m.failures {
+		out = append(out, RuntimeStatus{
+			Name:  failure.Name,
+			Path:  failure.Path,
+			Error: failure.Err,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Path < out[j].Path
+	})
+	return out
+}
+
+func (m *Manager) LoadFailures() []PluginLoadFailure {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]PluginLoadFailure, len(m.failures))
+	copy(out, m.failures)
+	return out
+}
+
 func (m *Manager) HookSpecs() []PluginHookSpec {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -856,6 +993,9 @@ func (m *Manager) ApplyHookFrom(ctx context.Context, name string, kind pkgplugin
 			outcome.Outputs = append(outcome.Outputs, raw)
 		}
 		outcome.Errors = append(outcome.Errors, hookErrors(errs)...)
+	}
+	if len(outcome.Errors) > 0 {
+		m.log.Fdebug("plugin: hook %s returned errors: %s", name, strings.Join(outcome.Errors, "; "))
 	}
 	return outcome, ctx.Err()
 }
@@ -1030,8 +1170,11 @@ func GetPluginDir() (string, error) {
 	return filepath.Join(home, ".pegg", "plugins"), nil
 }
 
-func pluginCmd(path string) *exec.Cmd {
+func pluginCmd(path, dir string) *exec.Cmd {
 	cmd := exec.Command(path)
+	if strings.TrimSpace(dir) != "" {
+		cmd.Dir = dir
+	}
 	configurePluginCmd(cmd)
 	return cmd
 }

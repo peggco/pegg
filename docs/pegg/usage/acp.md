@@ -44,6 +44,12 @@ handler does not apply the HTTP API's auth or CORS middleware.
     The background [scheduler](../features/scheduling.md) runs while the ACP server is
     up, so due schedules fire independently of the connected editor session.
 
+Plugins load through the normal startup path before the server accepts frames, so
+plugin tools, skills and hooks are registered before `initialize` returns. The ACP
+process uses the same plugin directory, `~/.pegg/pegg.json` and workspace as the
+in-process TUI/CLI bootstrap. `_pegg/plugins` reports the live plugin state (see
+[Pegg extension methods](#pegg-extension-methods)).
+
 ## Protocol basics
 
 - Every message is a JSON-RPC 2.0 envelope. `"jsonrpc"` must be exactly `"2.0"`.
@@ -315,6 +321,7 @@ Pegg-specific methods are prefixed with `_` per the ACP extensibility rules:
 | `_pegg/skills/install` | Install a skill from the hub |
 | `_pegg/stt/transcribe` | Transcribe base64 audio |
 | `_pegg/stt/record/start` / `_pegg/stt/record/stop` | Record and transcribe voice |
+| `_pegg/plugins` | Live plugin runtime state: loaded plugins, tools, hooks and boot errors |
 | `_pegg/session/history` | Paginated session history |
 | `_pegg/session/rename` | Rename a session |
 | `_pegg/session/set_model` | Set provider/model/reasoning effort (alias of `session/set_model`) |

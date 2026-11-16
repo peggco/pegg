@@ -3,6 +3,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -152,10 +154,13 @@ type RuleSetting struct {
 }
 
 type PluginSetting struct {
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	Enabled bool   `json:"enabled"`
-	Status  string `json:"status"`
+	Name    string   `json:"name"`
+	Path    string   `json:"path"`
+	Enabled bool     `json:"enabled"`
+	Status  string   `json:"status"`
+	Runtime string   `json:"runtime,omitempty"`
+	Error   string   `json:"error,omitempty"`
+	Hooks   []string `json:"hooks,omitempty"`
 }
 
 type SystemSettings struct {
@@ -226,7 +231,7 @@ func (a *App) SettingsSnapshot() (SettingsSnapshot, error) {
 	snap.MCP = buildMCPSettings(cfg)
 	snap.Skills = a.buildSkillSettings(ws, globalDir)
 	snap.Rules = buildRuleSettings(ws, globalDir)
-	snap.Plugins = buildPluginSettings(cfg, globalDir)
+	snap.Plugins = buildPluginSettings(cfg, globalDir, a.pluginSettingsRuntime())
 	snap.PluginsEnabled = cfg.Plugins.Enabled
 	snap.System = buildSystemSettings(a, cfg, ws, globalDir)
 	normalizeSnapshot(&snap)
@@ -606,7 +611,7 @@ func buildRuleSettings(workspace, globalDir string) []RuleSetting {
 	return out
 }
 
-func buildPluginSettings(cfg *config.Config, globalDir string) []PluginSetting {
+func buildPluginSettings(cfg *config.Config, globalDir string, runtime map[string]plugin.RuntimeStatus) []PluginSetting {
 	dir := filepath.Join(globalDir, "plugins")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -626,14 +631,78 @@ func buildPluginSettings(cfg *config.Config, globalDir string) []PluginSetting {
 		if !enabled {
 			status = "disabled"
 		}
-		out = append(out, PluginSetting{
+		setting := PluginSetting{
 			Name:    entry.Name(),
 			Path:    filepath.Join(dir, entry.Name()),
 			Enabled: enabled,
 			Status:  status,
-		})
+		}
+		if info, ok := runtimeForPlugin(runtime, entry.Name(), filepath.Join(dir, entry.Name())); ok {
+			if info.Loaded {
+				setting.Runtime = "loaded"
+			} else {
+				setting.Runtime = "failed"
+			}
+			setting.Error = info.Error
+			for _, hook := range info.Hooks {
+				setting.Hooks = append(setting.Hooks, hook.Name)
+			}
+		}
+		out = append(out, setting)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+func runtimeForPlugin(runtime map[string]plugin.RuntimeStatus, name, path string) (plugin.RuntimeStatus, bool) {
+	if status, ok := runtime[name]; ok {
+		return status, true
+	}
+	base := filepath.Base(path)
+	for _, status := range runtime {
+		switch {
+		case status.Name == name, filepath.Base(status.Path) == base, "pegg-"+status.Name == name:
+			return status, true
+		}
+	}
+	return plugin.RuntimeStatus{}, false
+}
+
+type pluginRuntimeResult struct {
+	Plugins []plugin.RuntimeStatus `json:"plugins"`
+}
+
+func (a *App) pluginSettingsRuntime() map[string]plugin.RuntimeStatus {
+	out := map[string]plugin.RuntimeStatus{}
+
+	a.mu.Lock()
+	client := a.client
+	running := client != nil && client.Running()
+	a.mu.Unlock()
+	a.pluginMu.Lock()
+	manager := a.pluginMgr
+	a.pluginMu.Unlock()
+
+	if running {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		raw, err := client.Request(ctx, "_pegg/plugins", struct{}{})
+		cancel()
+		if err == nil {
+			var result pluginRuntimeResult
+			if json.Unmarshal(raw, &result) == nil {
+				for _, status := range result.Plugins {
+					out[status.Name] = status
+				}
+				return out
+			}
+		}
+	}
+
+	if manager != nil {
+		for _, status := range manager.RuntimeStatus() {
+			out[status.Name] = status
+		}
+	}
 	return out
 }
 
@@ -893,6 +962,7 @@ func (a *App) TogglePluginSettings(name string) (bool, error) {
 		return enabled, err
 	}
 	a.resetPluginManager()
+	a.resetClient()
 	return enabled, nil
 }
 
