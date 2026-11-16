@@ -27,8 +27,11 @@ import dev.pegg.intellij.acp.ChatState
 import dev.pegg.intellij.acp.HubSkill
 import dev.pegg.intellij.acp.ModelEntry
 import dev.pegg.intellij.acp.SkillInstallResult
+import dev.pegg.intellij.actions.PeggActions
 import dev.pegg.intellij.chat.Attachments
 import dev.pegg.intellij.chat.ContextBuilder
+import dev.pegg.intellij.git.CheckoutResult
+import dev.pegg.intellij.git.KanbanCard
 import dev.pegg.intellij.log.PeggLog
 import dev.pegg.intellij.settings.PeggSettings
 import kotlinx.coroutines.launch
@@ -37,6 +40,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -391,6 +395,15 @@ class ChatWebView(
                 IdeActions.showLogs(project)
             }
             "restart" -> service.scope.launch { runCatching { controller.restart() }.onFailure { showError(it) } }
+            "checkoutCardBranch" -> {
+                val requestId = obj["requestId"]?.jsonPrimitive?.contentOrNull
+                val cardJson = obj["card"] as? JsonObject ?: return
+                val card = runCatching { ACP_JSON.decodeFromJsonElement<KanbanCard>(cardJson) }.getOrNull() ?: return
+                PeggActions.checkoutCard(project, card) { result ->
+                    result.onSuccess { postCheckoutResult(requestId, it) }
+                        .onFailure { postCheckoutError(requestId, it) }
+                }
+            }
             "copyText" -> {
                 val text = obj["text"]?.jsonPrimitive?.contentOrNull ?: return
                 ApplicationManager.getApplication().invokeLater { IdeActions.copy(text) }
@@ -517,6 +530,32 @@ class ChatWebView(
         postJson(buildJsonObject {
             put("type", "transcript")
             put("text", text)
+        }.toString())
+    }
+
+    private fun postCheckoutResult(requestId: String?, result: CheckoutResult) {
+        postJson(buildJsonObject {
+            put("type", "checkoutCardResult")
+            if (requestId != null) put("requestId", requestId)
+            put("ok", true)
+            put("branch", result.branch)
+            put("provider", result.provider.key)
+            put("remote", result.remote)
+            result.base?.let { put("base", it) }
+            put("created", result.created)
+            put("pushed", result.pushed)
+            put("stashed", result.stashed)
+            put("committed", result.committed)
+            put("alreadyOnBranch", result.alreadyOnBranch)
+        }.toString())
+    }
+
+    private fun postCheckoutError(requestId: String?, error: Throwable) {
+        postJson(buildJsonObject {
+            put("type", "checkoutCardResult")
+            if (requestId != null) put("requestId", requestId)
+            put("ok", false)
+            put("error", error.message ?: error.javaClass.simpleName)
         }.toString())
     }
 

@@ -171,6 +171,8 @@
                     text="Review Changes" description="Review the working-tree diff"/>
             <action id="Pegg.ReviewCurrentFile" class="dev.pegg.intellij.actions.PeggReviewCurrentFileAction"
                     text="Review Current File Changes" description="Review the working-tree diff for the current file"/>
+            <action id="Pegg.CheckoutCardBranch" class="dev.pegg.intellij.actions.PeggCheckoutCardBranchAction"
+                    text="Checkout Card Branch…" description="Check out the branch for a kanban card"/>
             <separator/>
             <action id="Pegg.Login" class="dev.pegg.intellij.actions.PeggLoginAction"
                     text="Provider Login" description="Run pegg login"/>

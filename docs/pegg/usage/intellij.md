@@ -137,6 +137,20 @@ diagnostic-oriented actions.
     intentions and actions rather than modifying other plugins' lightbulb
     entries.
 
+### Card branches
+
+Run **Tools → Pegg → Checkout Card Branch…** to pick a card from
+`.pegg/kanban/board.json` and check out its branch. Pegg detects the hosting
+provider (GitHub, Bitbucket or GitLab) from the `origin` remote, fetches an
+existing branch with tracking, or creates a missing branch from the remote
+default.
+
+A dirty working tree is never modified silently: choose **Stash**, **Commit**,
+or **Cancel** before the checkout. Branch names follow the branch template and
+support `{number}`, `{slug}`, `{title}`, `{id}`, and `{provider}`. Use the
+provider override for self-hosted remotes, change the remote name, or enable
+auto-push in **Settings → Tools → Pegg**.
+
 ### Keybindings
 
 | Key | Action |
@@ -184,6 +198,10 @@ location and the reason a candidate was rejected.
 | Max attachment bytes | 262144 | Maximum text attachment size |
 | Send on | `enter` | Send with Enter or Ctrl/Cmd+Enter |
 | Notify on complete | on | Notify when a run finishes while the IDE is unfocused |
+| Branch template | `{number}-{slug}` | Template for card branches |
+| Provider override | `""` | Force GitHub, Bitbucket, or GitLab for self-hosted remotes |
+| Remote | `origin` | Remote used for card branches |
+| Auto push | off | Push newly created card branches |
 | Environment variables | `{}` | Extra environment variables for the ACP process |
 | Log level | `info` | `error`, `warn`, `info`, or `debug` |
 

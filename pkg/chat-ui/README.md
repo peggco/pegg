@@ -20,7 +20,7 @@ Hosts only need to provide:
 2. A backend that produces `ChatState` JSON and handles the existing message
    protocol (`send`, `stop`, `setMode`, `setModel`, `pickModel`, permissions,
    questions, attachments, voice, open file/diff, save a copy of delivered files,
-   and so on).
+   `checkoutCardBranch` for kanban cards, and so on).
 3. Theme CSS variables and any optional feature flags:
    `window.__peggHideReady` and `window.__peggInlinePickers`.
 

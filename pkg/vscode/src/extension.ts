@@ -4,6 +4,7 @@ import { ChatController } from './chat/controller';
 import { registerChatParticipant } from './chatParticipant';
 import { registerChatCommands } from './commands/chat';
 import { registerEditorCommands } from './commands/editor';
+import { registerKanbanCommands } from './commands/kanban';
 import { registerCodeActions } from './integrations/codeActions';
 import { PeggStatusBar } from './integrations/statusBar';
 import { Logger } from './logger';
@@ -34,6 +35,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerChatParticipant(controller),
     ...registerChatCommands(controller, binary, log, sessionsProvider),
     ...registerEditorCommands(controller),
+    ...registerKanbanCommands(log),
   );
 
   context.subscriptions.push(

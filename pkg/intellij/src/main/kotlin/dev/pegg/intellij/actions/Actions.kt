@@ -23,6 +23,11 @@ import dev.pegg.intellij.PeggService
 import dev.pegg.intellij.acp.SessionListItem
 import dev.pegg.intellij.chat.Attachments
 import dev.pegg.intellij.chat.ContextBuilder
+import dev.pegg.intellij.git.CardCheckout
+import dev.pegg.intellij.git.CheckoutOptions
+import dev.pegg.intellij.git.CheckoutResult
+import dev.pegg.intellij.git.DirtyChoice
+import dev.pegg.intellij.git.KanbanCard
 import dev.pegg.intellij.log.PeggLog
 import dev.pegg.intellij.settings.PeggSettings
 import dev.pegg.intellij.ui.IdeActions
@@ -132,6 +137,106 @@ object PeggActions {
                 emptyList(),
             )
         }
+    }
+
+    fun checkoutCardBranch(project: Project) {
+        val root = ContextBuilder.projectRoot(project)?.path
+        if (root == null) {
+            Messages.showInfoMessage(project, "Open a project folder first.", "Pegg")
+            return
+        }
+        val cards = runCatching { CardCheckout.loadCards(File(root)) }
+            .getOrElse { error ->
+                PeggService.getInstance(project).showError("Could not read the kanban board", error)
+                return
+            }
+        if (cards.isEmpty()) {
+            Messages.showInfoMessage(
+                project,
+                "No kanban cards found. Start the kanban board to create .pegg/kanban/board.json.",
+                "Pegg",
+            )
+            return
+        }
+        val labels = cards.map { cardLabel(it) }.toTypedArray()
+        val index = Messages.showChooseDialog(
+            project,
+            "Pick a card to check out its branch.",
+            "Pegg: Checkout Card Branch",
+            null,
+            labels,
+            labels[0],
+        )
+        if (index < 0) return
+        val card = cards[index]
+        checkoutCard(project, card) { result ->
+            result.onSuccess { Messages.showInfoMessage(project, checkoutSummary(it), "Pegg") }
+                .onFailure { PeggService.getInstance(project).showError("Could not checkout card branch", it) }
+        }
+    }
+
+    fun checkoutCard(project: Project, card: KanbanCard, onDone: (Result<CheckoutResult>) -> Unit) {
+        val root = ContextBuilder.projectRoot(project)?.path
+        if (root == null) {
+            onDone(Result.failure(IllegalStateException("Open a project folder first.")))
+            return
+        }
+        val settings = PeggSettings.getInstance().state
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Pegg: Checkout Card Branch", false) {
+            override fun run(indicator: ProgressIndicator) {
+                val result = runCatching {
+                    CardCheckout.checkout(
+                        card,
+                        CheckoutOptions(
+                            cwd = root,
+                            remote = settings.gitRemote,
+                            providerOverride = settings.gitProvider,
+                            branchTemplate = settings.branchTemplate,
+                            autoPush = settings.gitAutoPush,
+                            confirmDirty = { dirty -> confirmDirty(project, dirty) },
+                            onProgress = { indicator.text = it },
+                        ),
+                    )
+                }
+                ApplicationManager.getApplication().invokeLater { onDone(result) }
+            }
+        })
+    }
+
+    private fun cardLabel(card: KanbanCard): String {
+        val number = card.issue?.number ?: card.issue?.iid
+        return if (number != null) "#$number ${card.title}" else card.title
+    }
+
+    private fun confirmDirty(project: Project, files: List<String>): DirtyChoice {
+        var choice = 2
+        val show = {
+            choice = Messages.showDialog(
+                project,
+                "The working tree has ${files.size} uncommitted change${if (files.size == 1) "" else "s"}.\n\n" +
+                    "Stash keeps the changes for later. Commit creates a checkpoint commit first. " +
+                    "Pegg never discards changes.",
+                "Pegg: Checkout Card Branch",
+                arrayOf("Stash", "Commit", "Cancel"),
+                0,
+                Messages.getQuestionIcon(),
+            )
+        }
+        if (ApplicationManager.getApplication().isDispatchThread) show() else ApplicationManager.getApplication().invokeAndWait(show)
+        return when (choice) {
+            0 -> DirtyChoice.STASH
+            1 -> DirtyChoice.COMMIT
+            else -> DirtyChoice.CANCEL
+        }
+    }
+
+    private fun checkoutSummary(result: CheckoutResult): String {
+        if (result.alreadyOnBranch) return "Already on ${result.branch}."
+        val action = if (result.created) "Created and checked out" else "Checked out"
+        val pushed = if (result.pushed) " and pushed to ${result.remote}" else ""
+        val stashed = if (result.stashed) " Local changes were stashed." else ""
+        val committed = if (result.committed) " Local changes were committed." else ""
+        return "$action ${result.branch}$pushed.$stashed$committed"
     }
 
     fun fixDiagnostics(project: Project, file: VirtualFile) {
@@ -642,6 +747,16 @@ class PeggReviewCurrentFileAction : PeggAction("Review Current File Changes") {
         val project = project(event) ?: return
         val file = file(event) ?: return
         PeggActions.reviewFile(project, file)
+    }
+}
+
+class PeggCheckoutCardBranchAction : PeggAction(
+    "Checkout Card Branch…",
+    "Check out the branch for a kanban card",
+    AllIcons.Vcs.Branch,
+) {
+    override fun actionPerformed(event: AnActionEvent) {
+        project(event)?.let { PeggActions.checkoutCardBranch(it) }
     }
 }
 

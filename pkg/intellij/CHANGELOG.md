@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Tools → Pegg → Checkout Card Branch…** picks a card from
+  `.pegg/kanban/board.json` and checks out its branch. The plugin detects
+  GitHub, Bitbucket, or GitLab from the remote, fetches an existing branch with
+  tracking, or creates a missing branch from the default branch. Dirty
+  worktrees prompt to stash, commit, or cancel.
+
 ### Changed
 
 - Todo/plan updates now render as an inline plan card at the latest

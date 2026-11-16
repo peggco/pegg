@@ -16,6 +16,10 @@ const values: Values = {
   'pegg.context.maxFileBytes': 262144,
   'pegg.chat.sendOnEnter': 'enter',
   'pegg.notifications.onComplete': false,
+  'pegg.git.branchTemplate': '{number}-{slug}',
+  'pegg.git.provider': '',
+  'pegg.git.remote': 'origin',
+  'pegg.git.autoPush': false,
   'pegg.env': {},
   'pegg.logLevel': 'error',
 };
