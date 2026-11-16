@@ -142,7 +142,7 @@ Unmodified single runes are ignored so typing is never swallowed.
 }
 ```
 
-Return `workspace` or `language` to change the initial view.
+Return `workspace` or `language` to change the initial view. `language` is empty when the config does not set one explicitly; the desktop then uses its own cached language or English.
 
 ### `desktop.emit`
 
