@@ -14,6 +14,7 @@ import (
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/live"
 	"github.com/peggco/pegg/internal/llm"
+	"github.com/peggco/pegg/internal/plugin"
 	"github.com/peggco/pegg/internal/run"
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/vfs"
@@ -158,6 +159,7 @@ type Server struct {
 	fs       *vfs.VFS
 	runs     *run.Coordinator
 	live     *live.Hub
+	plugins  *plugin.Manager
 
 	transport Transport
 	client    *Client
@@ -196,7 +198,12 @@ func New(
 	llmMgr *llm.Manager,
 	runs *run.Coordinator,
 	liveHub *live.Hub,
+	pluginMgrs ...*plugin.Manager,
 ) *Server {
+	var pluginMgr *plugin.Manager
+	if len(pluginMgrs) > 0 {
+		pluginMgr = pluginMgrs[0]
+	}
 	s := &Server{
 		cfg:           cfg,
 		bus:           bus,
@@ -206,6 +213,7 @@ func New(
 		fs:            fs,
 		runs:          runs,
 		live:          liveHub,
+		plugins:       pluginMgr,
 		active:        make(map[string]*ACPSession),
 		agents:        make(map[string]string),
 		taskNames:     make(map[string]string),
@@ -331,6 +339,20 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleSkillsSearch(ctx, params)
 	case "_pegg/skills/install":
 		result, handlerErr = s.handleSkillsInstall(ctx, params)
+	case "_pegg/plugins/list":
+		result, handlerErr = s.handlePluginsList(ctx, params)
+	case "_pegg/plugins/search":
+		result, handlerErr = s.handlePluginsSearch(ctx, params)
+	case "_pegg/plugins/install":
+		result, handlerErr = s.handlePluginsInstall(ctx, params)
+	case "_pegg/plugins/update":
+		result, handlerErr = s.handlePluginsUpdate(ctx, params)
+	case "_pegg/plugins/remove":
+		result, handlerErr = s.handlePluginsRemove(ctx, params)
+	case "_pegg/plugins/toggle":
+		result, handlerErr = s.handlePluginsToggle(ctx, params)
+	case "_pegg/plugins/env":
+		result, handlerErr = s.handlePluginsEnv(ctx, params)
 	case "_pegg/stt/transcribe":
 		result, handlerErr = s.handleSTTTranscribe(ctx, params)
 	case "_pegg/stt/record/start":

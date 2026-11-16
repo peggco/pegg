@@ -145,6 +145,8 @@
             </action>
             <action id="Pegg.Stop" class="dev.pegg.intellij.actions.PeggStopAction"
                     text="Stop Agent" description="Cancel the running Pegg agent"/>
+            <action id="Pegg.ManagePlugins" class="dev.pegg.intellij.actions.PeggOpenPluginsAction"
+                    text="Manage Plugins" description="Open the Pegg plugin management page"/>
             <action id="Pegg.SelectMode" class="dev.pegg.intellij.actions.PeggSelectModeAction"
                     text="Select Mode" description="Choose Auto, Plan, or Build">
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt M"/>

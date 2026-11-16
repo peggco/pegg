@@ -76,7 +76,7 @@ func (c *CLI) runHTTPServe() error {
 }
 
 func (c *CLI) runACPServe(stdio bool) error {
-	srv := acp.New(c.cfg, c.bus, c.log, c.fs, c.sessions, c.llmMgr, c.runCoord, c.liveHub)
+	srv := acp.New(c.cfg, c.bus, c.log, c.fs, c.sessions, c.llmMgr, c.runCoord, c.liveHub, c.pluginMgr)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

@@ -25,6 +25,9 @@ import dev.pegg.intellij.acp.PeggCapabilities
 import dev.pegg.intellij.acp.PendingInteraction
 import dev.pegg.intellij.acp.PermissionOption
 import dev.pegg.intellij.acp.PermissionParams
+import dev.pegg.intellij.acp.PluginCatalogResult
+import dev.pegg.intellij.acp.PluginListResult
+import dev.pegg.intellij.acp.PluginMutationResult
 import dev.pegg.intellij.acp.PromptResult
 import dev.pegg.intellij.acp.SessionForkResult
 import dev.pegg.intellij.acp.SessionListItem
@@ -478,6 +481,76 @@ class ChatController(
             emitState()
         }
         return result
+    }
+
+    private fun requirePlugins() {
+        if (capabilities?.pegg?.plugins != true) {
+            throw IllegalStateException(
+                "This Pegg binary does not support plugin management. Update the Pegg binary first.",
+            )
+        }
+    }
+
+    suspend fun plugins(): PluginListResult {
+        ensureStarted()
+        requirePlugins()
+        return request("_pegg/plugins/list", buildJsonObject { }, 30_000)
+    }
+
+    suspend fun searchPlugins(query: String, limit: Int = 30): PluginCatalogResult {
+        ensureStarted()
+        requirePlugins()
+        val params = buildJsonObject {
+            put("query", query)
+            put("limit", limit)
+        }
+        return request("_pegg/plugins/search", params, 30_000)
+    }
+
+    suspend fun installPlugin(source: String, name: String): PluginMutationResult {
+        ensureStarted()
+        requirePlugins()
+        val params = buildJsonObject {
+            put("source", source)
+            put("name", name)
+        }
+        return request("_pegg/plugins/install", params, 180_000)
+    }
+
+    suspend fun updatePlugin(source: String, name: String): PluginMutationResult {
+        ensureStarted()
+        requirePlugins()
+        val params = buildJsonObject {
+            put("source", source)
+            put("name", name)
+        }
+        return request("_pegg/plugins/update", params, 180_000)
+    }
+
+    suspend fun togglePlugin(name: String, enabled: Boolean): PluginMutationResult {
+        ensureStarted()
+        requirePlugins()
+        val params = buildJsonObject {
+            put("name", name)
+            put("enabled", enabled)
+        }
+        return request("_pegg/plugins/toggle", params, 30_000)
+    }
+
+    suspend fun removePlugin(name: String): PluginMutationResult {
+        ensureStarted()
+        requirePlugins()
+        return request("_pegg/plugins/remove", buildJsonObject { put("name", name) }, 60_000)
+    }
+
+    suspend fun setPluginEnv(name: String, env: Map<String, String>): PluginMutationResult {
+        ensureStarted()
+        requirePlugins()
+        val params = buildJsonObject {
+            put("name", name)
+            put("env", buildJsonObject { env.forEach { (key, value) -> put(key, value) } })
+        }
+        return request("_pegg/plugins/env", params, 30_000)
     }
 
     suspend fun startVoice() {

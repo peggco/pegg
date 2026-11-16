@@ -313,6 +313,13 @@ Pegg-specific methods are prefixed with `_` per the ACP extensibility rules:
 | `_pegg/skills/list` | Read-only list of registered skills (name, description, source, path) |
 | `_pegg/skills/search` | Search the skill hub |
 | `_pegg/skills/install` | Install a skill from the hub |
+| `_pegg/plugins/list` | List installed plugins with version, source, enabled state, load status, and load errors |
+| `_pegg/plugins/search` | Search the plugin catalog with installed/update metadata |
+| `_pegg/plugins/install` | Install a plugin from the catalog |
+| `_pegg/plugins/update` | Update an installed catalog plugin |
+| `_pegg/plugins/remove` | Remove an installed plugin |
+| `_pegg/plugins/toggle` | Enable or disable a plugin (updates `plugins.exclude`) |
+| `_pegg/plugins/env` | Replace a plugin's environment/options (`plugins.options`) |
 | `_pegg/stt/transcribe` | Transcribe base64 audio |
 | `_pegg/stt/record/start` / `_pegg/stt/record/stop` | Record and transcribe voice |
 | `_pegg/session/history` | Paginated session history |
@@ -321,6 +328,31 @@ Pegg-specific methods are prefixed with `_` per the ACP extensibility rules:
 | `_pegg/session/fork` | Fork a session before a message |
 | `_pegg/session/revert` | Revert a session to a message |
 | `_pegg/ask` | Ask the user structured questions (fallback for elicitation) |
+
+### Plugin management
+
+Clients can feature-detect plugin management through
+`agentCapabilities._meta["com.pegg/capabilities"].plugins`.
+
+| Method | Params | Result |
+|---|---|---|
+| `_pegg/plugins/list` | none | `{ plugins, pluginsEnabled }` |
+| `_pegg/plugins/search` | `{ query?, limit?, cursor?, filter? }` | `{ items, nextCursor? }` |
+| `_pegg/plugins/install` | `{ source, name? }` | `{ name, path, restartRequired, warnings?, catalogVersion?, installedVersion? }` |
+| `_pegg/plugins/update` | `{ source, name? }` | same as install |
+| `_pegg/plugins/remove` | `{ name }` | `{ name, restartRequired }` |
+| `_pegg/plugins/toggle` | `{ name, enabled }` | `{ name, restartRequired }` |
+| `_pegg/plugins/env` | `{ name, env }` | `{ name, restartRequired }` |
+
+Each installed plugin entry contains `name`, `path`, `version`, `source`,
+`description`, `enabled`, `loaded`, `manual`, `installedAt`, `lastError`, and
+`envKeys` (names only — values are never returned). `lastError` is populated from
+the most recent plugin boot attempt.
+
+Install, update, remove, toggle, and env changes apply to the next server start;
+the result sets `restartRequired` so clients can prompt the user to restart the
+Pegg server. `_pegg/plugins/env` replaces the plugin's option map with the given
+string values; send `{}` to clear it.
 
 ### Session history pagination
 

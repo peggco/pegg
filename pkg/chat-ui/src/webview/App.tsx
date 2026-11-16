@@ -8,8 +8,20 @@ import {
   type TaskState,
   type ToolState,
 } from '../state';
-import type { AttachmentInfo, PlanEntry } from '../types';
+import type { AttachmentInfo, PlanEntry, PluginCatalogItem, PluginInfo, PluginMutationResult } from '../types';
 import { filterTodoTools, isTodoTool, planEntriesFromInput } from '../plan';
+import {
+  applyPluginAction,
+  applyPluginCatalog,
+  applyPluginError,
+  applyPluginList,
+  initialPluginPageState,
+  pluginEnvKeys,
+  pluginStatus,
+  pluginStatusLabel,
+  setPluginPending,
+  type PluginPageState,
+} from '../plugins';
 import { renderMarkdown } from './markdown';
 import { host } from './host';
 import { DiffView } from './DiffView';
@@ -81,6 +93,34 @@ interface HubSkillInstalledMessage {
   error?: string;
 }
 
+interface OpenPluginsMessage {
+  type: 'openPlugins';
+}
+
+interface PluginsMessage {
+  type: 'plugins';
+  requestId?: string;
+  plugins?: PluginInfo[];
+  pluginsEnabled?: boolean;
+  error?: string;
+}
+
+interface PluginCatalogMessage {
+  type: 'pluginCatalog';
+  requestId?: string;
+  items?: PluginCatalogItem[];
+  nextCursor?: number;
+  error?: string;
+}
+
+interface PluginActionMessage {
+  type: 'pluginActionResult';
+  requestId?: string;
+  ok: boolean;
+  result?: PluginMutationResult;
+  error?: string;
+}
+
 type Incoming =
   | StateMessage
   | TranscriptMessage
@@ -90,7 +130,11 @@ type Incoming =
   | ComposerTextMessage
   | ModelsMessage
   | HubSkillsMessage
-  | HubSkillInstalledMessage;
+  | HubSkillInstalledMessage
+  | OpenPluginsMessage
+  | PluginsMessage
+  | PluginCatalogMessage
+  | PluginActionMessage;
 
 interface PopupState {
   kind: 'mention' | 'command';
@@ -169,6 +213,36 @@ export function App() {
   const hubSeq = useRef(0);
   const [composerPicker, setComposerPicker] = useState<ComposerPickerState | null>(null);
   const inlinePickers = (window as unknown as { __peggInlinePickers?: boolean }).__peggInlinePickers === true;
+  const [page, setPage] = useState<'chat' | 'plugins'>('chat');
+  const [pluginPage, setPluginPage] = useState<PluginPageState>(initialPluginPageState);
+  const [pluginQuery, setPluginQuery] = useState('');
+  const pluginQueryRef = useRef('');
+  const [envEditor, setEnvEditor] = useState<{ name: string; values: Record<string, string> } | null>(null);
+  const pluginSeq = useRef(0);
+  const pluginListRequest = useRef('');
+  const pluginCatalogRequest = useRef('');
+
+  const refreshPlugins = useCallback((query = pluginQueryRef.current) => {
+    pluginQueryRef.current = query;
+    const listId = `plugins-list-${++pluginSeq.current}`;
+    const catalogId = `plugins-catalog-${++pluginSeq.current}`;
+    pluginListRequest.current = listId;
+    pluginCatalogRequest.current = catalogId;
+    setPluginPage((current) => ({ ...current, loading: true, catalogLoading: true, error: undefined }));
+    host.postMessage({ type: 'pluginsList', requestId: listId });
+    host.postMessage({ type: 'pluginsSearch', requestId: catalogId, query });
+  }, []);
+
+  const openPlugins = useCallback(() => {
+    setPage('plugins');
+    refreshPlugins('');
+  }, [refreshPlugins]);
+
+  const runPluginAction = useCallback((type: string, params: Record<string, unknown>, key: string) => {
+    const requestId = `plugins-action-${++pluginSeq.current}`;
+    setPluginPage((current) => setPluginPending(current, key, true));
+    host.postMessage({ type, requestId, ...params });
+  }, []);
 
   const openMessageMenu = useCallback((item: ChatItem, rect: DOMRect) => {
     setMenu((current) => (current?.item.id === item.id ? null : { item, rect }));
@@ -350,12 +424,44 @@ export function App() {
         setPopup(null);
         setLocalError('');
         setCaret(start + replacement.length);
+      } else if (data.type === 'openPlugins') {
+        setPage('plugins');
+        refreshPlugins('');
+      } else if (data.type === 'plugins') {
+        if (data.requestId && data.requestId !== pluginListRequest.current) return;
+        if (data.error) {
+          setPluginPage((current) => applyPluginError(current, data.error!));
+          return;
+        }
+        setPluginPage((current) =>
+          applyPluginList(current, {
+            plugins: data.plugins ?? [],
+            pluginsEnabled: data.pluginsEnabled,
+          }),
+        );
+      } else if (data.type === 'pluginCatalog') {
+        if (data.requestId && data.requestId !== pluginCatalogRequest.current) return;
+        if (data.error) {
+          setPluginPage((current) => applyPluginError(current, data.error!, true));
+          return;
+        }
+        setPluginPage((current) =>
+          applyPluginCatalog(current, { items: data.items ?? [], nextCursor: data.nextCursor }),
+        );
+      } else if (data.type === 'pluginActionResult') {
+        if (!data.ok) {
+          setPluginPage((current) => applyPluginError(current, data.error ?? 'Plugin action failed'));
+          return;
+        }
+        setPluginPage((current) => applyPluginAction(current, data.result ?? {}));
+        refreshPlugins();
       }
     };
     window.addEventListener('message', onMessage);
     host.postMessage({ type: 'ready' });
     return () => window.removeEventListener('message', onMessage);
-  }, [insertText, setCaret]);
+  }, [insertText, setCaret, refreshPlugins]);
+
 
   useEffect(() => {
     if (!menu) return;
@@ -602,6 +708,240 @@ export function App() {
   const tokenText = usage.used > 0 ? `${formatNumber(usage.used)} tokens${cost}` : hideReady ? '' : 'Ready';
   const modelLabel = state.model || state.provider || 'Auto';
 
+  if (page === 'plugins') {
+    const catalogFor = (plugin: PluginInfo) =>
+      pluginPage.catalog.find(
+        (item) =>
+          (plugin.source &&
+            (item.source === plugin.source ||
+              item.id === plugin.source ||
+              item.repository === plugin.source)) ||
+          item.id === plugin.name ||
+          (item.source && item.source.split('/').pop() === plugin.name),
+      );
+    const envPlugin = envEditor ? pluginPage.installed.find((plugin) => plugin.name === envEditor.name) : undefined;
+    const envKeys = envPlugin ? pluginEnvKeys(envPlugin, catalogFor(envPlugin)) : [];
+    return (
+      <div className="app plugins-page">
+        <header className="plugins-header">
+          <button className="plugins-back" onClick={() => setPage('chat')}>
+            ← Chat
+          </button>
+          <div className="plugins-title">Plugins</div>
+          <button className="plugins-refresh" onClick={() => refreshPlugins(pluginQuery)}>
+            Refresh
+          </button>
+        </header>
+        <main className="plugins-body">
+          {pluginPage.error && <div className="plugins-banner error">{pluginPage.error}</div>}
+          {pluginPage.notice && (
+            <div className="plugins-banner notice">
+              <span>{pluginPage.notice}</span>
+              <button className="plugin-button" onClick={() => host.postMessage({ type: 'restart' })}>
+                Restart server
+              </button>
+            </div>
+          )}
+
+          <section className="plugins-section">
+            <h2>Installed</h2>
+            {pluginPage.loading && pluginPage.installed.length === 0 ? (
+              <div className="plugins-empty">
+                <span className="spinner" /> Loading plugins…
+              </div>
+            ) : pluginPage.installed.length === 0 ? (
+              <div className="plugins-empty">No plugins installed. Install one from the catalog below.</div>
+            ) : (
+              <ul className="plugin-list">
+                {pluginPage.installed.map((plugin) => {
+                  const status = pluginStatus(plugin);
+                  return (
+                    <li key={plugin.name} className="plugin-row">
+                      <div className="plugin-main">
+                        <div className="plugin-name-line">
+                          <span className="plugin-name">{plugin.name}</span>
+                          {plugin.version && <span className="plugin-version">v{plugin.version}</span>}
+                          <span className={`plugin-status status-${status}`}>{pluginStatusLabel(plugin)}</span>
+                        </div>
+                        <div className="plugin-sub">
+                          {plugin.source || 'manually installed'}
+                          {plugin.manual ? ' · manual' : ''}
+                        </div>
+                        {plugin.lastError && <div className="plugin-error">{plugin.lastError}</div>}
+                        {plugin.envKeys && plugin.envKeys.length > 0 && (
+                          <div className="plugin-env-keys">Env: {plugin.envKeys.join(', ')}</div>
+                        )}
+                      </div>
+                      <div className="plugin-actions">
+                        {!plugin.manual && plugin.source && (
+                          <button
+                            className="plugin-button primary"
+                            disabled={pluginPage.pending[plugin.name]}
+                            onClick={() =>
+                              runPluginAction(
+                                'pluginsUpdate',
+                                { source: plugin.source, name: plugin.name },
+                                plugin.name,
+                              )
+                            }
+                          >
+                            Update
+                          </button>
+                        )}
+                        <button
+                          className="plugin-button"
+                          disabled={pluginPage.pending[plugin.name]}
+                          onClick={() =>
+                            runPluginAction(
+                              'pluginsToggle',
+                              { name: plugin.name, enabled: !plugin.enabled },
+                              plugin.name,
+                            )
+                          }
+                        >
+                          {plugin.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                        <button
+                          className="plugin-button"
+                          onClick={() => setEnvEditor({ name: plugin.name, values: {} })}
+                        >
+                          Env
+                        </button>
+                        <button
+                          className="plugin-button danger"
+                          disabled={pluginPage.pending[plugin.name]}
+                          onClick={() =>
+                            runPluginAction('pluginsRemove', { name: plugin.name }, plugin.name)
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      {envEditor?.name === plugin.name && (
+                        <div className="plugin-env-editor">
+                          {envKeys.length === 0 ? (
+                            <div className="plugin-sub">This plugin has no required environment variables.</div>
+                          ) : (
+                            envKeys.map((key) => (
+                              <label key={key} className="plugin-env-row">
+                                <span>{key}</span>
+                                <input
+                                  type="password"
+                                  autoComplete="off"
+                                  placeholder="not set"
+                                  value={envEditor.values[key] ?? ''}
+                                  onChange={(event) =>
+                                    setEnvEditor((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            values: { ...current.values, [key]: event.target.value },
+                                          }
+                                        : current,
+                                    )
+                                  }
+                                />
+                              </label>
+                            ))
+                          )}
+                          <div className="plugin-env-actions">
+                            <button
+                              className="plugin-button primary"
+                              onClick={() => {
+                                runPluginAction(
+                                  'pluginsSetEnv',
+                                  { name: plugin.name, env: envEditor.values },
+                                  plugin.name,
+                                );
+                                setEnvEditor(null);
+                              }}
+                            >
+                              Save
+                            </button>
+                            <button className="plugin-button" onClick={() => setEnvEditor(null)}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="plugins-section">
+            <h2>Catalog</h2>
+            <form
+              className="plugin-search"
+              onSubmit={(event) => {
+                event.preventDefault();
+                pluginQueryRef.current = pluginQuery;
+                refreshPlugins(pluginQuery);
+              }}
+            >
+              <input
+                value={pluginQuery}
+                onChange={(event) => {
+                  pluginQueryRef.current = event.target.value;
+                  setPluginQuery(event.target.value);
+                }}
+                placeholder="Search plugins"
+              />
+              <button className="plugin-button" type="submit" disabled={pluginPage.catalogLoading}>
+                {pluginPage.catalogLoading ? 'Searching…' : 'Search'}
+              </button>
+            </form>
+            {pluginPage.catalogLoading && pluginPage.catalog.length === 0 ? (
+              <div className="plugins-empty">
+                <span className="spinner" /> Searching the catalog…
+              </div>
+            ) : pluginPage.catalog.length === 0 ? (
+              <div className="plugins-empty">No catalog plugins found.</div>
+            ) : (
+              <ul className="plugin-list">
+                {pluginPage.catalog.map((item) => (
+                  <li key={item.id} className="plugin-row">
+                    <div className="plugin-main">
+                      <div className="plugin-name-line">
+                        <span className="plugin-name">{item.name}</span>
+                        {item.official && <span className="plugin-badge">Official</span>}
+                        {item.version && <span className="plugin-version">v{item.version}</span>}
+                        {item.installedVersion && (
+                          <span className="plugin-version">installed v{item.installedVersion}</span>
+                        )}
+                      </div>
+                      <div className="plugin-sub">{item.description || item.source}</div>
+                      {item.capabilities && item.capabilities.length > 0 && (
+                        <div className="plugin-sub">{item.capabilities.join(' · ')}</div>
+                      )}
+                    </div>
+                    <div className="plugin-actions">
+                      <button
+                        className="plugin-button primary"
+                        disabled={Boolean(item.installedVersion) && !item.updateAvailable}
+                        onClick={() =>
+                          runPluginAction(
+                            item.updateAvailable ? 'pluginsUpdate' : 'pluginsInstall',
+                            { source: item.source, name: item.name },
+                            item.id,
+                          )
+                        }
+                      >
+                        {item.updateAvailable ? 'Update' : item.installedVersion ? 'Installed' : 'Install'}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="app" onDrop={onDrop} onDragOver={(event) => event.preventDefault()}>
 
@@ -787,6 +1127,9 @@ export function App() {
               </button>
             </div>
             <div className="right-actions">
+              <button className="icon-button" title="Plugins" onClick={openPlugins}>
+                <PluginsIcon />
+              </button>
               <button className="icon-button" title="Settings" onClick={() => host.postMessage({ type: 'openSettings' })}>
                 <SlidersIcon />
               </button>
@@ -2088,6 +2431,15 @@ function SlidersIcon() {
       <circle cx="8" cy="4.5" r="1.4" />
       <circle cx="11" cy="8" r="1.4" />
       <circle cx="5.5" cy="11.5" r="1.4" />
+    </svg>
+  );
+}
+
+function PluginsIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M6 2.5v3M10 2.5v3M4 5.5h8v3.2a4 4 0 0 1-4 4 4 4 0 0 1-4-4Z" />
+      <path d="M8 12.7v1.8" />
     </svg>
   );
 }

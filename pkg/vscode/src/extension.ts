@@ -32,6 +32,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.createTreeView('pegg.sessions', { treeDataProvider: sessionsProvider, showCollapseAll: false }),
     registerCodeActions(),
     registerChatParticipant(controller),
+    vscode.commands.registerCommand('pegg.chat.plugins', () => chatProvider.showPlugins()),
     ...registerChatCommands(controller, binary, log, sessionsProvider),
     ...registerEditorCommands(controller),
   );

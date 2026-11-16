@@ -34,6 +34,11 @@ Add plugin configuration to `~/.pegg/pegg.json`:
 | `exclude` | string[] | `[]` | Plugin names or binary names to skip during loading |
 | `options` | object | `{}` | Per-plugin configuration passed to the plugin |
 
+Plugin options are also where the IDE plugins store environment values entered in
+the plugin management page. String values are passed to the plugin unchanged in
+`Deps.Options`; the VS Code and IntelliJ pages write them under
+`plugins.options.<plugin-name>` and never read values back into the webview.
+
 ### Plugin directory
 
 Plugins are loaded from `~/.pegg/plugins/`. Pegg scans this directory at startup
