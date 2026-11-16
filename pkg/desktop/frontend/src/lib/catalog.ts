@@ -29,6 +29,17 @@ export function catalogTransport(item: CatalogItem): string {
   return item.transports?.join(' · ') ?? '';
 }
 
+export function normalizeVersion(value?: string): string {
+  return (value ?? '').trim().replace(/^v/i, '');
+}
+
+export function catalogVersionPair(item: CatalogItem): { from: string; to: string } | null {
+  const from = normalizeVersion(item.installedVersion);
+  const to = normalizeVersion(item.version);
+  if (!from || !to) return null;
+  return { from, to };
+}
+
 function installedList(item: CatalogItem, installed: CatalogInstalled): string[] {
   if (item.kind === 'skills') return installed.skills;
   if (item.kind === 'mcp') return installed.mcp;

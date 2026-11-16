@@ -38,6 +38,9 @@ type CatalogItem struct {
 	Homepage     string   `json:"homepage,omitempty"`
 	RequiredEnv  []string `json:"requiredEnv,omitempty"`
 	SkillID      string   `json:"skillId,omitempty"`
+
+	InstalledVersion string `json:"installedVersion,omitempty"`
+	UpdateAvailable  bool   `json:"updateAvailable,omitempty"`
 }
 
 type CatalogSearchResult struct {
@@ -88,7 +91,7 @@ func (a *App) SearchCatalog(kind, query, filter string, limit, cursor int) (Cata
 	for _, entry := range res.Items {
 		items = append(items, toCatalogItem(entry))
 	}
-	return CatalogSearchResult{Items: items, NextCursor: res.NextCursor}, nil
+	return CatalogSearchResult{Items: enrichCatalogItems(items), NextCursor: res.NextCursor}, nil
 }
 
 func catalogSearchOptions(filter string) catalog.SearchOptions {
@@ -139,6 +142,10 @@ func (a *App) GetCatalogEntry(kind, id string) (CatalogEntry, error) {
 				out.ConfigJSON = string(data)
 			}
 		}
+	}
+
+	if entry.Kind == catalog.KindPlugin {
+		out.CatalogItem = enrichCatalogItems([]CatalogItem{out.CatalogItem})[0]
 	}
 
 	return out, nil
@@ -254,6 +261,50 @@ func (a *App) InstallCatalogPlugin(source, name string) (CatalogMutationResult, 
 				"catalog lists version %s, installed %s; catalog may be stale",
 				entry.Version, result.Version))
 		}
+	}
+	return res, nil
+}
+
+func (a *App) UpdateCatalogPlugin(source, name string) (CatalogMutationResult, error) {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return CatalogMutationResult{}, errors.New("catalog: plugin source is required")
+	}
+	spec, err := install.ParseSource(source)
+	if err != nil {
+		return CatalogMutationResult{}, err
+	}
+	if strings.TrimSpace(name) == "" {
+		name = spec.DefaultName()
+	}
+
+	entry, entryErr := a.catalogEntry(catalog.KindPlugin, source)
+	var warnings []string
+	if entryErr == nil {
+		warnings = entry.CompatibilityWarnings(config.AppVersion, pkgplugin.ProtocolVersion)
+	} else {
+		warnings = append(warnings, "catalog entry not found; compatibility not checked")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+	result, err := install.Update(ctx, install.NewClient(), install.Options{
+		Source: spec,
+		Name:   name,
+	})
+	if err != nil {
+		return CatalogMutationResult{}, err
+	}
+
+	res := CatalogMutationResult{
+		Name:             result.Name,
+		Path:             result.Path,
+		RestartRequired:  result.Updated,
+		Warnings:         warnings,
+		InstalledVersion: result.Version,
+	}
+	if entryErr == nil {
+		res.CatalogVersion = entry.Version
 	}
 	return res, nil
 }
@@ -403,6 +454,65 @@ func skillCatalogKey(item catalog.InstalledSkill) string {
 		return item.Source + "/" + item.SkillID
 	}
 	return item.Name
+}
+
+func catalogUpdateAvailable(installedVersion, catalogVersion string) bool {
+	if strings.TrimSpace(installedVersion) == "" || strings.TrimSpace(catalogVersion) == "" {
+		return false
+	}
+	return install.VersionNewer(installedVersion, catalogVersion)
+}
+
+func enrichCatalogItems(items []CatalogItem) []CatalogItem {
+	pluginDir, _ := config.GetConfigPath("plugins")
+	return enrichCatalogItemsFromDir(items, pluginDir)
+}
+
+func enrichCatalogItemsFromDir(items []CatalogItem, pluginDir string) []CatalogItem {
+	if len(items) == 0 || pluginDir == "" {
+		return items
+	}
+	installed, err := install.List(pluginDir)
+	if err != nil || len(installed) == 0 {
+		return items
+	}
+	versions := make(map[string]string, len(installed))
+	for _, item := range installed {
+		versions[strings.ToLower(item.Name)] = item.Version
+	}
+
+	for i := range items {
+		if items[i].Kind != catalog.KindPlugin {
+			continue
+		}
+		version, ok := installedPluginVersion(items[i], versions)
+		if !ok {
+			continue
+		}
+		items[i].InstalledVersion = version
+		items[i].UpdateAvailable = catalogUpdateAvailable(version, items[i].Version)
+	}
+	return items
+}
+
+func installedPluginVersion(item CatalogItem, versions map[string]string) (string, bool) {
+	candidates := []string{item.ID, item.Name, item.Source}
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		names := []string{candidate}
+		if base := candidate[strings.LastIndex(candidate, "/")+1:]; base != candidate {
+			names = append(names, base)
+		}
+		for _, name := range names {
+			if version, ok := versions[strings.ToLower(name)]; ok {
+				return version, true
+			}
+		}
+	}
+	return "", false
 }
 
 func uniqueStrings(values []string) []string {

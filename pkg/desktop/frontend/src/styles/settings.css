@@ -938,6 +938,19 @@
   font-size: 10px;
 }
 
+.hub-version-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--pg-border);
+  border-radius: 6px;
+  color: var(--pg-muted);
+  font-family: var(--pg-font-mono);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 .hub-arrow {
   color: var(--pg-muted);
 }

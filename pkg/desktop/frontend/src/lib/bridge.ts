@@ -254,6 +254,10 @@ const App = GoApp as unknown as {
     source: string,
     name: string,
   ): Promise<CatalogMutationResult>;
+  UpdateCatalogPlugin(
+    source: string,
+    name: string,
+  ): Promise<CatalogMutationResult>;
   CatalogInstalled(): Promise<CatalogInstalled>;
 };
 

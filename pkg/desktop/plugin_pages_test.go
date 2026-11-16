@@ -50,6 +50,16 @@ func TestPluginPagesConversion(t *testing.T) {
 	}
 }
 
+func TestUpdateCatalogPluginRequiresSource(t *testing.T) {
+	app := &App{}
+	if _, err := app.UpdateCatalogPlugin("", "browser-use"); err == nil {
+		t.Fatal("expected an error for an empty source")
+	}
+	if _, err := app.UpdateCatalogPlugin("not-a-source", "browser-use"); err == nil {
+		t.Fatal("expected an error for an invalid source")
+	}
+}
+
 func TestPluginSettingsPagesIntegration(t *testing.T) {
 	if os.Getenv("PEGG_PLUGIN_E2E") != "1" {
 		t.Skip("set PEGG_PLUGIN_E2E=1 to load installed plugins")

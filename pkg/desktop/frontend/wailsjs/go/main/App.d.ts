@@ -216,6 +216,8 @@ export function Themes():Promise<Array<themes.Theme>>;
 
 export function TogglePluginSettings(arg1:string):Promise<boolean>;
 
+export function UpdateCatalogPlugin(arg1:string,arg2:string):Promise<main.CatalogMutationResult>;
+
 export function Version():Promise<string>;
 
 export function ViewState():Promise<main.DesktopViewState>;
