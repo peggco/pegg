@@ -193,3 +193,15 @@ nav:
       - TUI: hooks/tui.md
       - Desktop: hooks/desktop.md
       - View hooks: hooks/view.md
+  - Official Plugins:
+      - Overview: official-plugins/index.md
+      - Browser Use: official-plugins/browser-use.md
+      - Computer Use: official-plugins/computer-use.md
+      - Kanban: official-plugins/kanban.md
+      - Usage: official-plugins/usage.md
+      - Logs: official-plugins/logs.md
+      - Kanban Integrations:
+          - GitHub: official-plugins/kanban-github.md
+          - GitLab: official-plugins/kanban-gitlab.md
+          - Jira: official-plugins/kanban-jira.md
+          - Bitbucket: official-plugins/kanban-bitbucket.md
