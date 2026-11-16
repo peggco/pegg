@@ -45,7 +45,6 @@ export function CatalogDetail({
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [envOpen, setEnvOpen] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const [restart, setRestart] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -53,7 +52,6 @@ export function CatalogDetail({
   useEffect(() => {
     setRestart(false);
     setError('');
-    setConfirming(false);
     setWarnings([]);
   }, [item.kind, item.id]);
 
@@ -121,7 +119,6 @@ export function CatalogDetail({
   };
 
   const installPlugin = async () => {
-    setConfirming(false);
     setBusy(true);
     setError('');
     try {
@@ -167,7 +164,7 @@ export function CatalogDetail({
       else void installMCP({});
       return;
     }
-    setConfirming(true);
+    void installPlugin();
   };
 
   return (
@@ -257,17 +254,6 @@ export function CatalogDetail({
 
       {restart ? <div className="notice warn">{t('catalog.restartRequired')}</div> : null}
       {error ? <div className="notice error">{error}</div> : null}
-      {confirming ? (
-        <div className="notice warn">
-          <span style={{ flex: 1 }}>{t('catalog.pluginConfirm', { name: item.name })}</span>
-          <button className="btn small primary" onClick={() => void installPlugin()}>
-            {t('catalog.confirm')}
-          </button>
-          <button className="btn small ghost" onClick={() => setConfirming(false)}>
-            {t('common.cancel')}
-          </button>
-        </div>
-      ) : null}
 
       <div className="hub-detail-grid">
         <div className="hub-detail-card">

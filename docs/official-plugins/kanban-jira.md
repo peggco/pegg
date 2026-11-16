@@ -19,6 +19,11 @@ pegg plugins install peggco/pegg-kanban-jira
 
 ## Setup
 
+The plugin supports **Jira Cloud** and **Jira Data Center** through the `kind`
+setting (`cloud` by default; `datacenter`, `server`, and `dc` are accepted).
+
+### Jira Cloud
+
 1. Create a Jira Cloud API token at
    [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens).
 2. Add the plugin options to `~/.pegg/pegg.json`:
@@ -29,6 +34,7 @@ pegg plugins install peggco/pegg-kanban-jira
     "options": {
       "kanban-jira": {
         "enabled": true,
+        "kind": "cloud",
         "site": "acme",
         "email": "you@example.com",
         "token": "ATATT...",
@@ -42,7 +48,34 @@ pegg plugins install peggco/pegg-kanban-jira
 ```
 
 `site` accepts `acme`, `acme.atlassian.net`, or a full URL. The derived base URL is
-`https://<site>.atlassian.net` unless a full URL is supplied.
+`https://<site>.atlassian.net` unless a full URL is supplied. Cloud uses
+`/rest/api/3` and HTTP basic auth with `email` + `token`.
+
+### Jira Data Center
+
+Use a personal access token (recommended) or a username and password:
+
+```json
+{
+  "plugins": {
+    "options": {
+      "kanban-jira": {
+        "enabled": true,
+        "kind": "datacenter",
+        "base_url": "https://jira.example.com",
+        "token": "personal-access-token",
+        "project": "ABC",
+        "default_jql": "project = ABC AND status != Done ORDER BY updated DESC",
+        "request_timeout_seconds": 30
+      }
+    }
+  }
+}
+```
+
+`base_url` is required for Data Center. `token` is sent as `Authorization: Bearer`.
+Alternatively set `username` and `password` for HTTP basic auth. Data Center uses
+`/rest/api/2`.
 
 The preferred option keys are `kanban-jira` and `pegg-kanban-jira`. Legacy
 `jira` and `pegg-jira` keys are read as fallbacks.
@@ -52,9 +85,13 @@ The preferred option keys are `kanban-jira` and `pegg-kanban-jira`. Legacy
 | Variable | Meaning |
 |---|---|
 | `PEGG_JIRA_OPTIONS` | JSON options object |
-| `PEGG_JIRA_SITE` | Jira site or full URL |
-| `PEGG_JIRA_EMAIL` | Atlassian account email |
-| `PEGG_JIRA_TOKEN` | API token |
+| `PEGG_JIRA_KIND` | `cloud` or `datacenter` |
+| `PEGG_JIRA_SITE` | Jira Cloud site or full URL |
+| `PEGG_JIRA_URL` | Jira Data Center base URL |
+| `PEGG_JIRA_EMAIL` | Atlassian account email (Cloud) |
+| `PEGG_JIRA_USERNAME` | Data Center username (basic auth) |
+| `PEGG_JIRA_PASSWORD` | Data Center password (basic auth) |
+| `PEGG_JIRA_TOKEN` | Cloud API token or Data Center personal access token |
 | `PEGG_JIRA_PROJECT` | Default project key |
 | `PEGG_JIRA_JQL` | Default JQL when a fetch request has no query |
 | `PEGG_JIRA_SYNC_STATE` | Default state filter |
