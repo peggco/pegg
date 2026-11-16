@@ -132,6 +132,14 @@ npm ci
 - **Provider Registration**: New LLM providers added via CLI or config
 - **MCP/LSP Integration**: Remote/local servers defined in `pegg.json` or global config
 
+## Rules
+
+Project rules live in `.pegg/rules/` and are injected into every session after this file:
+
+- `COMMIT.md` — subject-only Conventional Commits; never add a body, description, or `Fixes #` footer unless the user explicitly asks
+- `CODING.md` — plan before implementing and run `make fmt`, `make vet`, `make test` after changes
+- `DOCS.md` — update docs and the VS Code/IntelliJ changelogs alongside code changes
+
 ## Further Reading
 
 - [Documentation](docs/AGENT.md) - Full specification document

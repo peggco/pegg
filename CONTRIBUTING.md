@@ -244,31 +244,77 @@ zensical build --clean
    - [ ] `make test` — all tests pass
    - [ ] New code has tests (if applicable)
    - [ ] Docs are updated (if applicable)
-   - [ ] Commit messages are clear
+   - [ ] Commit messages follow the subject-only convention below
 
 5. **Respond to review feedback.** Push additional commits to your branch — they'll appear in the PR automatically.
 
 ### Commit Messages
 
-Use clear, descriptive commit messages:
+We use [Conventional Commits](https://www.conventionalcommits.org/) with a
+**subject-only** message: one line, no body, no description, no footers. Issue
+references belong in the pull request description, not in the commit.
 
 ```
-fix: retry on provider rate limit instead of failing immediately
-
-The agent was returning ErrProviderRateLimit without retrying.
-Added exponential backoff with 3 retries before giving up.
-
-Fixes #42
+<type>(<scope>): <summary>
 ```
 
-Format:
-- **`feat:`** — new feature
-- **`fix:`** — bug fix
-- **`docs:`** — documentation only
-- **`test:`** — adding or updating tests
-- **`chore:`** — maintenance, dependencies, CI config
-- **`refactor:`** — code change that neither fixes a bug nor adds a feature
-- **`perf:`** — performance improvement
+Examples taken from the repository history:
+
+```
+feat(desktop): add update button for installed plugins
+fix(cli): prompt for base URL before API key in providers add
+ci(release): fix macOS/Cloudsmith/gh failures
+docs: add datacenter support to kanban-jira docs
+```
+
+Rules:
+
+- One line per commit — **no body and no `Fixes #`/`Closes #` footers**.
+- Imperative, lowercase summary with no trailing period.
+- Keep the full subject at or under about 72 characters.
+- One logical change per commit.
+- Squash merges may have `(#NNN)` appended by the host; leave it as-is.
+
+Types:
+- **`feat`** — new feature
+- **`fix`** — bug fix
+- **`docs`** — documentation only
+- **`test`** — adding or updating tests
+- **`chore`** — maintenance, dependencies, version bumps
+- **`refactor`** — code change that neither fixes a bug nor adds a feature
+- **`perf`** — performance improvement
+- **`ci`** — CI/CD configuration
+
+Scopes name the touched area, for example `internal/<pkg>`, `desktop`, `cli`,
+`tui`, `vscode`, `intellij`, `acp`, `docs`, `ci`, or `release`. Omit the scope
+when a change spans the repository, e.g. `chore: version update to 0.2.6`.
+
+The full rule lives in [`.pegg/rules/COMMIT.md`](.pegg/rules/COMMIT.md) and is
+loaded by Pegg on every session.
+
+#### Optional enforcement
+
+A `commit-msg` hook is not required, but you can reject bodies and malformed
+subjects locally:
+
+```bash
+cat > .git/hooks/commit-msg <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+msg_file="$1"
+subject=$(head -n 1 "$msg_file")
+pattern='^(feat|fix|refactor|docs|test|chore|ci|perf)(\([a-z0-9/_-]+\))?: [a-z]'
+if ! printf '%s' "$subject" | grep -Eq "$pattern" || printf '%s' "$subject" | grep -Eq '\.$'; then
+  echo "commit-msg: subject must look like '<type>(<scope>): <lowercase summary>'" >&2
+  exit 1
+fi
+if [ "$(grep -vE '^[[:space:]]*(#|$)' "$msg_file" | wc -l)" -gt 1 ]; then
+  echo "commit-msg: commit body is not allowed; squash to a single subject line" >&2
+  exit 1
+fi
+EOF
+chmod +x .git/hooks/commit-msg
+```
 
 ---
 
