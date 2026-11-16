@@ -272,6 +272,12 @@
         "category": "Pegg"
       },
       {
+        "command": "pegg.kanban.checkoutBranch",
+        "title": "Checkout Card Branch",
+        "category": "Pegg",
+        "icon": "$(git-branch)"
+      },
+      {
         "command": "pegg.login",
         "title": "Provider Login",
         "category": "Pegg",
@@ -717,6 +723,32 @@
           "type": "boolean",
           "default": true,
           "description": "Show a notification when an agent run finishes while VS Code is unfocused."
+        },
+        "pegg.git.branchTemplate": {
+          "type": "string",
+          "default": "{number}-{slug}",
+          "description": "Template for card branches. Supports {number}, {slug}, {title}, {id}, and {provider}."
+        },
+        "pegg.git.provider": {
+          "type": "string",
+          "enum": [
+            "",
+            "github",
+            "bitbucket",
+            "gitlab"
+          ],
+          "default": "",
+          "description": "Force the hosting provider for self-hosted remotes. Empty detects it from the origin URL."
+        },
+        "pegg.git.remote": {
+          "type": "string",
+          "default": "origin",
+          "description": "Git remote used to fetch and create card branches."
+        },
+        "pegg.git.autoPush": {
+          "type": "boolean",
+          "default": false,
+          "description": "Push a newly created card branch with upstream tracking."
         },
         "pegg.env": {
           "type": "object",

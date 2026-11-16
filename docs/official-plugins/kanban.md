@@ -45,6 +45,14 @@ cd /path/to/repo
 ./bin/pegg-kanban list
 ```
 
+## IDE checkout
+
+VS Code (**Pegg: Checkout Card Branch**) and IntelliJ
+(**Tools → Pegg → Checkout Card Branch…**) read cards from `board.json` and
+check out a card's branch without leaving the editor. The extensions detect
+GitHub, Bitbucket, or GitLab from the remote, reuse an existing branch, or
+create one from the default branch with the configured template.
+
 ## Configuration
 
 ```json

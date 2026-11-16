@@ -25,6 +25,10 @@ class PeggSettings : PersistentStateComponent<PeggSettings.State> {
         var maxFileBytes: Int = 262144,
         var sendOnEnter: String = "enter",
         var notifyOnComplete: Boolean = true,
+        var branchTemplate: String = "{number}-{slug}",
+        var gitProvider: String = "",
+        var gitRemote: String = "origin",
+        var gitAutoPush: Boolean = false,
         var env: MutableMap<String, String> = linkedMapOf(),
         var logLevel: String = "info",
     )
@@ -42,6 +46,9 @@ class PeggSettings : PersistentStateComponent<PeggSettings.State> {
         if (myState.logLevel !in setOf("error", "warn", "info", "debug")) myState.logLevel = "info"
         if (myState.sendOnEnter !in setOf("enter", "ctrl+enter")) myState.sendOnEnter = "enter"
         if (myState.defaultMode !in setOf("auto", "plan", "build")) myState.defaultMode = "auto"
+        if (myState.branchTemplate.isBlank()) myState.branchTemplate = "{number}-{slug}"
+        if (myState.gitProvider !in setOf("", "github", "bitbucket", "gitlab")) myState.gitProvider = ""
+        if (myState.gitRemote.isBlank()) myState.gitRemote = "origin"
     }
 
     fun addListener(listener: () -> Unit) = listeners.addIfAbsent(listener)

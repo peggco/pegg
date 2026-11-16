@@ -4,7 +4,9 @@ import { homedir } from 'node:os';
 import { basename } from 'node:path';
 import { ChatController } from '../chat/controller';
 import { makeAttachment } from '../chat/context';
-import { getConfig } from '../config';
+import { getConfig, workspaceRoot } from '../config';
+import { checkoutCardBranch } from '../integrations/cardBranch';
+import { promptDirty } from '../integrations/dirtyPrompt';
 import { Logger } from '../logger';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -294,6 +296,47 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           } catch (err) {
             await this.view?.webview.postMessage({
               type: 'hubSkillInstalled',
+              requestId,
+              ok: false,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+          return;
+        }
+        case 'checkoutCardBranch': {
+          const requestId = message?.requestId;
+          try {
+            const root = workspaceRoot();
+            if (!root) throw new Error('Open a folder first.');
+            const card = message?.card;
+            if (!card || typeof card.title !== 'string') throw new Error('Missing card metadata.');
+            const cfg = getConfig();
+            const result = await vscode.window.withProgress(
+              {
+                location: vscode.ProgressLocation.Notification,
+                title: 'Pegg: checking out card branch',
+                cancellable: false,
+              },
+              (progress) =>
+                checkoutCardBranch(card, {
+                  cwd: root,
+                  remote: cfg.gitRemote,
+                  providerOverride: cfg.gitProvider,
+                  branchTemplate: cfg.branchTemplate,
+                  autoPush: cfg.gitAutoPush,
+                  onProgress: (text) => progress.report({ message: text }),
+                  confirmDirty: promptDirty,
+                }),
+            );
+            await this.view?.webview.postMessage({
+              type: 'checkoutCardResult',
+              requestId,
+              ok: true,
+              result,
+            });
+          } catch (err) {
+            await this.view?.webview.postMessage({
+              type: 'checkoutCardResult',
               requestId,
               ok: false,
               error: err instanceof Error ? err.message : String(err),

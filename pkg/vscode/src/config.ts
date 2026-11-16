@@ -16,6 +16,10 @@ export interface PeggConfig {
   maxFileBytes: number;
   sendOnEnter: 'enter' | 'ctrl+enter';
   notifyOnComplete: boolean;
+  branchTemplate: string;
+  gitProvider: string;
+  gitRemote: string;
+  gitAutoPush: boolean;
   env: Record<string, string>;
   logLevel: 'error' | 'warn' | 'info' | 'debug';
 }
@@ -38,6 +42,10 @@ export function getConfig(): PeggConfig {
     maxFileBytes: Math.max(1024, c.get<number>('context.maxFileBytes', 262144)),
     sendOnEnter: c.get<'enter' | 'ctrl+enter'>('chat.sendOnEnter', 'enter'),
     notifyOnComplete: c.get<boolean>('notifications.onComplete', true),
+    branchTemplate: c.get<string>('git.branchTemplate', '{number}-{slug}').trim() || '{number}-{slug}',
+    gitProvider: c.get<string>('git.provider', '').trim().toLowerCase(),
+    gitRemote: c.get<string>('git.remote', 'origin').trim() || 'origin',
+    gitAutoPush: c.get<boolean>('git.autoPush', false),
     env: c.get<Record<string, string>>('env', {}) ?? {},
     logLevel: c.get<'error' | 'warn' | 'info' | 'debug'>('logLevel', 'info'),
   };

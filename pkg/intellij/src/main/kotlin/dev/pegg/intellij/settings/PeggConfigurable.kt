@@ -45,6 +45,10 @@ class PeggConfigurable : Configurable {
     private val maxFileBytes = JBTextField()
     private val sendOnEnter = JComboBox(arrayOf("enter", "ctrl+enter"))
     private val notifyOnComplete = JBCheckBox("Notify when a run finishes while the IDE is unfocused")
+    private val branchTemplate = JBTextField()
+    private val gitProvider = JComboBox(arrayOf("", "github", "bitbucket", "gitlab"))
+    private val gitRemote = JBTextField()
+    private val gitAutoPush = JBCheckBox("Push newly created card branches")
     private val logLevel = JComboBox(arrayOf("error", "warn", "info", "debug"))
     private val envModel = DefaultTableModel(arrayOf("Key", "Value"), 0)
     private val envTable = JBTable(envModel)
@@ -112,6 +116,11 @@ class PeggConfigurable : Configurable {
             .addComponent(TitledSeparator("Chat"))
             .addLabeledComponent("Send on", sendOnEnter)
             .addComponent(notifyOnComplete)
+            .addComponent(TitledSeparator("Git"))
+            .addLabeledComponent("Branch template", branchTemplate)
+            .addLabeledComponent("Provider override", gitProvider)
+            .addLabeledComponent("Remote", gitRemote)
+            .addComponent(gitAutoPush)
             .addComponent(TitledSeparator("Environment"))
             .addLabeledComponent("Environment variables", envPanel)
             .addComponent(TitledSeparator("Logging"))
@@ -138,6 +147,10 @@ class PeggConfigurable : Configurable {
             current.maxFileBytes != maxFileBytes.text.trim().toIntOrNull() ||
             current.sendOnEnter != (sendOnEnter.selectedItem as? String ?: "enter") ||
             current.notifyOnComplete != notifyOnComplete.isSelected ||
+            current.branchTemplate != branchTemplate.text.trim() ||
+            current.gitProvider != (gitProvider.selectedItem as? String ?: "") ||
+            current.gitRemote != gitRemote.text.trim() ||
+            current.gitAutoPush != gitAutoPush.isSelected ||
             current.logLevel != (logLevel.selectedItem as? String ?: "info") ||
             current.env != readEnv()
     }
@@ -164,6 +177,10 @@ class PeggConfigurable : Configurable {
         state.maxFileBytes = bytes
         state.sendOnEnter = sendOnEnter.selectedItem as? String ?: "enter"
         state.notifyOnComplete = notifyOnComplete.isSelected
+        state.branchTemplate = branchTemplate.text.trim().ifBlank { "{number}-{slug}" }
+        state.gitProvider = gitProvider.selectedItem as? String ?: ""
+        state.gitRemote = gitRemote.text.trim().ifBlank { "origin" }
+        state.gitAutoPush = gitAutoPush.isSelected
         state.logLevel = logLevel.selectedItem as? String ?: "info"
         state.env = readEnv()
         settings.notifyChanged()
@@ -208,6 +225,11 @@ class PeggConfigurable : Configurable {
         sendOnEnter.model = DefaultComboBoxModel(arrayOf("enter", "ctrl+enter"))
         sendOnEnter.selectedItem = state.sendOnEnter
         notifyOnComplete.isSelected = state.notifyOnComplete
+        branchTemplate.text = state.branchTemplate
+        gitProvider.model = DefaultComboBoxModel(arrayOf("", "github", "bitbucket", "gitlab"))
+        gitProvider.selectedItem = state.gitProvider
+        gitRemote.text = state.gitRemote
+        gitAutoPush.isSelected = state.gitAutoPush
         logLevel.model = DefaultComboBoxModel(arrayOf("error", "warn", "info", "debug"))
         logLevel.selectedItem = state.logLevel
         envModel.rowCount = 0

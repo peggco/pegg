@@ -167,6 +167,21 @@ the active file when nothing is selected.
 
 Selection actions fall back to the current line when no text is selected.
 
+### Card branches
+
+Run **Pegg: Checkout Card Branch** to pick a card from
+`.pegg/kanban/board.json` and check out its branch. Pegg detects the hosting
+provider (GitHub, Bitbucket or GitLab) from the `origin` remote, fetches an
+existing branch with tracking, or creates a missing branch from the remote
+default.
+
+A dirty working tree is never modified silently: choose **Stash**, **Commit**,
+or **Cancel** before the checkout. Branch names follow
+`pegg.git.branchTemplate` and support `{number}`, `{slug}`, `{title}`, `{id}`,
+and `{provider}`. Set `pegg.git.provider` for self-hosted remotes,
+`pegg.git.remote` for a remote other than `origin`, and `pegg.git.autoPush` to
+push newly created branches.
+
 ### Code actions
 
 The lightbulb and Quick Fix menus include Pegg actions for selections and
@@ -271,6 +286,10 @@ probed, the detected version and why a candidate was rejected.
 | `pegg.context.maxFileBytes` | `262144` | Maximum text attachment size |
 | `pegg.chat.sendOnEnter` | `enter` | Send with Enter or Ctrl/Cmd+Enter |
 | `pegg.notifications.onComplete` | `true` | Notify when a run finishes unfocused |
+| `pegg.git.branchTemplate` | `{number}-{slug}` | Template for card branches |
+| `pegg.git.provider` | `""` | Force GitHub, Bitbucket, or GitLab for self-hosted remotes |
+| `pegg.git.remote` | `origin` | Remote used for card branches |
+| `pegg.git.autoPush` | `false` | Push newly created card branches |
 | `pegg.env` | `{}` | Extra environment variables for the Pegg process |
 | `pegg.logLevel` | `info` | Extension log level |
 
