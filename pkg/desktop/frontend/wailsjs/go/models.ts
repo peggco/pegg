@@ -351,6 +351,8 @@ export namespace main {
 	    homepage?: string;
 	    requiredEnv?: string[];
 	    skillId?: string;
+	    installedVersion?: string;
+	    updateAvailable?: boolean;
 	    configJSON?: string;
 	    installCommand?: string;
 	    readmeSource?: string;
@@ -382,6 +384,8 @@ export namespace main {
 	        this.homepage = source["homepage"];
 	        this.requiredEnv = source["requiredEnv"];
 	        this.skillId = source["skillId"];
+	        this.installedVersion = source["installedVersion"];
+	        this.updateAvailable = source["updateAvailable"];
 	        this.configJSON = source["configJSON"];
 	        this.installCommand = source["installCommand"];
 	        this.readmeSource = source["readmeSource"];
@@ -425,6 +429,8 @@ export namespace main {
 	    homepage?: string;
 	    requiredEnv?: string[];
 	    skillId?: string;
+	    installedVersion?: string;
+	    updateAvailable?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new CatalogItem(source);
@@ -450,6 +456,8 @@ export namespace main {
 	        this.homepage = source["homepage"];
 	        this.requiredEnv = source["requiredEnv"];
 	        this.skillId = source["skillId"];
+	        this.installedVersion = source["installedVersion"];
+	        this.updateAvailable = source["updateAvailable"];
 	    }
 	}
 	export class CatalogMutationResult {
