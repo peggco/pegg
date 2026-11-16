@@ -226,6 +226,7 @@ var tr = map[string]string{
 	"chat.files.sent":           "%d dosya gönderildi",
 	"chat.files.copyHint":       "tıkla: aç · Enter: yolu kopyala",
 	"chat.moreDown":             " ↓ %d ",
+	"chat.table.scroll":         "Shift+←/→ tablo",
 
 	"ask.placeholder":        "Yanıtınızı yazın…",
 	"ask.yes":                "Evet",

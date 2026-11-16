@@ -243,6 +243,12 @@ Haskell, CSS, HTML, JSON, YAML, Markdown, SQL, R, Lua, and Dart.
 | ++up++ / ++down++ | Scroll one line |
 | ++pgup++ / ++pgdn++ | Scroll one page |
 | ++home++ / ++end++ | Jump to top / bottom |
+| ++shift+left++ / ++shift+right++ | Scroll a wide markdown table horizontally (when the prompt is empty) |
+
+When a table is wider than the viewport it is kept unwrapped, and a hint at the
+bottom of the chat shows that more columns exist. With the prompt empty,
+++shift+left++/++shift+right++ reveal the hidden columns and snap between table
+columns; typing in the prompt keeps those keys for text selection.
 
 ## Subagents
 

@@ -643,3 +643,48 @@ func TestHomeHubPickerFallbackAndInstall(t *testing.T) {
 		t.Fatalf("install request = %v", got)
 	}
 }
+
+const wideHomeTable = "| AlphaColumn | BravoColumn | CharlieColumn | DeltaColumn | EchoColumn | FoxtrotColumn | GolfColumn | HotelColumn | IndiaColumn |\n" +
+	"| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n" +
+	"| one | two | three | four | five | six | seven | eight | nine |"
+
+func drawWideTablePage(t *testing.T) *Page {
+	t.Helper()
+	p := drawFrame(t, 100, 30)
+	p.Chat().AppendItem(&components.ChatItem{Kind: components.ItemAssistant, Text: wideHomeTable})
+	p.Draw(drawScreen(t, 100, 30), layout.Region{Left: 0, Top: 0, Width: 100, Height: 30}, true)
+	return p
+}
+
+func TestHomeShiftArrowsScrollTableWhenInputEmpty(t *testing.T) {
+	p := drawWideTablePage(t)
+
+	_, maxOff, ok := p.Chat().TableScrollState()
+	if !ok || maxOff <= 0 {
+		t.Fatalf("wide table not scrollable: ok=%v max=%d", ok, maxOff)
+	}
+	if !p.HandleKey(tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModShift)) {
+		t.Fatal("Shift+Right not consumed with an empty input")
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off == 0 {
+		t.Fatal("Shift+Right did not scroll the table")
+	}
+}
+
+func TestHomeShiftArrowsKeepInputSelection(t *testing.T) {
+	p := drawWideTablePage(t)
+
+	for _, r := range "ab" {
+		p.Input().InsertRune(r)
+	}
+	p.Input().Home()
+	if !p.HandleKey(tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModShift)) {
+		t.Fatal("Shift+Right not consumed by the input")
+	}
+	if got := p.Input().SelectedText(); got != "a" {
+		t.Fatalf("input selection = %q, want a", got)
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off != 0 {
+		t.Fatalf("table offset = %d, want 0 while the input has text", off)
+	}
+}

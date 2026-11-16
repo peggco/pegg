@@ -551,3 +551,107 @@ func TestParseTodoItemsPreservesOrderAndFields(t *testing.T) {
 		t.Errorf("item 1 deps = %q, want %q", items[1].deps, "todo-3, todo-2")
 	}
 }
+
+func drawTableChat(t *testing.T, innerW int, table string) (*Chat, tcell.SimulationScreen, int, int) {
+	t.Helper()
+	styles.RegisterDefaults()
+	styles.Set("dark")
+
+	w, h := innerW+2, 12
+	s := tcell.NewSimulationScreen("UTF-8")
+	if err := s.Init(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Fini)
+	s.SetSize(w, h)
+
+	c := NewChat()
+	c.AppendItem(&ChatItem{Kind: ItemAssistant, Text: table})
+	c.Draw(s, layout.Region{Left: 0, Top: 0, Width: w, Height: h}, false)
+	return c, s, w, h
+}
+
+func TestChatWideTableScrollsHorizontally(t *testing.T) {
+	table := "| Alpha | Beta | Gamma | Delta | Epsilon |\n| --- | --- | --- | --- | --- |\n| one | two | three | four | five |"
+	c, s, w, h := drawTableChat(t, 20, table)
+
+	off, maxOff, ok := c.TableScrollState()
+	if !ok {
+		t.Fatal("wide table not detected")
+	}
+	if off != 0 {
+		t.Fatalf("initial offset = %d, want 0", off)
+	}
+	if maxOff <= 0 {
+		t.Fatalf("max offset = %d, want > 0", maxOff)
+	}
+	content := screenContent(s, w, h)
+	if !strings.Contains(content, "Alpha") {
+		t.Fatalf("first column not visible at offset 0:\n%s", content)
+	}
+
+	ev := tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModShift)
+	for i := 0; i < 50; i++ {
+		c.HandleKey(ev)
+	}
+	off, maxOff, ok = c.TableScrollState()
+	if !ok || off != maxOff {
+		t.Fatalf("offset after scrolling = %d, want max %d", off, maxOff)
+	}
+
+	c.Draw(s, layout.Region{Left: 0, Top: 0, Width: w, Height: h}, false)
+	content = screenContent(s, w, h)
+	if !strings.Contains(content, "Epsilon") {
+		t.Fatalf("last column not visible at max offset:\n%s", content)
+	}
+	if strings.Contains(content, "Alpha") {
+		t.Fatalf("first column should be clipped at max offset:\n%s", content)
+	}
+	if !strings.Contains(content, "Shift") {
+		t.Fatalf("table scroll hint missing:\n%s", content)
+	}
+	if !c.TableHintVisible() {
+		t.Fatal("table hint flag should be set")
+	}
+}
+
+func TestChatWideUnicodeTableReachesLastColumn(t *testing.T) {
+	table := "| 名前 | 値 |\n| --- | --- |\n| 東京 | 🚀 |"
+	c, s, w, h := drawTableChat(t, 10, table)
+
+	for i := 0; i < 50; i++ {
+		c.HandleKey(tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModShift))
+	}
+	if _, maxOff, ok := c.TableScrollState(); !ok || maxOff <= 0 {
+		t.Fatalf("unicode table not scrollable: ok=%v max=%d", ok, maxOff)
+	}
+	c.Draw(s, layout.Region{Left: 0, Top: 0, Width: w, Height: h}, false)
+	content := screenContent(s, w, h)
+	if !strings.Contains(content, "🚀") {
+		t.Fatalf("last unicode column not visible:\n%s", content)
+	}
+}
+
+func TestChatShiftLeftScrollsTableBack(t *testing.T) {
+	table := "| Alpha | Beta | Gamma | Delta | Epsilon |\n| --- | --- | --- | --- | --- |\n| one | two | three | four | five |"
+	c, _, _, _ := drawTableChat(t, 20, table)
+
+	for i := 0; i < 50; i++ {
+		c.HandleKey(tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModShift))
+	}
+	if off, _, _ := c.TableScrollState(); off == 0 {
+		t.Fatal("table did not scroll right")
+	}
+	if !c.HandleKey(tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModShift)) {
+		t.Fatal("Shift+Left not consumed")
+	}
+	if off, _, _ := c.TableScrollState(); off == 0 {
+		t.Fatal("Shift+Left did not scroll table back")
+	}
+	for i := 0; i < 50; i++ {
+		c.HandleKey(tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModShift))
+	}
+	if off, _, _ := c.TableScrollState(); off != 0 {
+		t.Fatalf("offset after scrolling back = %d, want 0", off)
+	}
+}
