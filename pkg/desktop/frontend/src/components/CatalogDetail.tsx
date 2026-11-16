@@ -138,7 +138,7 @@ export function CatalogDetail({
       else void installMCP({});
       return;
     }
-    setConfirming(true);
+    void installPlugin();
   };
 
   return (
