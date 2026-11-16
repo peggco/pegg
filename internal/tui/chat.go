@@ -405,6 +405,13 @@ func formatActivity(call llm.ToolCall) string {
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.URL != "" {
 			return i18n.Tf("chat.activity.fetching", p.URL)
 		}
+	case "websearch":
+		var p struct {
+			Query string `json:"query"`
+		}
+		if err := json.Unmarshal([]byte(args), &p); err == nil && p.Query != "" {
+			return i18n.Tf("chat.activity.searching", p.Query)
+		}
 	}
 	return name
 }
@@ -910,6 +917,13 @@ func (a *App) addToolItem(t *agentTranscript, call llm.ToolCall, agentID string)
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.URL != "" {
 			it.ToolName = "webfetch:" + p.URL
+		}
+	case "websearch":
+		var p struct {
+			Query string `json:"query"`
+		}
+		if err := json.Unmarshal([]byte(args), &p); err == nil && p.Query != "" {
+			it.ToolName = "websearch:" + p.Query
 		}
 	case "list":
 		var p struct {
@@ -1751,6 +1765,13 @@ func enrichToolItem(it *components.ChatItem) {
 		}
 		if err := json.Unmarshal([]byte(args), &p); err == nil && p.URL != "" {
 			it.ToolName = "webfetch:" + p.URL
+		}
+	case "websearch":
+		var p struct {
+			Query string `json:"query"`
+		}
+		if err := json.Unmarshal([]byte(args), &p); err == nil && p.Query != "" {
+			it.ToolName = "websearch:" + p.Query
 		}
 	case "list":
 		var p struct {
