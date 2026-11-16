@@ -8,6 +8,7 @@ import (
 	"github.com/peggco/pegg/internal/agent/middleware"
 	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/builtin/middlewares/compaction"
+	"github.com/peggco/pegg/internal/changejournal"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/llm"
@@ -53,6 +54,12 @@ type (
 	Session         = session.Session
 	SessionMessage  = session.Message
 	SessionSnapshot = session.Snapshot
+
+	ChangeJournalEntry  = changejournal.Entry
+	ChangeJournalChange = changejournal.Change
+	ChangeJournalResult = changejournal.Result
+	ChangeJournalOp     = changejournal.Op
+	ChangeJournalStatus = changejournal.Status
 
 	AgentStarted    = agent.AgentStarted
 	AgentInput      = agent.AgentInput
@@ -121,6 +128,10 @@ const (
 	TopicSessionCurrentChanged = session.TopicSessionCurrentChanged
 	TopicSessionResume         = session.TopicSessionResume
 	TopicSessionAttached       = session.TopicSessionAttached
+
+	TopicChangeJournal         = changejournal.TopicChangeJournal
+	TopicChangeJournalReverted = changejournal.TopicChangeJournalReverted
+	TopicChangeJournalRestored = changejournal.TopicChangeJournalRestored
 )
 
 const (

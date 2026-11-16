@@ -94,6 +94,15 @@ Reverting a session stores the removed messages as a snapshot:
 snaps, err := eng.SessionSnapshots(s.ID)
 ```
 
+The change journal is attached to the same revert. Reverting a message also
+restores the files that message touched; files edited by the user afterwards are
+reported as conflicts and left untouched. Undoing the revert re-applies the
+agent's changes. Query the journal directly when you need the per-file detail:
+
+```go
+entries, err := eng.ChangeJournal().EntriesForMessage(s.ID, messageID)
+```
+
 ## Appending messages
 
 ```go
