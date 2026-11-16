@@ -8,6 +8,7 @@ export const LANGUAGES: Array<{ code: Lang; label: string }> = [
 ];
 
 const en: Record<string, string> = {
+  "closing.title": "Closing Pegg…",
   "nav.newChat": "New chat",
   "nav.chats": "Chats",
   "nav.projects": "Projects",
@@ -371,6 +372,7 @@ const en: Record<string, string> = {
 };
 
 const tr: Record<string, string> = {
+  "closing.title": "Pegg kapatılıyor…",
   "nav.newChat": "Yeni sohbet",
   "nav.chats": "Sohbetler",
   "nav.projects": "Projeler",

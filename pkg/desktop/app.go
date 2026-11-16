@@ -21,6 +21,7 @@ import (
 	"github.com/peggco/pegg/internal/plugin"
 	"github.com/peggco/pegg/pkg/desktop/internal/acpclient"
 	"github.com/peggco/pegg/pkg/desktop/internal/binary"
+	"github.com/peggco/pegg/pkg/desktop/internal/closer"
 	"github.com/peggco/pegg/pkg/desktop/internal/prefs"
 	"github.com/peggco/pegg/pkg/desktop/internal/selfupdate"
 	"github.com/peggco/pegg/pkg/desktop/internal/themes"
@@ -86,6 +87,10 @@ type App struct {
 	clientAt string
 	initRes  *acpclient.InitializeResult
 	closing  bool
+
+	closeMu      sync.Mutex
+	closeStarted bool
+	closeReady   bool
 
 	sessionsMu sync.Mutex
 	sessions   map[string]*SessionInfo
@@ -165,8 +170,21 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) beforeClose(ctx context.Context) bool {
+	a.closeMu.Lock()
+	if a.closeReady {
+		a.closeMu.Unlock()
+		return false
+	}
+	if a.closeStarted {
+		a.closeMu.Unlock()
+		return true
+	}
+	a.closeStarted = true
+	a.closeMu.Unlock()
+
 	a.saveWindow(ctx)
-	return false
+	go a.runShutdown()
+	return true
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -175,18 +193,22 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.viewCancel != nil {
 		a.viewCancel()
 	}
-	c := a.client
 	a.mu.Unlock()
-	if c != nil {
-		c.Close()
+
+	a.closeMu.Lock()
+	started := a.closeStarted
+	a.closeMu.Unlock()
+	if !started {
+		closer.Run(a.shutdownTasks(a.takeClient()), closer.Options{
+			Deadline: shutdownDeadline,
+			Logf:     a.logf,
+		})
 	}
-	_, _ = a.ConnectStop()
-	_, _ = a.TeamCancel()
-	_, _ = a.PeggCancel()
-	a.resetPluginManager()
+
 	a.logMu.Lock()
 	if a.log != nil {
 		_ = a.log.Close()
+		a.log = nil
 	}
 	a.logMu.Unlock()
 }

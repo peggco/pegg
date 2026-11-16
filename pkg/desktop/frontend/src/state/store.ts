@@ -25,6 +25,7 @@ export interface Toast {
 
 export interface UIState {
   ready: boolean;
+  closing: boolean;
   boot?: BootstrapInfo;
   themes: Theme[];
   theme?: Theme;
@@ -82,6 +83,7 @@ const initialPrefs: Prefs = {
 
 export const initialState: UIState = {
   ready: false,
+  closing: false,
   themes: [],
   prefs: initialPrefs,
   chat: emptyChat(),

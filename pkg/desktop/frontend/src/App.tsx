@@ -4,6 +4,7 @@ import {
   api,
   onAsk,
   onBinaryProgress,
+  onClosing,
   onDesktopView,
   onDesktopUpdate,
   onFileDrop,
@@ -35,6 +36,7 @@ import {
 } from './state/actions';
 import { store, useStore } from './state/store';
 import { CommandPalette } from './components/CommandPalette';
+import { ClosingOverlay } from './components/ClosingOverlay';
 import { Composer } from './components/Composer';
 import { AskPanel } from './components/AskPanel';
 import { Onboarding, StatusBanner, Toasts, Welcome } from './components/Welcome';
@@ -50,6 +52,7 @@ import { matchViewBinding } from './lib/view';
 
 export function App() {
   const ready = useStore((s) => s.ready);
+  const closing = useStore((s) => s.closing);
   const view = useStore((s) => s.view);
   const desktopView = useStore((s) => s.desktopView);
   const binary = useStore((s) => s.binary);
@@ -104,6 +107,7 @@ export function App() {
       onLoading(handleLoading),
       onPendingClear(clearPending),
       onSessionsChanged(handleSessionsChanged),
+      onClosing(() => store.set({ closing: true })),
       onDesktopView((state) => store.set({ desktopView: state })),
       onBinaryProgress(setBinaryProgress),
       onDesktopUpdate(setSelfUpdate),
@@ -263,6 +267,7 @@ export function App() {
       <CatalogModal />
       <CommandPalette />
       <Toasts />
+      <ClosingOverlay active={closing} />
     </div>
   );
 }

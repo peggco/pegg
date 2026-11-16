@@ -2,10 +2,12 @@ package acpclient
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestReadFrame(t *testing.T) {
@@ -78,4 +80,13 @@ func TestInitializeResultPeggCapabilities(t *testing.T) {
 	if caps == nil || !caps.Ask || !caps.Terminals {
 		t.Fatalf("caps = %+v", caps)
 	}
+}
+
+func TestCloseWithContextUnstarted(t *testing.T) {
+	c := New(Options{})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	c.CloseWithContext(ctx)
+	c.CloseWithContext(nil)
+	c.Kill()
 }

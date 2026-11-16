@@ -125,6 +125,7 @@ func (c *Client) Start(ctx context.Context) error {
 		c.startFailed(err)
 		return err
 	}
+	prepareCommand(cmd)
 	if err := cmd.Start(); err != nil {
 		c.startFailed(err)
 		return err
@@ -513,6 +514,13 @@ func (c *Client) failAll(err error) {
 }
 
 func (c *Client) Close() {
+	c.CloseWithContext(context.Background())
+}
+
+func (c *Client) CloseWithContext(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	c.mu.Lock()
 	if !c.started {
 		c.mu.Unlock()
@@ -536,10 +544,25 @@ func (c *Client) Close() {
 		<-c.exitCh
 		close(done)
 	}()
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
-		_ = cmd.Process.Kill()
-		<-done
+		return
+	case <-timer.C:
+	case <-ctx.Done():
 	}
+	c.Kill()
+	select {
+	case <-done:
+	case <-time.After(250 * time.Millisecond):
+	case <-ctx.Done():
+	}
+}
+
+func (c *Client) Kill() {
+	c.mu.Lock()
+	cmd := c.cmd
+	c.mu.Unlock()
+	_ = forceKill(cmd)
 }

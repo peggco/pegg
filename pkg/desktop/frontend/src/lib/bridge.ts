@@ -317,6 +317,10 @@ export function onSessionsChanged(cb: () => void): Unsubscribe {
   return on("sessions:changed", cb);
 }
 
+export function onClosing(cb: () => void): Unsubscribe {
+  return on<boolean>("app:closing", () => cb());
+}
+
 export function onBinaryProgress(
   cb: (progress: BinaryProgress) => void,
 ): Unsubscribe {

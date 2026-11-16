@@ -20,3 +20,10 @@ func terminateProcess(cmd *exec.Cmd) error {
 	}
 	return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 }
+
+func forceKillProcess(cmd *exec.Cmd) error {
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
+	return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+}

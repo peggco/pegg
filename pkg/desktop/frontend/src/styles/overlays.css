@@ -420,3 +420,38 @@
     width: 132px;
   }
 }
+
+.closing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--pg-bg) 82%, transparent);
+  backdrop-filter: blur(10px);
+  animation: pg-closing-in 160ms var(--pg-ease);
+}
+
+.closing-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius-lg);
+  background: var(--pg-surface);
+  box-shadow: var(--pg-shadow-lg);
+  color: var(--pg-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+@keyframes pg-closing-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

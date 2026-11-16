@@ -170,6 +170,20 @@ Tool output follows the terminal UI's hierarchy instead of dumping everything:
 - `task` calls render as a single **TASK** card: name, subagent type, prompt, `background` badge, live activity, response preview, usage/duration, and an **Open history** action while running. The raw `task` tool row and the duplicate subagent card are no longer shown for task-launched subagents; fork subagents keep the standalone subagent card. Background continuations stream into the same thread when the subagent finishes.
 - Todo/plan writes render as an inline plan card at the latest `todowrite` in each message, replacing the tool row. Older updates in the same message collapse into that last card; a new todo list in a later message appears as its own card. The plan no longer sticks to the bottom of the chat or follows you into new messages.
 
+## Closing the app
+
+Closing the window no longer blocks on child-process teardown:
+
+- Window bounds and settings are written synchronously before cleanup starts, so the
+  next launch restores the same layout.
+- The ACP server, Connect, team, Pegg Forever, and plugin tasks are stopped in
+  parallel under a 2-second deadline.
+- If cleanup is still running after ~300 ms, a localized **Closing Pegg…** /
+  **Pegg kapatılıyor…** overlay with a spinner covers the window. Fast cleanups close
+  before the overlay ever appears.
+- At the deadline the remaining process groups are force-killed and the desktop exits
+  instead of leaving orphaned `pegg`, LSP, MCP, or plugin processes.
+
 ## Desktop updates
 
 Pegg Desktop checks for a newer release on startup and covers both binaries:
