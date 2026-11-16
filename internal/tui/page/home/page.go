@@ -525,6 +525,12 @@ func (p *Page) HandleKey(ev *tcell.EventKey) bool {
 			return true
 		}
 	}
+	if (ev.Key() == tcell.KeyLeft || ev.Key() == tcell.KeyRight) &&
+		ev.Modifiers()&tcell.ModShift != 0 && p.input.Empty() {
+		if p.chat.HandleKey(ev) {
+			return true
+		}
+	}
 	return p.input.HandleKey(ev)
 }
 

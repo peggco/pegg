@@ -2,6 +2,7 @@ package components
 
 import (
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -121,6 +122,11 @@ type Chat struct {
 	mouseDown  bool
 	mouseStart selPos
 	dragged    bool
+
+	hscroll         map[*ChatItem]int
+	itemMaxWidth    map[*ChatItem]int
+	itemTableBounds map[*ChatItem][]int
+	tableHintOn     bool
 }
 
 type selPos struct {
@@ -129,7 +135,15 @@ type selPos struct {
 }
 
 func NewChat() *Chat {
-	return &Chat{autoScroll: true, lastWidth: -1, follow: true, itemCursor: -1}
+	return &Chat{
+		autoScroll:      true,
+		lastWidth:       -1,
+		follow:          true,
+		itemCursor:      -1,
+		hscroll:         map[*ChatItem]int{},
+		itemMaxWidth:    map[*ChatItem]int{},
+		itemTableBounds: map[*ChatItem][]int{},
+	}
 }
 
 func (c *Chat) SetItems(items []*ChatItem) {
@@ -143,6 +157,14 @@ func (c *Chat) SetItems(items []*ChatItem) {
 	c.dirty = true
 	c.itemCursor = -1
 	c.selActive = false
+	c.resetTableScroll()
+}
+
+func (c *Chat) resetTableScroll() {
+	c.hscroll = map[*ChatItem]int{}
+	c.itemMaxWidth = map[*ChatItem]int{}
+	c.itemTableBounds = map[*ChatItem][]int{}
+	c.tableHintOn = false
 }
 
 func (c *Chat) sel() int {
@@ -189,6 +211,7 @@ func (c *Chat) Clear() {
 	c.itemCursor = -1
 	c.flat = nil
 	c.flatItems = nil
+	c.resetTableScroll()
 }
 
 func (c *Chat) HasItems() bool { return len(c.items) > 0 }
@@ -274,6 +297,16 @@ func (c *Chat) HandleKey(ev *tcell.EventKey) bool {
 	case tcell.KeyEnd:
 		c.follow = true
 		return true
+	case tcell.KeyLeft:
+		if ev.Modifiers()&tcell.ModShift != 0 {
+			return c.ScrollTableHorizontal(-1)
+		}
+		return false
+	case tcell.KeyRight:
+		if ev.Modifiers()&tcell.ModShift != 0 {
+			return c.ScrollTableHorizontal(1)
+		}
+		return false
 	case tcell.KeyEnter:
 		c.activateCursor()
 		return true
@@ -340,6 +373,146 @@ func (c *Chat) ScrollToBottom() {
 	c.follow = true
 	c.autoScroll = true
 	c.wasAtBottom = true
+}
+
+func (c *Chat) itemAtFlat(idx int) *ChatItem {
+	i := sort.Search(len(c.flatItems), func(i int) bool {
+		return c.flatItems[i].End > idx
+	})
+	if i >= len(c.flatItems) {
+		return nil
+	}
+	fi := c.flatItems[i]
+	if idx < fi.Start || fi.ItemIdx < 0 || fi.ItemIdx >= len(c.items) {
+		return nil
+	}
+	return c.items[fi.ItemIdx]
+}
+
+func (c *Chat) maxHScrollForItem(it *ChatItem) int {
+	if it == nil || c.lastWidth <= 0 {
+		return 0
+	}
+	maxW := c.itemMaxWidth[it]
+	if maxW <= c.lastWidth {
+		return 0
+	}
+	return maxW - c.lastWidth
+}
+
+func (c *Chat) hscrollFor(it *ChatItem) int {
+	if it == nil || c.hscroll == nil {
+		return 0
+	}
+	return ClampScroll(c.hscroll[it], c.maxHScrollForItem(it))
+}
+
+func (c *Chat) hscrollAtFlat(idx int) int {
+	return c.hscrollFor(c.itemAtFlat(idx))
+}
+
+func (c *Chat) activeWideItem() *ChatItem {
+	if c.itemCursor >= 0 && c.itemCursor < len(c.flatItems) {
+		it := c.items[c.flatItems[c.itemCursor].ItemIdx]
+		if c.maxHScrollForItem(it) > 0 {
+			return it
+		}
+	}
+	start := c.scroll
+	end := start + c.lastVisible
+	if c.lastVisible <= 0 {
+		end = len(c.flat)
+	}
+	for _, fi := range c.flatItems {
+		if fi.End <= start || fi.Start >= end {
+			continue
+		}
+		it := c.items[fi.ItemIdx]
+		if c.maxHScrollForItem(it) > 0 {
+			return it
+		}
+	}
+	return nil
+}
+
+func (c *Chat) ScrollTableHorizontal(delta int) bool {
+	if delta == 0 {
+		return false
+	}
+	it := c.activeWideItem()
+	if it == nil {
+		return false
+	}
+	maxOff := c.maxHScrollForItem(it)
+	if maxOff <= 0 {
+		return false
+	}
+	cur := c.hscrollFor(it)
+	next := c.snapTableOffset(it, cur, delta, maxOff)
+	if next == cur {
+		return false
+	}
+	if c.hscroll == nil {
+		c.hscroll = map[*ChatItem]int{}
+	}
+	c.hscroll[it] = next
+	c.dirty = true
+	return true
+}
+
+func (c *Chat) snapTableOffset(it *ChatItem, cur, delta, maxOff int) int {
+	bounds := c.itemTableBounds[it]
+	if len(bounds) == 0 {
+		step := c.lastWidth / 4
+		if step < 4 {
+			step = 4
+		}
+		return ClampScroll(cur+delta*step, maxOff)
+	}
+	if delta > 0 {
+		for _, b := range bounds {
+			if b > cur {
+				return ClampScroll(b, maxOff)
+			}
+		}
+		return maxOff
+	}
+	for i := len(bounds) - 1; i >= 0; i-- {
+		if bounds[i] < cur {
+			return ClampScroll(bounds[i], maxOff)
+		}
+	}
+	return 0
+}
+
+func (c *Chat) TableScrollState() (offset, max int, ok bool) {
+	it := c.activeWideItem()
+	if it == nil {
+		return 0, 0, false
+	}
+	return c.hscrollFor(it), c.maxHScrollForItem(it), true
+}
+
+func (c *Chat) TableHintVisible() bool { return c.tableHintOn }
+
+func tableColumnBounds(lines []Line) []int {
+	seen := map[int]bool{}
+	var bounds []int
+	for _, ln := range lines {
+		if len(ln) < 2 || ln[0].R != '│' || ln[1].R != ' ' || ln[len(ln)-1].R != '│' {
+			continue
+		}
+		col := 0
+		for _, cell := range ln {
+			if cell.R == '│' && !seen[col] {
+				seen[col] = true
+				bounds = append(bounds, col)
+			}
+			col += cellWidth(cell.R)
+		}
+	}
+	sort.Ints(bounds)
+	return bounds
 }
 
 func (c *Chat) setScroll(off int) {
@@ -419,6 +592,9 @@ func (c *Chat) posAt(x, y, top, left int) (selPos, bool) {
 	cell := x - (left + 1)
 	if cell < 0 {
 		cell = 0
+	}
+	if off := c.hscrollAtFlat(line); off > 0 && c.lastWidth > 0 && c.flat[line].Width() > c.lastWidth {
+		cell += off
 	}
 	return selPos{line: line, cell: cell}, true
 }
@@ -643,6 +819,8 @@ func (c *Chat) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 	}
 
 	selS, selE, hasSel := c.selectionBounds()
+	c.tableHintOn = false
+	tableOff, tableMax := 0, 0
 	for row := 0; row < visible; row++ {
 		idx := offset + row
 		if idx >= total {
@@ -659,7 +837,36 @@ func (c *Chat) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 		if hasSel {
 			line = c.applySelection(idx, line, selS, selE, th)
 		}
+		if rawWidth := line.Width(); rawWidth > innerW {
+			if it := c.itemAtFlat(idx); it != nil {
+				if maxOff := c.maxHScrollForItem(it); maxOff > 0 {
+					if maxOff > tableMax {
+						tableOff = c.hscrollFor(it)
+						tableMax = maxOff
+					}
+					if off := c.hscrollFor(it); off > 0 {
+						line = WindowLine(line, off, innerW)
+					}
+				}
+			}
+		}
 		DrawLineBounded(s, x+1, y, bounds.Left+bounds.Width, line)
+	}
+
+	if tableMax > 0 {
+		left, right := "", ""
+		if tableOff > 0 {
+			left = "← "
+		}
+		if tableOff < tableMax {
+			right = " →"
+		}
+		label := left + i18n.T("chat.table.scroll") + right
+		labelCells := LineFromSegments([]Segment{
+			{Text: " " + label + " ", Style: th.Base().Foreground(th.Accent).Background(th.Surface)},
+		}, DisplayWidth(label)+2)
+		DrawLineBounded(s, bounds.Left+1, bounds.Bottom()-1, bounds.Right(), labelCells)
+		c.tableHintOn = true
 	}
 
 	c.indicatorVisible = false
@@ -757,6 +964,22 @@ func (c *Chat) rebuildFlat(width int) {
 				c.cache[i] = lines
 			}
 		}
+		if it.Kind == ItemAssistant {
+			maxW := 0
+			for _, ln := range lines {
+				if w := ln.Width(); w > maxW {
+					maxW = w
+				}
+			}
+			if c.itemMaxWidth == nil {
+				c.itemMaxWidth = map[*ChatItem]int{}
+			}
+			if c.itemTableBounds == nil {
+				c.itemTableBounds = map[*ChatItem][]int{}
+			}
+			c.itemMaxWidth[it] = maxW
+			c.itemTableBounds[it] = tableColumnBounds(lines)
+		}
 		if len(lines) > 0 {
 			c.flatItems = append(c.flatItems, flatItem{
 				ItemIdx: i,
@@ -851,6 +1074,9 @@ func (c *Chat) itemLines(it *ChatItem, width int) []Line {
 		lines = WrapSegments([]Segment{
 			{Text: "  " + it.Text, Style: th.Base().Foreground(th.Warning).Background(th.Background)},
 		}, width)
+	}
+	if it.Kind == ItemAssistant {
+		return lines
 	}
 	return clipLinesToWidth(lines, width)
 }

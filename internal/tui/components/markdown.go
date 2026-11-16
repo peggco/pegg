@@ -225,17 +225,13 @@ func processTable(n *extast.Table, source []byte) []MdLine {
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		switch row := c.(type) {
 		case *extast.TableHeader:
-			for tr := row.FirstChild(); tr != nil; tr = tr.NextSibling() {
-				if tableRow, ok := tr.(*extast.TableRow); ok {
-					var cells []string
-					for cell := tableRow.FirstChild(); cell != nil; cell = cell.NextSibling() {
-						if tc, ok := cell.(*extast.TableCell); ok {
-							cells = append(cells, extractCellText(tc, source))
-						}
-					}
-					allRows = append(allRows, cells)
+			var cells []string
+			for cell := row.FirstChild(); cell != nil; cell = cell.NextSibling() {
+				if tc, ok := cell.(*extast.TableCell); ok {
+					cells = append(cells, extractCellText(tc, source))
 				}
 			}
+			allRows = append(allRows, cells)
 		case *extast.TableRow:
 			var cells []string
 			for cell := row.FirstChild(); cell != nil; cell = cell.NextSibling() {
@@ -261,8 +257,8 @@ func processTable(n *extast.Table, source []byte) []MdLine {
 	colWidths := make([]int, colCount)
 	for _, row := range allRows {
 		for i, cell := range row {
-			if i < colCount && len(cell) > colWidths[i] {
-				colWidths[i] = len(cell)
+			if i < colCount && DisplayWidth(cell) > colWidths[i] {
+				colWidths[i] = DisplayWidth(cell)
 			}
 		}
 	}
@@ -280,7 +276,7 @@ func processTable(n *extast.Table, source []byte) []MdLine {
 			if i < len(row) {
 				cell = row[i]
 			}
-			padded[i] = padRight(cell, colWidths[i])
+			padded[i] = padRightDisplay(cell, colWidths[i])
 		}
 		lines = append(lines, MdLine{
 			Table:    true,
@@ -303,11 +299,12 @@ func processTable(n *extast.Table, source []byte) []MdLine {
 	return lines
 }
 
-func padRight(s string, width int) string {
-	if len(s) >= width {
+func padRightDisplay(s string, width int) string {
+	w := DisplayWidth(s)
+	if w >= width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	return s + strings.Repeat(" ", width-w)
 }
 
 func extractCellText(n gast.Node, source []byte) string {
@@ -640,19 +637,31 @@ func renderTableLine(ln MdLine, th styles.Theme, width int) []Line {
 	baseStyle := th.Base().Background(th.Background)
 	borderStyle := baseStyle.Foreground(th.Border)
 
+	lineWidth := DisplayWidth(text)
+	if lineWidth < 1 {
+		lineWidth = 1
+	}
+	target := width
+	if lineWidth > target {
+		target = lineWidth
+	}
+	segs := []Segment{{Text: text, Style: baseStyle}}
+	if lineWidth < width {
+		segs = append(segs, Segment{Text: strings.Repeat(" ", width-lineWidth), Style: baseStyle})
+	}
+
 	if ln.Hr {
-		return []Line{LineFromSegments(padToWidth([]Segment{{Text: text, Style: borderStyle}}, width, baseStyle), width)}
+		segs[0].Style = borderStyle
+		return []Line{LineFromSegments(segs, target)}
 	}
 
 	if ln.TableRow {
-		segStyle := baseStyle.Foreground(th.Accent).Bold(true)
-		seg := Segment{Text: text, Style: segStyle}
-		return []Line{LineFromSegments(padToWidth([]Segment{seg}, width, baseStyle), width)}
+		segs[0].Style = baseStyle.Foreground(th.Accent).Bold(true)
+		return []Line{LineFromSegments(segs, target)}
 	}
 
-	segStyle := baseStyle.Foreground(th.Foreground)
-	seg := Segment{Text: text, Style: segStyle}
-	return []Line{LineFromSegments(padToWidth([]Segment{seg}, width, baseStyle), width)}
+	segs[0].Style = baseStyle.Foreground(th.Foreground)
+	return []Line{LineFromSegments(segs, target)}
 }
 
 func renderProseLine(ln MdLine, th styles.Theme, width int) []Line {
