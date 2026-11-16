@@ -160,7 +160,7 @@ The desktop settings page mirrors the TUI settings layout, backed by the same `~
 
 Theme and model changes apply immediately; section edits have an explicit save action so presets can be reviewed before writing.
 
-The desktop interface supports English (default) and Turkish. Choose the language in Settings → General; the same `language` value is stored in `~/.pegg/pegg.json` and shared with the TUI.
+The desktop interface supports English (default) and Turkish. Choose the language in Settings → General; the same `language` value is stored in `~/.pegg/pegg.json` and shared with the TUI. Both catalogs follow the same terminology and address style, documented in [Localization](../localization.md).
 
 ## Tool cards
 

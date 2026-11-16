@@ -268,7 +268,7 @@ to choose it, click the field to place the cursor, or click outside to go back.
 
 | Tab | Contents |
 |---|---|
-| **General** | Provider (add or reconfigure), Model (searchable list), STT provider, STT model, Theme, Reasoning effort |
+| **General** | Provider (add or reconfigure), Model (searchable list), STT provider, STT model, Theme, Language, Reasoning effort |
 | **Session** | Load/New/Delete session, Change title, Compaction settings |
 | **MCP** | Connected MCP servers (stdio, SSE, Streamable HTTP) and their tools |
 | **Skills** | Loaded skills with descriptions |
@@ -293,6 +293,9 @@ to choose it, click the field to place the cursor, or click outside to go back.
   models show a muted **stream** label on the right; choosing one makes Pegg use
   streaming automatically. Selecting a model enables voice input.
 - **Reasoning** — available only for models that advertise reasoning options.
+- **Language** — switch between English and Turkish. The choice is saved as the
+  shared `language` value and also applies to Pegg Desktop; see
+  [Localization](../localization.md).
 - **Session → Load** — sessions from the current directory, newest first. Loading
   restores the last 50 messages; scrolling to the top loads older messages in
   batches of 50.
