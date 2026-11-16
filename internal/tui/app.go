@@ -870,8 +870,11 @@ func newSettingsOverlay(a *App) *settings.Settings {
 		}
 		a.requestRedraw()
 		if a.deps.Config != nil {
+			previous := a.deps.Config.Language
 			a.deps.Config.Language = i18n.Current()
-			go config.SaveLanguage(i18n.Current())
+			if err := config.SaveLanguage(i18n.Current()); err != nil {
+				a.deps.Config.Language = previous
+			}
 		}
 	})
 	s.SetOnRequestUpdate(func() {

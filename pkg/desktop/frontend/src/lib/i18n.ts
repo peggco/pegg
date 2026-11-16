@@ -1,4 +1,4 @@
-import { useStore } from "../state/store";
+import { store, useStore } from "../state/store";
 
 export type Lang = "en" | "tr";
 
@@ -6,6 +6,52 @@ export const LANGUAGES: Array<{ code: Lang; label: string }> = [
   { code: "en", label: "English" },
   { code: "tr", label: "Türkçe" },
 ];
+
+export const LANGUAGE_STORAGE = "pegg.language";
+
+export function normalizeLanguage(value: string | null | undefined): Lang {
+  return value === "tr" ? "tr" : "en";
+}
+
+function languageStorage(): Storage | undefined {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function readStoredLanguage(): Lang | undefined {
+  try {
+    const stored = languageStorage()?.getItem(LANGUAGE_STORAGE);
+    return stored === "en" || stored === "tr" ? stored : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function persistLanguage(language: Lang): void {
+  try {
+    languageStorage()?.setItem(LANGUAGE_STORAGE, language);
+  } catch {
+    return;
+  }
+}
+
+export function applyLanguage(language: string | null | undefined): Lang {
+  const next = normalizeLanguage(language);
+  store.set({ language: next });
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = next;
+  }
+  return next;
+}
+
+export function setLanguage(language: string | null | undefined): Lang {
+  const next = applyLanguage(language);
+  persistLanguage(next);
+  return next;
+}
 
 export const en: Record<string, string> = {
   "nav.newChat": "New chat",
@@ -231,6 +277,48 @@ export const en: Record<string, string> = {
   "settings.systemGroup": "System",
   "settings.language": "Language",
   "settings.languageDesc": "Interface language for the desktop app.",
+  "settings.generalDesc":
+    "Model, language, and voice input. Model changes apply to the current session immediately.",
+  "settings.modelTitle": "Model",
+  "settings.provider": "Provider",
+  "settings.model": "Model",
+  "settings.reasoningEffort": "Reasoning effort",
+  "settings.reasoningEffortHint": "Provider-supported effort levels for this model.",
+  "settings.reasoningEffortUnsupported":
+    "This model does not declare reasoning effort options.",
+  "settings.default": "Default",
+  "settings.noProviders": "No providers configured",
+  "settings.providerDefault": "Provider default",
+  "settings.providersTitle": "Providers",
+  "settings.addProvider": "Add provider",
+  "settings.modelCount": "{count} model",
+  "settings.modelCountPlural": "{count} models",
+  "settings.removeProvider": "Remove {name}",
+  "settings.noProvidersHint":
+    "No providers configured. Add one to start a session.",
+  "settings.providerRemoved": "{name} removed",
+  "settings.sttTitle": "Speech-to-text providers",
+  "settings.addSttProvider": "Add STT provider",
+  "settings.sttEmpty": "No speech-to-text providers found.",
+  "settings.configured": "configured",
+  "settings.notConfigured": "not configured",
+  "settings.voiceInput": "Voice input",
+  "settings.sttProvider": "Speech-to-text provider",
+  "settings.sttModel": "Speech-to-text model",
+  "settings.sttNotConfigured": "Not configured",
+  "settings.recordCommand": "Record command",
+  "settings.recordCommandHint":
+    "Optional custom recorder. Leave empty to use the platform default.",
+  "settings.recordCommandPlaceholder":
+    "e.g. arecord -q -f S16_LE -r 16000 -c 1 -t wav",
+  "settings.maxDuration": "Max recording duration",
+  "settings.maxDurationHint": "Seconds before the microphone stops.",
+  "settings.sttCredentialsNote":
+    "STT credentials are managed by the Pegg CLI/config.",
+  "settings.sttNoProvider":
+    "No speech-to-text provider is configured. Run `pegg login` or set stt in ~/.pegg/pegg.json.",
+  "settings.languageSaveFailed": "Could not save the language: {error}",
+  "settings.generalSaved": "General settings saved",
   "settings.team": "Team & Connect",
   "settings.teamGroup": "Team",
   "team.description":
@@ -596,6 +684,49 @@ export const tr: Record<string, string> = {
   "settings.systemGroup": "Sistem",
   "settings.language": "Dil",
   "settings.languageDesc": "Masaüstü uygulamasının arayüz dili.",
+  "settings.generalDesc":
+    "Model, dil ve sesli giriş. Model değişiklikleri geçerli oturuma hemen uygulanır.",
+  "settings.modelTitle": "Model",
+  "settings.provider": "Sağlayıcı",
+  "settings.model": "Model",
+  "settings.reasoningEffort": "Akıl yürütme düzeyi",
+  "settings.reasoningEffortHint":
+    "Bu model için sağlayıcının desteklediği düzeyler.",
+  "settings.reasoningEffortUnsupported":
+    "Bu model akıl yürütme düzeyi seçenekleri tanımlamıyor.",
+  "settings.default": "Varsayılan",
+  "settings.noProviders": "Yapılandırılmış sağlayıcı yok",
+  "settings.providerDefault": "Sağlayıcı varsayılanı",
+  "settings.providersTitle": "Sağlayıcılar",
+  "settings.addProvider": "Sağlayıcı ekle",
+  "settings.modelCount": "{count} model",
+  "settings.modelCountPlural": "{count} model",
+  "settings.removeProvider": "{name} kaldır",
+  "settings.noProvidersHint":
+    "Yapılandırılmış sağlayıcı yok. Oturum başlatmak için bir tane ekleyin.",
+  "settings.providerRemoved": "{name} kaldırıldı",
+  "settings.sttTitle": "Konuşma-metin sağlayıcıları",
+  "settings.addSttProvider": "STT sağlayıcısı ekle",
+  "settings.sttEmpty": "Konuşma-metin sağlayıcısı bulunamadı.",
+  "settings.configured": "yapılandırıldı",
+  "settings.notConfigured": "yapılandırılmadı",
+  "settings.voiceInput": "Sesli giriş",
+  "settings.sttProvider": "Konuşma-metin sağlayıcısı",
+  "settings.sttModel": "Konuşma-metin modeli",
+  "settings.sttNotConfigured": "Yapılandırılmadı",
+  "settings.recordCommand": "Kayıt komutu",
+  "settings.recordCommandHint":
+    "İsteğe bağlı özel kayıt aracı. Platform varsayılanı için boş bırakın.",
+  "settings.recordCommandPlaceholder":
+    "ör. arecord -q -f S16_LE -r 16000 -c 1 -t wav",
+  "settings.maxDuration": "Azami kayıt süresi",
+  "settings.maxDurationHint": "Mikrofonun duracağı saniye sayısı.",
+  "settings.sttCredentialsNote":
+    "STT kimlik bilgileri Pegg CLI/yapılandırması tarafından yönetilir.",
+  "settings.sttNoProvider":
+    "Konuşma-metin sağlayıcısı yapılandırılmamış. `pegg login` çalıştırın veya ~/.pegg/pegg.json içinde stt ayarlayın.",
+  "settings.languageSaveFailed": "Dil kaydedilemedi: {error}",
+  "settings.generalSaved": "Genel ayarlar kaydedildi",
   "settings.team": "Ekip ve bağlantı",
   "settings.teamGroup": "Ekip",
   "team.description":

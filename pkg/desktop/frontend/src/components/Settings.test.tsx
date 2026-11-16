@@ -15,6 +15,8 @@ const {
   onPeggStatus,
   pluginSettingsPages,
   pluginSettingsAction,
+  saveGeneralSettings,
+  saveLanguage,
 } = vi.hoisted(() => ({
   settingsSnapshot: vi.fn(),
   providerCatalog: vi.fn(),
@@ -29,6 +31,8 @@ const {
   onPeggStatus: vi.fn(),
   pluginSettingsPages: vi.fn(),
   pluginSettingsAction: vi.fn(),
+  saveGeneralSettings: vi.fn(),
+  saveLanguage: vi.fn(),
 }));
 
 vi.mock('../lib/bridge', () => ({
@@ -43,7 +47,8 @@ vi.mock('../lib/bridge', () => ({
     ListModels: listModels,
     ProviderSetup: providerSetup,
     OpenExternal: openExternal,
-    SaveGeneralSettings: vi.fn(async () => undefined),
+    SaveGeneralSettings: saveGeneralSettings,
+    SaveLanguage: saveLanguage,
     RemoveProvider: vi.fn(async () => undefined),
     PluginSettingsPages: pluginSettingsPages,
     PluginSettingsRefresh: pluginSettingsPages,
@@ -54,6 +59,7 @@ vi.mock('../lib/bridge', () => ({
 }));
 
 import { Settings } from './Settings';
+import { LANGUAGE_STORAGE } from '../lib/i18n';
 import { store } from '../state/store';
 import type { ForeverStatus, SettingsSnapshot } from '../types';
 
@@ -66,7 +72,10 @@ function snapshot(): SettingsSnapshot {
       model: '',
       reasoningEffort: '',
       language: 'en',
-      languages: [{ code: 'en', label: 'English' }],
+      languages: [
+        { code: 'en', label: 'English' },
+        { code: 'tr', label: 'Türkçe' },
+      ],
       providers: [],
       stt: {
         providers: [],
@@ -106,6 +115,10 @@ beforeEach(() => {
   openExternal.mockResolvedValue(undefined);
   pluginSettingsPages.mockResolvedValue([]);
   pluginSettingsAction.mockResolvedValue({ output: 'ok' });
+  saveGeneralSettings.mockResolvedValue(undefined);
+  saveLanguage.mockResolvedValue(undefined);
+  window.localStorage.clear();
+  document.documentElement.lang = 'en';
   store.set({
     language: 'en',
     settingsOpen: true,
@@ -197,6 +210,30 @@ describe('Settings provider onboarding', () => {
         'openai',
         'sk-custom',
         'https://gateway.example.com/v1',
+      ),
+    );
+  });
+});
+
+describe('Settings language', () => {
+  it('applies and persists a selected language immediately', async () => {
+    render(<Settings />);
+
+    const select = await screen.findByRole('combobox', { name: 'Language' });
+    fireEvent.change(select, { target: { value: 'tr' } });
+
+    expect(store.get().language).toBe('tr');
+    expect(document.documentElement.lang).toBe('tr');
+    expect(window.localStorage.getItem(LANGUAGE_STORAGE)).toBe('tr');
+    await waitFor(() => expect(saveLanguage).toHaveBeenCalledWith('tr'));
+
+    const save = await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    expect(screen.getByText('Dil')).toBeTruthy();
+
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(saveGeneralSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ language: 'tr' }),
       ),
     );
   });

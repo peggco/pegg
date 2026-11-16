@@ -754,12 +754,35 @@ func (a *App) RemoveSTTProvider(name string) error {
 	return config.Save(cfg)
 }
 
+func (a *App) SaveLanguage(language string) error {
+	language = strings.TrimSpace(language)
+	if language == "" {
+		return fmt.Errorf("language is required")
+	}
+	if !supportedLanguage(language) {
+		return fmt.Errorf("unsupported language %q", language)
+	}
+	return config.SaveLanguage(language)
+}
+
+func supportedLanguage(language string) bool {
+	for _, code := range i18n.Names() {
+		if code == language {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *App) SaveGeneralSettings(g GeneralSettings) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
 	if g.Language != "" {
+		if !supportedLanguage(g.Language) {
+			return fmt.Errorf("unsupported language %q", g.Language)
+		}
 		cfg.Language = g.Language
 	}
 	if cfg.STT == nil {

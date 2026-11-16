@@ -56,6 +56,7 @@ export function App() {
   const providerSetup = useStore((s) => s.providerSetup);
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const prefs = useStore((s) => s.prefs);
+  const language = useStore((s) => s.language);
   const subagentView = useStore((s) => s.subagentView);
   const asks = useStore((s) => s.chat.asks);
   const platform = useStore((s) => s.boot?.platform ?? 'linux');
@@ -71,6 +72,10 @@ export function App() {
   useEffect(() => {
     document.documentElement.dir = prefs.direction;
   }, [prefs.direction]);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   useEffect(() => {
     void bootstrap();

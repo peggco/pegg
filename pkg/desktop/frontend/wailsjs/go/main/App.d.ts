@@ -164,6 +164,8 @@ export function SaveCopy(arg1:string,arg2:string):Promise<string>;
 
 export function SaveGeneralSettings(arg1:main.GeneralSettings):Promise<void>;
 
+export function SaveLanguage(arg1:string):Promise<void>;
+
 export function SaveMemorySettings(arg1:main.MemorySettings):Promise<void>;
 
 export function SavePermissionSettings(arg1:main.PermissionsSettings):Promise<void>;
