@@ -31,6 +31,7 @@ const fetchEntry = vi.mocked(actions.fetchCatalogEntry);
 const fetchReadme = vi.mocked(actions.fetchCatalogReadme);
 const installMCP = vi.mocked(actions.installCatalogMCP);
 const installSkill = vi.mocked(actions.installHubSkill);
+const installPlugin = vi.mocked(actions.installCatalogPlugin);
 
 const SKILL: CatalogItem = {
   kind: 'skills',
@@ -54,6 +55,17 @@ const MCP: CatalogItem = {
   transport: 'stdio',
 };
 
+const PLUGIN: CatalogItem = {
+  kind: 'plugins',
+  id: 'kanban',
+  name: 'Kanban',
+  description: 'Local kanban board.',
+  source: 'pegg/plugins',
+  url: '',
+  official: true,
+  version: '1.0.0',
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   search.mockResolvedValue({ items: [], nextCursor: null });
@@ -61,6 +73,7 @@ beforeEach(() => {
   fetchReadme.mockResolvedValue('');
   installMCP.mockResolvedValue({});
   installSkill.mockResolvedValue({});
+  installPlugin.mockResolvedValue({});
   store.set({ language: 'en', catalogOpen: true, catalogTab: 'skills' });
 });
 
@@ -146,5 +159,22 @@ describe('CatalogModal', () => {
     await waitFor(() =>
       expect(installMCP).toHaveBeenCalledWith('github', { GITHUB_TOKEN: 'ghp_secret' }, {}, 'global'),
     );
+  });
+
+  it('installs a plugin immediately without a confirmation step', async () => {
+    store.set({ catalogTab: 'plugins' });
+    search.mockResolvedValue({ items: [PLUGIN], nextCursor: null });
+    fetchEntry.mockResolvedValue({ ...PLUGIN } as CatalogEntry);
+    const { container, getByText, queryByText } = render(<CatalogModal />);
+
+    await waitFor(() => expect(getByText('Kanban')).not.toBeNull());
+    fireEvent.click(getByText('Kanban'));
+
+    await waitFor(() => expect(fetchEntry).toHaveBeenCalledWith('plugins', 'kanban'));
+
+    fireEvent.click(container.querySelector('.hub-install-bar .btn.primary') as HTMLElement);
+
+    await waitFor(() => expect(installPlugin).toHaveBeenCalledWith('pegg/plugins', 'Kanban'));
+    expect(queryByText('Confirm')).toBeNull();
   });
 });

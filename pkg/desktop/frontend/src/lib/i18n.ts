@@ -90,8 +90,6 @@ const en: Record<string, string> = {
   "catalog.kind.mcp": "MCP",
   "catalog.kind.plugins": "Plugins",
   "catalog.restartRequired": "Restart Pegg Desktop to activate the change.",
-  "catalog.pluginConfirm": "Install plugin {name} from its GitHub release?",
-  "catalog.confirm": "Confirm",
   "catalog.docs": "Provider docs",
   "catalog.envTitle": "Required environment",
   "catalog.envHint":
@@ -452,8 +450,6 @@ const tr: Record<string, string> = {
   "catalog.kind.plugins": "Eklentiler",
   "catalog.restartRequired":
     "Değişikliği etkinleştirmek için Pegg Desktop'ı yeniden başlatın.",
-  "catalog.pluginConfirm": "{name} eklentisi GitHub sürümünden kurulsun mu?",
-  "catalog.confirm": "Onayla",
   "catalog.docs": "Sağlayıcı belgeleri",
   "catalog.envTitle": "Gerekli ortam değişkenleri",
   "catalog.envHint":
