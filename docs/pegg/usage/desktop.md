@@ -148,9 +148,9 @@ The desktop settings page mirrors the TUI settings layout, backed by the same `~
 - **Permissions** — Auto/Manual/Judge/Recommended presets, per-tool rules, judge provider/model/threshold.
 - **Memory** — enable/consolidate, gate, threshold, context budget, max results, entry stats.
 - **MCP** — configured stdio, SSE, and Streamable HTTP servers with their transport labels, plus a link to the config file.
-- **Skills** — global, project, and plugin-provided skills with reveal actions; the same list feeds the composer `/` skill menu. Plugin skills appear after the agent has loaded the plugin, so restart the desktop once after installing a plugin.
+- **Skills** — global, project, and plugin-provided skills with reveal actions; the same list feeds the composer `/` skill menu. Plugin skills appear after the agent has loaded the plugin; installing or updating a plugin restarts the agent automatically.
 - **Rules** — global/project Markdown rules with a preview.
-- **Plugins** — installed plugins with per-plugin enable/disable.
+- **Plugins** — installed plugins with per-plugin enable/disable, the runtime boot result reported by the agent, the hooks each plugin registered, and the load error when a plugin failed to boot. Enabling, disabling, installing or updating a plugin restarts the agent process, so the new plugin set takes effect without relaunching the app.
 - **Plugin pages** — plugins that expose a TUI page (for example Kanban and Notify) appear as their own sidebar entries. Each page renders the plugin's sections, status badges, and actions; actions with fields open a form, and destructive actions ask for confirmation. Pages are loaded through the same generic hook the TUI uses, so no plugin-specific desktop code is required.
 - **System** — desktop/agent versions, binary resolution and updates, runtime paths, and logs.
 
@@ -267,9 +267,24 @@ pkg/desktop/
 
 Streaming updates are coalesced in Go (16 ms) and delivered to the UI as one `acp:update` event per frame, which keeps token streaming smooth without React state churn.
 
+The Desktop never runs agent work in the GUI process. It spawns
+`pegg serve --acp --stdio` in the current workspace and forwards chat to it, so the
+agent uses exactly the same bootstrap, plugin loading and hook registry as the TUI and
+CLI. The child is restarted when the workspace changes or when plugins are installed,
+updated, enabled or disabled.
+
+Because a desktop launcher (`.desktop`, `launchd`, `systemd`) does not read shell rc
+files, the GUI hydrates the agent environment from the user's login shell on startup:
+`PATH` is extended with the shell's entries and missing git-host credential variables
+(`GH_TOKEN`, `GITHUB_TOKEN`, `PEGG_GITHUB_*`, and the GitLab/Jira/Bitbucket
+equivalents) are imported. This keeps `gh auth token` and repository detection working
+the same way they do from the TUI. Set `PEGG_SHELL_ENV=0` to skip the login-shell
+probe, for example when a profile is slow or produces side effects.
+
 ## Troubleshooting
 
 - **"Could not load sessions"** — check ~/.config/pegg/desktop.log. Session usage costs are decoded as numbers; older builds that expected an object fail here.
 - **No models** — configure a provider with `pegg login` or the Pegg config, then reopen the model menu.
 - **Blank window on Linux** — confirm WebKitGTK 4.1 is installed and rebuild with `-tags webkit2_41`.
+- **Kanban GitHub integration inactive** — open Settings → Plugins and check the plugin row. A `failed` badge carries the boot error. If `gh` is not on the login-shell `PATH`, set `plugins.options["kanban-github"].token` or export `PEGG_GITHUB_TOKEN` and restart the desktop. Toggling the plugin restarts the agent, so a fixed `PATH` takes effect without relaunching.
 - **KDE window stays on top** — window rules from an earlier session can persist. Remove the rule for `pegg-desktop` in System Settings → Window Management → Window Rules; the app itself never sets always-on-top.

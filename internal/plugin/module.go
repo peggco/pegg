@@ -1,6 +1,9 @@
 package plugin
 
 import (
+	"os/exec"
+	"strings"
+
 	"github.com/peggco/pegg/internal/core/cache"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
@@ -31,6 +34,8 @@ func Module(
 
 	mgr := NewManager(log, cfg, bus, cacheStore, llmMgr, sess, fs, mcpMgr, lspMgr)
 	mgr.SetExcludedPlugins(pluginCfg.Exclude)
+	log.Fdebug("plugin: loading from %s (excluded: %s, gh: %s)",
+		pluginDirForLog(), excludedForLog(pluginCfg.Exclude), ghForLog())
 
 	if err := mgr.LoadPlugins(); err != nil {
 		log.Fwarn("plugin: failed to load plugins: %v", err)
@@ -45,4 +50,27 @@ func Module(
 	}
 
 	return mgr, nil
+}
+
+func pluginDirForLog() string {
+	dir, err := GetPluginDir()
+	if err != nil {
+		return "(unknown)"
+	}
+	return dir
+}
+
+func excludedForLog(exclude []string) string {
+	if len(exclude) == 0 {
+		return "none"
+	}
+	return strings.Join(exclude, ",")
+}
+
+func ghForLog() string {
+	path, err := exec.LookPath("gh")
+	if err != nil {
+		return "not found on PATH"
+	}
+	return path
 }

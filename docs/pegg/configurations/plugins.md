@@ -141,12 +141,30 @@ still available.
 1. At startup, after all core modules are initialized, Pegg scans the plugin
    directory for executables.
 2. Each executable is launched as a separate process via
-   [HashiCorp go-plugin](https://github.com/hashicorp/go-plugin).
+   [HashiCorp go-plugin](https://github.com/hashicorp/go-plugin). The plugin process
+   inherits Pegg's environment and runs with the workspace as its working directory,
+   so repository detection and credential lookups match the surface that started it.
 3. The plugin's `Boot` method receives the application config and its
    `plugins.options` entry.
 4. Tool bundles are activated lazily when a skill with `tools: <bundle>` is loaded.
-5. If a plugin fails to load, a warning is logged and Pegg continues normally.
-6. On shutdown, plugin processes receive a close request and are then terminated.
+5. Each boot result is recorded. A summary line (`plugin: boot complete: N loaded,
+   M failed`) is logged, every registered hook is logged at debug level, and failures
+   are reported with the plugin name and error.
+6. If a plugin fails to load, a warning is logged and Pegg continues normally. The
+   plugin's row in the Desktop settings shows the failure and its error.
+7. On shutdown, plugin processes receive a close request and are then terminated.
+
+The live runtime state is available to clients through the ACP `_pegg/plugins`
+extension method, and to humans through `pegg plugins list --runtime` and
+`pegg hooks list`.
+
+### Environment from GUI launches
+
+A process launched from a desktop environment does not inherit shell rc exports. When
+Pegg Desktop starts, it probes the user's login shell once and merges the shell `PATH`
+plus git-host credential variables (`GH_TOKEN`, `GITHUB_TOKEN`, `PEGG_GITHUB_*`,
+`PEGG_JIRA_TOKEN`, `PEGG_BITBUCKET_*`) into the environment used by the agent and its
+plugin processes. Set `PEGG_SHELL_ENV=0` to disable the probe.
 
 ## Scaffolding
 

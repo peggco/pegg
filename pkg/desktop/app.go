@@ -81,11 +81,12 @@ type App struct {
 	binary     binary.Status
 	selfUpdate *selfupdate.Manager
 
-	mu       sync.Mutex
-	client   *acpclient.Client
-	clientAt string
-	initRes  *acpclient.InitializeResult
-	closing  bool
+	mu            sync.Mutex
+	client        *acpclient.Client
+	clientAt      string
+	clientStartMu sync.Mutex
+	initRes       *acpclient.InitializeResult
+	closing       bool
 
 	sessionsMu sync.Mutex
 	sessions   map[string]*SessionInfo
@@ -367,6 +368,7 @@ func (a *App) OpenWorkspace(path string) (string, error) {
 		return "", err
 	}
 	resetFileIndex()
+	a.resetClient()
 	if err := a.prefs.TouchWorkspace(abs, workspace.Name(abs)); err != nil {
 		return "", err
 	}

@@ -6,6 +6,7 @@ import (
 	"embed"
 	"log"
 
+	"github.com/peggco/pegg/internal/core/env"
 	"github.com/peggco/pegg/pkg/desktop/internal/prefs"
 	"github.com/peggco/pegg/pkg/desktop/internal/themes"
 
@@ -22,7 +23,11 @@ var assets embed.FS
 var appIcon []byte
 
 func main() {
+	envChanged := env.Apply()
 	app := NewApp()
+	if len(envChanged) > 0 {
+		app.logf("env: hydrated from login shell: %v", envChanged)
+	}
 	window := prefs.Window{Width: 1280, Height: 840}
 	dark := false
 	if store, err := prefs.Load(); err == nil {

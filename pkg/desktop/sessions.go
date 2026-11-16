@@ -24,21 +24,42 @@ const (
 )
 
 func (a *App) ensureClient() (*acpclient.Client, error) {
+	cwd := a.currentWorkspace()
+	if _, err := workspace.Valid(cwd); err != nil {
+		cwd, _ = os.UserHomeDir()
+	}
+
 	a.mu.Lock()
-	if a.client != nil && a.client.Running() {
+	if a.closing {
+		a.mu.Unlock()
+		return nil, errors.New("app is shutting down")
+	}
+	if a.client != nil && a.client.Running() && a.clientAt == cwd {
 		c := a.client
 		a.mu.Unlock()
 		return c, nil
 	}
+	stale := a.client
+	a.client = nil
+	a.clientAt = ""
 	a.mu.Unlock()
+	if stale != nil {
+		a.logf("acp: restarting agent for workspace %s", cwd)
+		stale.Close()
+	}
+
+	a.clientStartMu.Lock()
+	defer a.clientStartMu.Unlock()
 
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.client != nil && a.client.Running() {
-		return a.client, nil
-	}
 	if a.closing {
+		a.mu.Unlock()
 		return nil, errors.New("app is shutting down")
+	}
+	if a.client != nil && a.client.Running() && a.clientAt == cwd {
+		c := a.client
+		a.mu.Unlock()
+		return c, nil
 	}
 	st := a.binary
 	if !st.Found {
@@ -46,12 +67,9 @@ func (a *App) ensureClient() (*acpclient.Client, error) {
 		st = binary.Resolve(context.Background(), p.BinaryPath, p.Workspace)
 		a.binary = st
 	}
+	a.mu.Unlock()
 	if !st.Found {
 		return nil, fmt.Errorf("pegg binary not found: %s", st.Error)
-	}
-	cwd := a.currentWorkspace()
-	if _, err := workspace.Valid(cwd); err != nil {
-		cwd, _ = os.UserHomeDir()
 	}
 	client := acpclient.New(acpclient.Options{
 		Binary:  st.Path,
@@ -98,11 +116,31 @@ func (a *App) ensureClient() (*acpclient.Client, error) {
 		client.Close()
 		return nil, fmt.Errorf("initialize response: %w", err)
 	}
+	a.mu.Lock()
+	if a.closing {
+		a.mu.Unlock()
+		client.Close()
+		return nil, errors.New("app is shutting down")
+	}
 	a.client = client
 	a.clientAt = cwd
 	a.initRes = &initRes
+	a.mu.Unlock()
 	a.logf("acp initialized: %+v", initRes.AgentInfo)
 	return client, nil
+}
+
+func (a *App) resetClient() {
+	a.mu.Lock()
+	client := a.client
+	a.client = nil
+	a.clientAt = ""
+	a.initRes = nil
+	a.mu.Unlock()
+	if client != nil {
+		a.logf("acp: resetting agent client")
+		client.Close()
+	}
 }
 
 func (a *App) Capabilities() *acpclient.PeggCapabilities {
