@@ -52,10 +52,11 @@ The installable zip is in `pkg/intellij/build/distributions/`.
 
 ## Tool window
 
-The Pegg tool window has two tabs:
+The Pegg tool window has three tabs:
 
 - **Pegg** — the chat, composer, plan, and approvals.
 - **Sessions** — session history shared with the CLI and VS Code.
+- **Pages** — plugin pages such as the kanban board.
 
 The chat tab is the same shared `pkg/chat-ui` renderer as the VS Code extension, rendered with JCEF. It
 supports streaming markdown, syntax highlighting, reasoning, tool cards with
@@ -67,6 +68,18 @@ an exit-code footer. Unified **TASK** cards with live activity, a response previ
 usage/duration and an in-place transcript while running, fork-subagent cards,
 inline plan cards at the latest todo write per message, usage and cost,
 permission cards, and ask-user forms.
+
+### Plugin pages
+
+The **Pages** tab renders plugin-provided pages with JCEF using the same shared
+board renderer as the desktop app. It shows toolbar actions, metrics, board
+columns, channels, lists, settings, and per-card edit, run, and delete, plus a
+move selector for cards that expose a `column` field. When more than one page is
+available, use the page selector to switch.
+
+The tab follows the IDE light/dark theme, refreshes when it opens or when you
+press **Refresh**, and keeps its state while the tool window is hidden. This
+requires a Pegg binary that advertises the `pluginPages` capability.
 
 ### Composer
 

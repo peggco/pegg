@@ -158,6 +158,7 @@ type Server struct {
 	fs       *vfs.VFS
 	runs     *run.Coordinator
 	live     *live.Hub
+	plugins  PluginPageProvider
 
 	transport Transport
 	client    *Client
@@ -196,7 +197,12 @@ func New(
 	llmMgr *llm.Manager,
 	runs *run.Coordinator,
 	liveHub *live.Hub,
+	pageProviders ...PluginPageProvider,
 ) *Server {
+	var plugins PluginPageProvider
+	if len(pageProviders) > 0 {
+		plugins = pageProviders[0]
+	}
 	s := &Server{
 		cfg:           cfg,
 		bus:           bus,
@@ -206,6 +212,7 @@ func New(
 		fs:            fs,
 		runs:          runs,
 		live:          liveHub,
+		plugins:       plugins,
 		active:        make(map[string]*ACPSession),
 		agents:        make(map[string]string),
 		taskNames:     make(map[string]string),
@@ -337,6 +344,12 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleSTTRecordStart(ctx, params)
 	case "_pegg/stt/record/stop":
 		result, handlerErr = s.handleSTTRecordStop(ctx, params)
+	case "_pegg/plugins/pages/list":
+		result, handlerErr = s.handlePluginPagesList(ctx, params)
+	case "_pegg/plugins/pages/get":
+		result, handlerErr = s.handlePluginPageGet(ctx, params)
+	case "_pegg/plugins/pages/action":
+		result, handlerErr = s.handlePluginPageAction(ctx, params)
 	case "session/cancel":
 		handlerErr = s.handleSessionCancel(ctx, params)
 		if handlerErr == nil {

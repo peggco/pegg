@@ -9,11 +9,13 @@ const isWatch = process.argv.includes('--watch');
 
 mkdirSync(outdir, { recursive: true });
 copyFileSync(resolve(here, 'webview/index.html'), resolve(outdir, 'index.html'));
+copyFileSync(resolve(here, 'webview/plugin-page.html'), resolve(outdir, 'plugin-page.html'));
 
 const options = {
   entryPoints: {
     bootstrap: resolve(here, 'webview/bootstrap.ts'),
     webview: resolve(here, 'webview/main.tsx'),
+    'plugin-page': resolve(here, 'webview/plugin-page.tsx'),
   },
   bundle: true,
   platform: 'browser',

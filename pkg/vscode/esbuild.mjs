@@ -28,11 +28,28 @@ const webviewOptions = {
   logLevel: 'info',
 };
 
+const pluginPageOptions = {
+  entryPoints: ['src/webview/pluginPage.tsx'],
+  bundle: true,
+  platform: 'browser',
+  format: 'iife',
+  target: 'es2022',
+  outfile: 'dist/pluginPage.js',
+  sourcemap: true,
+  minify: !isWatch,
+  logLevel: 'info',
+};
+
 if (isWatch) {
   const ctx1 = await esbuild.context(extensionOptions);
   const ctx2 = await esbuild.context(webviewOptions);
-  await Promise.all([ctx1.watch(), ctx2.watch()]);
+  const ctx3 = await esbuild.context(pluginPageOptions);
+  await Promise.all([ctx1.watch(), ctx2.watch(), ctx3.watch()]);
   console.log('watching...');
 } else {
-  await Promise.all([esbuild.build(extensionOptions), esbuild.build(webviewOptions)]);
+  await Promise.all([
+    esbuild.build(extensionOptions),
+    esbuild.build(webviewOptions),
+    esbuild.build(pluginPageOptions),
+  ]);
 }

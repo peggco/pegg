@@ -4,10 +4,12 @@ import { ChatController } from './chat/controller';
 import { registerChatParticipant } from './chatParticipant';
 import { registerChatCommands } from './commands/chat';
 import { registerEditorCommands } from './commands/editor';
+import { registerPluginPageCommands } from './commands/pluginPages';
 import { registerCodeActions } from './integrations/codeActions';
 import { PeggStatusBar } from './integrations/statusBar';
 import { Logger } from './logger';
 import { ChatViewProvider } from './views/chatViewProvider';
+import { PluginPageViewHost } from './views/pluginPageView';
 import { SessionsTreeProvider } from './views/sessionsTree';
 
 let controller: ChatController | undefined;
@@ -19,6 +21,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   controller = new ChatController(context, binary, log);
 
   const chatProvider = new ChatViewProvider(context.extensionUri, controller, log);
+  const pluginPages = new PluginPageViewHost(context.extensionUri, controller, log);
   const sessionsProvider = new SessionsTreeProvider(controller, log);
   const statusBar = new PeggStatusBar(controller);
 
@@ -32,8 +35,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.createTreeView('pegg.sessions', { treeDataProvider: sessionsProvider, showCollapseAll: false }),
     registerCodeActions(),
     registerChatParticipant(controller),
+    pluginPages,
     ...registerChatCommands(controller, binary, log, sessionsProvider),
     ...registerEditorCommands(controller),
+    ...registerPluginPageCommands(pluginPages),
   );
 
   context.subscriptions.push(

@@ -113,6 +113,79 @@ data class SkillInstallResult(
 )
 
 @Serializable
+data class PluginPageField(
+    val id: String,
+    val label: String? = null,
+    val placeholder: String? = null,
+    val value: String? = null,
+    val secret: Boolean = false,
+    val required: Boolean = false,
+    val options: List<String> = emptyList(),
+)
+
+@Serializable
+data class PluginPageAction(
+    val id: String,
+    val label: String,
+    val description: String? = null,
+    val confirm: Boolean = false,
+    val fields: List<PluginPageField> = emptyList(),
+)
+
+@Serializable
+data class PluginPageMetric(
+    val label: String,
+    val value: String,
+    val detail: String? = null,
+    val badge: String? = null,
+)
+
+@Serializable
+data class PluginPageItem(
+    val id: String? = null,
+    val title: String,
+    val detail: String? = null,
+    val badge: String? = null,
+    val disabled: Boolean = false,
+    val fields: List<PluginPageField> = emptyList(),
+    val action: String? = null,
+    val column: String? = null,
+    val meta: Map<String, String> = emptyMap(),
+)
+
+@Serializable
+data class PluginPageSection(
+    val title: String,
+    val kind: String? = null,
+    val items: List<PluginPageItem> = emptyList(),
+    val note: String? = null,
+)
+
+@Serializable
+data class PluginPage(
+    val id: String,
+    val title: String,
+    val description: String? = null,
+    val owner: String,
+    val layout: String? = null,
+    val metrics: List<PluginPageMetric> = emptyList(),
+    val sections: List<PluginPageSection> = emptyList(),
+    val actions: List<PluginPageAction> = emptyList(),
+    val settings: List<PluginPageField> = emptyList(),
+    val saveAction: String? = null,
+    val footer: String? = null,
+)
+
+@Serializable
+data class PluginPagesResult(val pages: List<PluginPage> = emptyList())
+
+@Serializable
+data class PluginPageGetResult(val page: PluginPage)
+
+@Serializable
+data class PluginPageResult(val output: String? = null, val page: PluginPage? = null)
+
+@Serializable
 data class Cost(val amount: Double, val currency: String? = null)
 
 @Serializable
@@ -240,6 +313,7 @@ data class PeggCapabilities(
     val history: Boolean? = null,
     val terminals: Boolean? = null,
     val elicitation: Boolean? = null,
+    val pluginPages: Boolean? = null,
 )
 
 @Serializable

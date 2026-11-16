@@ -1,0 +1,596 @@
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  color: var(--vscode-foreground, #1f1f1f);
+  background: var(--vscode-editor-background, var(--vscode-sideBar-background, #ffffff));
+  font-family: var(--vscode-font-family, 'Segoe UI', 'Ubuntu', sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.pp-root {
+  --pp-bg: var(--vscode-editor-background, #ffffff);
+  --pp-surface: color-mix(in srgb, var(--vscode-foreground, #1f1f1f) 4%, var(--pp-bg));
+  --pp-hover: color-mix(in srgb, var(--vscode-foreground, #1f1f1f) 8%, var(--pp-bg));
+  --pp-border: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  --pp-border-strong: color-mix(in srgb, var(--vscode-foreground, #1f1f1f) 28%, transparent);
+  --pp-text: var(--vscode-foreground, #1f1f1f);
+  --pp-muted: var(--vscode-descriptionForeground, #6b6b6b);
+  --pp-accent: var(--vscode-button-background, #2f65ca);
+  --pp-accent-fg: var(--vscode-button-foreground, #ffffff);
+  --pp-danger: var(--vscode-errorForeground, #c7222d);
+  --pp-success: var(--vscode-testing-iconPassed, #2e9e5b);
+  --pp-radius-sm: 5px;
+  --pp-radius-md: 8px;
+  min-height: 100%;
+  padding: 22px 26px 40px;
+  color: var(--pp-text);
+  background: var(--pp-bg);
+  overflow: auto;
+}
+
+.pp-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+
+.pp-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+}
+
+.pp-desc {
+  margin: 5px 0 0;
+  max-width: 720px;
+  color: var(--pp-muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.pp-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: none;
+}
+
+.pp-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 4px;
+  color: var(--pp-muted);
+  font-size: 11.5px;
+}
+
+.pp-btn {
+  height: 30px;
+  padding: 0 11px;
+  border-radius: var(--pp-radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--pp-border);
+  background: var(--pp-surface);
+  color: var(--pp-text);
+  font-size: 12px;
+  font-weight: 550;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.pp-btn svg {
+  flex: none;
+}
+
+.pp-btn:hover {
+  background: var(--pp-hover);
+  border-color: var(--pp-border-strong);
+}
+
+.pp-btn.primary {
+  background: var(--pp-accent);
+  border-color: var(--pp-accent);
+  color: var(--pp-accent-fg);
+}
+
+.pp-btn.ghost {
+  background: transparent;
+}
+
+.pp-btn.danger {
+  color: var(--pp-danger);
+}
+
+.pp-btn.small {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+
+.pp-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pp-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--pp-radius-sm);
+  background: transparent;
+  color: var(--pp-muted);
+}
+
+.pp-icon:hover {
+  background: var(--pp-hover);
+  color: var(--pp-text);
+}
+
+.pp-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  margin: 12px 0;
+  border: 1px solid var(--pp-border);
+  border-radius: var(--pp-radius-sm);
+  background: var(--pp-surface);
+  font-size: 12px;
+}
+
+.pp-notice.error {
+  color: var(--pp-danger);
+  border-color: color-mix(in srgb, var(--pp-danger) 42%, var(--pp-border));
+  background: color-mix(in srgb, var(--pp-danger) 7%, var(--pp-bg));
+}
+
+.pp-notice span {
+  flex: 1;
+}
+
+.pp-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.pp-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--pp-border);
+  border-radius: var(--pp-radius-md);
+  background: var(--pp-surface);
+}
+
+.pp-metric-label {
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--pp-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pp-metric-value {
+  font-size: 22px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+}
+
+.pp-metric-detail {
+  font-size: 11.5px;
+  color: var(--pp-muted);
+}
+
+.pp-panel {
+  margin: 16px 0;
+  border: 1px solid var(--pp-border);
+  border-radius: var(--pp-radius-md);
+  background: var(--pp-surface);
+  overflow: hidden;
+}
+
+.pp-panel-head {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--pp-border);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.pp-note {
+  padding: 9px 16px 0;
+  color: var(--pp-muted);
+  font-size: 11.5px;
+}
+
+.pp-board {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 14px;
+}
+
+.pp-column {
+  flex: 0 0 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--pp-border);
+  border-radius: var(--pp-radius-md);
+  background: var(--pp-bg);
+  align-self: flex-start;
+}
+
+.pp-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--pp-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pp-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px;
+}
+
+.pp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--pp-border);
+  border-radius: var(--pp-radius-sm);
+  background: var(--pp-surface);
+}
+
+.pp-card.disabled {
+  opacity: 0.55;
+}
+
+.pp-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.pp-card-detail {
+  font-size: 11.5px;
+  color: var(--pp-muted);
+  line-height: 1.45;
+}
+
+.pp-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pp-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pp-move {
+  display: inline-flex;
+}
+
+.pp-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pp-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border: 1px solid var(--pp-border);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--pp-muted);
+  white-space: nowrap;
+}
+
+.pp-badge.muted {
+  opacity: 0.85;
+}
+
+.pp-channels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.pp-channel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--pp-border);
+  border-radius: var(--pp-radius-md);
+  background: var(--pp-bg);
+}
+
+.pp-channel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pp-channel-name {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.pp-channel-detail {
+  font-size: 11.5px;
+  color: var(--pp-muted);
+}
+
+.pp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pp-muted);
+  flex: none;
+}
+
+.pp-dot.ok {
+  background: var(--pp-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pp-success) 18%, transparent);
+}
+
+.pp-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--pp-border) 65%, transparent);
+}
+
+.pp-row:first-child {
+  border-top: 0;
+}
+
+.pp-row.disabled {
+  opacity: 0.55;
+}
+
+.pp-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.pp-row-name {
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+.pp-row-desc {
+  margin-top: 2px;
+  color: var(--pp-muted);
+  font-size: 11.5px;
+}
+
+.pp-row-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.pp-empty,
+.pp-empty-inline {
+  color: var(--pp-muted);
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.pp-empty {
+  padding: 60px 20px;
+}
+
+.pp-empty p {
+  margin: 0 0 6px;
+}
+
+.pp-empty .pp-btn {
+  margin-top: 12px;
+}
+
+.pp-empty-inline {
+  padding: 24px 16px;
+}
+
+.pp-muted {
+  color: var(--pp-muted);
+}
+
+.pp-footer {
+  margin-top: 18px;
+  color: var(--pp-muted);
+  font-size: 11.5px;
+}
+
+.pp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 7vh 20px 20px;
+  background: rgba(0, 0, 0, 0.38);
+  overflow: auto;
+}
+
+.pp-modal {
+  width: min(560px, 100%);
+  border: 1px solid var(--pp-border);
+  border-radius: var(--pp-radius-md);
+  background: var(--pp-bg);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+}
+
+.pp-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--pp-border);
+}
+
+.pp-modal-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pp-modal-body {
+  padding: 16px;
+}
+
+.pp-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.pp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.pp-field-label {
+  color: var(--pp-muted);
+  font-size: 11.5px;
+  font-weight: 550;
+}
+
+.pp-input,
+.pp-select {
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--vscode-input-border, var(--pp-border));
+  border-radius: var(--pp-radius-sm);
+  background: var(--vscode-input-background, var(--pp-bg));
+  color: var(--vscode-input-foreground, var(--pp-text));
+  outline: none;
+}
+
+.pp-input:focus,
+.pp-select:focus {
+  border-color: var(--vscode-focusBorder, var(--pp-accent));
+}
+
+.pp-input::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--pp-muted));
+}
+
+.pp-select.small {
+  height: 26px;
+  font-size: 11.5px;
+}
+
+.pp-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.pp-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 60;
+  max-width: 380px;
+  padding: 10px 14px;
+  border: 1px solid var(--pp-border);
+  border-radius: var(--pp-radius-sm);
+  background: var(--vscode-notifications-background, var(--pp-surface));
+  color: var(--pp-text);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  font-size: 12px;
+}
+
+.pp-toast.success {
+  border-color: color-mix(in srgb, var(--pp-success) 45%, var(--pp-border));
+}
+
+.pp-toast.error {
+  border-color: color-mix(in srgb, var(--pp-danger) 45%, var(--pp-border));
+}
+
+.pp-spin {
+  animation: pp-spin 0.9s linear infinite;
+}
+
+@keyframes pp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

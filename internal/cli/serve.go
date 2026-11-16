@@ -76,7 +76,11 @@ func (c *CLI) runHTTPServe() error {
 }
 
 func (c *CLI) runACPServe(stdio bool) error {
-	srv := acp.New(c.cfg, c.bus, c.log, c.fs, c.sessions, c.llmMgr, c.runCoord, c.liveHub)
+	var pages acp.PluginPageProvider
+	if c.pluginMgr != nil {
+		pages = c.pluginMgr
+	}
+	srv := acp.New(c.cfg, c.bus, c.log, c.fs, c.sessions, c.llmMgr, c.runCoord, c.liveHub, pages)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

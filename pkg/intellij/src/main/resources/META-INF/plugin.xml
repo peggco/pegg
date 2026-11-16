@@ -10,6 +10,7 @@
             <li>Streaming chat with markdown, tool cards, reasoning, plans, and usage.</li>
             <li>Subagent activity with an in-place subagent transcript.</li>
             <li>Sessions shared with the CLI and VS Code.</li>
+            <li>Plugin pages such as the kanban board, rendered in the tool window.</li>
             <li>Permissions, ask-user questions, attachments, voice input, and skills.</li>
             <li>Editor actions for explain, edit, review, tests, docs, and diagnostics.</li>
         </ul>

@@ -38,12 +38,22 @@ function workspaceRoot(): string {
   return process.env.PEGG_TEST_WORKSPACE ?? process.cwd();
 }
 
+function uri(path: string) {
+  return {
+    fsPath: path,
+    scheme: 'file',
+    path,
+    with: (change: { query?: string }) => uri(change.query ? `${path}?${change.query}` : path),
+    toString: () => `file://${path}`,
+  };
+}
+
 export const Uri = {
-  file: (path: string) => ({ fsPath: path, scheme: 'file', path, toString: () => `file://${path}` }),
-  parse: (value: string) => ({ fsPath: value, scheme: 'file', path: value, toString: () => value }),
+  file: (path: string) => uri(path),
+  parse: (value: string) => uri(value),
   joinPath: (base: { fsPath: string }, ...parts: string[]) => {
     const joined = [base.fsPath, ...parts].join('/').replace(/\/+/g, '/');
-    return { fsPath: joined, scheme: 'file', path: joined, toString: () => `file://${joined}` };
+    return uri(joined);
   },
 };
 
@@ -86,8 +96,70 @@ export class CodeAction {
   ) {}
 }
 
+class FakeWebview {
+  html = '';
+  options: Record<string, unknown> = {};
+  cspSource = 'vscode-resource:';
+  messages: unknown[] = [];
+  private listener?: (message: unknown) => void;
+
+  asWebviewUri(value: { fsPath: string; toString(): string }): { fsPath: string; toString(): string } {
+    return { fsPath: value.fsPath, toString: () => `vscode-resource:${value.fsPath}` };
+  }
+
+  onDidReceiveMessage(listener: (message: unknown) => void) {
+    this.listener = listener;
+    return disposable;
+  }
+
+  async postMessage(message: unknown): Promise<boolean> {
+    this.messages.push(message);
+    return true;
+  }
+
+  emit(message: unknown): void {
+    this.listener?.(message);
+  }
+}
+
+export class WebviewPanel {
+  readonly webview = new FakeWebview();
+  title: string;
+  revealCount = 0;
+  disposed = false;
+  private listeners: Array<() => void> = [];
+
+  constructor(title: string, options?: Record<string, unknown>) {
+    this.title = title;
+    this.webview.options = options ?? {};
+  }
+
+  reveal(): void {
+    this.revealCount += 1;
+  }
+
+  onDidDispose(listener: () => void) {
+    this.listeners.push(listener);
+    return disposable;
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    for (const listener of this.listeners) listener();
+  }
+}
+
+export const createdPanels: WebviewPanel[] = [];
+
+export const ViewColumn = { Active: -1, One: 1, Two: 2, Three: 3 };
+
 export const window = {
   state: { focused: true },
+  createWebviewPanel: (_viewType: string, title: string, _column?: number, options?: Record<string, unknown>) => {
+    const panel = new WebviewPanel(title, options);
+    createdPanels.push(panel);
+    return panel;
+  },
   activeTextEditor: undefined,
   createOutputChannel: () => output,
   registerWebviewViewProvider: () => disposable,
