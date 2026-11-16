@@ -166,7 +166,7 @@ var tr = map[string]string{
 	"home.hint.stop":     "çalışan bir ajanı durdurmak için Esc'ye iki kez basın",
 	"home.hint.attach":   "eklemek için bir dosyayı sürükleyin veya yapıştırın",
 	"home.hint.focus":    "Mesajda ek varsa odak değiştirmek için 'Shift+Tab' kullanın",
-	"home.hint.history":  "Önceki mesajları geri getirmek için Alt+Up/Alt+Down kullanın",
+	"home.hint.history":  "Önceki mesajları geri getirmek için boş girişte Up'a basın",
 	"home.hint.newline":  "Sona yeni satır eklemek için Ctrl+J'ye basın",
 	"home.hint.clear":    "Input'u temizlemek için Ctrl+C'ye basın (çıkmak için iki kez)",
 

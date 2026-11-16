@@ -166,7 +166,7 @@ var en = map[string]string{
 	"home.hint.stop":     "press Esc twice to stop a running agent",
 	"home.hint.attach":   "paste or drop a file to attach it",
 	"home.hint.focus":    "use 'Shift+Tab' to focus attachments (when the message has attachments)",
-	"home.hint.history":  "use Alt+Up/Alt+Down to recall previous messages",
+	"home.hint.history":  "press Up on an empty input to recall previous messages",
 	"home.hint.newline":  "press Ctrl+J to add a new line at the end",
 	"home.hint.clear":    "press Ctrl+C to clear the input (twice to quit)",
 

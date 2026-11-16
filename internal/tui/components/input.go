@@ -43,9 +43,12 @@ type Input struct {
 	mentionLabels []string
 	longTexts     map[rune]string
 
-	history      []string
-	historyPos   int
-	historyDraft string
+	history         []string
+	historyPos      int
+	historyDraft    string
+	historyBrowsing bool
+	historyRow      int
+	historyCol      int
 
 	focused      bool
 	blinkOn      bool
@@ -456,6 +459,7 @@ func copyLines(lines []string) []string {
 }
 
 func (in *Input) saveUndo() {
+	in.exitHistoryBrowsing()
 	in.undo = append(in.undo, inputSnapshot{copyLines(in.lines), in.row, in.col, clonePos(in.anchor)})
 	if len(in.undo) > 200 {
 		in.undo = in.undo[1:]
@@ -1097,6 +1101,7 @@ func (in *Input) Undo() {
 	in.undo = in.undo[:len(in.undo)-1]
 	in.redo = append(in.redo, inputSnapshot{copyLines(in.lines), in.row, in.col, clonePos(in.anchor)})
 	in.lines, in.row, in.col, in.anchor = copyLines(s.lines), s.row, s.col, clonePos(s.anchor)
+	in.exitHistoryBrowsing()
 	in.ensureCursorVisible()
 }
 
@@ -1108,6 +1113,7 @@ func (in *Input) Redo() {
 	in.redo = in.redo[:len(in.redo)-1]
 	in.undo = append(in.undo, inputSnapshot{copyLines(in.lines), in.row, in.col, clonePos(in.anchor)})
 	in.lines, in.row, in.col, in.anchor = copyLines(s.lines), s.row, s.col, clonePos(s.anchor)
+	in.exitHistoryBrowsing()
 	in.ensureCursorVisible()
 }
 
@@ -1170,17 +1176,40 @@ func (in *Input) SetHistory(items []string) {
 func (in *Input) resetHistoryNav() {
 	in.historyPos = len(in.history)
 	in.historyDraft = ""
+	in.historyBrowsing = false
+	in.historyRow, in.historyCol = 0, 0
+}
+
+func (in *Input) exitHistoryBrowsing() {
+	in.historyBrowsing = false
+	in.historyDraft = ""
+	in.historyRow, in.historyCol = 0, 0
+}
+
+func (in *Input) historyUnchanged() bool {
+	if !in.historyBrowsing || in.historyPos >= len(in.history) || in.anchor != nil {
+		return false
+	}
+	if in.row != in.historyRow || in.col != in.historyCol {
+		return false
+	}
+	return in.Value() == in.history[in.historyPos]
 }
 
 func (in *Input) historyPrev() bool {
 	if len(in.history) == 0 || in.anchor != nil {
 		return false
 	}
-	if in.historyPos > len(in.history) {
-		in.historyPos = len(in.history)
-	}
-	if in.historyPos == len(in.history) {
+	if !in.historyBrowsing {
+		if strings.TrimSpace(in.Value()) != "" {
+			return false
+		}
+		in.historyBrowsing = true
 		in.historyDraft = in.Value()
+		in.historyPos = len(in.history)
+	} else if !in.historyUnchanged() {
+		in.exitHistoryBrowsing()
+		return false
 	}
 	if in.historyPos == 0 {
 		return true
@@ -1191,14 +1220,14 @@ func (in *Input) historyPrev() bool {
 }
 
 func (in *Input) historyNext() bool {
-	if in.historyPos >= len(in.history) || in.anchor != nil {
+	if !in.historyBrowsing || !in.historyUnchanged() {
 		return false
 	}
+	draft := in.historyDraft
 	in.historyPos++
 	if in.historyPos >= len(in.history) {
-		in.historyPos = len(in.history)
-		in.loadHistory(in.historyDraft)
-		in.historyDraft = ""
+		in.loadHistory(draft)
+		in.exitHistoryBrowsing()
 		return true
 	}
 	in.loadHistory(in.history[in.historyPos])
@@ -1208,6 +1237,7 @@ func (in *Input) historyNext() bool {
 func (in *Input) loadHistory(text string) {
 	in.resetContent()
 	if text == "" {
+		in.historyRow, in.historyCol = 0, 0
 		in.lastActivity = time.Now()
 		in.ensureCursorVisible()
 		return
@@ -1215,6 +1245,7 @@ func (in *Input) loadHistory(text string) {
 	in.lines = strings.Split(text, "\n")
 	in.row = len(in.lines) - 1
 	in.col = len([]rune(in.lines[in.row]))
+	in.historyRow, in.historyCol = in.row, in.col
 	in.lastActivity = time.Now()
 	in.ensureCursorVisible()
 }
@@ -1373,12 +1404,6 @@ func (in *Input) HandleKey(ev *tcell.EventKey) bool {
 		case tcell.KeyRight:
 			in.WordRight()
 			return true
-		case tcell.KeyUp:
-			in.historyPrev()
-			return true
-		case tcell.KeyDown:
-			in.historyNext()
-			return true
 		case tcell.KeyBackspace, tcell.KeyBackspace2:
 			in.DeleteWord()
 			return true
@@ -1420,14 +1445,14 @@ func (in *Input) HandleKey(ev *tcell.EventKey) bool {
 	case tcell.KeyUp:
 		if shift {
 			in.ShiftUp()
-		} else {
+		} else if alt || !in.historyPrev() {
 			in.MoveUp()
 		}
 		return true
 	case tcell.KeyDown:
 		if shift {
 			in.ShiftDown()
-		} else {
+		} else if alt || !in.historyNext() {
 			in.MoveDown()
 		}
 		return true

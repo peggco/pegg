@@ -77,8 +77,7 @@ warning.
 | ++enter++ | Submit |
 | ++shift+enter++ | Insert newline |
 | ++left++ / ++right++ | Move the cursor (word-wrap aware) |
-| ++up++ / ++down++ | Move the cursor between lines |
-| ++alt+up++ / ++alt+down++ | Recall the previous / next message |
+| ++up++ / ++down++ | Move the cursor between lines; Up on an empty input recalls the previous message |
 | ++ctrl+j++ | Jump to the last line and insert a newline |
 | ++home++ / ++end++ | Start / end of line |
 | ++ctrl+left++ / ++ctrl+right++ | Word left / right |
@@ -103,10 +102,11 @@ Sent messages are kept in an in-memory history (the last 200, with consecutive
 duplicates skipped). Loading a session seeds the history from its stored user
 messages, so the shortcuts also work after resuming a session. In the input:
 
-- ++alt+up++ recalls the previous message; ++alt+down++ recalls the next
-  message. Shift+Up/Down continues to extend the selection.
-- While browsing history, the message you were typing is saved as a draft and
-  restored when you move past the newest entry.
+- ++up++ on an empty input recalls the previous message; ++down++ recalls the
+  next. Once the recalled text or cursor changes, Up/Down move the cursor
+  again. Shift+Up/Down continues to extend the selection.
+- While browsing history, the input you had is saved as a draft and restored
+  when you move past the newest entry.
 - Recalled messages scroll into view automatically, so multi-line messages stay
   visible with the cursor at the end.
 - ++ctrl+j++ moves the cursor to the end of the input and starts a new line,

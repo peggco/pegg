@@ -755,12 +755,9 @@ func TestInputHistoryPrevNextRestoresDraft(t *testing.T) {
 	in := NewInput()
 	in.AddHistory("first")
 	in.AddHistory("second")
-	for _, r := range "draft" {
-		in.InsertRune(r)
-	}
 
 	if !in.historyPrev() {
-		t.Fatal("Up should recall history")
+		t.Fatal("Up on empty input should recall history")
 	}
 	if got := in.Value(); got != "second" {
 		t.Fatalf("value = %q, want second", got)
@@ -785,29 +782,125 @@ func TestInputHistoryPrevNextRestoresDraft(t *testing.T) {
 		t.Fatalf("value = %q, want second", got)
 	}
 	if !in.historyNext() {
-		t.Fatal("Down should restore the draft")
+		t.Fatal("Down should restore the empty draft")
 	}
-	if got := in.Value(); got != "draft" {
-		t.Fatalf("value = %q, want draft", got)
+	if got := in.Value(); got != "" {
+		t.Fatalf("value = %q, want the empty draft", got)
 	}
 	if in.historyNext() {
 		t.Fatal("Down past the newest entry should not be handled")
 	}
 }
 
-func TestInputHistoryKeysAtEdges(t *testing.T) {
+func TestInputPlainUpRecallsOnEmptyInput(t *testing.T) {
 	in := NewInput()
 	in.Focus()
 	in.AddHistory("previous")
-	in.InsertRune('x')
 
-	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModAlt))
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
 	if got := in.Value(); got != "previous" {
-		t.Fatalf("Alt+Up value = %q, want previous", got)
+		t.Fatalf("Up value = %q, want previous", got)
 	}
-	in.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, tcell.ModAlt))
-	if got := in.Value(); got != "x" {
-		t.Fatalf("Alt+Down value = %q, want the draft x", got)
+	if in.Row() != 0 || in.Col() != len("previous") {
+		t.Fatalf("cursor = %d,%d, want 0,%d", in.Row(), in.Col(), len("previous"))
+	}
+	in.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
+	if got := in.Value(); got != "" {
+		t.Fatalf("Down value = %q, want the empty draft", got)
+	}
+}
+
+func TestInputPlainUpOnNonEmptyInputMovesCursor(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.AddHistory("older")
+	in.SetValue("line1\nline2")
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "line1\nline2" {
+		t.Fatalf("Up value = %q, want the typed text", got)
+	}
+	if in.Row() != 0 {
+		t.Fatalf("row = %d, want 0 after Up", in.Row())
+	}
+	in.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
+	if got := in.Value(); got != "line1\nline2" {
+		t.Fatalf("Down value = %q, want the typed text", got)
+	}
+	if in.Row() != 1 {
+		t.Fatalf("row = %d, want 1 after Down", in.Row())
+	}
+}
+
+func TestInputHistoryEditExitsBrowsing(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.AddHistory("older")
+	in.AddHistory("newer")
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "newer" {
+		t.Fatalf("value = %q, want newer", got)
+	}
+	in.InsertRune('!')
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "newer!" {
+		t.Fatalf("Up after edit recalled %q, want the edited text", got)
+	}
+}
+
+func TestInputHistoryCursorMoveExitsBrowsing(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.AddHistory("older")
+	in.AddHistory("newer")
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	in.MoveLeft()
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "newer" {
+		t.Fatalf("Up after cursor move recalled %q, want newer", got)
+	}
+}
+
+func TestInputHistoryMultilineNavigation(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.SetInnerWidth(20)
+	in.AddHistory("line1\nline2")
+	in.AddHistory("a\nb\nc")
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "a\nb\nc" {
+		t.Fatalf("value = %q, want newest multiline entry", got)
+	}
+	if in.Row() != 2 || in.Col() != 1 {
+		t.Fatalf("cursor = %d,%d, want 2,1 at the end of the recalled text", in.Row(), in.Col())
+	}
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "line1\nline2" {
+		t.Fatalf("value = %q, want older multiline entry", got)
+	}
+	in.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
+	if got := in.Value(); got != "a\nb\nc" {
+		t.Fatalf("value = %q, want newest multiline entry after Down", got)
+	}
+	in.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
+	if got := in.Value(); got != "" {
+		t.Fatalf("value = %q, want the empty draft after Down", got)
+	}
+}
+
+func TestInputHistoryNoHistoryUpMovesCursor(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "" {
+		t.Fatalf("value = %q, want empty", got)
+	}
+	if in.Row() != 0 || in.Col() != 0 {
+		t.Fatalf("cursor = %d,%d, want 0,0", in.Row(), in.Col())
 	}
 }
 
@@ -842,16 +935,24 @@ func TestInputShiftUpStillSelects(t *testing.T) {
 	}
 }
 
-func TestInputAltUpRecallsFromMultiline(t *testing.T) {
+func TestInputAltUpNoLongerRecalls(t *testing.T) {
 	in := NewInput()
 	in.Focus()
-	in.SetInnerWidth(20)
 	in.AddHistory("older")
 	in.SetValue("line1\nline2")
 
 	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModAlt))
-	if got := in.Value(); got != "older" {
-		t.Fatalf("Alt+Up value = %q, want older", got)
+	if got := in.Value(); got != "line1\nline2" {
+		t.Fatalf("Alt+Up recalled %q, want the typed text", got)
+	}
+	if in.Row() != 0 {
+		t.Fatalf("row = %d, want 0 after Alt+Up moved the cursor", in.Row())
+	}
+
+	in.Clear()
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModAlt))
+	if got := in.Value(); got != "" {
+		t.Fatalf("Alt+Up on an empty input recalled %q, want no recall", got)
 	}
 }
 

@@ -345,18 +345,18 @@ func TestCtrlCClearsInputWarnsThenQuits(t *testing.T) {
 	}
 }
 
-func TestAppAltUpRecallsInputHistory(t *testing.T) {
+func TestAppUpRecallsInputHistory(t *testing.T) {
 	p := home.New()
 	p.Input().Focus()
 	p.Input().InsertRune('h')
 	p.Input().Submit()
 
 	a := &App{home: p, root: p}
-	if !a.handleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModAlt)) {
-		t.Fatal("Alt+Up should be handled")
+	if !a.handleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0)) {
+		t.Fatal("Up should be handled")
 	}
 	if got := p.Input().Value(); got != "h" {
-		t.Fatalf("Alt+Up recalled %q, want h", got)
+		t.Fatalf("Up recalled %q, want h", got)
 	}
 }
 
@@ -622,9 +622,9 @@ func TestAppResolveUserMessage(t *testing.T) {
 		t.Fatalf("input history = %d, want 2 user messages", got)
 	}
 	a.home.Input().Focus()
-	a.home.Input().HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, tcell.ModAlt))
+	a.home.Input().HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
 	if got := a.home.Input().Value(); got != "second" {
-		t.Fatalf("Alt+Up recalled %q, want second", got)
+		t.Fatalf("Up recalled %q, want second", got)
 	}
 
 	target := chatItemByText(a.chat.Items(), "second")
