@@ -421,7 +421,7 @@ func TestProviderAddCustomEndpointPromptOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := []string{"select provider", "Provider name", "select driver", "Base URL", "headers", "API key"}
+	want := []string{"select provider", "Provider name", "select driver", "Base URL", "API key", "headers"}
 	if len(order) != len(want) {
 		t.Fatalf("prompt order = %v, want %v", order, want)
 	}

@@ -191,10 +191,13 @@ func (c *CLI) runProviderAdd(out io.Writer, f *providerAddFlags, p providerAddPr
 	}
 
 	baseURL := strings.TrimSpace(f.baseURL)
+	apiKey := strings.TrimSpace(f.apiKey)
 	headers := f.headers
 	note := ""
 
-	if name == "" || !llm.HasProvider(name) {
+	isCustomEndpoint := name == "" || !llm.HasProvider(name)
+
+	if isCustomEndpoint {
 		if interactive {
 			if baseURL == "" {
 				u, err := p.promptString("Base URL")
@@ -203,13 +206,6 @@ func (c *CLI) runProviderAdd(out io.Writer, f *providerAddFlags, p providerAddPr
 				}
 				baseURL = strings.TrimSpace(u)
 			}
-			if !f.headersSet || len(headers) == 0 {
-				h, err := p.promptHeaders()
-				if err != nil {
-					return err
-				}
-				headers = h
-			}
 		} else if baseURL == "" {
 			return fmt.Errorf("cli: base-url is required for driver entries (--driver %s)", driver)
 		}
@@ -217,13 +213,22 @@ func (c *CLI) runProviderAdd(out io.Writer, f *providerAddFlags, p providerAddPr
 		note = "note: named providers use built-in endpoints; base_url/driver are stored but ignored"
 	}
 
-	apiKey := strings.TrimSpace(f.apiKey)
 	if interactive && !f.apiKeySet {
 		k, err := p.promptAPIKey()
 		if err != nil {
 			return err
 		}
 		apiKey = k
+	}
+
+	if isCustomEndpoint && interactive {
+		if !f.headersSet || len(headers) == 0 {
+			h, err := p.promptHeaders()
+			if err != nil {
+				return err
+			}
+			headers = h
+		}
 	}
 
 	cfg := config.LLMConfig{

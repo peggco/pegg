@@ -337,8 +337,6 @@ pegg providers add --driver openai --base-url http://localhost:11434/v1 --api-ke
 | `--max-retries` | Maximum retry count |
 
 Running it with any of `--name`, `--driver`, or `--base-url` skips all prompts.
-In interactive mode the custom-endpoint flow asks for the provider name and
-driver, then the base URL and headers, and finally the API key.
 Models are fetched in the background after saving; a failed fetch does not block
 the add — run `pegg providers refresh` to retry. Registered names use built-in
 endpoints; `--base-url`/`--driver` only affect driver entries and custom names.

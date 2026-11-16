@@ -163,11 +163,9 @@ pegg providers add --name my-gw --driver openai --base-url http://localhost:1143
 `providers add` runs without prompts when any of `--name`, `--driver`, or
 `--base-url` is given; headers default to empty and the API key may be left
 empty. With no flags it starts the interactive picker. Picking its
-"Custom endpoint" option prompts for a provider name and a driver, then the
-base URL and headers, and finally the API key, so the endpoint is known before
-the credential is entered. The saved entry is a named custom endpoint (the name
-must not collide with a registered provider). Models are fetched in the
-background after saving —
+"Custom endpoint" option prompts for a provider name and a driver, so the
+saved entry is a named custom endpoint (the name must not collide with a
+registered provider). Models are fetched in the background after saving —
 a failed fetch does not block the add, run `pegg providers refresh` to retry.
 
 ### TUI
