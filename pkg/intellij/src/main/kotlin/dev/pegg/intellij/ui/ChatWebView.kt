@@ -26,6 +26,9 @@ import dev.pegg.intellij.acp.ChatSettings
 import dev.pegg.intellij.acp.ChatState
 import dev.pegg.intellij.acp.HubSkill
 import dev.pegg.intellij.acp.ModelEntry
+import dev.pegg.intellij.acp.PluginCatalogResult
+import dev.pegg.intellij.acp.PluginListResult
+import dev.pegg.intellij.acp.PluginMutationResult
 import dev.pegg.intellij.acp.SkillInstallResult
 import dev.pegg.intellij.chat.Attachments
 import dev.pegg.intellij.chat.ContextBuilder
@@ -230,6 +233,10 @@ class ChatWebView(
         execute("window.postMessage(JSON.parse($literal), '*');")
     }
 
+    fun showPlugins() {
+        postJson(buildJsonObject { put("type", "openPlugins") }.toString())
+    }
+
     private fun handleMessage(request: String) {
         val obj = runCatching { ACP_JSON.parseToJsonElement(request).jsonObject }.getOrNull() ?: return
         when (val type = obj["type"]?.jsonPrimitive?.contentOrNull) {
@@ -300,6 +307,45 @@ class ChatWebView(
                     runCatching { controller.installHubSkill(source, skillId, "global") }
                         .onSuccess { postHubSkillInstalled(requestId, it) }
                         .onFailure { postHubSkillInstalledError(requestId, it) }
+                }
+            }
+            "pluginsList" -> {
+                val requestId = obj["requestId"]?.jsonPrimitive?.contentOrNull ?: return
+                service.scope.launch {
+                    runCatching { controller.plugins() }
+                        .onSuccess { postPlugins(requestId, it) }
+                        .onFailure { postPluginsError(requestId, it) }
+                }
+            }
+            "pluginsSearch" -> {
+                val requestId = obj["requestId"]?.jsonPrimitive?.contentOrNull ?: return
+                val search = obj["query"]?.jsonPrimitive?.contentOrNull ?: ""
+                service.scope.launch {
+                    runCatching { controller.searchPlugins(search) }
+                        .onSuccess { postPluginCatalog(requestId, it) }
+                        .onFailure { postPluginCatalogError(requestId, it) }
+                }
+            }
+            "pluginsInstall", "pluginsUpdate", "pluginsToggle", "pluginsRemove", "pluginsSetEnv" -> {
+                val requestId = obj["requestId"]?.jsonPrimitive?.contentOrNull ?: return
+                val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: ""
+                val source = obj["source"]?.jsonPrimitive?.contentOrNull ?: ""
+                val enabled = obj["enabled"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() ?: false
+                val env = (obj["env"] as? JsonObject)
+                    ?.mapValues { it.value.jsonPrimitive.contentOrNull ?: "" }
+                    ?: emptyMap()
+                service.scope.launch {
+                    runCatching {
+                        when (type) {
+                            "pluginsInstall" -> controller.installPlugin(source, name)
+                            "pluginsUpdate" -> controller.updatePlugin(source, name)
+                            "pluginsToggle" -> controller.togglePlugin(name, enabled)
+                            "pluginsRemove" -> controller.removePlugin(name)
+                            else -> controller.setPluginEnv(name, env)
+                        }
+                    }
+                        .onSuccess { postPluginAction(requestId, it) }
+                        .onFailure { postPluginActionError(requestId, it) }
                 }
             }
             "pickFiles" -> ApplicationManager.getApplication().invokeLater { chooseFiles() }
@@ -493,6 +539,60 @@ class ChatWebView(
     private fun postHubSkillInstalledError(requestId: String, error: Throwable) {
         postJson(buildJsonObject {
             put("type", "hubSkillInstalled")
+            put("requestId", requestId)
+            put("ok", false)
+            put("error", error.message ?: error.javaClass.simpleName)
+        }.toString())
+    }
+
+    private fun postPlugins(requestId: String, result: PluginListResult) {
+        postJson(buildJsonObject {
+            put("type", "plugins")
+            put("requestId", requestId)
+            put("plugins", ACP_JSON.encodeToJsonElement(result.plugins))
+            put("pluginsEnabled", result.pluginsEnabled)
+        }.toString())
+    }
+
+    private fun postPluginsError(requestId: String, error: Throwable) {
+        postJson(buildJsonObject {
+            put("type", "plugins")
+            put("requestId", requestId)
+            put("plugins", JsonArray(emptyList()))
+            put("error", error.message ?: error.javaClass.simpleName)
+        }.toString())
+    }
+
+    private fun postPluginCatalog(requestId: String, result: PluginCatalogResult) {
+        postJson(buildJsonObject {
+            put("type", "pluginCatalog")
+            put("requestId", requestId)
+            put("items", ACP_JSON.encodeToJsonElement(result.items))
+            result.nextCursor?.let { put("nextCursor", it) }
+        }.toString())
+    }
+
+    private fun postPluginCatalogError(requestId: String, error: Throwable) {
+        postJson(buildJsonObject {
+            put("type", "pluginCatalog")
+            put("requestId", requestId)
+            put("items", JsonArray(emptyList()))
+            put("error", error.message ?: error.javaClass.simpleName)
+        }.toString())
+    }
+
+    private fun postPluginAction(requestId: String, result: PluginMutationResult) {
+        postJson(buildJsonObject {
+            put("type", "pluginActionResult")
+            put("requestId", requestId)
+            put("ok", true)
+            put("result", ACP_JSON.encodeToJsonElement(result))
+        }.toString())
+    }
+
+    private fun postPluginActionError(requestId: String, error: Throwable) {
+        postJson(buildJsonObject {
+            put("type", "pluginActionResult")
             put("requestId", requestId)
             put("ok", false)
             put("error", error.message ?: error.javaClass.simpleName)

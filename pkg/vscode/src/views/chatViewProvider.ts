@@ -41,6 +41,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.postState();
   }
 
+  async showPlugins(): Promise<void> {
+    await vscode.commands.executeCommand('pegg.chat.focus');
+    await this.view?.webview.postMessage({ type: 'openPlugins' });
+  }
+
   private html(webview: vscode.Webview): string {
     const nonce = nonceString();
     const version = String(Date.now());
@@ -301,12 +306,97 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           }
           return;
         }
+        case 'pluginsList': {
+          const requestId = String(message.requestId ?? '');
+          try {
+            const result = await this.controller.listPlugins();
+            await this.view?.webview.postMessage({
+              type: 'plugins',
+              requestId,
+              plugins: result.plugins,
+              pluginsEnabled: result.pluginsEnabled,
+            });
+          } catch (err) {
+            await this.view?.webview.postMessage({
+              type: 'plugins',
+              requestId,
+              plugins: [],
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+          return;
+        }
+        case 'pluginsSearch': {
+          const requestId = String(message.requestId ?? '');
+          try {
+            const result = await this.controller.searchPlugins(String(message.query ?? ''));
+            await this.view?.webview.postMessage({
+              type: 'pluginCatalog',
+              requestId,
+              items: result.items,
+              nextCursor: result.nextCursor,
+            });
+          } catch (err) {
+            await this.view?.webview.postMessage({
+              type: 'pluginCatalog',
+              requestId,
+              items: [],
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+          return;
+        }
+        case 'pluginsInstall':
+        case 'pluginsUpdate':
+        case 'pluginsToggle':
+        case 'pluginsRemove':
+        case 'pluginsSetEnv': {
+          const requestId = String(message.requestId ?? '');
+          try {
+            const result = await this.runPluginAction(message);
+            await this.view?.webview.postMessage({
+              type: 'pluginActionResult',
+              requestId,
+              ok: true,
+              result,
+            });
+          } catch (err) {
+            await this.view?.webview.postMessage({
+              type: 'pluginActionResult',
+              requestId,
+              ok: false,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+          return;
+        }
         default:
           this.log.debug('Unknown webview message', message?.type);
       }
     } catch (err) {
       this.log.error('Webview action failed', err);
       void vscode.window.showErrorMessage(`Pegg: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  private async runPluginAction(message: { type?: unknown; [key: string]: unknown }) {
+    const type = String(message.type ?? '');
+    switch (type) {
+      case 'pluginsInstall':
+        return this.controller.installPlugin(String(message.source ?? ''), String(message.name ?? ''));
+      case 'pluginsUpdate':
+        return this.controller.updatePlugin(String(message.source ?? ''), String(message.name ?? ''));
+      case 'pluginsToggle':
+        return this.controller.togglePlugin(String(message.name ?? ''), Boolean(message.enabled));
+      case 'pluginsRemove':
+        return this.controller.removePlugin(String(message.name ?? ''));
+      case 'pluginsSetEnv':
+        return this.controller.setPluginEnv(
+          String(message.name ?? ''),
+          (message.env ?? {}) as Record<string, string>,
+        );
+      default:
+        throw new Error(`Unknown plugin action: ${type}`);
     }
   }
 

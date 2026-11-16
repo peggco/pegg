@@ -12,6 +12,9 @@ import {
   ModelListResult,
   PeggCapabilities,
   PermissionParams,
+  PluginCatalogResult,
+  PluginListResult,
+  PluginMutationResult,
   PromptResult,
   SessionInfo,
   SessionListItem,
@@ -403,6 +406,66 @@ export class ChatController extends EventEmitter {
       this.emitState();
     }
     return result;
+  }
+
+  private requirePlugins(): void {
+    if (!this.peggCaps()?.plugins) {
+      throw new Error('This Pegg binary does not support plugin management. Update the Pegg binary first.');
+    }
+  }
+
+  async listPlugins(): Promise<PluginListResult> {
+    await this.ensureStarted();
+    this.requirePlugins();
+    return this.client!.request<PluginListResult>('_pegg/plugins/list', {}, 30000);
+  }
+
+  async searchPlugins(query: string, limit = 30): Promise<PluginCatalogResult> {
+    await this.ensureStarted();
+    this.requirePlugins();
+    return this.client!.request<PluginCatalogResult>('_pegg/plugins/search', { query, limit }, 30000);
+  }
+
+  async installPlugin(source: string, name: string): Promise<PluginMutationResult> {
+    await this.ensureStarted();
+    this.requirePlugins();
+    return this.client!.request<PluginMutationResult>(
+      '_pegg/plugins/install',
+      { source, name },
+      180000,
+    );
+  }
+
+  async updatePlugin(source: string, name: string): Promise<PluginMutationResult> {
+    await this.ensureStarted();
+    this.requirePlugins();
+    return this.client!.request<PluginMutationResult>(
+      '_pegg/plugins/update',
+      { source, name },
+      180000,
+    );
+  }
+
+  async togglePlugin(name: string, enabled: boolean): Promise<PluginMutationResult> {
+    await this.ensureStarted();
+    this.requirePlugins();
+    return this.client!.request<PluginMutationResult>(
+      '_pegg/plugins/toggle',
+      { name, enabled },
+      30000,
+    );
+  }
+
+  async removePlugin(name: string): Promise<PluginMutationResult> {
+    await this.ensureStarted();
+    this.requirePlugins();
+    return this.client!.request<PluginMutationResult>('_pegg/plugins/remove', { name }, 60000);
+  }
+
+  async setPluginEnv(name: string, env: Record<string, string>): Promise<PluginMutationResult> {
+    await this.ensureStarted();
+    this.requirePlugins();
+    return this.client!.request<PluginMutationResult>('_pegg/plugins/env', { name, env }, 30000);
   }
 
   async startVoice(): Promise<void> {

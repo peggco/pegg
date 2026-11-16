@@ -96,6 +96,23 @@ It supports:
 
 The current session is marked with a green icon.
 
+## Plugins
+
+Run **Tools → Pegg → Manage Plugins**, or click the plug icon in the chat
+toolbar, to open the plugin page in the Pegg tool window. It shares the same
+`pkg/chat-ui` page as VS Code:
+
+- **Installed** — name, version, source, enabled/loaded state, and the last boot
+  error. Enable or disable a plugin, remove it, or configure its environment.
+- **Catalog** — search the plugin catalog and install or update a plugin.
+  Update badges appear when the catalog is newer than the installed release.
+- **Environment** — masked inputs for the plugin's required and configured
+  environment variables, saved to `plugins.options` in `~/.pegg/pegg.json`.
+
+Plugin install, update, enable/disable, and env changes take effect when the ACP
+server restarts. The page shows a restart hint and a **Restart server** button
+after any change.
+
 ## Modes
 
 | Mode | Behavior |

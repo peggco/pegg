@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a plugin management page (**Pegg: Manage Plugins**) that lists installed
+  plugins with version, source, enabled/loaded state, and load errors; supports
+  enable/disable, remove, catalog install and update, and masked environment
+  editing without leaving the editor.
 - Todo/plan updates now render as an inline plan card at the latest
   `todowrite` in each message instead of a persistent panel above the
   composer. Older updates in the same message collapse into the last card, a

@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"encoding/json"
+	"strings"
+)
 
 func PluginExcluded(name string) (bool, error) {
 	cfg, err := Load()
@@ -60,4 +63,57 @@ func updatePluginExclude(names []string, add bool) (bool, error) {
 		return nil
 	})
 	return changed, err
+}
+
+func PluginOptions(name string) (map[string]string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, nil
+	}
+	cfg, err := Load()
+	if err != nil {
+		return nil, err
+	}
+	raw, ok := cfg.Plugins.Options[name]
+	if !ok || len(raw) == 0 {
+		return map[string]string{}, nil
+	}
+	var values map[string]string
+	if err := json.Unmarshal(raw, &values); err != nil {
+		return map[string]string{}, nil
+	}
+	if values == nil {
+		values = map[string]string{}
+	}
+	return values, nil
+}
+
+func SetPluginOptions(name string, values map[string]string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+	clean := make(map[string]string, len(values))
+	for key, value := range values {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		clean[key] = value
+	}
+	return Update(func(cfg *Config) error {
+		if len(clean) == 0 {
+			delete(cfg.Plugins.Options, name)
+			return nil
+		}
+		data, err := json.Marshal(clean)
+		if err != nil {
+			return err
+		}
+		if cfg.Plugins.Options == nil {
+			cfg.Plugins.Options = make(map[string]json.RawMessage)
+		}
+		cfg.Plugins.Options[name] = json.RawMessage(data)
+		return nil
+	})
 }

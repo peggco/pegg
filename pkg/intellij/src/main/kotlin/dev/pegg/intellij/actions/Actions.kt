@@ -493,6 +493,20 @@ class PeggOpenChatAction : PeggAction("Open Pegg Chat", "Open the Pegg tool wind
     }
 }
 
+class PeggOpenPluginsAction : PeggAction(
+    "Manage Plugins",
+    "Open the Pegg plugin management page",
+    AllIcons.General.Settings,
+) {
+    override fun actionPerformed(event: AnActionEvent) {
+        val project = project(event) ?: return
+        val service = service(event) ?: return
+        PeggActions.openChat(project)
+        service.activate()
+        service.webView?.showPlugins()
+    }
+}
+
 class PeggNewSessionAction : PeggAction("New Session", "Start a new Pegg session", AllIcons.General.Add) {
     override fun actionPerformed(event: AnActionEvent) {
         val project = project(event) ?: return

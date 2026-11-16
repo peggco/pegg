@@ -83,6 +83,12 @@
         "icon": "$(add)"
       },
       {
+        "command": "pegg.chat.plugins",
+        "title": "Manage Plugins",
+        "category": "Pegg",
+        "icon": "$(extensions)"
+      },
+      {
         "command": "pegg.chat.stop",
         "title": "Stop Agent",
         "category": "Pegg",
@@ -398,6 +404,11 @@
           "command": "pegg.chat.newSession",
           "when": "view == pegg.chat",
           "group": "navigation@1"
+        },
+        {
+          "command": "pegg.chat.plugins",
+          "when": "view == pegg.chat",
+          "group": "navigation@2"
         },
         {
           "command": "pegg.session.refresh",

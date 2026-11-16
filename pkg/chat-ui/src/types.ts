@@ -403,6 +403,7 @@ export interface PeggCapabilities {
   history?: boolean;
   terminals?: boolean;
   elicitation?: boolean;
+  plugins?: boolean;
 }
 
 export interface AgentCapabilities {
@@ -436,6 +437,58 @@ export interface ModelEntry {
 
 export interface ModelListResult {
   models: ModelEntry[];
+}
+
+export interface PluginInfo {
+  name: string;
+  path?: string;
+  version?: string;
+  source?: string;
+  description?: string;
+  enabled: boolean;
+  loaded: boolean;
+  manual?: boolean;
+  installedAt?: string;
+  lastError?: string;
+  envKeys?: string[];
+}
+
+export interface PluginListResult {
+  plugins: PluginInfo[];
+  pluginsEnabled?: boolean;
+}
+
+export interface PluginCatalogItem {
+  id: string;
+  name: string;
+  description?: string;
+  source: string;
+  url?: string;
+  license?: string;
+  official?: boolean;
+  tags?: string[];
+  version?: string;
+  capabilities?: string[];
+  platforms?: string[];
+  repository?: string;
+  homepage?: string;
+  requiredEnv?: string[];
+  installedVersion?: string;
+  updateAvailable?: boolean;
+}
+
+export interface PluginCatalogResult {
+  items: PluginCatalogItem[];
+  nextCursor?: number;
+}
+
+export interface PluginMutationResult {
+  name?: string;
+  path?: string;
+  restartRequired?: boolean;
+  warnings?: string[];
+  catalogVersion?: string;
+  installedVersion?: string;
 }
 
 export interface PromptResult {

@@ -86,6 +86,7 @@ type PeggCapabilities struct {
 	History     bool `json:"history,omitempty"`
 	Terminals   bool `json:"terminals,omitempty"`
 	Elicitation bool `json:"elicitation,omitempty"`
+	Plugins     bool `json:"plugins,omitempty"`
 }
 
 type PromptCaps struct {
@@ -172,6 +173,7 @@ func (s *Server) handleInitialize(ctx context.Context, params json.RawMessage) (
 				History:     true,
 				Terminals:   true,
 				Elicitation: true,
+				Plugins:     true,
 			},
 		},
 	}

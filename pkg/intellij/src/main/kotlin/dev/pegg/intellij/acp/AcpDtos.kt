@@ -113,6 +113,63 @@ data class SkillInstallResult(
 )
 
 @Serializable
+data class PluginInfo(
+    val name: String,
+    val path: String? = null,
+    val version: String? = null,
+    val source: String? = null,
+    val description: String? = null,
+    val enabled: Boolean = false,
+    val loaded: Boolean = false,
+    val manual: Boolean? = null,
+    val installedAt: String? = null,
+    val lastError: String? = null,
+    val envKeys: List<String> = emptyList(),
+)
+
+@Serializable
+data class PluginListResult(
+    val plugins: List<PluginInfo> = emptyList(),
+    val pluginsEnabled: Boolean = true,
+)
+
+@Serializable
+data class PluginCatalogItem(
+    val id: String,
+    val name: String,
+    val description: String? = null,
+    val source: String,
+    val url: String? = null,
+    val license: String? = null,
+    val official: Boolean = false,
+    val tags: List<String> = emptyList(),
+    val version: String? = null,
+    val capabilities: List<String> = emptyList(),
+    val platforms: List<String> = emptyList(),
+    val repository: String? = null,
+    val homepage: String? = null,
+    val requiredEnv: List<String> = emptyList(),
+    val installedVersion: String? = null,
+    val updateAvailable: Boolean = false,
+)
+
+@Serializable
+data class PluginCatalogResult(
+    val items: List<PluginCatalogItem> = emptyList(),
+    val nextCursor: Int? = null,
+)
+
+@Serializable
+data class PluginMutationResult(
+    val name: String? = null,
+    val path: String? = null,
+    val restartRequired: Boolean = false,
+    val warnings: List<String> = emptyList(),
+    val catalogVersion: String? = null,
+    val installedVersion: String? = null,
+)
+
+@Serializable
 data class Cost(val amount: Double, val currency: String? = null)
 
 @Serializable
@@ -240,6 +297,7 @@ data class PeggCapabilities(
     val history: Boolean? = null,
     val terminals: Boolean? = null,
     val elicitation: Boolean? = null,
+    val plugins: Boolean? = null,
 )
 
 @Serializable

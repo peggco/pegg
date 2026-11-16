@@ -48,6 +48,7 @@ type Manager struct {
 	commands    []PluginCommand
 	eventUnsubs []func() error
 	registry    *corehook.Registry
+	loadErrors  map[string]string
 
 	hookMu    sync.Mutex
 	hookDepth map[string]int
@@ -118,15 +119,16 @@ func NewManager(
 	_ *lsp.Manager,
 ) *Manager {
 	return &Manager{
-		log:       log,
-		cfg:       cfg,
-		bus:       bus,
-		fs:        fs,
-		plugins:   make(map[string]*PluginInstance),
-		clients:   make(map[string]*goplugin.Client),
-		exclude:   make(map[string]bool),
-		registry:  corehook.Default().Registry(),
-		hookDepth: make(map[string]int),
+		log:        log,
+		cfg:        cfg,
+		bus:        bus,
+		fs:         fs,
+		plugins:    make(map[string]*PluginInstance),
+		clients:    make(map[string]*goplugin.Client),
+		exclude:    make(map[string]bool),
+		registry:   corehook.Default().Registry(),
+		hookDepth:  make(map[string]int),
+		loadErrors: make(map[string]string),
 	}
 }
 
@@ -144,6 +146,7 @@ const pluginLoadWorkers = 8
 var errPluginSkipped = errors.New("plugin skipped")
 
 type pluginLoadResult struct {
+	name     string
 	instance *PluginInstance
 	err      error
 }
@@ -175,7 +178,7 @@ func (m *Manager) LoadPlugins() error {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			instance, err := m.connectPlugin(path)
-			results[i] = pluginLoadResult{instance: instance, err: err}
+			results[i] = pluginLoadResult{name: filepath.Base(path), instance: instance, err: err}
 		}(i, path)
 	}
 	wg.Wait()
@@ -184,6 +187,7 @@ func (m *Manager) LoadPlugins() error {
 		if result.err != nil {
 			if !errors.Is(result.err, errPluginSkipped) {
 				m.log.Fwarn("plugin: %v", result.err)
+				m.recordLoadError(result.name, result.err)
 			}
 			continue
 		}
@@ -192,13 +196,44 @@ func (m *Manager) LoadPlugins() error {
 				continue
 			}
 			m.log.Fwarn("plugin: failed to register %s: %v", result.instance.Name, err)
+			m.recordLoadError(result.name, err)
 			if result.instance.Client != nil {
 				result.instance.Client.Kill()
 			}
+			continue
 		}
+		m.clearLoadError(result.name)
 	}
 
 	return nil
+}
+
+func (m *Manager) recordLoadError(name string, err error) {
+	if name == "" || err == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.loadErrors == nil {
+		m.loadErrors = make(map[string]string)
+	}
+	m.loadErrors[name] = err.Error()
+}
+
+func (m *Manager) clearLoadError(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.loadErrors, name)
+}
+
+func (m *Manager) LoadErrors() map[string]string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make(map[string]string, len(m.loadErrors))
+	for name, message := range m.loadErrors {
+		out[name] = message
+	}
+	return out
 }
 
 func (m *Manager) pluginExcluded(name string) bool {

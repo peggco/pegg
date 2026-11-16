@@ -115,6 +115,24 @@ The sidebar chat supports:
 - Enter/Tab — accept.
 - Esc — dismiss.
 
+## Plugins
+
+Run **Pegg: Manage Plugins**, or click the plug icon in the chat toolbar, to open
+the plugin page inside the Pegg sidebar. It lists installed plugins and the Pegg
+catalog:
+
+- **Installed** — name, version, source, enabled/loaded state, and the last boot
+  error. Enable or disable a plugin, remove it, or configure its environment.
+- **Catalog** — search the plugin catalog and install or update a plugin without
+  leaving the editor. Update badges appear when the catalog is newer than the
+  installed release.
+- **Environment** — masked inputs for the plugin's required and configured
+  environment variables, saved to `plugins.options` in `~/.pegg/pegg.json`.
+
+Plugin install, update, enable/disable, and env changes take effect when the ACP
+server restarts. The page shows a restart hint and a **Restart server** button
+after any change.
+
 ## Modes
 
 | Mode | Behavior |
@@ -207,6 +225,7 @@ or run **Pegg: Review Current File Changes** for the active file.
 |---|---|
 | **Pegg: Open Chat** | Focus the Pegg chat view |
 | **Pegg: New Session** | Start a fresh session |
+| **Pegg: Manage Plugins** | Open the plugin management page |
 | **Pegg: Stop Agent** | Cancel the running agent and subagents |
 | **Pegg: Select Mode** | Auto, Plan, or Build |
 | **Pegg: Select Model** | Choose a configured provider/model |

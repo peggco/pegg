@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added a plugin management page (**Tools → Pegg → Manage Plugins**) that lists
+  installed plugins with version, source, enabled/loaded state, and load errors;
+  supports enable/disable, remove, catalog install and update, and masked
+  environment editing without leaving the IDE.
+
 ### Changed
 
 - Todo/plan updates now render as an inline plan card at the latest
