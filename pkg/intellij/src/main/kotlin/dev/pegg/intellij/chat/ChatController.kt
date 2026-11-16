@@ -26,10 +26,12 @@ import dev.pegg.intellij.acp.PendingInteraction
 import dev.pegg.intellij.acp.PermissionOption
 import dev.pegg.intellij.acp.PermissionParams
 import dev.pegg.intellij.acp.PromptResult
+import dev.pegg.intellij.acp.RevertSummary
 import dev.pegg.intellij.acp.SessionForkResult
 import dev.pegg.intellij.acp.SessionListItem
 import dev.pegg.intellij.acp.SessionListResult
 import dev.pegg.intellij.acp.SessionNewResult
+import dev.pegg.intellij.acp.SessionRevertResult
 import dev.pegg.intellij.acp.SessionStateResult
 import dev.pegg.intellij.acp.SessionUpdate
 import dev.pegg.intellij.acp.SkillInstallResult
@@ -86,6 +88,7 @@ class ChatController(
     private val stateListeners = CopyOnWriteArrayList<(ChatState) -> Unit>()
     private val sessionsListeners = CopyOnWriteArrayList<() -> Unit>()
     private val composerTextListeners = CopyOnWriteArrayList<(String) -> Unit>()
+    private val revertSummaryListeners = CopyOnWriteArrayList<(RevertSummary) -> Unit>()
     private val runFinishedListeners = CopyOnWriteArrayList<(ChatState) -> Unit>()
 
     private var client: AcpClient? = null
@@ -109,6 +112,8 @@ class ChatController(
     fun removeSessionsListener(listener: () -> Unit) = sessionsListeners.remove(listener)
     fun addComposerTextListener(listener: (String) -> Unit) = composerTextListeners.addIfAbsent(listener)
     fun removeComposerTextListener(listener: (String) -> Unit) = composerTextListeners.remove(listener)
+    fun addRevertSummaryListener(listener: (RevertSummary) -> Unit) = revertSummaryListeners.addIfAbsent(listener)
+    fun removeRevertSummaryListener(listener: (RevertSummary) -> Unit) = revertSummaryListeners.remove(listener)
     fun addRunFinishedListener(listener: (ChatState) -> Unit) = runFinishedListeners.addIfAbsent(listener)
     fun removeRunFinishedListener(listener: (ChatState) -> Unit) = runFinishedListeners.remove(listener)
 
@@ -530,7 +535,7 @@ class ChatController(
         ensureSession()
         if (state.running) throw IllegalStateException("Wait for Pegg to finish before reverting.")
         if (!historySupported) throw IllegalStateException("This Pegg binary does not support reverting. Update it first.")
-        request<JsonElement>("_pegg/session/revert", messageRef(item), 60_000)
+        val result = request<SessionRevertResult>("_pegg/session/revert", messageRef(item), 60_000)
         synchronized(stateLock) {
             ChatStateOps.truncateFrom(state, itemId)
             state.usage = UsageState()
@@ -539,6 +544,33 @@ class ChatController(
         emitState()
         composerTextListeners.forEach { it(item.text) }
         emitSessions()
+        val summary = RevertSummary(
+            removed = result.removed,
+            snapshotId = result.snapshotId,
+            files = result.files,
+            totalAdditions = result.totalAdditions,
+            totalDeletions = result.totalDeletions,
+            status = "reverted",
+        )
+        revertSummaryListeners.forEach { runCatching { it(summary) } }
+    }
+
+    suspend fun undoRevert(snapshotId: String) {
+        ensureSession()
+        if (state.running) throw IllegalStateException("Wait for Pegg to finish before undoing.")
+        if (snapshotId.isBlank()) throw IllegalStateException("Nothing to undo.")
+        val peggId = state.peggSessionId
+        requestRaw(
+            "_pegg/session/undo_revert",
+            buildJsonObject {
+                put("sessionId", state.acpSessionId ?: "")
+                put("snapshotId", snapshotId)
+            },
+            60_000,
+        )
+        if (peggId != null) resumeSession(peggId)
+        val summary = RevertSummary(snapshotId = snapshotId, status = "restored")
+        revertSummaryListeners.forEach { runCatching { it(summary) } }
     }
 
     suspend fun restart() {

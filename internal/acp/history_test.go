@@ -188,3 +188,90 @@ func TestSessionMessageRefErrors(t *testing.T) {
 		}
 	})
 }
+
+func TestSessionRevertReturnsFileSummary(t *testing.T) {
+	srv := newTestServer(t)
+	sess, err := srv.sessions.Create(session.CreateOptions{Title: "S", ProjectDir: "/tmp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.sessions.AppendMessage(sess.ID, llm.UserMessage("edit files")); err != nil {
+		t.Fatal(err)
+	}
+	assistant := llm.Message{
+		Role: llm.RoleAssistant,
+		ToolCalls: []llm.ToolCall{{
+			Function: llm.Function{
+				Name:      "edit",
+				Arguments: `{"filePath":"src/app.go","oldString":"a","newString":"a\nb"}`,
+			},
+		}},
+	}
+	if _, err := srv.sessions.AppendMessage(sess.ID, assistant); err != nil {
+		t.Fatal(err)
+	}
+	srv.addSession(&ACPSession{ID: "acp-summary", Cwd: "/tmp", PeggSessionID: sess.ID})
+
+	index := 0
+	params, _ := json.Marshal(SessionMessageRef{SessionId: "acp-summary", UserMessageIndex: &index})
+	raw, err := srv.handleSessionRevert(context.Background(), json.RawMessage(params))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := raw.(SessionRevertResult)
+	if len(result.Files) != 1 || result.Files[0].Path != "src/app.go" {
+		t.Fatalf("files = %+v", result.Files)
+	}
+	if result.Files[0].Additions != 1 || result.Files[0].Deletions != 0 {
+		t.Fatalf("file counts = %+v", result.Files[0])
+	}
+	if result.TotalAdditions != 1 || result.TotalDeletions != 0 {
+		t.Fatalf("totals = +%d -%d", result.TotalAdditions, result.TotalDeletions)
+	}
+}
+
+func TestSessionUndoRevertRestoresMessages(t *testing.T) {
+	srv := newTestServer(t)
+	sessionID, _ := seedHistorySession(t, srv)
+
+	index := 1
+	params, _ := json.Marshal(SessionMessageRef{SessionId: "acp-1", UserMessageIndex: &index})
+	raw, err := srv.handleSessionRevert(context.Background(), json.RawMessage(params))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := raw.(SessionRevertResult)
+	if result.SnapshotId == "" {
+		t.Fatal("revert did not return a snapshot id")
+	}
+
+	undoParams, _ := json.Marshal(SessionUndoRevertParams{SessionId: "acp-1", SnapshotId: result.SnapshotId})
+	undoRaw, err := srv.handleSessionUndoRevert(context.Background(), json.RawMessage(undoParams))
+	if err != nil {
+		t.Fatal(err)
+	}
+	undo := undoRaw.(SessionUndoRevertResult)
+	if !undo.Restored {
+		t.Fatal("undo did not report restored")
+	}
+	messages, err := srv.sessions.Messages(sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 4 {
+		t.Fatalf("messages after undo = %d, want 4", len(messages))
+	}
+}
+
+func TestSessionUndoRevertErrors(t *testing.T) {
+	srv := newTestServer(t)
+	seedHistorySession(t, srv)
+
+	_, err := srv.handleSessionUndoRevert(context.Background(), json.RawMessage(`{"sessionId":"acp-1","snapshotId":"missing"}`))
+	if err == nil {
+		t.Fatal("expected an error for an unknown snapshot")
+	}
+	if _, err := srv.handleSessionUndoRevert(context.Background(), json.RawMessage(`{"sessionId":"acp-1"}`)); err == nil {
+		t.Fatal("expected an error for a missing snapshot id")
+	}
+}

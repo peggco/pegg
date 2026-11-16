@@ -83,6 +83,10 @@ permission cards, and ask-user forms.
 | New line | Shift+Enter |
 | Stop | Stop button while the agent is running |
 
+Reverting a user message shows a summary above the composer with the file count,
+green/red line totals, per-file statuses, and an **Undo** button. The composer
+keeps focus, so you can keep typing while the summary is visible.
+
 ## Sessions
 
 The **Sessions** tab lists sessions for the current project and other projects.

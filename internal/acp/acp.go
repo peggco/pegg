@@ -321,6 +321,8 @@ func (s *Server) dispatch(ctx context.Context, id any, method string, params jso
 		result, handlerErr = s.handleSessionFork(ctx, params)
 	case "_pegg/session/revert":
 		result, handlerErr = s.handleSessionRevert(ctx, params)
+	case "_pegg/session/undo_revert":
+		result, handlerErr = s.handleSessionUndoRevert(ctx, params)
 	case "_pegg/models":
 		result, handlerErr = s.handleListModels(ctx, params)
 	case "_pegg/skills/reload":

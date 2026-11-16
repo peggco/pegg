@@ -170,8 +170,9 @@ Deleting a session permanently removes its messages and usage from the store.
 The session layer also supports **forking** (copy a session up to a message into a
 new session, recording a `parent_id`) and **reverting** (truncate after a message,
 with the removed messages stored as a snapshot for later restore). These APIs are
-exposed in the [Go SDK](../../sdk/sessions.md) but are not wired into the CLI, TUI, or
-HTTP API yet.
+exposed in the [Go SDK](../../sdk/sessions.md), the ACP clients (desktop, VS
+Code, IntelliJ) and the TUI. A revert returns a per-file change summary that
+each chat surface shows above the composer with an inline undo action.
 
 ## Tips
 

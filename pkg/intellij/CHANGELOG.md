@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- A revert summary now appears above the composer with the reverted file count,
+  green/red line totals, an expandable per-file list, and an undo button.
+  Conflict entries are marked, the summary is localized, and the composer keeps
+  focus throughout.
+
 ### Changed
 
 - Todo/plan updates now render as an inline plan card at the latest

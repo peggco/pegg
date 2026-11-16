@@ -319,7 +319,8 @@ Pegg-specific methods are prefixed with `_` per the ACP extensibility rules:
 | `_pegg/session/rename` | Rename a session |
 | `_pegg/session/set_model` | Set provider/model/reasoning effort (alias of `session/set_model`) |
 | `_pegg/session/fork` | Fork a session before a message |
-| `_pegg/session/revert` | Revert a session to a message |
+| `_pegg/session/revert` | Revert a session to a message; returns the removed count, a snapshot id, and a per-file change summary |
+| `_pegg/session/undo_revert` | Restore the messages from a revert snapshot (`{ sessionId, snapshotId }`) |
 | `_pegg/ask` | Ask the user structured questions (fallback for elicitation) |
 
 ### Session history pagination

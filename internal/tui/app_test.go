@@ -581,7 +581,15 @@ func TestAppRevertMessage(t *testing.T) {
 	_, _ = mgr.AppendMessage(sess.ID, llm.Message{Role: llm.RoleUser, Content: "first"})
 	_, _ = mgr.AppendMessage(sess.ID, llm.Message{Role: llm.RoleAssistant, Content: "hi"})
 	second, _ := mgr.AppendMessage(sess.ID, llm.Message{Role: llm.RoleUser, Content: "second"})
-	_, _ = mgr.AppendMessage(sess.ID, llm.Message{Role: llm.RoleAssistant, Content: "reply"})
+	_, _ = mgr.AppendMessage(sess.ID, llm.Message{
+		Role: llm.RoleAssistant,
+		ToolCalls: []llm.ToolCall{{
+			Function: llm.Function{
+				Name:      "edit",
+				Arguments: `{"filePath":"a.go","oldString":"a","newString":"a\nb"}`,
+			},
+		}},
+	})
 
 	info, ok := a.sessionInfoFor(sess.ID)
 	if !ok {
@@ -602,6 +610,66 @@ func TestAppRevertMessage(t *testing.T) {
 	}
 	if got := a.home.Input().Value(); got != "second" {
 		t.Fatalf("input = %q, want second", got)
+	}
+	if a.revertSnapshotID == "" {
+		t.Fatal("revert snapshot id was not captured")
+	}
+	notice := a.home.RevertNotice()
+	if notice == nil || notice.Restored || !strings.Contains(notice.Title, "1 file") {
+		t.Fatalf("notice = %+v", notice)
+	}
+	if notice.Additions != 1 || notice.Deletions != 0 {
+		t.Fatalf("notice counts = +%d -%d", notice.Additions, notice.Deletions)
+	}
+}
+
+func TestAppUndoRevert(t *testing.T) {
+	a, mgr := newSessionApp(t)
+	dir, _ := os.Getwd()
+	sess, err := mgr.Create(session.CreateOptions{Title: "S", Provider: "p", Model: "m", ProjectDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = mgr.AppendMessage(sess.ID, llm.Message{Role: llm.RoleUser, Content: "first"})
+	_, _ = mgr.AppendMessage(sess.ID, llm.Message{Role: llm.RoleAssistant, Content: "hi"})
+	second, _ := mgr.AppendMessage(sess.ID, llm.Message{Role: llm.RoleUser, Content: "second"})
+	_, _ = mgr.AppendMessage(sess.ID, llm.Message{Role: llm.RoleAssistant, Content: "reply"})
+
+	info, ok := a.sessionInfoFor(sess.ID)
+	if !ok {
+		t.Fatal("session info not loaded")
+	}
+	a.activateSession(info)
+	target := chatItemByText(a.chat.Items(), "second")
+	if target == nil {
+		t.Fatal("second user message not found in chat")
+	}
+
+	a.doRevert(sess.ID, second.ID, target)
+	a.undoRevert()
+
+	msgs, _ := mgr.Messages(sess.ID)
+	if len(msgs) != 4 {
+		t.Fatalf("messages after undo = %d, want 4", len(msgs))
+	}
+	if a.revertSnapshotID != "" {
+		t.Fatal("undo did not clear the snapshot id")
+	}
+	if items := a.chat.Items(); len(items) != 4 {
+		t.Fatalf("chat items after undo = %d, want 4", len(items))
+	}
+	notice := a.home.RevertNotice()
+	if notice == nil || !notice.Restored {
+		t.Fatalf("notice = %+v", notice)
+	}
+}
+
+func TestIsUndoRevertKey(t *testing.T) {
+	if !isUndoRevertKey(tcell.NewEventKey(tcell.KeyCtrlZ, 0, tcell.ModCtrl|tcell.ModShift)) {
+		t.Fatal("Ctrl+Shift+Z should undo the revert")
+	}
+	if isUndoRevertKey(tcell.NewEventKey(tcell.KeyCtrlZ, 0, tcell.ModCtrl)) {
+		t.Fatal("plain Ctrl+Z must stay bound to text undo")
 	}
 }
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- After reverting a message, a compact summary now appears above the composer
+  with the reverted file count, green/red line totals, an expandable per-file
+  list, and an undo button. Conflict entries are marked, the summary is
+  localized, and the composer keeps focus throughout.
 - Todo/plan updates now render as an inline plan card at the latest
   `todowrite` in each message instead of a persistent panel above the
   composer. Older updates in the same message collapse into the last card, a

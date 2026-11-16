@@ -319,9 +319,31 @@ data class SessionForkResult(
 )
 
 @Serializable
+data class RevertFileChange(
+    val path: String,
+    val additions: Int = 0,
+    val deletions: Int = 0,
+    val status: String = "reverted",
+)
+
+@Serializable
+data class RevertSummary(
+    val removed: Int = 0,
+    val snapshotId: String? = null,
+    val files: List<RevertFileChange> = emptyList(),
+    val totalAdditions: Int = 0,
+    val totalDeletions: Int = 0,
+    val status: String = "reverted",
+    val error: String? = null,
+)
+
+@Serializable
 data class SessionRevertResult(
     val removed: Int = 0,
     val snapshotId: String? = null,
+    val files: List<RevertFileChange> = emptyList(),
+    val totalAdditions: Int = 0,
+    val totalDeletions: Int = 0,
 )
 
 @Serializable
@@ -639,6 +661,7 @@ data class ChatState(
 data class ChatSettings(
     val sendOnEnter: String = "enter",
     val defaultMode: String = "auto",
+    val language: String = "en",
 )
 
 fun textOf(content: JsonElement?): String {

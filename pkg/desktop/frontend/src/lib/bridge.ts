@@ -87,6 +87,9 @@ export interface ForkResult {
 export interface RevertResult {
   removed: number;
   snapshotId?: string;
+  files?: import('../state/chat').RevertFileChange[];
+  totalAdditions?: number;
+  totalDeletions?: number;
 }
 
 export interface STTResult {
@@ -198,6 +201,7 @@ const App = GoApp as unknown as {
     messageId: string,
     userMessageIndex: number,
   ): Promise<RevertResult>;
+  UndoRevertSession(sessionId: string, snapshotId: string): Promise<void>;
   RecordStart(): Promise<void>;
   RecordStop(): Promise<STTResult>;
   RespondPermission(requestId: string, optionId: string): Promise<void>;

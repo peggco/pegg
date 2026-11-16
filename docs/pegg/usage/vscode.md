@@ -115,6 +115,10 @@ The sidebar chat supports:
 - Enter/Tab — accept.
 - Esc — dismiss.
 
+Reverting a user message shows a summary above the composer with the file count,
+green/red line totals, per-file statuses, and an **Undo** button. The composer
+keeps focus, so you can keep typing while the summary is visible.
+
 ## Modes
 
 | Mode | Behavior |

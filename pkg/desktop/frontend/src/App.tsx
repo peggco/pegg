@@ -36,6 +36,7 @@ import {
 import { store, useStore } from './state/store';
 import { CommandPalette } from './components/CommandPalette';
 import { Composer } from './components/Composer';
+import { RevertSummary } from './components/RevertSummary';
 import { AskPanel } from './components/AskPanel';
 import { Onboarding, StatusBanner, Toasts, Welcome } from './components/Welcome';
 import { ProviderOnboarding } from './components/ProviderOnboarding';
@@ -248,6 +249,7 @@ export function App() {
               <div className={`composer-dock${subagentView && !asks.length ? ' hidden' : ''}`}>
                 {asks.length ? <AskPanel key={asks[0].requestId} ask={asks[0]} /> : null}
                 <div className={asks.length ? 'composer-hidden' : undefined} aria-hidden={asks.length ? true : undefined}>
+                  <RevertSummary />
                   <Composer compact placeholder={desktopView?.placeholder} />
                   <ViewLines lines={desktopView?.footer} className="view-footer" />
                   <div className="composer-hint">

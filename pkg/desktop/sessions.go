@@ -1030,6 +1030,24 @@ func (a *App) RevertSession(sessionID, messageID string, userMessageIndex int) (
 	return res, nil
 }
 
+func (a *App) UndoRevertSession(sessionID, snapshotID string) error {
+	info, err := a.resolveSession(sessionID)
+	if err != nil {
+		return err
+	}
+	client, err := a.clientOrErr()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	params := map[string]any{"sessionId": info.ACPID, "snapshotId": snapshotID}
+	if _, err := client.Request(ctx, "_pegg/session/undo_revert", params); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (a *App) RecordStart() error {
 	client, err := a.ensureClient()
 	if err != nil {

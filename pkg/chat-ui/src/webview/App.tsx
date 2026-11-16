@@ -14,12 +14,13 @@ import { renderMarkdown } from './markdown';
 import { host } from './host';
 import { DiffView } from './DiffView';
 import { WriteView } from './WriteView';
+import { RevertSummaryBar, type RevertSummaryView } from './RevertSummary';
 import { useAnchoredScroll } from './useAnchoredScroll';
 
 interface StateMessage {
   type: 'state';
   state: ChatState;
-  settings: { sendOnEnter: 'enter' | 'ctrl+enter'; defaultMode: string };
+  settings: { sendOnEnter: 'enter' | 'ctrl+enter'; defaultMode: string; language?: string };
 }
 
 interface TranscriptMessage {
@@ -81,6 +82,11 @@ interface HubSkillInstalledMessage {
   error?: string;
 }
 
+interface RevertSummaryMessage {
+  type: 'revertSummary';
+  summary: RevertSummaryView;
+}
+
 type Incoming =
   | StateMessage
   | TranscriptMessage
@@ -90,7 +96,8 @@ type Incoming =
   | ComposerTextMessage
   | ModelsMessage
   | HubSkillsMessage
-  | HubSkillInstalledMessage;
+  | HubSkillInstalledMessage
+  | RevertSummaryMessage;
 
 interface PopupState {
   kind: 'mention' | 'command';
@@ -168,6 +175,8 @@ export function App() {
   const hubInstall = useRef<{ requestId: string; name: string; anchor: number } | null>(null);
   const hubSeq = useRef(0);
   const [composerPicker, setComposerPicker] = useState<ComposerPickerState | null>(null);
+  const [revert, setRevert] = useState<RevertSummaryView | null>(null);
+  const sessionRef = useRef<string | undefined>(undefined);
   const inlinePickers = (window as unknown as { __peggInlinePickers?: boolean }).__peggInlinePickers === true;
 
   const openMessageMenu = useCallback((item: ChatItem, rect: DOMRect) => {
@@ -301,6 +310,10 @@ export function App() {
     const onMessage = (event: MessageEvent<Incoming>) => {
       const data = event.data;
       if (data.type === 'state') {
+        if (sessionRef.current !== data.state.acpSessionId) {
+          sessionRef.current = data.state.acpSessionId;
+          setRevert(null);
+        }
         setState(data.state);
         setSettings(data.settings);
       } else if (data.type === 'transcript') {
@@ -321,6 +334,11 @@ export function App() {
           el.focus();
           el.setSelectionRange(data.text.length, data.text.length);
         });
+      } else if (data.type === 'revertSummary') {
+        setRevert(data.summary);
+        if (data.summary.status === 'restored' || data.summary.status === 'error') {
+          requestAnimationFrame(() => textarea.current?.focus());
+        }
       } else if (data.type === 'models') {
         setModels(data.models);
         setComposerPicker((current) => current?.kind === 'model' ? { ...current, loading: false } : current);
@@ -687,6 +705,19 @@ export function App() {
                 </>
               )}
         </div>
+
+        {revert ? (
+          <RevertSummaryBar
+            summary={revert}
+            language={settings.language}
+            onUndo={() => {
+              if (!revert.snapshotId) return;
+              setRevert({ ...revert, status: 'undoing' });
+              host.postMessage({ type: 'undoRevert', snapshotId: revert.snapshotId });
+            }}
+            onDismiss={() => setRevert(null)}
+          />
+        ) : null}
 
         <div className="composer">
         {popup && (activeSuggestions.length > 0 || hubLoading) && (

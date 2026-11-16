@@ -228,10 +228,28 @@ export interface SessionForkResult {
   parentId?: string;
 }
 
+export type RevertFileStatus = 'reverted' | 'conflict' | 'skipped';
+
+export interface RevertFileChange {
+  path: string;
+  additions: number;
+  deletions: number;
+  status?: RevertFileStatus;
+}
+
+export interface RevertSummary {
+  files: RevertFileChange[];
+  totalAdditions: number;
+  totalDeletions: number;
+}
+
 export interface SessionRevertResult {
   _meta?: Meta;
   removed: number;
   snapshotId?: string;
+  files?: RevertFileChange[];
+  totalAdditions?: number;
+  totalDeletions?: number;
 }
 
 export interface SessionHistoryResult {
