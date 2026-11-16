@@ -251,7 +251,7 @@ export function App() {
                   <Composer compact placeholder={desktopView?.placeholder} />
                   <ViewLines lines={desktopView?.footer} className="view-footer" />
                   <div className="composer-hint">
-                    Type @ for files · / for commands · Pegg can run commands and edit files.
+                    Type @ for files · / for commands · ↑ recalls history when empty · Pegg can run commands and edit files.
                   </div>
                 </div>
               </div>

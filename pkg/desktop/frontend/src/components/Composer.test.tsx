@@ -4,7 +4,7 @@ import { Composer } from './Composer';
 import { api } from '../lib/bridge';
 import { editorText, focusRange } from '../lib/editor';
 import { installHubSkill, sendPrompt } from '../state/actions';
-import { emptyChat } from '../state/chat';
+import { emptyChat, appendUser } from '../state/chat';
 import { store } from '../state/store';
 import type { HubSkill, SlashCommand } from '../types';
 
@@ -181,5 +181,110 @@ describe('Composer slash skills', () => {
     act(() => type(editor, '/rem'));
     fireEvent.keyDown(editor, { key: 'Escape' });
     expect(container.querySelector('.slash-menu')).toBeNull();
+  });
+});
+
+function seedHistory(...prompts: string[]) {
+  setup();
+  store.setChat((chat) => prompts.reduce((next, prompt) => appendUser(next, prompt), chat));
+}
+
+describe('Composer prompt history', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    searchHub.mockResolvedValue([]);
+    submitPrompt.mockResolvedValue(undefined);
+    install.mockResolvedValue({});
+  });
+
+  it('recalls history from an empty composer and walks Up/Down', () => {
+    seedHistory('first', 'second');
+    const { editor } = mount();
+
+    fireEvent.keyDown(editor, { key: 'ArrowUp' });
+    expect(editorText(editor)).toBe('second');
+
+    fireEvent.keyDown(editor, { key: 'ArrowUp' });
+    expect(editorText(editor)).toBe('first');
+
+    fireEvent.keyDown(editor, { key: 'ArrowUp' });
+    expect(editorText(editor)).toBe('first');
+
+    fireEvent.keyDown(editor, { key: 'ArrowDown' });
+    expect(editorText(editor)).toBe('second');
+
+    fireEvent.keyDown(editor, { key: 'ArrowDown' });
+    expect(editorText(editor)).toBe('');
+  });
+
+  it('restores the draft with Down past the newest entry', () => {
+    seedHistory('previous');
+    const { editor } = mount();
+
+    act(() => type(editor, 'my draft'));
+    fireEvent.keyDown(editor, { key: 'ArrowUp', altKey: true });
+    expect(editorText(editor)).toBe('previous');
+
+    fireEvent.keyDown(editor, { key: 'ArrowDown', altKey: true });
+    expect(editorText(editor)).toBe('my draft');
+  });
+
+  it('seeds prompts that finish loading after mount', () => {
+    setup();
+    const { editor } = mount();
+
+    act(() => {
+      store.setChat((chat) => appendUser(chat, 'loaded later'));
+    });
+
+    fireEvent.keyDown(editor, { key: 'ArrowUp' });
+    expect(editorText(editor)).toBe('loaded later');
+  });
+
+  it('keeps multiline prompts intact', () => {
+    seedHistory('line one\nline two\nline three');
+    const { editor } = mount();
+
+    fireEvent.keyDown(editor, { key: 'ArrowUp' });
+    expect(editorText(editor)).toBe('line one\nline two\nline three');
+  });
+
+  it('stops browsing after an edit and keeps the text', () => {
+    seedHistory('previous');
+    const { editor } = mount();
+
+    fireEvent.keyDown(editor, { key: 'ArrowUp' });
+    expect(editorText(editor)).toBe('previous');
+
+    act(() => type(editor, 'edited'));
+    fireEvent.keyDown(editor, { key: 'ArrowDown' });
+    expect(editorText(editor)).toBe('edited');
+  });
+
+  it('adds submitted prompts to the session history', () => {
+    seedHistory('first');
+    const { editor } = mount();
+
+    act(() => type(editor, 'second'));
+    fireEvent.keyDown(editor, { key: 'Enter' });
+    expect(submitPrompt).toHaveBeenCalledWith({ text: 'second', attachments: [] });
+    expect(editorText(editor)).toBe('');
+
+    fireEvent.keyDown(editor, { key: 'ArrowUp' });
+    expect(editorText(editor)).toBe('second');
+    fireEvent.keyDown(editor, { key: 'ArrowUp' });
+    expect(editorText(editor)).toBe('first');
+  });
+
+  it('leaves slash-menu navigation in control of the arrows', () => {
+    seedHistory('previous');
+    const { container, editor } = mount();
+
+    act(() => type(editor, '/rem'));
+    expect(container.querySelector('.slash-menu')).not.toBeNull();
+
+    fireEvent.keyDown(editor, { key: 'ArrowUp' });
+    expect(editorText(editor)).toBe('/rem');
+    expect(container.querySelector('.slash-menu')).not.toBeNull();
   });
 });
