@@ -191,7 +191,7 @@ func Run(args []string) error {
 	}
 	defer mcpMgr.Close()
 
-	lspMgr, err := lsp.Module(cfg.LanguageServers, fs, log)
+	lspMgr, err := lsp.Module(cfg.LanguageServers, fs, log, bus)
 	if err != nil {
 		return fmt.Errorf("bootstrap: init lsp: %w", err)
 	}

@@ -8,9 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/lsp/diagnostic"
 	"github.com/peggco/pegg/internal/vfs"
@@ -26,6 +29,10 @@ type Manager struct {
 	closed           bool
 	idleTimeout      time.Duration
 	diagTimeout      time.Duration
+	messageCount     uint64
+	bus              event.Bus
+	messageHandler   func(agent.AgentMessage)
+	inflight         atomic.Int64
 	done             chan struct{}
 	transportFactory func(StdioOptions) (Transport, error)
 }
@@ -63,6 +70,52 @@ func NewManager(fs *vfs.VFS, log *logger.Logger) *Manager {
 
 func (m *Manager) SetTransportFactory(fn func(StdioOptions) (Transport, error)) {
 	m.transportFactory = fn
+}
+
+func (m *Manager) SetBus(bus event.Bus) {
+	if bus == nil {
+		return
+	}
+	m.mu.Lock()
+	if m.bus != nil {
+		m.mu.Unlock()
+		return
+	}
+	m.bus = bus
+	m.messageHandler = m.handleAgentMessage
+	handler := m.messageHandler
+	m.mu.Unlock()
+	if err := bus.Subscribe(agent.TopicAgentMessage, handler); err != nil && m.log != nil {
+		m.log.Fwarn("lsp: subscribe %s: %v", agent.TopicAgentMessage, err)
+	}
+}
+
+func (m *Manager) handleAgentMessage(agent.AgentMessage) {
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return
+	}
+	m.messageCount++
+	count := m.messageCount
+	m.mu.Unlock()
+	go m.reapIdleMessages(count)
+}
+
+func (m *Manager) reapIdleMessages(current uint64) {
+	if m.inflight.Load() > 0 {
+		return
+	}
+	for _, srv := range m.snapshotServers() {
+		if !srv.ShouldStopIdle(current) {
+			continue
+		}
+		if m.log != nil {
+			m.log.Fdebug("lsp: %s stopped after %d idle messages", srv.name, srv.IdleMessages())
+		}
+		m.clearServerDiagnostics(srv)
+		go srv.stop()
+	}
 }
 
 func (m *Manager) SetIdleTimeout(d time.Duration) {
@@ -205,9 +258,11 @@ func (m *Manager) ensureRunning(name, path string) {
 		m.mu.Unlock()
 		return
 	}
+	current := m.messageCount
 	srv := m.servers[name]
 	if srv == nil {
 		srv = NewServer(name, m.cfg[name])
+		srv.lastUsedMessage = current
 		m.servers[name] = srv
 		srv.mu.Lock()
 		srv.starting = true
@@ -218,6 +273,18 @@ func (m *Manager) ensureRunning(name, path string) {
 		return
 	}
 	srv.mu.Lock()
+	srv.lastUsedMessage = current
+	if srv.stopping {
+		done := srv.stopDone
+		srv.pending[path] = true
+		srv.mu.Unlock()
+		m.mu.Unlock()
+		if done != nil {
+			<-done
+		}
+		m.ensureRunning(name, path)
+		return
+	}
 	if srv.starting {
 		srv.pending[path] = true
 		srv.mu.Unlock()
@@ -239,9 +306,14 @@ func (m *Manager) ensureRunning(name, path string) {
 }
 
 func (m *Manager) startServer(srv *Server, path string) {
+	m.mu.Lock()
+	current := m.messageCount
+	m.mu.Unlock()
+
 	srv.mu.Lock()
 	srv.starting = false
 	srv.lastUsed = time.Now()
+	srv.lastUsedMessage = current
 	srv.mu.Unlock()
 
 	root, err := m.findRoot(path, srv.cfg.RootMarkers)
@@ -315,6 +387,8 @@ func (m *Manager) openIfNeeded(srv *Server, path string) {
 }
 
 func (m *Manager) notifyDiagnostics(path string) []diagnostic.Diagnostic {
+	m.inflight.Add(1)
+	defer m.inflight.Add(-1)
 	deadline := time.Now().Add(m.diagWait())
 	beforeSeq := m.diagSeq(path)
 
@@ -362,6 +436,8 @@ func (m *Manager) waitServerRunning(srv *Server, deadline time.Time) {
 }
 
 func (m *Manager) readDiagnostics(path string) []diagnostic.Diagnostic {
+	m.inflight.Add(1)
+	defer m.inflight.Add(-1)
 	if m.diagSeq(path) > 0 {
 		return m.Diagnostics(path)
 	}
@@ -564,12 +640,20 @@ func (m *Manager) Close() error {
 		return nil
 	}
 	m.closed = true
+	bus := m.bus
+	handler := m.messageHandler
+	m.bus = nil
+	m.messageHandler = nil
 	close(m.done)
 	servers := make([]*Server, 0, len(m.servers))
 	for _, srv := range m.servers {
 		servers = append(servers, srv)
 	}
 	m.mu.Unlock()
+
+	if bus != nil && handler != nil {
+		_ = bus.Unsubscribe(agent.TopicAgentMessage, handler)
+	}
 
 	for _, srv := range servers {
 		m.clearServerDiagnostics(srv)

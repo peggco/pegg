@@ -18,23 +18,29 @@ type Server struct {
 	name string
 	cfg  config.LanguageServerConfig
 
-	mu       sync.Mutex
-	client   *Client
-	started  bool
-	failed   bool
-	starting bool
-	docs     map[string]*docState
-	pending  map[string]bool
-	lastUsed time.Time
+	mu              sync.Mutex
+	client          *Client
+	started         bool
+	failed          bool
+	starting        bool
+	stopping        bool
+	stopDone        chan struct{}
+	inflight        int
+	docs            map[string]*docState
+	pending         map[string]bool
+	lastUsed        time.Time
+	lastUsedMessage uint64
+	idleMessages    int
 }
 
 func NewServer(name string, cfg config.LanguageServerConfig) *Server {
 	return &Server{
-		name:     name,
-		cfg:      cfg,
-		docs:     make(map[string]*docState),
-		pending:  make(map[string]bool),
-		lastUsed: time.Now(),
+		name:         name,
+		cfg:          cfg,
+		docs:         make(map[string]*docState),
+		pending:      make(map[string]bool),
+		lastUsed:     time.Now(),
+		idleMessages: cfg.IdleMessagesValue(),
 	}
 }
 
@@ -48,6 +54,26 @@ func (s *Server) IdleFor() time.Duration {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return time.Since(s.lastUsed)
+}
+
+func (s *Server) ShouldStopIdle(current uint64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.client == nil || !s.started || s.starting || s.stopping || s.failed || s.inflight > 0 {
+		return false
+	}
+	limit := s.idleMessages
+	if limit <= 0 {
+		limit = config.DefaultIdleMessages
+	}
+	return current >= s.lastUsedMessage && current-s.lastUsedMessage >= uint64(limit)
+}
+
+func (s *Server) IdleMessages() int {
+	if s.idleMessages <= 0 {
+		return config.DefaultIdleMessages
+	}
+	return s.idleMessages
 }
 
 func (s *Server) Matches(path string) bool {
@@ -81,6 +107,8 @@ func (s *Server) IsFailed() bool {
 func (s *Server) openDoc(item TextDocumentItem) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.inflight++
+	defer func() { s.inflight-- }()
 
 	if _, err := s.openLocked(item); err != nil {
 		return 0, err
@@ -92,6 +120,8 @@ func (s *Server) openDoc(item TextDocumentItem) (int, error) {
 func (s *Server) syncDocs(item TextDocumentItem) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.inflight++
+	defer func() { s.inflight-- }()
 
 	ds, err := s.openLocked(item)
 	if err != nil {
@@ -138,11 +168,24 @@ func (s *Server) openURIs() []string {
 
 func (s *Server) stop() {
 	s.mu.Lock()
-	c := s.client
-	s.mu.Unlock()
-	if c == nil {
+	if s.stopping {
+		done := s.stopDone
+		s.mu.Unlock()
+		if done != nil {
+			<-done
+		}
 		return
 	}
+	c := s.client
+	if c == nil {
+		s.mu.Unlock()
+		return
+	}
+	s.stopping = true
+	s.stopDone = make(chan struct{})
+	done := s.stopDone
+	s.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_ = c.Shutdown(ctx)
@@ -153,6 +196,8 @@ func (s *Server) stop() {
 	s.started = false
 	s.docs = make(map[string]*docState)
 	s.pending = make(map[string]bool)
+	s.stopping = false
+	close(done)
 	s.mu.Unlock()
 }
 

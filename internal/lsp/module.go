@@ -4,11 +4,12 @@ import (
 	"fmt"
 
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/vfs"
 )
 
-func Module(global map[string]config.LanguageServerConfig, fs *vfs.VFS, log *logger.Logger) (*Manager, error) {
+func Module(global map[string]config.LanguageServerConfig, fs *vfs.VFS, log *logger.Logger, bus event.Bus) (*Manager, error) {
 	project, err := LoadProjectServers(".")
 	if err != nil {
 		return nil, fmt.Errorf("lsp: load project servers: %w", err)
@@ -16,6 +17,7 @@ func Module(global map[string]config.LanguageServerConfig, fs *vfs.VFS, log *log
 
 	servers := MergeServers(MergeServers(Registered(), global), project)
 	mgr := NewManager(fs, log)
+	mgr.SetBus(bus)
 	mgr.Start(servers)
 
 	if len(servers) == 0 {

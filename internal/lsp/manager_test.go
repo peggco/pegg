@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/core/config"
+	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/lsp/diagnostic"
 	"github.com/peggco/pegg/internal/vfs"
 )
@@ -368,6 +370,116 @@ func TestActivityKeepsServerAlive(t *testing.T) {
 	if len(mgr.Running()) != 1 {
 		t.Fatalf("server closed despite continuous activity: %v", mgr.Running())
 	}
+}
+
+func publishMessages(bus event.Bus, n int) {
+	for i := 0; i < n; i++ {
+		bus.Publish(agent.TopicAgentMessage, agent.AgentMessage{})
+	}
+}
+
+func TestIdleMessagesStopServer(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	fs, _ := vfs.New(root, vfs.Options{})
+
+	bus := event.New()
+	mgr := NewManager(fs, nil)
+	mgr.SetBus(bus)
+	mgr.SetTransportFactory(func(opts StdioOptions) (Transport, error) {
+		return newScriptedTransport(), nil
+	})
+	defer mgr.Close()
+	mgr.Start(map[string]config.LanguageServerConfig{
+		"gopls": {Command: "/bin/true", FileTypes: []string{"go"}, RootMarkers: []string{"go.mod"}, IdleMessages: 2},
+	})
+
+	if _, err := fs.Read("main.go"); err != nil {
+		t.Fatal(err)
+	}
+	waitRunning(t, mgr, 1)
+
+	publishMessages(bus, 1)
+	waitRunning(t, mgr, 1)
+
+	publishMessages(bus, 1)
+	waitRunning(t, mgr, 0)
+}
+
+func TestIdleMessagesResetOnTouch(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	fs, _ := vfs.New(root, vfs.Options{})
+
+	bus := event.New()
+	mgr := NewManager(fs, nil)
+	mgr.SetBus(bus)
+	mgr.SetTransportFactory(func(opts StdioOptions) (Transport, error) {
+		return newScriptedTransport(), nil
+	})
+	defer mgr.Close()
+	mgr.Start(map[string]config.LanguageServerConfig{
+		"gopls": {Command: "/bin/true", FileTypes: []string{"go"}, RootMarkers: []string{"go.mod"}, IdleMessages: 2},
+	})
+
+	if _, err := fs.Read("main.go"); err != nil {
+		t.Fatal(err)
+	}
+	waitRunning(t, mgr, 1)
+
+	publishMessages(bus, 1)
+	waitRunning(t, mgr, 1)
+
+	if _, err := fs.Read("main.go"); err != nil {
+		t.Fatal(err)
+	}
+	waitRunning(t, mgr, 1)
+
+	publishMessages(bus, 1)
+	waitRunning(t, mgr, 1)
+
+	publishMessages(bus, 1)
+	waitRunning(t, mgr, 0)
+
+	if _, err := fs.Read("main.go"); err != nil {
+		t.Fatal(err)
+	}
+	waitRunning(t, mgr, 1)
+	waitDiagnosticsCount(t, mgr, "main.go", 1)
+}
+
+func TestIdleMessagesDefaultKeepsServerUntilFive(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	fs, _ := vfs.New(root, vfs.Options{})
+
+	bus := event.New()
+	mgr := NewManager(fs, nil)
+	mgr.SetBus(bus)
+	mgr.SetTransportFactory(func(opts StdioOptions) (Transport, error) {
+		return newScriptedTransport(), nil
+	})
+	defer mgr.Close()
+	mgr.Start(map[string]config.LanguageServerConfig{
+		"gopls": {Command: "/bin/true", FileTypes: []string{"go"}, RootMarkers: []string{"go.mod"}},
+	})
+
+	if _, err := fs.Read("main.go"); err != nil {
+		t.Fatal(err)
+	}
+	waitRunning(t, mgr, 1)
+
+	publishMessages(bus, config.DefaultIdleMessages-1)
+	waitRunning(t, mgr, 1)
+
+	publishMessages(bus, 1)
+	waitRunning(t, mgr, 0)
 }
 
 func TestConcurrentTouchesSingleServer(t *testing.T) {

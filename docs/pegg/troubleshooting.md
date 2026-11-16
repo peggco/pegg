@@ -245,8 +245,9 @@ uses the same config and session database as the CLI.
 ??? question "No LSP diagnostics appear in file reads"
 
     Diagnostics require a language server whose `filetypes` match the file. Servers
-    start lazily on first access and are stopped after 10 minutes idle. If the binary
-    is missing, Pegg tries the configured `download` URL or `install` command.
+    start lazily on first access and are stopped after 5 agent messages without a
+    matching file access (or after 10 minutes idle, whichever comes first). If the
+    binary is missing, Pegg tries the configured `download` URL or `install` command.
 
     ```bash
     pegg lsp list
