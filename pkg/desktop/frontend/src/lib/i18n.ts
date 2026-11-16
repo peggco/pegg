@@ -90,8 +90,6 @@ const en: Record<string, string> = {
   "catalog.kind.mcp": "MCP",
   "catalog.kind.plugins": "Plugins",
   "catalog.restartRequired": "Restart Pegg Desktop to activate the change.",
-  "catalog.pluginConfirm": "Install plugin {name} from its GitHub release?",
-  "catalog.confirm": "Confirm",
   "catalog.docs": "Provider docs",
   "catalog.envTitle": "Required environment",
   "catalog.envHint":
