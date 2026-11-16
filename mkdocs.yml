@@ -137,6 +137,7 @@ nav:
       - Providers & Models: pegg/providers-and-models.md
       - Config: pegg/config.md
       - Troubleshooting: pegg/troubleshooting.md
+      - Localization: pegg/localization.md
       - Usage:
         - CLI: pegg/usage/cli.md
         - TUI: pegg/usage/tui.md
