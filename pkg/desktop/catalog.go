@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -215,7 +217,7 @@ func (a *App) InstallCatalogMCP(id string, env, headers map[string]string, scope
 	return CatalogMutationResult{Name: name, Path: path, RestartRequired: true}, nil
 }
 
-func (a *App) InstallCatalogPlugin(source, name string) (CatalogMutationResult, error) {
+func (a *App) InstallCatalogPlugin(source, name string, env map[string]string) (CatalogMutationResult, error) {
 	source = strings.TrimSpace(source)
 	if source == "" {
 		return CatalogMutationResult{}, errors.New("catalog: plugin source is required")
@@ -228,10 +230,18 @@ func (a *App) InstallCatalogPlugin(source, name string) (CatalogMutationResult, 
 		name = spec.DefaultName()
 	}
 
+	pluginEnv, err := normalizePluginEnv(env)
+	if err != nil {
+		return CatalogMutationResult{}, err
+	}
+
 	entry, entryErr := a.catalogEntry(catalog.KindPlugin, source)
 	var warnings []string
 	if entryErr == nil {
 		warnings = entry.CompatibilityWarnings(config.AppVersion, pkgplugin.ProtocolVersion)
+		if missing := missingPluginEnv(entry.RequiredEnv, pluginEnv); len(missing) > 0 {
+			return CatalogMutationResult{}, fmt.Errorf("catalog: missing required values: %s", strings.Join(missing, ", "))
+		}
 	} else {
 		warnings = append(warnings, "catalog entry not found; compatibility not checked")
 	}
@@ -244,6 +254,12 @@ func (a *App) InstallCatalogPlugin(source, name string) (CatalogMutationResult, 
 	})
 	if err != nil {
 		return CatalogMutationResult{}, err
+	}
+
+	if len(pluginEnv) > 0 {
+		if err := config.SetPluginEnv(result.Name, pluginEnv); err != nil {
+			return CatalogMutationResult{}, fmt.Errorf("save plugin environment: %w", err)
+		}
 	}
 
 	res := CatalogMutationResult{
@@ -263,6 +279,43 @@ func (a *App) InstallCatalogPlugin(source, name string) (CatalogMutationResult, 
 		}
 	}
 	return res, nil
+}
+
+func normalizePluginEnv(env map[string]string) (map[string]string, error) {
+	if len(env) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(env))
+	for rawKey, value := range env {
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			continue
+		}
+		out[key] = value
+	}
+	if err := config.ValidatePluginEnv(out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func missingPluginEnv(required []string, provided map[string]string) []string {
+	var missing []string
+	for _, rawKey := range required {
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			continue
+		}
+		if _, ok := provided[key]; ok {
+			continue
+		}
+		if _, ok := os.LookupEnv(key); ok {
+			continue
+		}
+		missing = append(missing, key)
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 func (a *App) UpdateCatalogPlugin(source, name string) (CatalogMutationResult, error) {

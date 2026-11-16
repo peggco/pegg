@@ -68,7 +68,7 @@ export function InstallBinary():Promise<binary.Status>;
 
 export function InstallCatalogMCP(arg1:string,arg2:Record<string, string>,arg3:Record<string, string>,arg4:string):Promise<main.CatalogMutationResult>;
 
-export function InstallCatalogPlugin(arg1:string,arg2:string):Promise<main.CatalogMutationResult>;
+export function InstallCatalogPlugin(arg1:string,arg2:string,arg3:Record<string, string>):Promise<main.CatalogMutationResult>;
 
 export function InstallHubSkill(arg1:string,arg2:string,arg3:string):Promise<main.SkillMutationResult>;
 
@@ -213,6 +213,10 @@ export function TeamRemove(arg1:string):Promise<main.TeamStatus>;
 export function TeamStatus():Promise<main.TeamStatus>;
 
 export function Themes():Promise<Array<themes.Theme>>;
+
+export function PluginEnv(arg1:string):Promise<Record<string, string>>;
+
+export function SetPluginEnv(arg1:string,arg2:Record<string, string>):Promise<void>;
 
 export function TogglePluginSettings(arg1:string):Promise<boolean>;
 

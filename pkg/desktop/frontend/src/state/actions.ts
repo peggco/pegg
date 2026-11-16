@@ -1144,8 +1144,9 @@ export async function installCatalogMCP(
 export async function installCatalogPlugin(
   source: string,
   name: string,
+  env: Record<string, string>,
 ): Promise<CatalogMutationResult> {
-  const res = await api.InstallCatalogPlugin(source, name);
+  const res = await api.InstallCatalogPlugin(source, name, env);
   applyCatalogMutation(res, name || source);
   return res;
 }

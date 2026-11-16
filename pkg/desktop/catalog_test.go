@@ -187,3 +187,29 @@ func writeInstalledPlugin(t *testing.T, dir, name, source, version string) {
 		t.Fatal(err)
 	}
 }
+
+func TestNormalizePluginEnv(t *testing.T) {
+	got, err := normalizePluginEnv(map[string]string{" TOKEN ": "secret", "": "ignored"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got["TOKEN"] != "secret" {
+		t.Fatalf("env = %#v", got)
+	}
+
+	if _, err := normalizePluginEnv(map[string]string{"bad key": "secret"}); err == nil {
+		t.Fatal("expected invalid key error")
+	}
+}
+
+func TestMissingPluginEnv(t *testing.T) {
+	t.Setenv("PEGG_TEST_PLUGIN_ENV", "present")
+
+	missing := missingPluginEnv(
+		[]string{"B", "A", "PEGG_TEST_PLUGIN_ENV"},
+		map[string]string{"A": "1"},
+	)
+	if len(missing) != 1 || missing[0] != "B" {
+		t.Fatalf("missing = %#v", missing)
+	}
+}

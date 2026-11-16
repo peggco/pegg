@@ -122,6 +122,8 @@ const App = GoApp as unknown as {
   SavePermissionSettings(p: PermissionsSettings): Promise<void>;
   SaveMemorySettings(m: MemorySettings): Promise<void>;
   TogglePluginSettings(name: string): Promise<boolean>;
+  PluginEnv(name: string): Promise<Record<string, string>>;
+  SetPluginEnv(name: string, env: Record<string, string>): Promise<void>;
   PluginSettingsPages(): Promise<PluginSettingPage[]>;
   PluginSettingsRefresh(): Promise<PluginSettingPage[]>;
   PluginSettingsAction(
@@ -253,6 +255,7 @@ const App = GoApp as unknown as {
   InstallCatalogPlugin(
     source: string,
     name: string,
+    env: Record<string, string>,
   ): Promise<CatalogMutationResult>;
   UpdateCatalogPlugin(
     source: string,

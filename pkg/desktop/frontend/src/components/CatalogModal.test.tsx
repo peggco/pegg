@@ -205,7 +205,30 @@ describe('CatalogModal', () => {
 
     fireEvent.click(container.querySelector('.hub-install-bar .btn.primary') as HTMLElement);
 
-    await waitFor(() => expect(installPlugin).toHaveBeenCalledWith('pegg/plugins', 'Kanban'));
+    await waitFor(() => expect(installPlugin).toHaveBeenCalledWith('pegg/plugins', 'Kanban', {}));
     expect(queryByText('Confirm')).toBeNull();
+  });
+
+  it('prompts for plugin environment variables before installing', async () => {
+    store.set({ catalogTab: 'plugins' });
+    search.mockResolvedValue({ items: [KANBAN], nextCursor: null });
+    fetchEntry.mockResolvedValue({ ...KANBAN, requiredEnv: ['JIRA_TOKEN'] });
+    const { container, getByText } = render(<CatalogModal />);
+
+    await waitFor(() => expect(getByText('Kanban')).not.toBeNull());
+    fireEvent.click(getByText('Kanban'));
+
+    await waitFor(() => expect(fetchEntry).toHaveBeenCalledWith('plugins', 'kanban'));
+    fireEvent.click(container.querySelector('.hub-install-bar .btn.primary') as HTMLElement);
+    await waitFor(() => expect(container.querySelector('input[name="JIRA_TOKEN"]')).not.toBeNull());
+
+    fireEvent.change(container.querySelector('input[name="JIRA_TOKEN"]') as HTMLElement, {
+      target: { value: 'jira_secret' },
+    });
+    fireEvent.click(container.querySelector('.modal.provider-modal .btn.primary') as HTMLElement);
+
+    await waitFor(() =>
+      expect(installPlugin).toHaveBeenCalledWith('pegg/plugins', 'Kanban', { JIRA_TOKEN: 'jira_secret' }),
+    );
   });
 });

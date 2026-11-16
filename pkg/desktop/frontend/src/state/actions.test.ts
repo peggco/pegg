@@ -184,9 +184,9 @@ describe('catalog actions', () => {
       commands: [{ name: 'browse', description: 'Open a browser' }],
     });
 
-    await installPlugin('peggco/pegg-browser-use', 'browser-use');
+    await installPlugin('peggco/pegg-browser-use', 'browser-use', {});
 
-    expect(installCatalogPlugin).toHaveBeenCalledWith('peggco/pegg-browser-use', 'browser-use');
+    expect(installCatalogPlugin).toHaveBeenCalledWith('peggco/pegg-browser-use', 'browser-use', {});
     expect(store.get().chat.commands).toContainEqual({ name: 'browse', description: 'Open a browser' });
   });
 

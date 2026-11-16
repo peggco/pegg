@@ -207,6 +207,21 @@ func (m *Manager) pluginExcluded(name string) bool {
 	return m.exclude[name]
 }
 
+func (m *Manager) pluginEnv(name string) map[string]string {
+	if m.cfg == nil {
+		return nil
+	}
+	env, ok := m.cfg.Plugins.Env[name]
+	if !ok || len(env) == 0 {
+		return nil
+	}
+	copied := make(map[string]string, len(env))
+	for key, value := range env {
+		copied[key] = value
+	}
+	return copied
+}
+
 // connectPlugin starts one plugin process, performs the handshake and Boot, and
 // fetches its capability metadata. It does not touch shared manager state, so
 // plugins can be connected concurrently.
@@ -223,7 +238,7 @@ func (m *Manager) connectPlugin(path string) (*PluginInstance, error) {
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig:  pkgplugin.Handshake,
 		Plugins:          pkgplugin.NewClientPluginMap(m.dispatchHook),
-		Cmd:              pluginCmd(path),
+		Cmd:              pluginCmd(path, m.pluginEnv(name)),
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolNetRPC},
 		Logger: hclog.New(&hclog.LoggerOptions{
 			Output: &logWriter{log: m.log},
@@ -1030,8 +1045,20 @@ func GetPluginDir() (string, error) {
 	return filepath.Join(home, ".pegg", "plugins"), nil
 }
 
-func pluginCmd(path string) *exec.Cmd {
+func pluginCmd(path string, env map[string]string) *exec.Cmd {
 	cmd := exec.Command(path)
+	if len(env) > 0 {
+		merged := os.Environ()
+		keys := make([]string, 0, len(env))
+		for key := range env {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			merged = append(merged, key+"="+env[key])
+		}
+		cmd.Env = merged
+	}
 	configurePluginCmd(cmd)
 	return cmd
 }

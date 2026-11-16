@@ -122,8 +122,8 @@ export function InstallCatalogMCP(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['InstallCatalogMCP'](arg1, arg2, arg3, arg4);
 }
 
-export function InstallCatalogPlugin(arg1, arg2) {
-  return window['go']['main']['App']['InstallCatalogPlugin'](arg1, arg2);
+export function InstallCatalogPlugin(arg1, arg2, arg3) {
+  return window['go']['main']['App']['InstallCatalogPlugin'](arg1, arg2, arg3);
 }
 
 export function InstallHubSkill(arg1, arg2, arg3) {
@@ -412,6 +412,14 @@ export function TeamStatus() {
 
 export function Themes() {
   return window['go']['main']['App']['Themes']();
+}
+
+export function PluginEnv(arg1) {
+  return window['go']['main']['App']['PluginEnv'](arg1);
+}
+
+export function SetPluginEnv(arg1, arg2) {
+  return window['go']['main']['App']['SetPluginEnv'](arg1, arg2);
 }
 
 export function TogglePluginSettings(arg1) {

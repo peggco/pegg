@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -102,9 +103,10 @@ func (p *PermissionConfig) JudgeThresholdValue() float64 {
 }
 
 type PluginConfig struct {
-	Enabled bool                       `json:"enabled,omitempty"`
-	Exclude []string                   `json:"exclude,omitempty"`
-	Options map[string]json.RawMessage `json:"options,omitempty"`
+	Enabled bool                         `json:"enabled,omitempty"`
+	Exclude []string                     `json:"exclude,omitempty"`
+	Options map[string]json.RawMessage   `json:"options,omitempty"`
+	Env     map[string]map[string]string `json:"env,omitempty"`
 }
 
 type ConnectConfig struct {
@@ -849,4 +851,66 @@ func TogglePlugin(name string) (bool, error) {
 	}
 
 	return !found, nil
+}
+
+var pluginEnvKeyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+func ValidatePluginEnv(env map[string]string) error {
+	for key := range env {
+		if !pluginEnvKeyPattern.MatchString(key) {
+			return fmt.Errorf("invalid plugin environment variable name %q", key)
+		}
+	}
+	return nil
+}
+
+func SetPluginEnv(name string, env map[string]string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("plugin name is required")
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("invalid plugin name %q", name)
+	}
+	if err := ValidatePluginEnv(env); err != nil {
+		return err
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	if len(env) == 0 {
+		delete(cfg.Plugins.Env, name)
+		if len(cfg.Plugins.Env) == 0 {
+			cfg.Plugins.Env = nil
+		}
+	} else {
+		if cfg.Plugins.Env == nil {
+			cfg.Plugins.Env = map[string]map[string]string{}
+		}
+		copied := make(map[string]string, len(env))
+		for key, value := range env {
+			copied[key] = value
+		}
+		cfg.Plugins.Env[name] = copied
+	}
+	return Save(cfg)
+}
+
+// PluginEnv returns a copy of the environment configured for one plugin.
+func PluginEnv(name string) (map[string]string, bool) {
+	cfg, err := Load()
+	if err != nil || cfg == nil {
+		return nil, false
+	}
+	env, ok := cfg.Plugins.Env[name]
+	if !ok {
+		return nil, false
+	}
+	copied := make(map[string]string, len(env))
+	for key, value := range env {
+		copied[key] = value
+	}
+	return copied, true
 }

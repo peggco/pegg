@@ -152,10 +152,11 @@ type RuleSetting struct {
 }
 
 type PluginSetting struct {
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	Enabled bool   `json:"enabled"`
-	Status  string `json:"status"`
+	Name    string   `json:"name"`
+	Path    string   `json:"path"`
+	Enabled bool     `json:"enabled"`
+	Status  string   `json:"status"`
+	Env     []string `json:"env,omitempty"`
 }
 
 type SystemSettings struct {
@@ -631,10 +632,23 @@ func buildPluginSettings(cfg *config.Config, globalDir string) []PluginSetting {
 			Path:    filepath.Join(dir, entry.Name()),
 			Enabled: enabled,
 			Status:  status,
+			Env:     sortedEnvKeys(cfg.Plugins.Env[entry.Name()]),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+func sortedEnvKeys(env map[string]string) []string {
+	if len(env) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(env))
+	for key := range env {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func buildSystemSettings(a *App, cfg *config.Config, workspace, globalDir string) SystemSettings {
@@ -894,6 +908,30 @@ func (a *App) TogglePluginSettings(name string) (bool, error) {
 	}
 	a.resetPluginManager()
 	return enabled, nil
+}
+
+func (a *App) PluginEnv(name string) (map[string]string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, errors.New("plugin name is required")
+	}
+	env, ok := config.PluginEnv(name)
+	if !ok {
+		return map[string]string{}, nil
+	}
+	return env, nil
+}
+
+func (a *App) SetPluginEnv(name string, env map[string]string) error {
+	pluginEnv, err := normalizePluginEnv(env)
+	if err != nil {
+		return err
+	}
+	if err := config.SetPluginEnv(name, pluginEnv); err != nil {
+		return err
+	}
+	a.resetPluginManager()
+	return nil
 }
 
 func (a *App) ProviderCatalog() []ProviderCatalogEntry {

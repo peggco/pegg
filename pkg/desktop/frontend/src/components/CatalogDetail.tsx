@@ -118,16 +118,18 @@ export function CatalogDetail({
     }
   };
 
-  const installPlugin = async () => {
+  const installPlugin = async (env: Record<string, string> = {}) => {
     setBusy(true);
     setError('');
     try {
-      const res = await installCatalogPlugin(item.source || item.id, item.name);
+      const res = await installCatalogPlugin(item.source || item.id, item.name, env);
       onInstalled(item, res.installedVersion);
+      setEnvOpen(false);
       setWarnings(res.warnings ?? []);
       if (res.restartRequired) setRestart(true);
     } catch (err) {
       setError(errorText(err));
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -164,7 +166,12 @@ export function CatalogDetail({
       else void installMCP({});
       return;
     }
-    void installPlugin();
+    if (item.kind === 'plugins') {
+      if (requiredEnv.length) setEnvOpen(true);
+      else void installPlugin().catch(() => undefined);
+      return;
+    }
+    void installPlugin().catch(() => undefined);
   };
 
   return (
@@ -395,7 +402,7 @@ export function CatalogDetail({
           requiredEnv={requiredEnv}
           docsUrl={repoURL}
           onClose={() => setEnvOpen(false)}
-          onSubmit={(env) => installMCP(env)}
+          onSubmit={(env) => (item.kind === 'plugins' ? installPlugin(env) : installMCP(env))}
         />
       ) : null}
     </div>

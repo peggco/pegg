@@ -7,6 +7,7 @@ import { useT } from '../lib/i18n';
 import type { CompactionSettings, PermissionsSettings, SettingsSnapshot } from '../types';
 import { Card, Empty, Field, PageHead, Range, SaveBar, Segmented, Switch } from './SettingsUI';
 import { MCPModal } from './MCPModal';
+import { PluginEnvDialog } from './PluginEnvDialog';
 
 export interface PanelProps {
   snap: SettingsSnapshot;
@@ -678,6 +679,7 @@ export function PluginsPanel({
 }: PanelProps & { onPluginsChanged?: () => Promise<void> | void }) {
   const t = useT();
   const [busy, setBusy] = useState<string | null>(null);
+  const [envPlugin, setEnvPlugin] = useState<string | null>(null);
 
   const toggle = async (name: string) => {
     setBusy(name);
@@ -722,6 +724,10 @@ export function PluginsPanel({
                 </div>
                 <div className="row-side">
                   <span className="badge">{plugin.status}</span>
+                  {plugin.env?.length ? <span className="badge">{plugin.env.length} env</span> : null}
+                  <button className="btn small" onClick={() => setEnvPlugin(plugin.name)}>
+                    {t('pluginEnv.configure')}
+                  </button>
                   <Switch
                     checked={plugin.enabled}
                     onChange={() => void toggle(plugin.name)}
@@ -736,6 +742,16 @@ export function PluginsPanel({
           <Empty>No plugins installed in ~/.pegg/plugins.</Empty>
         )}
       </Card>
+      {envPlugin ? (
+        <PluginEnvDialog
+          name={envPlugin}
+          onClose={() => setEnvPlugin(null)}
+          onSaved={async () => {
+            await refresh();
+            await onPluginsChanged?.();
+          }}
+        />
+      ) : null}
     </>
   );
 }

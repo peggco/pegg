@@ -470,6 +470,7 @@ export interface PluginSetting {
   path: string;
   enabled: boolean;
   status: string;
+  env?: string[];
 }
 
 export interface SystemSettings {

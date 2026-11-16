@@ -21,6 +21,12 @@ Add plugin configuration to `~/.pegg/pegg.json`:
       "browser-use": {
         "headless": true
       }
+    },
+    "env": {
+      "kanban-jira": {
+        "JIRA_TOKEN": "your-token",
+        "JIRA_URL": "https://example.atlassian.net"
+      }
     }
   }
 }
@@ -33,6 +39,20 @@ Add plugin configuration to `~/.pegg/pegg.json`:
 | `enabled` | boolean | `true` | Enable or disable the plugin system |
 | `exclude` | string[] | `[]` | Plugin names or binary names to skip during loading |
 | `options` | object | `{}` | Per-plugin configuration passed to the plugin |
+| `env` | object | `{}` | Per-plugin environment variables passed to the plugin process |
+
+### Environment variables
+
+The `env` object maps a plugin name (the installed binary name shown in
+`pegg plugins list` and desktop plugin settings) to its environment variables.
+Pegg merges these values over its own process environment when it launches the
+plugin, so plugins can read them with the usual `os.Getenv` calls.
+
+Keys must be valid environment variable names (`[A-Za-z_][A-Za-z0-9_]*`). The
+desktop app prompts for the variables a catalog entry declares in `requiredEnv`
+during install, and lets you edit them later under **Settings → Plugins →
+Environment**. Values are masked in the UI, logs, and summaries.
+
 
 ### Plugin directory
 
