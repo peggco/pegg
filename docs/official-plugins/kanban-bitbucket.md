@@ -38,12 +38,40 @@ pegg plugins install peggco/pegg-kanban-bitbucket
 The card's issue provider can be Jira, GitHub, or GitLab. The plugin does not require
 `card.issue.provider == "bitbucket"`.
 
+### Change-request routing
+
+Kanban resolves a `change_request_provider` per card and passes it in the
+`kanban.run.prepare` and `kanban.card.succeeded` payloads. This plugin handles both hooks
+only when that value is `bitbucket` (or, for older Kanban versions that omit the field,
+whenever a change request is requested).
+
+This plugin contributes the default route `{"jira": "bitbucket"}` through the
+`kanban.change_request.routes` filter, so Jira issues open Bitbucket pull requests out of
+the box. The route is driven by the `issue_providers` setting (default `["jira"]`). Set it
+to `[]` to stop Bitbucket from handling Jira issues, or add other providers:
+
+```json
+{
+  "plugins": {
+    "options": {
+      "kanban-bitbucket": {
+        "issue_providers": ["jira", "linear"]
+      }
+    }
+  }
+}
+```
+
+User config in the Kanban `change_request_providers` map always wins over this default, so
+you can also route Jira to another host by setting `{"jira": "gitlab"}` there.
+
 ## Hooks
 
 | Hook | Kind | Priority | Purpose |
 |---|---|---|---|
 | `kanban.run.prepare` | filter | 10 | Create a worktree with a `pegg/<slug>` branch. |
 | `kanban.card.succeeded` | action | 10 | Open a Bitbucket pull request. |
+| `kanban.change_request.routes` | filter | 10 | Route issues from `issue_providers` to Bitbucket pull requests. |
 
 Both hooks are no-ops when the plugin is disabled.
 
@@ -81,6 +109,7 @@ branch.
         "api_token": "ATBB...",
         "default_base": "main",
         "worktree_root": ".pegg-worktrees",
+        "issue_providers": ["jira"],
         "request_timeout_seconds": 30
       }
     }
@@ -127,6 +156,7 @@ branch.
 | `PEGG_BITBUCKET_USERNAME` / `PEGG_BITBUCKET_PASSWORD` | Data Center basic auth. |
 | `PEGG_BITBUCKET_TOKEN` | Data Center HTTP access token. |
 | `PEGG_BITBUCKET_DEFAULT_BASE` | Default destination branch. |
+| `PEGG_BITBUCKET_ISSUE_PROVIDERS` | JSON array or comma-separated issue providers routed to Bitbucket (default `jira`). |
 | `PEGG_BITBUCKET_WORKTREE_ROOT` | Worktree directory. |
 | `PEGG_BITBUCKET_TIMEOUT_SECONDS` | API timeout. |
 

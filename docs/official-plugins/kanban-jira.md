@@ -130,6 +130,11 @@ Markdown. The fetch limit is clamped to 100.
 - With `transition_on_success` set, the issue is transitioned to that status. A
   configured `default_transition` is used when the payload has none.
 
+Jira is not a git host, so this plugin never opens a pull request. Kanban routes the
+change request to a git-host plugin through `change_request_provider`; by default
+`kanban-bitbucket` handles Jira issues (`{"jira": "bitbucket"}`). See
+[Kanban Bitbucket](kanban-bitbucket.md) for the delivery side.
+
 ## Notes
 
 - Jira Cloud API tokens are used with HTTP basic auth (`email` + `token`).

@@ -68,7 +68,9 @@ cd /path/to/repo
         "sync_labels": [],
         "sync_limit": 50,
         "feedback": true,
-        "create_change_request": false,
+        "create_change_request": true,
+        "change_request_provider": "",
+        "change_request_providers": {},
         "hooks_bin": "",
         "hooks_timeout_seconds": 90
       }
@@ -92,12 +94,15 @@ cd /path/to/repo
 | `sync_update_existing` | `true` | Refresh imported cards outside trigger/terminal columns. |
 | `sync_labels` / `sync_limit` / `sync_state` | defaults | Issue import filters. |
 | `feedback` | `true` | Let integrations comment after a successful run. |
-| `create_change_request` | `false` | Let integrations open a PR/MR after a successful run. |
+| `create_change_request` | `true` | Let integrations open a PR/MR after a successful run. |
+| `change_request_provider` | empty | Change-request provider for cards with no issue (or no route). |
+| `change_request_providers` | `{}` | Route issue provider → change-request provider, e.g. `{"jira":"bitbucket"}`. |
 | `transition_on_success` | empty | Status transition passed to integrations. |
 
 Environment variables use the `PEGG_KANBAN_` prefix, for example
-`PEGG_KANBAN_HOST`, `PEGG_KANBAN_PORT`, `PEGG_KANBAN_MAX_PARALLEL`, and
-`PEGG_KANBAN_TOKEN`.
+`PEGG_KANBAN_HOST`, `PEGG_KANBAN_PORT`, `PEGG_KANBAN_MAX_PARALLEL`,
+`PEGG_KANBAN_TOKEN`, `PEGG_KANBAN_CREATE_CHANGE_REQUEST`,
+`PEGG_KANBAN_CHANGE_REQUEST_PROVIDER`, and `PEGG_KANBAN_CHANGE_REQUEST_PROVIDERS`.
 
 ## Run environments and hooks
 
@@ -110,6 +115,7 @@ hooks:
 | `kanban.issues.fetch` | filter | Fetch and normalize issues. |
 | `kanban.run.prepare` | filter | Change the working directory, branch, environment, or metadata for a run. |
 | `kanban.card.succeeded` | action | React to a successful run, such as commenting, transitioning, or opening a PR/MR. |
+| `kanban.change_request.routes` | filter | Contribute default issue → change-request routes. |
 
 `kanban.run.prepare` receives:
 
@@ -131,6 +137,43 @@ A handler returns the same value with a modified `context`:
 `kind` is free-form. `path` becomes `cmd.Dir`, `branch` appears in the prompt, and `env` is
 merged into the child process environment. With no handler, the run uses the repository
 root. `card.context` stores a sanitized copy for display; `env` is never persisted.
+
+## Change-request routing
+
+The issue source and the change-request target are independent. Kanban resolves a
+`change_request_provider` for every card and passes it to `kanban.run.prepare` and
+`kanban.card.succeeded`:
+
+1. If `change_request_providers` maps the card's issue provider, use that value (an empty
+   value disables the change request for that provider).
+2. Otherwise use the issue provider itself.
+3. For cards with no issue, use `change_request_provider`.
+
+Default routes come from the `kanban.change_request.routes` filter, so Kanban stays
+provider-neutral. `kanban-bitbucket` contributes `{"jira": "bitbucket"}` by default, so
+Jira issues open Bitbucket pull requests out of the box. User config in
+`change_request_providers` always wins over plugin defaults.
+
+Each git-host plugin handles `kanban.run.prepare` and `kanban.card.succeeded` only when it
+is the resolved `change_request_provider`. Issue comments and transitions stay gated on the
+issue's own provider, so a Jira issue routed to Bitbucket is still commented and
+transitioned by `kanban-jira`.
+
+With `create_change_request` enabled (the default), a GitLab issue opens a GitLab MR, a
+GitHub issue opens a GitHub PR, and a Jira issue opens a Bitbucket PR — no extra routing
+config needed. Override the target per issue provider:
+
+```json
+{
+  "plugins": {
+    "options": {
+      "kanban": {
+        "change_request_providers": {"jira": "gitlab"}
+      }
+    }
+  }
+}
+```
 
 ## Integration plugins
 
@@ -227,5 +270,6 @@ pegg plugins install peggco/pegg-kanban-bitbucket
 ```
 
 Each integration registers `kanban.providers`, `kanban.issues.fetch`,
-`kanban.run.prepare`, and/or `kanban.card.succeeded` handlers. Without an integration,
-manual cards, drag and drop, agent runs, logs, SSE, and CLI/TUI actions all work offline.
+`kanban.run.prepare`, `kanban.card.succeeded`, and/or `kanban.change_request.routes`
+handlers. Without an integration, manual cards, drag and drop, agent runs, logs, SSE, and
+CLI/TUI actions all work offline.

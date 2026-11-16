@@ -88,6 +88,32 @@ Environment: `PEGG_GITHUB_TOKEN`, `PEGG_GITHUB_REPO`, `PEGG_GITHUB_OWNER`,
   `base_branch`, then `default_base`, then the repository default branch.
 - Tokens are never printed, logged, or returned. Errors are redacted.
 
+### Change-request routing
+
+Kanban resolves a `change_request_provider` per card and passes it in the
+`kanban.run.prepare` and `kanban.card.succeeded` payloads. This plugin handles both hooks
+only when that value is `github` (or, for older Kanban versions that omit the field, when
+the issue provider is `github`). The issue comment is only posted when the issue itself
+came from GitHub, so a Jira issue routed to GitHub opens a pull request without a GitHub
+comment.
+
+To route another issue source to GitHub, set the route in the Kanban options:
+
+```json
+{
+  "plugins": {
+    "options": {
+      "kanban": {
+        "change_request_providers": {"jira": "github"}
+      }
+    }
+  }
+}
+```
+
+The repository is taken from the issue repo when the issue came from GitHub, and from
+`owner`/`repo` (or the git remote) otherwise.
+
 ## Example
 
 ```bash

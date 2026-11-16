@@ -86,6 +86,31 @@ Environment overrides:
   `default_target_branch` when `create_change_request` is enabled.
 - Existing merge requests produce an actionable error instead of a duplicate.
 
+### Change-request routing
+
+Kanban resolves a `change_request_provider` per card and passes it in the
+`kanban.run.prepare` and `kanban.card.succeeded` payloads. This plugin handles both hooks
+only when that value is `gitlab` (or, for older Kanban versions that omit the field, when
+the issue provider is `gitlab`). The issue note is only posted when the issue itself came
+from GitLab, so a Jira issue routed to GitLab opens a merge request without a GitLab note.
+
+To route another issue source to GitLab, set the route in the Kanban options:
+
+```json
+{
+  "plugins": {
+    "options": {
+      "kanban": {
+        "change_request_providers": {"jira": "gitlab"}
+      }
+    }
+  }
+}
+```
+
+The project is taken from the issue repo when the issue came from GitLab, and from
+`project` otherwise.
+
 ## Token scopes
 
 Use a project or group access token with `api` scope (or `read_api` for sync-only usage).
