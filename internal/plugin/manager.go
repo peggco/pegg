@@ -706,6 +706,24 @@ func (m *Manager) tuiPagesFor(name string) []pkgplugin.TUIPage {
 	return out
 }
 
+func (m *Manager) Pages(owner string) []pkgplugin.TUIPage {
+	return m.tuiPagesFor(owner)
+}
+
+func (m *Manager) PageOwners() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	owners := make([]string, 0, len(m.plugins))
+	for name, instance := range m.plugins {
+		if pkgplugin.Supports(instance.Capabilities, pkgplugin.CapabilityTUI) {
+			owners = append(owners, name)
+		}
+	}
+	sort.Strings(owners)
+	return owners
+}
+
 func (m *Manager) RefreshTUIPages(ctx context.Context, name string) ([]pkgplugin.TUIPage, error) {
 	instance, ok := m.GetPlugin(name)
 	if !ok {

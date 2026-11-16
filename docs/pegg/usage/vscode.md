@@ -136,6 +136,24 @@ Use the **Sessions** view or the command palette:
 Sessions are shared with the CLI and TUI. Resuming a session replays its history
 and restores the stored provider, model, and mode.
 
+## Plugin pages
+
+Plugins that expose pages (the kanban board, notification channels, and others)
+can be opened as real editor tabs. Run **Pegg: Open Plugin Page** from the
+Command Palette, or use the browser button in the chat view title, then pick a
+page.
+
+The tab renders the same declarative board as the desktop app: toolbar actions
+such as start, stop, sync, and add card; metrics; board columns; channels; lists;
+settings; and per-card edit, run, and delete. Cards that expose a `column` field
+also get a move selector. The page refreshes when it opens and whenever you
+press **Refresh**, and actions that return a replacement page update the tab in
+place.
+
+The tab keeps its state while hidden, follows the editor light/dark theme, and
+is reused when the same page is opened again. This requires a Pegg binary that
+advertises the `pluginPages` capability.
+
 ## Editor integrations
 
 Pegg adds actions to the editor, explorer, and source control views.

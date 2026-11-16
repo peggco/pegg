@@ -24,9 +24,12 @@ class PeggToolWindowFactory : ToolWindowFactory {
             openChat = { toolWindow.contentManager.setSelectedContent(chatContent) },
         )
         val sessionsContent = factory.createContent(sessions.component, "Sessions", false)
+        val pages = PluginPagesPanel(service)
+        val pagesContent = factory.createContent(pages.component, "Pages", false)
 
         toolWindow.contentManager.addContent(chatContent)
         toolWindow.contentManager.addContent(sessionsContent)
+        toolWindow.contentManager.addContent(pagesContent)
         toolWindow.contentManager.setSelectedContent(chatContent)
         toolWindow.setToHideOnEmptyContent(false)
         toolWindow.setTitleActions(
@@ -40,12 +43,14 @@ class PeggToolWindowFactory : ToolWindowFactory {
 
         service.webView = chat
         service.sessionsPanel = sessions
+        service.pluginPagesPanel = pages
         service.controller.setChatVisible {
             toolWindow.isVisible && toolWindow.contentManager.selectedContent === chatContent
         }
 
         Disposer.register(service, chat)
         Disposer.register(service, sessions)
+        Disposer.register(service, pages)
 
         service.activate()
     }

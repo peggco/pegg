@@ -1,7 +1,7 @@
 {
   "name": "pegg-vscode",
   "displayName": "Pegg",
-  "description": "Pegg AI coding agent for VS Code: chat, tools, sessions, permissions, attachments, and editor integrations.",
+  "description": "Pegg AI coding agent for VS Code: chat, tools, sessions, plugins, permissions, attachments, and editor integrations.",
   "version": "0.2.4",
   "publisher": "peggco",
   "license": "FSL-1.1-MIT",
@@ -38,7 +38,8 @@
   "activationEvents": [
     "onView:pegg.chat",
     "onView:pegg.sessions",
-    "onChatParticipant:pegg.chat"
+    "onChatParticipant:pegg.chat",
+    "onCommand:pegg.pluginPages.open"
   ],
   "contributes": {
     "viewsContainers": {
@@ -75,6 +76,12 @@
         "title": "Open Chat",
         "category": "Pegg",
         "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "pegg.pluginPages.open",
+        "title": "Open Plugin Page",
+        "category": "Pegg",
+        "icon": "$(browser)"
       },
       {
         "command": "pegg.chat.newSession",
@@ -398,6 +405,11 @@
           "command": "pegg.chat.newSession",
           "when": "view == pegg.chat",
           "group": "navigation@1"
+        },
+        {
+          "command": "pegg.pluginPages.open",
+          "when": "view == pegg.chat",
+          "group": "navigation@2"
         },
         {
           "command": "pegg.session.refresh",

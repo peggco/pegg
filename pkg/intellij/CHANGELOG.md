@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- A **Pages** tool-window tab now opens plugin pages such as the kanban board in
+  JCEF, with the same board, actions, settings, and theme as the desktop app.
+  Cards can be moved between columns, and the tab keeps its state while hidden.
+
 ### Changed
 
 - Todo/plan updates now render as an inline plan card at the latest

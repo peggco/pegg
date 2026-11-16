@@ -66,3 +66,30 @@ func TestTUIPagesCaptureAndExecute(t *testing.T) {
 		t.Fatalf("updated cache: %#v", instance.TUIPages)
 	}
 }
+
+func TestPagesAndOwners(t *testing.T) {
+	impl := &tuiPlugin{pages: []pkgplugin.TUIPage{{ID: "main", Title: "Main"}}}
+	mgr := NewManager(logger.New(logger.LevelError), config.DefaultConfig(), nil, nil, nil, nil, nil, nil, nil)
+	instance := &PluginInstance{
+		Name:         impl.Name(),
+		Plugin:       impl,
+		Capabilities: impl.Capabilities(),
+		TUIPages:     []pkgplugin.TUIPage{{ID: "main", Title: "Main", Owner: impl.Name()}},
+	}
+	mgr.plugins[instance.Name] = instance
+
+	pages := mgr.Pages(instance.Name)
+	if len(pages) != 1 || pages[0].ID != "main" {
+		t.Fatalf("pages: %#v", pages)
+	}
+	pages[0].Title = "mutated"
+	if mgr.Pages(instance.Name)[0].Title != "Main" {
+		t.Fatal("Pages must return a copy")
+	}
+	if owners := mgr.PageOwners(); len(owners) != 1 || owners[0] != instance.Name {
+		t.Fatalf("owners: %#v", owners)
+	}
+	if got := mgr.Pages("missing"); len(got) != 0 {
+		t.Fatalf("expected no pages for unknown owner, got %#v", got)
+	}
+}

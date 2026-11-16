@@ -6,6 +6,7 @@ import { ChatController } from '../chat/controller';
 import { makeAttachment } from '../chat/context';
 import { getConfig } from '../config';
 import { Logger } from '../logger';
+import { nonceString } from './nonce';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = 'pegg.chat';
@@ -416,9 +417,3 @@ function languageFor(path: string): string {
   return map[ext] ?? 'plaintext';
 }
 
-function nonceString(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let out = '';
-  for (let i = 0; i < 32; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
-}

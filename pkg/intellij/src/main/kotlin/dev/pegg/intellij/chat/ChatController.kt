@@ -23,6 +23,10 @@ import dev.pegg.intellij.acp.InitializeResult
 import dev.pegg.intellij.acp.ModelListResult
 import dev.pegg.intellij.acp.PeggCapabilities
 import dev.pegg.intellij.acp.PendingInteraction
+import dev.pegg.intellij.acp.PluginPage
+import dev.pegg.intellij.acp.PluginPageGetResult
+import dev.pegg.intellij.acp.PluginPageResult
+import dev.pegg.intellij.acp.PluginPagesResult
 import dev.pegg.intellij.acp.PermissionOption
 import dev.pegg.intellij.acp.PermissionParams
 import dev.pegg.intellij.acp.PromptResult
@@ -478,6 +482,39 @@ class ChatController(
             emitState()
         }
         return result
+    }
+
+    suspend fun listPluginPages(): List<PluginPage> {
+        ensureStarted()
+        if (capabilities?.pegg?.pluginPages != true) {
+            throw IllegalStateException("This Pegg binary does not support plugin pages. Update the Pegg binary first.")
+        }
+        return request<PluginPagesResult>("_pegg/plugins/pages/list", buildJsonObject { }, 30_000).pages
+    }
+
+    suspend fun getPluginPage(owner: String, pageId: String): PluginPage {
+        ensureStarted()
+        val params = buildJsonObject {
+            put("owner", owner)
+            put("pageId", pageId)
+        }
+        return request<PluginPageGetResult>("_pegg/plugins/pages/get", params, 30_000).page
+    }
+
+    suspend fun runPluginPageAction(
+        owner: String,
+        pageId: String,
+        actionId: String,
+        values: Map<String, String>,
+    ): PluginPageResult {
+        ensureStarted()
+        val params = buildJsonObject {
+            put("owner", owner)
+            put("pageId", pageId)
+            put("actionId", actionId)
+            put("values", buildJsonObject { values.forEach { (key, value) -> put(key, value) } })
+        }
+        return request<PluginPageResult>("_pegg/plugins/pages/action", params, 60_000)
     }
 
     suspend fun startVoice() {

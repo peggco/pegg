@@ -5,10 +5,23 @@ import dev.pegg.intellij.BuildInfo
 import java.io.File
 
 object WebViewAssets {
-    private val files = listOf("index.html", "bootstrap.js", "webview.js", "webview.css")
+    private val files = listOf(
+        "index.html",
+        "bootstrap.js",
+        "webview.js",
+        "webview.css",
+        "plugin-page.html",
+        "plugin-page.js",
+        "plugin-page.css",
+    )
 
     @Synchronized
-    fun ensure(): File {
+    fun ensure(): File = ensureFile("index.html")
+
+    @Synchronized
+    fun ensurePluginPage(): File = ensureFile("plugin-page.html")
+
+    private fun ensureFile(entry: String): File {
         val version = BuildInfo.VERSION
         val dir = File(PathManager.getTempPath(), "pegg-webview/$version")
         dir.mkdirs()
@@ -18,6 +31,6 @@ object WebViewAssets {
                 ?: throw IllegalStateException("Missing bundled webview asset: $name")
             stream.use { input -> target.outputStream().use { output -> input.copyTo(output) } }
         }
-        return File(dir, "index.html")
+        return File(dir, entry)
     }
 }

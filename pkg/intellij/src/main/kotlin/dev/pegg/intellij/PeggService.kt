@@ -10,6 +10,7 @@ import dev.pegg.intellij.binary.BinaryManager
 import dev.pegg.intellij.chat.ChatController
 import dev.pegg.intellij.log.PeggLog
 import dev.pegg.intellij.ui.ChatWebView
+import dev.pegg.intellij.ui.PluginPagesPanel
 import dev.pegg.intellij.ui.SessionsPanel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,9 @@ class PeggService(private val project: Project) : Disposable {
 
     @Volatile
     var sessionsPanel: SessionsPanel? = null
+
+    @Volatile
+    var pluginPagesPanel: PluginPagesPanel? = null
 
     @Volatile
     var chatVisible: Boolean = false
@@ -65,6 +69,7 @@ class PeggService(private val project: Project) : Disposable {
     override fun dispose() {
         webView = null
         sessionsPanel = null
+        pluginPagesPanel = null
         controller.dispose()
         scope.cancel()
     }

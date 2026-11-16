@@ -403,6 +403,7 @@ export interface PeggCapabilities {
   history?: boolean;
   terminals?: boolean;
   elicitation?: boolean;
+  pluginPages?: boolean;
 }
 
 export interface AgentCapabilities {
@@ -444,3 +445,5 @@ export interface PromptResult {
 }
 
 export type ServerRequestHandler = (method: string, params: unknown) => Promise<unknown>;
+
+export * from './pluginPage/types';

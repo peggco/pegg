@@ -52,8 +52,9 @@ intellijPlatform {
         version = providers.gradleProperty("pluginVersion").get()
         description = """
             <p>Pegg brings the Pegg AI coding agent into every JetBrains IDE.</p>
-            <p>Chat, tools, sessions, subagents, plans, permissions, attachments, voice input,
-            and editor actions are driven by the local Pegg binary over the Agent Client Protocol.</p>
+            <p>Chat, tools, sessions, plugin pages, subagents, plans, permissions, attachments,
+            voice input, and editor actions are driven by the local Pegg binary over the Agent
+            Client Protocol.</p>
         """.trimIndent()
         vendor {
             name = "Pegg"

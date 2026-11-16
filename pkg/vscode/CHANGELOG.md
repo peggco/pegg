@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Plugin pages such as the kanban board can now be opened as editor tabs with
+  **Pegg: Open Plugin Page**, with the same board, actions, settings, and theme
+  as the desktop app. The tab is reused when reopened and supports moving cards
+  between columns.
 - Todo/plan updates now render as an inline plan card at the latest
   `todowrite` in each message instead of a persistent panel above the
   composer. Older updates in the same message collapse into the last card, a

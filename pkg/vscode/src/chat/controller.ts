@@ -11,6 +11,10 @@ import {
   InitializeResult,
   ModelListResult,
   PeggCapabilities,
+  PluginPage,
+  PluginPageGetResult,
+  PluginPageResult,
+  PluginPagesResult,
   PermissionParams,
   PromptResult,
   SessionInfo,
@@ -403,6 +407,31 @@ export class ChatController extends EventEmitter {
       this.emitState();
     }
     return result;
+  }
+
+  async listPluginPages(): Promise<PluginPage[]> {
+    await this.ensureStarted();
+    if (!this.peggCaps()?.pluginPages) {
+      throw new Error('This Pegg binary does not support plugin pages. Update the Pegg binary first.');
+    }
+    const result = await this.client!.request<PluginPagesResult>('_pegg/plugins/pages/list', {}, 30000);
+    return result.pages ?? [];
+  }
+
+  async getPluginPage(owner: string, pageId: string): Promise<PluginPage> {
+    await this.ensureStarted();
+    const result = await this.client!.request<PluginPageGetResult>('_pegg/plugins/pages/get', { owner, pageId }, 30000);
+    return result.page;
+  }
+
+  async runPluginPageAction(
+    owner: string,
+    pageId: string,
+    actionId: string,
+    values: Record<string, string> = {},
+  ): Promise<PluginPageResult> {
+    await this.ensureStarted();
+    return this.client!.request<PluginPageResult>('_pegg/plugins/pages/action', { owner, pageId, actionId, values }, 60000);
   }
 
   async startVoice(): Promise<void> {

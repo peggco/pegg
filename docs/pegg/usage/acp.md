@@ -320,7 +320,20 @@ Pegg-specific methods are prefixed with `_` per the ACP extensibility rules:
 | `_pegg/session/set_model` | Set provider/model/reasoning effort (alias of `session/set_model`) |
 | `_pegg/session/fork` | Fork a session before a message |
 | `_pegg/session/revert` | Revert a session to a message |
+| `_pegg/plugins/pages/list` | List plugin pages (`owner?`) |
+| `_pegg/plugins/pages/get` | Fetch one plugin page, refreshing it from the plugin |
+| `_pegg/plugins/pages/action` | Run a page action and return optional output/page |
 | `_pegg/ask` | Ask the user structured questions (fallback for elicitation) |
+
+Plugin pages use the same declarative shape as the desktop app: `id`, `title`,
+`owner`, `description`, `metrics`, `sections` (with `kind: "board"` for kanban
+columns), `actions`, `settings`, and `saveAction`. `list` returns
+`{ "pages": [...] }`, `get` takes `{ "owner", "pageId" }` and returns
+`{ "page": {...} }`, and `action` takes
+`{ "owner", "pageId", "actionId", "values?" }`, returning
+`{ "output?", "page?" }`. When `action` returns a page, it replaces the cached
+page and the host should update the view in place. Clients can feature-gate on
+the `pluginPages` flag in `com.pegg/capabilities`.
 
 ### Session history pagination
 
