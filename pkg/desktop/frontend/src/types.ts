@@ -593,6 +593,8 @@ export interface CatalogItem {
   homepage?: string;
   requiredEnv?: string[];
   skillId?: string;
+  installedVersion?: string;
+  updateAvailable?: boolean;
 }
 
 export interface CatalogSearchResult {

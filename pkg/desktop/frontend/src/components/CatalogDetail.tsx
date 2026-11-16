@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Check, Copy, Download, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, ExternalLink, RefreshCw } from 'lucide-react';
 import { api } from '../lib/bridge';
 import { renderMarkdown } from '../lib/markdown';
 import { useT } from '../lib/i18n';
 import {
   catalogInstallCommand,
   catalogTransport,
+  catalogVersionPair,
   initials,
   skillID,
 } from '../lib/catalog';
-import { errorText, installCatalogMCP, installCatalogPlugin, installHubSkill } from '../state/actions';
+import {
+  errorText,
+  installCatalogMCP,
+  installCatalogPlugin,
+  installHubSkill,
+  updateCatalogPlugin,
+} from '../state/actions';
 import { store } from '../state/store';
 import type { CatalogEntry, CatalogItem } from '../types';
 import { MCPEnvDialog } from './MCPEnvDialog';
@@ -31,7 +38,7 @@ export function CatalogDetail({
   readmeLoading: boolean;
   installed: boolean;
   onBack: () => void;
-  onInstalled: (item: CatalogItem) => void;
+  onInstalled: (item: CatalogItem, version?: string) => void;
 }) {
   const t = useT();
   const [scope, setScope] = useState<Scope>('global');
@@ -56,6 +63,8 @@ export function CatalogDetail({
 
   const command = catalogInstallCommand(item);
   const transport = catalogTransport(item);
+  const updateAvailable = item.updateAvailable === true;
+  const versionPair = updateAvailable ? catalogVersionPair(item) : null;
   const requiredEnv = entry?.requiredEnv ?? item.requiredEnv ?? [];
   const compatibilityWarnings = entry?.compatibilityWarnings ?? [];
   const repoURL = item.repository
@@ -114,7 +123,22 @@ export function CatalogDetail({
     setError('');
     try {
       const res = await installCatalogPlugin(item.source || item.id, item.name);
-      onInstalled(item);
+      onInstalled(item, res.installedVersion);
+      setWarnings(res.warnings ?? []);
+      if (res.restartRequired) setRestart(true);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updatePlugin = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await updateCatalogPlugin(item.source || item.id, item.name);
+      onInstalled(item, res.installedVersion);
       setWarnings(res.warnings ?? []);
       if (res.restartRequired) setRestart(true);
     } catch (err) {
@@ -125,7 +149,12 @@ export function CatalogDetail({
   };
 
   const onInstallClick = () => {
-    if (busy || installed) return;
+    if (busy) return;
+    if (updateAvailable) {
+      void updatePlugin();
+      return;
+    }
+    if (installed) return;
     if (item.kind === 'skills') {
       void installSkill();
       return;
@@ -173,9 +202,26 @@ export function CatalogDetail({
             ))}
           </div>
         ) : null}
-        <button className="btn primary small" disabled={busy || installed} onClick={onInstallClick}>
-          {installed ? <Check size={12} /> : <Download size={12} />}
-          {installed ? t('catalog.installed') : busy ? t('catalog.installing') : t('catalog.install')}
+        {versionPair ? (
+          <span className="hub-version-pair" title={t('catalog.updateAvailable')}>
+            {versionPair.from} → {versionPair.to}
+          </span>
+        ) : null}
+        <button
+          className="btn primary small"
+          disabled={busy || (installed && !updateAvailable)}
+          onClick={onInstallClick}
+        >
+          {updateAvailable ? <RefreshCw size={12} /> : installed ? <Check size={12} /> : <Download size={12} />}
+          {updateAvailable
+            ? busy
+              ? t('catalog.updating')
+              : t('catalog.update')
+            : installed
+              ? t('catalog.installed')
+              : busy
+                ? t('catalog.installing')
+                : t('catalog.install')}
         </button>
       </div>
 
@@ -282,6 +328,15 @@ export function CatalogDetail({
                       <dd>{item.version}</dd>
                     </div>
                   ) : null}
+                  {item.installedVersion ? (
+                    <div>
+                      <dt>{t('catalog.installed')}</dt>
+                      <dd>
+                        {item.installedVersion}
+                        {updateAvailable ? '' : ` · ${t('catalog.upToDate')}`}
+                      </dd>
+                    </div>
+                  ) : null}
                   {item.platforms?.length ? (
                     <div>
                       <dt>{t('catalog.platforms')}</dt>
@@ -310,9 +365,26 @@ export function CatalogDetail({
               ) : null}
             </dl>
           </div>
-          <button className="btn primary hub-side-install" disabled={busy || installed} onClick={onInstallClick}>
-            {installed ? <Check size={13} /> : <Download size={13} />}
-            {installed ? t('catalog.installed') : busy ? t('catalog.installing') : t('catalog.install')}
+          {versionPair ? (
+            <div className="hub-version-pair">
+              {versionPair.from} → {versionPair.to}
+            </div>
+          ) : null}
+          <button
+            className="btn primary hub-side-install"
+            disabled={busy || (installed && !updateAvailable)}
+            onClick={onInstallClick}
+          >
+            {updateAvailable ? <RefreshCw size={13} /> : installed ? <Check size={13} /> : <Download size={13} />}
+            {updateAvailable
+              ? busy
+                ? t('catalog.updating')
+                : t('catalog.update')
+              : installed
+                ? t('catalog.installed')
+                : busy
+                  ? t('catalog.installing')
+                  : t('catalog.install')}
           </button>
         </div>
       </div>

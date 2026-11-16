@@ -23,14 +23,17 @@ vi.mock('../state/actions', async (importOriginal) => {
     installHubSkill: vi.fn(async () => ({})),
     installCatalogMCP: vi.fn(async () => ({})),
     installCatalogPlugin: vi.fn(async () => ({})),
+    updateCatalogPlugin: vi.fn(async () => ({})),
   };
 });
 
 const search = vi.mocked(actions.searchCatalog);
 const fetchEntry = vi.mocked(actions.fetchCatalogEntry);
 const fetchReadme = vi.mocked(actions.fetchCatalogReadme);
+const fetchInstalled = vi.mocked(actions.fetchCatalogInstalled);
 const installMCP = vi.mocked(actions.installCatalogMCP);
 const installSkill = vi.mocked(actions.installHubSkill);
+const updatePlugin = vi.mocked(actions.updateCatalogPlugin);
 const installPlugin = vi.mocked(actions.installCatalogPlugin);
 
 const SKILL: CatalogItem = {
@@ -56,6 +59,19 @@ const MCP: CatalogItem = {
 };
 
 const PLUGIN: CatalogItem = {
+  kind: 'plugins',
+  id: 'peggco/pegg-browser-use',
+  name: 'browser-use',
+  description: 'Drive a real browser.',
+  source: 'peggco/pegg-browser-use',
+  url: '',
+  official: true,
+  version: '1.3.0',
+  installedVersion: '1.2.0',
+  updateAvailable: true,
+};
+
+const KANBAN: CatalogItem = {
   kind: 'plugins',
   id: 'kanban',
   name: 'Kanban',
@@ -161,10 +177,25 @@ describe('CatalogModal', () => {
     );
   });
 
-  it('installs a plugin immediately without a confirmation step', async () => {
+  it('offers an update for an installed plugin with a newer release', async () => {
     store.set({ catalogTab: 'plugins' });
     search.mockResolvedValue({ items: [PLUGIN], nextCursor: null });
-    fetchEntry.mockResolvedValue({ ...PLUGIN } as CatalogEntry);
+    fetchInstalled.mockResolvedValue({ skills: [], mcp: [], plugins: ['browser-use'] });
+    updatePlugin.mockResolvedValue({ name: 'browser-use', installedVersion: '1.3.0' });
+    const { getByText } = render(<CatalogModal />);
+
+    await waitFor(() => expect(getByText('browser-use')).not.toBeNull());
+    fireEvent.click(getByText('Update'));
+
+    await waitFor(() =>
+      expect(updatePlugin).toHaveBeenCalledWith('peggco/pegg-browser-use', 'browser-use'),
+    );
+  });
+
+  it('installs a plugin immediately without a confirmation step', async () => {
+    store.set({ catalogTab: 'plugins' });
+    search.mockResolvedValue({ items: [KANBAN], nextCursor: null });
+    fetchEntry.mockResolvedValue({ ...KANBAN } as CatalogEntry);
     const { container, getByText, queryByText } = render(<CatalogModal />);
 
     await waitFor(() => expect(getByText('Kanban')).not.toBeNull());

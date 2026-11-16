@@ -418,6 +418,10 @@ export function TogglePluginSettings(arg1) {
   return window['go']['main']['App']['TogglePluginSettings'](arg1);
 }
 
+export function UpdateCatalogPlugin(arg1, arg2) {
+  return window['go']['main']['App']['UpdateCatalogPlugin'](arg1, arg2);
+}
+
 export function Version() {
   return window['go']['main']['App']['Version']();
 }

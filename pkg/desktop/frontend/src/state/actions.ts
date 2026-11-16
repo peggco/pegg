@@ -1150,6 +1150,15 @@ export async function installCatalogPlugin(
   return res;
 }
 
+export async function updateCatalogPlugin(
+  source: string,
+  name: string,
+): Promise<CatalogMutationResult> {
+  const res = await api.UpdateCatalogPlugin(source, name);
+  applyCatalogMutation(res, name || source);
+  return res;
+}
+
 export async function searchHubSkills(
   query: string,
   limit = 20,

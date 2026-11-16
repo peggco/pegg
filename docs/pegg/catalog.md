@@ -84,6 +84,13 @@ selector: the OS comes from the running desktop app and is sent with every plugi
 search. The tab keeps the same `All / Official / Community` split used by skills and
 MCP servers.
 
+When an installed plugin has a newer release than the version on disk, the entry shows
+the version pair (for example `1.2.0 → 1.3.0`) and an **Update** button that reinstalls
+the newer build in place, with no confirmation dialog. The comparison is a real semver
+check, so an installed version that is newer than the catalog entry never offers a
+downgrade. Plugins installed by hand (without install metadata) have no recorded
+version and therefore never show **Update**.
+
 ## Skills
 
 ```bash

@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Download } from 'lucide-react';
+import { ArrowRight, Check, Download, RefreshCw } from 'lucide-react';
 import { useT } from '../lib/i18n';
 import { catalogTransport, initials } from '../lib/catalog';
 import type { CatalogItem } from '../types';
@@ -9,16 +9,19 @@ export function CatalogCard({
   busy,
   onOpen,
   onInstall,
+  onUpdate,
 }: {
   item: CatalogItem;
   installed: boolean;
   busy?: boolean;
   onOpen: () => void;
   onInstall: () => void;
+  onUpdate: () => void;
 }) {
   const t = useT();
   const transport = catalogTransport(item);
   const tags = item.tags?.slice(0, 2) ?? [];
+  const updateAvailable = item.updateAvailable === true;
 
   return (
     <div
@@ -40,15 +43,24 @@ export function CatalogCard({
           {item.official ? t('catalog.official') : t('catalog.community')}
         </span>
         <button
-          className={`hub-install${installed ? ' done' : ''}`}
-          disabled={busy || installed}
+          className={`hub-install${installed && !updateAvailable ? ' done' : ''}`}
+          disabled={busy || (installed && !updateAvailable)}
           onClick={(event) => {
             event.stopPropagation();
-            onInstall();
+            if (updateAvailable) onUpdate();
+            else onInstall();
           }}
         >
-          {installed ? <Check size={12} /> : <Download size={12} />}
-          {installed ? t('catalog.installed') : busy ? t('catalog.installing') : t('catalog.install')}
+          {updateAvailable ? <RefreshCw size={12} /> : installed ? <Check size={12} /> : <Download size={12} />}
+          {updateAvailable
+            ? busy
+              ? t('catalog.updating')
+              : t('catalog.update')
+            : installed
+              ? t('catalog.installed')
+              : busy
+                ? t('catalog.installing')
+                : t('catalog.install')}
         </button>
       </div>
       <div className="hub-card-name">{item.name}</div>

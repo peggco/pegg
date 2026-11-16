@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { loadHistory, searchCatalog, installCatalogMCP, installCatalogPlugin } = vi.hoisted(() => ({
+const { loadHistory, searchCatalog, installCatalogMCP, installCatalogPlugin, updateCatalogPlugin } = vi.hoisted(() => ({
   loadHistory: vi.fn(),
   searchCatalog: vi.fn(),
   installCatalogMCP: vi.fn(),
   installCatalogPlugin: vi.fn(),
+  updateCatalogPlugin: vi.fn(),
 }));
 
 vi.mock('../lib/bridge', () => ({
@@ -13,6 +14,7 @@ vi.mock('../lib/bridge', () => ({
     SearchCatalog: searchCatalog,
     InstallCatalogMCP: installCatalogMCP,
     InstallCatalogPlugin: installCatalogPlugin,
+    UpdateCatalogPlugin: updateCatalogPlugin,
   },
 }));
 
@@ -22,6 +24,7 @@ import {
   installCatalogPlugin as installPlugin,
   loadOlderMessages,
   searchCatalog as runSearch,
+  updateCatalogPlugin as updatePlugin,
 } from './actions';
 import { MAX_CHAT_ITEMS, emptyChat, type ChatItem, type ChatState } from './chat';
 import { store } from './store';
@@ -185,5 +188,17 @@ describe('catalog actions', () => {
 
     expect(installCatalogPlugin).toHaveBeenCalledWith('peggco/pegg-browser-use', 'browser-use');
     expect(store.get().chat.commands).toContainEqual({ name: 'browse', description: 'Open a browser' });
+  });
+
+  it('updates plugins and returns the new installed version', async () => {
+    updateCatalogPlugin.mockResolvedValue({
+      name: 'browser-use',
+      installedVersion: '1.3.0',
+    });
+
+    const result = await updatePlugin('peggco/pegg-browser-use', 'browser-use');
+
+    expect(updateCatalogPlugin).toHaveBeenCalledWith('peggco/pegg-browser-use', 'browser-use');
+    expect(result.installedVersion).toBe('1.3.0');
   });
 });

@@ -16,6 +16,7 @@ import {
   searchCatalog,
   setCatalogTab,
   toggleCatalog,
+  updateCatalogPlugin,
 } from '../state/actions';
 import { store, useStore } from '../state/store';
 import type {
@@ -186,7 +187,18 @@ export function CatalogModal() {
     setNextCursor(null);
   };
 
-  const markInstalled = (item: CatalogItem) => {
+  const applyVersion = (item: CatalogItem, version?: string) => {
+    if (!version) return;
+    const key = catalogKey(item);
+    const patch = (entry: CatalogItem): CatalogItem =>
+      catalogKey(entry) === key
+        ? { ...entry, installedVersion: version, updateAvailable: false }
+        : entry;
+    setItems((current) => current.map(patch));
+    setSelected((current) => (current ? patch(current) : current));
+  };
+
+  const markInstalled = (item: CatalogItem, version?: string) => {
     setInstalled((current) => {
       const values = item.kind === 'skills' ? current.skills : item.kind === 'mcp' ? current.mcp : current.plugins;
       const next = Array.from(new Set([...values, item.name || item.id]));
@@ -194,6 +206,20 @@ export function CatalogModal() {
       if (item.kind === 'mcp') return { ...current, mcp: next };
       return { ...current, plugins: next };
     });
+    applyVersion(item, version);
+  };
+
+  const updateItem = async (item: CatalogItem) => {
+    const key = catalogKey(item);
+    setBusy(key);
+    try {
+      const res = await updateCatalogPlugin(item.source || item.id, item.name);
+      markInstalled(item, res.installedVersion);
+    } catch (err) {
+      store.toast('error', errorText(err));
+    } finally {
+      setBusy(null);
+    }
   };
 
   const quickInstall = async (item: CatalogItem) => {
@@ -304,6 +330,7 @@ export function CatalogModal() {
                         busy={busy === catalogKey(item)}
                         onOpen={() => setSelected(item)}
                         onInstall={() => void quickInstall(item)}
+                        onUpdate={() => void updateItem(item)}
                       />
                     ))}
               </div>
