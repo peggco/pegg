@@ -1,6 +1,35 @@
 package config
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestServerConfigAllowUnauthenticatedJSON(t *testing.T) {
+	data, err := json.Marshal(ServerConfig{AllowUnauthenticated: true})
+	if err != nil {
+		t.Fatalf("marshal server config: %v", err)
+	}
+	if string(data) != `{"allow_unauthenticated":true}` {
+		t.Fatalf("marshaled server config = %s", data)
+	}
+
+	var decoded ServerConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal server config: %v", err)
+	}
+	if !decoded.AllowUnauthenticated {
+		t.Fatal("allow_unauthenticated should survive a JSON round-trip")
+	}
+
+	data, err = json.Marshal(ServerConfig{})
+	if err != nil {
+		t.Fatalf("marshal empty server config: %v", err)
+	}
+	if string(data) != `{}` {
+		t.Fatalf("empty server config should omit allow_unauthenticated, got %s", data)
+	}
+}
 
 func findProvider(cfg *Config, name string) *LLMConfig {
 	for i := range cfg.Providers {

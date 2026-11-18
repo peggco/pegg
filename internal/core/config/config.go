@@ -81,10 +81,11 @@ type LanguageServerConfig struct {
 }
 
 type ServerConfig struct {
-	Host            string            `json:"host,omitempty"`
-	Port            int               `json:"port,omitempty"`
-	RequiredHeaders map[string]string `json:"required_headers,omitempty"`
-	Headers         map[string]string `json:"headers,omitempty"`
+	Host                 string            `json:"host,omitempty"`
+	Port                 int               `json:"port,omitempty"`
+	RequiredHeaders      map[string]string `json:"required_headers,omitempty"`
+	Headers              map[string]string `json:"headers,omitempty"`
+	AllowUnauthenticated bool              `json:"allow_unauthenticated,omitempty"`
 }
 
 type PermissionConfig struct {

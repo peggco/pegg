@@ -147,7 +147,7 @@ Start a server: the HTTP REST API by default, or ACP with `--acp`.
 
 ```bash
 pegg serve                          # HTTP API on 127.0.0.1:8080
-pegg serve --port 9000 --host 0.0.0.0
+pegg serve --port 9000 --host 0.0.0.0 --insecure
 pegg serve --acp                    # ACP over HTTP at /acp
 pegg serve --acp --stdio            # ACP over stdin/stdout
 ```
@@ -158,8 +158,12 @@ pegg serve --acp --stdio            # ACP over stdin/stdout
 | `--host` | config (`127.0.0.1`) | Host to bind to |
 | `--acp` | `false` | Start the ACP server instead of the HTTP API |
 | `--stdio` | `false` | Use the stdio transport (only with `--acp`) |
+| `--insecure` | `false` | Allow a non-loopback bind without authentication (prints a warning) |
 
-See [HTTP](http.md) and [ACP](acp.md).
+A non-loopback `--host` is refused unless `--insecure` is passed or
+`server.required_headers` is configured. ACP-over-HTTP does not enforce required
+headers, so it always needs `--insecure` for a non-loopback bind. See
+[HTTP](http.md) and [ACP](acp.md).
 
 ## `pegg login`
 
