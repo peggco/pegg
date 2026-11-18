@@ -23,6 +23,7 @@ import type {
   Theme,
 } from "../types";
 import { resolveTheme, applyTheme } from "../lib/theme";
+import { readStoredLanguage, setLanguage } from "../lib/i18n";
 import { clampSidebarWidth } from "../lib/sidebar";
 import {
   addAsk,
@@ -70,6 +71,7 @@ export async function bootstrap(): Promise<void> {
     const boot = await api.Bootstrap();
     const themes = boot.themes?.length ? boot.themes : [];
     const prefs = boot.prefs;
+    const language = setLanguage(boot.language || readStoredLanguage() || "en");
     store.set({
       ready: true,
       boot,
@@ -81,7 +83,7 @@ export async function bootstrap(): Promise<void> {
       selfUpdate: boot.selfUpdate,
       providerSetup: boot.providerSetup,
       sidebarCollapsed: prefs.sidebarCollapsed,
-      language: boot.language || "en",
+      language,
       status: { state: boot.binary.found ? "connecting" : "disconnected" },
     });
     applyResolvedTheme(themes, prefs);

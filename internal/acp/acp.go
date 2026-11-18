@@ -9,6 +9,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/peggco/pegg/internal/agent"
+	"github.com/peggco/pegg/internal/changejournal"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
@@ -183,6 +184,9 @@ type Server struct {
 	askMu       sync.Mutex
 	pendingAsks map[string]*pendingAsk
 
+	journalMu      sync.Mutex
+	journalResults map[string]changejournal.Result
+
 	closed chan struct{}
 	once   sync.Once
 }
@@ -198,25 +202,38 @@ func New(
 	liveHub *live.Hub,
 ) *Server {
 	s := &Server{
-		cfg:           cfg,
-		bus:           bus,
-		log:           log,
-		sessions:      sessions,
-		llmMgr:        llmMgr,
-		fs:            fs,
-		runs:          runs,
-		live:          liveHub,
-		active:        make(map[string]*ACPSession),
-		agents:        make(map[string]string),
-		taskNames:     make(map[string]string),
-		subagentStart: make(map[string]time.Time),
-		pendingAsks:   make(map[string]*pendingAsk),
-		closed:        make(chan struct{}),
+		cfg:            cfg,
+		bus:            bus,
+		log:            log,
+		sessions:       sessions,
+		llmMgr:         llmMgr,
+		fs:             fs,
+		runs:           runs,
+		live:           liveHub,
+		active:         make(map[string]*ACPSession),
+		agents:         make(map[string]string),
+		taskNames:      make(map[string]string),
+		subagentStart:  make(map[string]time.Time),
+		pendingAsks:    make(map[string]*pendingAsk),
+		journalResults: make(map[string]changejournal.Result),
+		closed:         make(chan struct{}),
 	}
 	s.client = NewClient(s.sendRaw)
 	s.newAgentFn = s.newOrchestratorAgent
 	s.subscribeAsk()
+	s.subscribeChangeJournal()
 	return s
+}
+
+func (s *Server) subscribeChangeJournal() {
+	if s.bus == nil {
+		return
+	}
+	_ = s.bus.Subscribe(changejournal.TopicChangeJournalReverted, func(result changejournal.Result) {
+		s.journalMu.Lock()
+		s.journalResults[result.SessionID] = result
+		s.journalMu.Unlock()
+	})
 }
 
 func (s *Server) Serve(ctx context.Context, transport Transport) error {

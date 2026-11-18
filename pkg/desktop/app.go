@@ -564,8 +564,25 @@ func (a *App) saveWindow(ctx context.Context) {
 
 func currentLanguage() string {
 	cfg, err := config.Load()
-	if err != nil || cfg == nil || cfg.Language == "" {
-		return "en"
+	if err != nil || cfg == nil || !configLanguageSet() {
+		return ""
 	}
 	return cfg.Language
+}
+
+func configLanguageSet() bool {
+	path, err := config.GetConfigPath(config.GlobalConfigFileName)
+	if err != nil {
+		return false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return false
+	}
+	_, ok := raw["language"]
+	return ok
 }

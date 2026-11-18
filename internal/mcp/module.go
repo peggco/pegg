@@ -21,7 +21,7 @@ func Module(global map[string]config.MCPServerConfig, log *logger.Logger) (*Mana
 	if len(servers) == 0 {
 		log.Debug("mcp: no servers configured")
 	} else {
-		log.Finfo("mcp: starting %d server(s)", len(servers))
+		log.Fdebug("mcp: starting %d server(s)", len(servers))
 	}
 	return mgr, nil
 }

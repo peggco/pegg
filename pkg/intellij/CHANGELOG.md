@@ -8,6 +8,10 @@
   green/red line totals, an expandable per-file list, and an undo button.
   Conflict entries are marked, the summary is localized, and the composer keeps
   focus throughout.
+- Prompt history: with an empty composer, Up recalls the previous prompt and
+  repeated Up/Down walk that session's prompts. Editing or moving the caret ends
+  browsing, and Down past the newest entry restores the draft. Mention/skill
+  menus keep the arrows.
 
 ### Changed
 

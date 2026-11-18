@@ -102,10 +102,14 @@ export function RevertSummary() {
             );
           })}
           {files.some((file) => file.status === "conflict") ? (
-            <div className="revert-summary-note">{t("revert.conflictHint")}</div>
+            <div className="revert-summary-note">
+              {files.find((file) => file.status === "conflict")?.reason || t("revert.conflictHint")}
+            </div>
           ) : null}
           {files.some((file) => file.status === "skipped") ? (
-            <div className="revert-summary-note">{t("revert.skippedHint")}</div>
+            <div className="revert-summary-note">
+              {files.find((file) => file.status === "skipped")?.reason || t("revert.skippedHint")}
+            </div>
           ) : null}
         </div>
       ) : null}

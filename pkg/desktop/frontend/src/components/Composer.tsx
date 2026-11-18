@@ -18,6 +18,14 @@ import {
   syncChipName,
 } from '../lib/editor';
 import { compactNumber } from '../lib/format';
+import {
+  createPromptHistory,
+  handleHistoryKey,
+  promptHistoryEntries,
+  rememberPrompt,
+  resetPromptHistory,
+  type PromptHistory,
+} from '../lib/history';
 import { slashToken } from '../lib/slash';
 import {
   attachFiles,
@@ -93,6 +101,8 @@ export function Composer({
   const sendOnEnter = useStore((s) => s.prefs.sendOnEnter);
   const focusKey = useStore((s) => s.composerFocus);
   const workspace = useStore((s) => s.workspace);
+  const chatSession = useStore((s) => `${s.chat.acpId ?? ''}:${s.chat.peggId ?? ''}`);
+  const chatLoading = useStore((s) => s.chat.loading);
 
   const t = useT();
   const placeholderText = placeholder?.trim() || (compact ? t('composer.reply') : t('composer.placeholder'));
@@ -116,6 +126,8 @@ export function Composer({
   const rootRef = useRef<HTMLDivElement>(null);
   const mentionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const slashRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const historyRef = useRef<PromptHistory>(createPromptHistory());
+  const historySession = useRef('');
 
   /**
    * Re-reads the contenteditable buffer. Chips serialize to a space here (the
@@ -201,6 +213,36 @@ export function Composer({
   useEffect(() => {
     if (focusKey > 0 && editorRef.current) editorRef.current.focus();
   }, [focusKey]);
+
+  useEffect(() => {
+    if (chatLoading) return;
+    let seen = 0;
+    let first = '';
+    const sync = () => {
+      const entries = promptHistoryEntries(store.get().chat.items);
+      if (historySession.current !== chatSession) {
+        historySession.current = chatSession;
+        historyRef.current = createPromptHistory(entries);
+        seen = entries.length;
+        first = entries[0] ?? '';
+        return;
+      }
+      if (entries.length < seen || (entries[0] ?? '') !== first) {
+        historyRef.current = createPromptHistory(entries);
+        seen = entries.length;
+        first = entries[0] ?? '';
+        return;
+      }
+      if (entries.length > seen) {
+        let next = historyRef.current;
+        for (const prompt of entries.slice(seen)) next = rememberPrompt(next, prompt);
+        historyRef.current = next;
+        seen = entries.length;
+      }
+    };
+    sync();
+    return store.subscribe(sync);
+  }, [chatSession, chatLoading]);
 
   useEffect(() => {
     const el = editorRef.current;
@@ -368,6 +410,7 @@ export function Composer({
       store.toast('warn', 'Choose a project folder first');
       return;
     }
+    historyRef.current = rememberPrompt(historyRef.current, value);
     const payload = attachments.map(toPromptAttachment);
     setEditorText(el, '');
     setAttachments([]);
@@ -380,6 +423,23 @@ export function Composer({
   const pickFiles = async () => {
     const files = await attachFiles();
     if (files.length) setAttachments((prev) => [...prev, ...files].slice(0, 8));
+  };
+
+  const selectionCollapsed = () => {
+    const selection = window.getSelection();
+    return !selection || selection.rangeCount === 0 || selection.isCollapsed;
+  };
+
+  const resetHistoryOnCaretMove = () => {
+    const history = historyRef.current;
+    if (history.index >= history.entries.length) return;
+    const el = editorRef.current;
+    if (!el) return;
+    const value = editorText(el);
+    const caretAt = caretOffset(el);
+    if (caretAt === null || caretAt !== value.length || !selectionCollapsed()) {
+      historyRef.current = resetPromptHistory(history);
+    }
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -412,6 +472,45 @@ export function Composer({
         return (next + slashCount) % slashCount;
       });
       return;
+    }
+    if (
+      historyRef.current.index < historyRef.current.entries.length &&
+      ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)
+    ) {
+      historyRef.current = resetPromptHistory(historyRef.current);
+    }
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      const el = editorRef.current;
+      const value = el ? editorText(el) : text;
+      const caretAt = el ? caretOffset(el) : null;
+      const popupOpen =
+        Boolean(mention) ||
+        (slashQuery !== null && (slashItems.length > 0 || remoteSkills.length > 0 || remoteLoading));
+      const outcome = handleHistoryKey(
+        {
+          history: historyRef.current,
+          value,
+          selectionCollapsed: selectionCollapsed(),
+          caretAtEnd: caretAt === null || caretAt === value.length,
+          popupOpen,
+        },
+        event.key,
+      );
+      historyRef.current = outcome.history;
+      if (outcome.handled) {
+        event.preventDefault();
+        if (outcome.text !== value && el) {
+          setEditorText(el, outcome.text);
+          el.focus();
+          focusRange(endRange(el));
+          sync();
+          const recalledToken = slashToken(outcome.text);
+          if (recalledToken) setDismissed(recalledToken);
+          setMention(null);
+          setRemoteSkills([]);
+        }
+        return;
+      }
     }
     if (
       event.key === 'Enter' &&
@@ -457,6 +556,7 @@ export function Composer({
   const onEditorInput = () => {
     const el = editorRef.current;
     if (el && !composingRef.current) flatten(el);
+    historyRef.current = resetPromptHistory(historyRef.current);
     setDismissed(null);
     sync();
   };
@@ -548,9 +648,15 @@ export function Composer({
           sync();
         }}
         onPaste={onEditorPaste}
-        onClick={() => sync()}
+        onClick={() => {
+          sync();
+          resetHistoryOnCaretMove();
+        }}
         onMouseDown={onEditorMouseDown}
-        onMouseUp={() => sync()}
+        onMouseUp={() => {
+          sync();
+          resetHistoryOnCaretMove();
+        }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onCompositionStart={() => {

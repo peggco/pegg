@@ -96,3 +96,25 @@ func TestFormatDuration(t *testing.T) {
 		}
 	}
 }
+
+func TestWindowLine(t *testing.T) {
+	l := LineFromSegments([]Segment{{Text: "abcdefghij"}}, 100)
+
+	if got := lineText(WindowLine(l, 0, 4)); got != "abcd" {
+		t.Errorf("window at 0 = %q, want abcd", got)
+	}
+	if got := lineText(WindowLine(l, 3, 4)); got != "defg" {
+		t.Errorf("window at 3 = %q, want defg", got)
+	}
+	if got := lineText(WindowLine(l, 8, 4)); got != "ij" {
+		t.Errorf("tail window = %q, want ij", got)
+	}
+
+	wide := LineFromSegments([]Segment{{Text: "a名前b"}}, 100)
+	if got := lineText(WindowLine(wide, 1, 4)); got != "名前" {
+		t.Errorf("wide window = %q, want 名前", got)
+	}
+	if got := lineText(WindowLine(wide, 2, 4)); got != "前b" {
+		t.Errorf("wide window skipping half a rune = %q, want 前b", got)
+	}
+}

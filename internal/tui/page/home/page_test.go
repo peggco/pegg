@@ -643,3 +643,106 @@ func TestHomeHubPickerFallbackAndInstall(t *testing.T) {
 		t.Fatalf("install request = %v", got)
 	}
 }
+
+const wideHomeTable = "| AlphaColumn | BravoColumn | CharlieColumn | DeltaColumn | EchoColumn | FoxtrotColumn | GolfColumn | HotelColumn | IndiaColumn |\n" +
+	"| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n" +
+	"| one | two | three | four | five | six | seven | eight | nine |"
+
+func drawWideTablePage(t *testing.T) *Page {
+	t.Helper()
+	p := drawFrame(t, 100, 30)
+	p.Chat().AppendItem(&components.ChatItem{Kind: components.ItemAssistant, Text: wideHomeTable})
+	p.Draw(drawScreen(t, 100, 30), layout.Region{Left: 0, Top: 0, Width: 100, Height: 30}, true)
+	return p
+}
+
+func TestHomeShiftArrowsScrollTableWhenInputEmpty(t *testing.T) {
+	p := drawWideTablePage(t)
+
+	_, maxOff, ok := p.Chat().TableScrollState()
+	if !ok || maxOff <= 0 {
+		t.Fatalf("wide table not scrollable: ok=%v max=%d", ok, maxOff)
+	}
+	if !p.HandleKey(tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModShift)) {
+		t.Fatal("Shift+Right not consumed with an empty input")
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off == 0 {
+		t.Fatal("Shift+Right did not scroll the table")
+	}
+}
+
+func TestHomeShiftArrowsKeepInputSelection(t *testing.T) {
+	p := drawWideTablePage(t)
+
+	for _, r := range "ab" {
+		p.Input().InsertRune(r)
+	}
+	p.Input().Home()
+	if !p.HandleKey(tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModShift)) {
+		t.Fatal("Shift+Right not consumed by the input")
+	}
+	if got := p.Input().SelectedText(); got != "a" {
+		t.Fatalf("input selection = %q, want a", got)
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off != 0 {
+		t.Fatalf("table offset = %d, want 0 while the input has text", off)
+	}
+}
+
+func TestHomeChatWheelScrollsWideTable(t *testing.T) {
+	p := drawWideTablePage(t)
+	region := p.chatBounds(layout.Region{Left: 0, Top: 0, Width: 100, Height: 30})
+	y := region.Top
+
+	if !p.HandleChatWheel(50, y, 100, 30, 1) {
+		t.Fatal("wheel down over the table not consumed")
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off == 0 {
+		t.Fatal("wheel down did not scroll the table")
+	}
+
+	for p.HandleChatWheel(50, y, 100, 30, 1) {
+	}
+	off, maxOff, ok := p.Chat().TableScrollState()
+	if !ok || off != maxOff {
+		t.Fatalf("table offset at right edge = %d, want %d", off, maxOff)
+	}
+	if p.HandleChatWheel(50, y, 100, 30, 1) {
+		t.Fatal("wheel down at the right edge should fall through to vertical scrolling")
+	}
+
+	if !p.HandleMouse(50, y, 100, 30, tcell.WheelLeft) {
+		t.Fatal("WheelLeft over the table not consumed")
+	}
+	for p.HandleChatWheel(50, y, 100, 30, -1) {
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off != 0 {
+		t.Fatalf("table offset after scrolling back = %d, want 0", off)
+	}
+	if p.HandleChatWheel(50, y, 100, 30, -1) {
+		t.Fatal("wheel up at the left edge should fall through to vertical scrolling")
+	}
+}
+
+func TestHomeChatWheelOverProseDoesNotScrollTable(t *testing.T) {
+	p := drawWideTablePage(t)
+	region := p.chatBounds(layout.Region{Left: 0, Top: 0, Width: 100, Height: 30})
+
+	if p.HandleChatWheel(50, region.Top+4, 100, 30, 1) {
+		t.Fatal("wheel over a non-table line should not scroll the table")
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off != 0 {
+		t.Fatalf("table offset = %d, want 0", off)
+	}
+}
+
+func TestHomeChatWheelOutsideChatIgnored(t *testing.T) {
+	p := drawWideTablePage(t)
+
+	if p.HandleChatWheel(50, 29, 100, 30, 1) {
+		t.Fatal("wheel outside the chat should be ignored")
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off != 0 {
+		t.Fatalf("table offset = %d, want 0 when the pointer is outside the chat", off)
+	}
+}

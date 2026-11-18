@@ -1,4 +1,4 @@
-import { useStore } from "../state/store";
+import { store, useStore } from "../state/store";
 
 export type Lang = "en" | "tr";
 
@@ -7,7 +7,53 @@ export const LANGUAGES: Array<{ code: Lang; label: string }> = [
   { code: "tr", label: "Türkçe" },
 ];
 
-const en: Record<string, string> = {
+export const LANGUAGE_STORAGE = "pegg.language";
+
+export function normalizeLanguage(value: string | null | undefined): Lang {
+  return value === "tr" ? "tr" : "en";
+}
+
+function languageStorage(): Storage | undefined {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function readStoredLanguage(): Lang | undefined {
+  try {
+    const stored = languageStorage()?.getItem(LANGUAGE_STORAGE);
+    return stored === "en" || stored === "tr" ? stored : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function persistLanguage(language: Lang): void {
+  try {
+    languageStorage()?.setItem(LANGUAGE_STORAGE, language);
+  } catch {
+    return;
+  }
+}
+
+export function applyLanguage(language: string | null | undefined): Lang {
+  const next = normalizeLanguage(language);
+  store.set({ language: next });
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = next;
+  }
+  return next;
+}
+
+export function setLanguage(language: string | null | undefined): Lang {
+  const next = applyLanguage(language);
+  persistLanguage(next);
+  return next;
+}
+
+export const en: Record<string, string> = {
   "nav.newChat": "New chat",
   "nav.chats": "Chats",
   "nav.projects": "Projects",
@@ -247,6 +293,48 @@ const en: Record<string, string> = {
   "settings.systemGroup": "System",
   "settings.language": "Language",
   "settings.languageDesc": "Interface language for the desktop app.",
+  "settings.generalDesc":
+    "Model, language, and voice input. Model changes apply to the current session immediately.",
+  "settings.modelTitle": "Model",
+  "settings.provider": "Provider",
+  "settings.model": "Model",
+  "settings.reasoningEffort": "Reasoning effort",
+  "settings.reasoningEffortHint": "Provider-supported effort levels for this model.",
+  "settings.reasoningEffortUnsupported":
+    "This model does not declare reasoning effort options.",
+  "settings.default": "Default",
+  "settings.noProviders": "No providers configured",
+  "settings.providerDefault": "Provider default",
+  "settings.providersTitle": "Providers",
+  "settings.addProvider": "Add provider",
+  "settings.modelCount": "{count} model",
+  "settings.modelCountPlural": "{count} models",
+  "settings.removeProvider": "Remove {name}",
+  "settings.noProvidersHint":
+    "No providers configured. Add one to start a session.",
+  "settings.providerRemoved": "{name} removed",
+  "settings.sttTitle": "Speech-to-text providers",
+  "settings.addSttProvider": "Add STT provider",
+  "settings.sttEmpty": "No speech-to-text providers found.",
+  "settings.configured": "configured",
+  "settings.notConfigured": "not configured",
+  "settings.voiceInput": "Voice input",
+  "settings.sttProvider": "Speech-to-text provider",
+  "settings.sttModel": "Speech-to-text model",
+  "settings.sttNotConfigured": "Not configured",
+  "settings.recordCommand": "Record command",
+  "settings.recordCommandHint":
+    "Optional custom recorder. Leave empty to use the platform default.",
+  "settings.recordCommandPlaceholder":
+    "e.g. arecord -q -f S16_LE -r 16000 -c 1 -t wav",
+  "settings.maxDuration": "Max recording duration",
+  "settings.maxDurationHint": "Seconds before the microphone stops.",
+  "settings.sttCredentialsNote":
+    "STT credentials are managed by the Pegg CLI/config.",
+  "settings.sttNoProvider":
+    "No speech-to-text provider is configured. Run `pegg login` or set stt in ~/.pegg/pegg.json.",
+  "settings.languageSaveFailed": "Could not save the language: {error}",
+  "settings.generalSaved": "General settings saved",
   "settings.team": "Team & Connect",
   "settings.teamGroup": "Team",
   "team.description":
@@ -386,16 +474,16 @@ const en: Record<string, string> = {
   "update.agent": "Pegg agent",
 };
 
-const tr: Record<string, string> = {
+export const tr: Record<string, string> = {
   "nav.newChat": "Yeni sohbet",
   "nav.chats": "Sohbetler",
   "nav.projects": "Projeler",
-  "nav.skills": "Yetenekler",
+  "nav.skills": "Beceriler",
   "nav.catalog": "Katalog",
   "nav.settings": "Ayarlar",
   "nav.recents": "Son sohbetler",
-  "skills.title": "Yetenekler",
-  "skills.search": "Hub üzerinde ara…",
+  "skills.title": "Beceriler",
+  "skills.search": "Hub'da ara…",
   "skills.agents": "Ajanlar",
   "skills.global": "Genel",
   "skills.project": "Proje",
@@ -403,20 +491,20 @@ const tr: Record<string, string> = {
   "skills.remove": "Kaldır",
   "skills.installed": "Kurulu",
   "skills.hub": "Hub",
-  "skills.fromHub": "Hub üzerinden genel olarak kurulur",
+  "skills.fromHub": "Hub'dan genel kapsama kurulur",
   "skills.installing": "Kuruluyor…",
-  "skills.empty": "Henüz yetenek kurulu değil.",
-  "skills.noResults": "Yetenek bulunamadı.",
-  "skills.searchHint": "Kurmak için Pegg hub üzerinde arayın.",
-  "skills.directory": "Yetenek dizini",
+  "skills.empty": "Henüz beceri kurulu değil.",
+  "skills.noResults": "Beceri bulunamadı.",
+  "skills.searchHint": "Kurmak için Pegg hub'ında arayın.",
+  "skills.directory": "Beceri dizini",
   "skills.subtitle":
-    "Ajanını özel yetenekler, entegrasyonlar ve araçlarla güçlendir. Dizinde ara, kur ve kullan.",
+    "Ajanınızı özel beceriler, entegrasyonlar ve araçlarla güçlendirin. Dizinde arayın, kurun ve kullanın.",
   "skills.all": "Tümü",
   "skills.official": "Resmi",
   "skills.community": "Topluluk",
-  "skills.count": "yetenek",
+  "skills.count": "beceri",
   "skills.loadMore": "Daha fazla yükle",
-  "skills.back": "Tüm yetenekler",
+  "skills.back": "Tüm beceriler",
   "skills.installCommand": "Kur",
   "skills.copy": "Kopyala",
   "skills.copied": "Kopyalandı",
@@ -425,12 +513,12 @@ const tr: Record<string, string> = {
   "skills.source": "Kaynak",
   "skills.status": "Durum",
   "skills.license": "Lisans",
-  "skills.skillId": "Yetenek ID",
+  "skills.skillId": "Beceri kimliği",
   "skills.noReadme": "Bu kaynak için README yok.",
   "catalog.title": "Katalog",
   "catalog.directory": "Pegg kataloğu",
   "catalog.subtitle":
-    "Pegg için yetenekler, MCP sunucuları ve eklentiler keşfedin. Katalogda arayın, bir kaydı açın ve tek adımda kurun.",
+    "Pegg için becerileri, MCP sunucularını ve eklentileri keşfedin. Katalogda arayın, bir kaydı açın ve tek adımda kurun.",
   "catalog.search": "Katalogda ara…",
   "catalog.all": "Tümü",
   "catalog.official": "Resmi",
@@ -445,7 +533,7 @@ const tr: Record<string, string> = {
   "catalog.update": "Güncelle",
   "catalog.updating": "Güncelleniyor…",
   "catalog.upToDate": "Güncel",
-  "catalog.updateAvailable": "Güncelleme mevcut",
+  "catalog.updateAvailable": "Güncelleme hazır",
   "catalog.installCommand": "Kur",
   "catalog.copy": "Kopyala",
   "catalog.copied": "Kopyalandı",
@@ -454,8 +542,8 @@ const tr: Record<string, string> = {
   "catalog.source": "Kaynak",
   "catalog.status": "Durum",
   "catalog.license": "Lisans",
-  "catalog.skillId": "Yetenek ID",
-  "catalog.transport": "Taşıma",
+  "catalog.skillId": "Beceri kimliği",
+  "catalog.transport": "Aktarım",
   "catalog.version": "Sürüm",
   "catalog.platforms": "Platformlar",
   "catalog.capabilities": "Yetenekler",
@@ -469,7 +557,7 @@ const tr: Record<string, string> = {
   "catalog.noReadme": "Bu kayıt için README yok.",
   "catalog.global": "Genel",
   "catalog.project": "Proje",
-  "catalog.kind.skills": "Yetenekler",
+  "catalog.kind.skills": "Beceriler",
   "catalog.kind.mcp": "MCP",
   "catalog.kind.plugins": "Eklentiler",
   "catalog.restartRequired":
@@ -483,7 +571,7 @@ const tr: Record<string, string> = {
   "date.today": "Bugün",
   "date.yesterday": "Dün",
   "date.previous7": "Son 7 gün",
-  "date.earlier": "Daha önce",
+  "date.earlier": "Daha eski",
   "nav.noSessions":
     "Henüz oturum yok. Bir sohbet başlatın; çalışmalarınız burada görünsün.",
   "nav.loadingMore": "Yükleniyor…",
@@ -495,11 +583,11 @@ const tr: Record<string, string> = {
   "nav.rename": "Yeniden adlandır",
   "nav.delete": "Sil",
   "welcome.morning": "Günaydın",
-  "welcome.afternoon": "İyi öğleden sonralar",
+  "welcome.afternoon": "İyi öğleden sonra",
   "welcome.evening": "İyi akşamlar",
   "welcome.night": "İyi geceler",
   "welcome.working":
-    "{workspace} üzerinde çalışıyorsunuz. Bir şey sorun veya Pegg’e görev verin.",
+    "{workspace} üzerinde çalışıyorsunuz. Bir şey sorun veya Pegg'e bir görev verin.",
   "welcome.choose": "Başlamak için bir proje klasörü seçin.",
   "welcome.explain": "Bu kod tabanını açıkla",
   "welcome.explainPrompt":
@@ -519,13 +607,13 @@ const tr: Record<string, string> = {
   "welcome.files": "dosyalar",
   "welcome.commands": "komutlar",
   "composer.placeholder": "Bugün size nasıl yardımcı olabilirim?",
-  "composer.reply": "Pegg’e yanıtla…",
+  "composer.reply": "Pegg'e yanıt verin…",
   "composer.auto": "Otomatik",
   "composer.plan": "Plan",
   "composer.build": "Geliştir",
-  "composer.autoHint": "Pegg ne zaman planlayacağına kendi karar verir",
-  "composer.planHint": "Önce tasarla, düzenleme yapma",
-  "composer.buildHint": "Doğrudan uygula",
+  "composer.autoHint": "Pegg ne zaman planlayacağına kendisi karar verir",
+  "composer.planHint": "Önce tasarlar, düzenleme yapmaz",
+  "composer.buildHint": "Doğrudan uygular",
   "composer.attach": "Dosya ekle",
   "composer.voice": "Sesli giriş",
   "composer.model": "Model",
@@ -540,7 +628,7 @@ const tr: Record<string, string> = {
     "Dosyalar için @ · komutlar için / · Pegg komut çalıştırıp dosya düzenleyebilir.",
   "common.copy": "Kopyala",
   "common.copied": "Kopyalandı",
-  "common.fork": "Çatalla",
+  "common.fork": "Dallandır",
   "common.revert": "Geri al",
   "revert.title.one": "{count} dosya geri alındı",
   "revert.title.other": "{count} dosya geri alındı",
@@ -588,14 +676,14 @@ const tr: Record<string, string> = {
   "settings.permissions": "İzinler",
   "settings.memory": "Bellek",
   "mcp.description":
-    "Pegg için kullanılabilir Model Context Protocol sunucuları.",
+    "Pegg'in kullanabileceği MCP sunucuları.",
   "mcp.add": "Sunucu ekle",
   "mcp.addTitle": "MCP sunucusu ekle",
   "mcp.openConfig": "Yapılandırmayı aç",
   "mcp.empty": "Yapılandırılmış MCP sunucusu yok.",
   "mcp.name": "Ad",
-  "mcp.nameHint": "Bu sunucu için benzersiz ad.",
-  "mcp.transport": "Taşıma",
+  "mcp.nameHint": "Bu sunucu için benzersiz bir ad.",
+  "mcp.transport": "Aktarım",
   "mcp.transportStdio": "stdio",
   "mcp.transportSSE": "SSE (eski)",
   "mcp.transportStreamableHTTP": "Streamable HTTP",
@@ -609,15 +697,15 @@ const tr: Record<string, string> = {
   "mcp.envHint": "Her satıra bir KEY=VALUE.",
   "mcp.headers": "Başlıklar",
   "mcp.headersHint": "Her satıra bir KEY=VALUE.",
-  "mcp.nameRequired": "Sunucu adı gerekli",
-  "mcp.commandRequired": "stdio sunucuları için komut gerekli",
-  "mcp.urlRequired": "SSE ve Streamable HTTP sunucuları için URL gerekli",
+  "mcp.nameRequired": "Sunucu adı zorunludur",
+  "mcp.commandRequired": "stdio sunucuları için komut zorunludur",
+  "mcp.urlRequired": "SSE ve Streamable HTTP sunucuları için URL zorunludur",
   "mcp.added": "{name} eklendi",
   "mcp.removed": "{name} kaldırıldı",
   "mcp.restartHint":
     "Yeni sunucuyu etkinleştirmek için Pegg Desktop'ı yeniden başlatın.",
   "settings.mcp": "MCP",
-  "settings.skills": "Yetenekler",
+  "settings.skills": "Beceriler",
   "settings.rules": "Kurallar",
   "settings.plugins": "Eklentiler",
   "settings.system": "Sistem",
@@ -628,7 +716,50 @@ const tr: Record<string, string> = {
   "settings.systemGroup": "Sistem",
   "settings.language": "Dil",
   "settings.languageDesc": "Masaüstü uygulamasının arayüz dili.",
-  "settings.team": "Ekip ve Bağlantı",
+  "settings.generalDesc":
+    "Model, dil ve sesli giriş. Model değişiklikleri geçerli oturuma hemen uygulanır.",
+  "settings.modelTitle": "Model",
+  "settings.provider": "Sağlayıcı",
+  "settings.model": "Model",
+  "settings.reasoningEffort": "Akıl yürütme düzeyi",
+  "settings.reasoningEffortHint":
+    "Bu model için sağlayıcının desteklediği düzeyler.",
+  "settings.reasoningEffortUnsupported":
+    "Bu model akıl yürütme düzeyi seçenekleri tanımlamıyor.",
+  "settings.default": "Varsayılan",
+  "settings.noProviders": "Yapılandırılmış sağlayıcı yok",
+  "settings.providerDefault": "Sağlayıcı varsayılanı",
+  "settings.providersTitle": "Sağlayıcılar",
+  "settings.addProvider": "Sağlayıcı ekle",
+  "settings.modelCount": "{count} model",
+  "settings.modelCountPlural": "{count} model",
+  "settings.removeProvider": "{name} kaldır",
+  "settings.noProvidersHint":
+    "Yapılandırılmış sağlayıcı yok. Oturum başlatmak için bir tane ekleyin.",
+  "settings.providerRemoved": "{name} kaldırıldı",
+  "settings.sttTitle": "Konuşma-metin sağlayıcıları",
+  "settings.addSttProvider": "STT sağlayıcısı ekle",
+  "settings.sttEmpty": "Konuşma-metin sağlayıcısı bulunamadı.",
+  "settings.configured": "yapılandırıldı",
+  "settings.notConfigured": "yapılandırılmadı",
+  "settings.voiceInput": "Sesli giriş",
+  "settings.sttProvider": "Konuşma-metin sağlayıcısı",
+  "settings.sttModel": "Konuşma-metin modeli",
+  "settings.sttNotConfigured": "Yapılandırılmadı",
+  "settings.recordCommand": "Kayıt komutu",
+  "settings.recordCommandHint":
+    "İsteğe bağlı özel kayıt aracı. Platform varsayılanı için boş bırakın.",
+  "settings.recordCommandPlaceholder":
+    "ör. arecord -q -f S16_LE -r 16000 -c 1 -t wav",
+  "settings.maxDuration": "Azami kayıt süresi",
+  "settings.maxDurationHint": "Mikrofonun duracağı saniye sayısı.",
+  "settings.sttCredentialsNote":
+    "STT kimlik bilgileri Pegg CLI/yapılandırması tarafından yönetilir.",
+  "settings.sttNoProvider":
+    "Konuşma-metin sağlayıcısı yapılandırılmamış. `pegg login` çalıştırın veya ~/.pegg/pegg.json içinde stt ayarlayın.",
+  "settings.languageSaveFailed": "Dil kaydedilemedi: {error}",
+  "settings.generalSaved": "Genel ayarlar kaydedildi",
+  "settings.team": "Ekip ve bağlantı",
   "settings.teamGroup": "Ekip",
   "team.description":
     "Bu masaüstünü ekibinizle eşleştirin, aktarma sunucusunu arka planda çalıştırın ve oturumları web uygulamasıyla eşitleyin.",
@@ -641,9 +772,9 @@ const tr: Record<string, string> = {
   "team.deviceId": "Cihaz kimliği",
   "team.autoStart": "Açılışta bağlan",
   "team.autoStartHint":
-    "Pegg Desktop açıldığında arka plan aktarma sunucusunu otomatik başlat.",
+    "Pegg Desktop açıldığında arka plan aktarma sunucusunu otomatik başlatır.",
   "team.autoApprove": "Uzak eylemleri otomatik onayla",
-  "team.autoApproveHint": "Webden gelen hassas eylemler için yerel onayı atla.",
+  "team.autoApproveHint": "Web'den gelen hassas eylemler için yerel onayı atlar.",
   "team.connect": "Bağlan",
   "team.disconnect": "Bağlantıyı kes",
   "team.logout": "Belirteci unut",
@@ -659,6 +790,42 @@ const tr: Record<string, string> = {
   "team.providerRefreshed": "Ekip sağlayıcısı yenilendi",
   "team.providerRemoved": "Ekip sağlayıcısı kaldırıldı",
   "team.noProviders": "Henüz bağlı ekip sağlayıcısı yok.",
+  "onboarding.title": "Sağlayıcı bağlayın",
+  "onboarding.subtitle":
+    "Pegg'in oturum başlatabilmesi için bir model sağlayıcısı gerekir. Pegg Forever'a giriş yapın, bir API anahtarı yapıştırın veya sağlayıcıyı kendiniz yapılandırın.",
+  "onboarding.login": "Pegg'e giriş yapın",
+  "onboarding.loginDetail":
+    "Tarayıcıda onaylayın; Pegg Forever otomatik olarak yapılandırılır.",
+  "onboarding.apiKey": "API anahtarı kullanın",
+  "onboarding.apiKeyDetail": "Mevcut bir Pegg Forever anahtarını yapıştırın.",
+  "onboarding.configure": "Kendim yapılandıracağım",
+  "onboarding.configureDetail":
+    "Sağlayıcı ayarlarını açın ve sağlayıcıyı elle seçin.",
+  "onboarding.loginTitle": "Pegg'e giriş yapın",
+  "onboarding.waiting": "Tarayıcı onayı bekleniyor…",
+  "onboarding.approving": "Onaylanıyor…",
+  "onboarding.starting": "Başlatılıyor…",
+  "onboarding.done": "Pegg'e giriş yapıldı",
+  "onboarding.openBrowser": "Tarayıcıyı aç",
+  "onboarding.cancel": "İptal",
+  "onboarding.back": "Geri",
+  "onboarding.apiKeyTitle": "API anahtarı kullanın",
+  "onboarding.apiKeyLabel": "API anahtarı",
+  "onboarding.apiKeyHint": "~/.pegg/pegg.json dosyasında yerel olarak saklanır.",
+  "onboarding.apiKeyPlaceholder": "vsk_…",
+  "onboarding.apiKeyRequired": "Bir API anahtarı girin.",
+  "onboarding.save": "Anahtarı kaydet",
+  "onboarding.saving": "Kaydediliyor…",
+  "onboarding.error": "Bir sorun oluştu: {error}",
+  "onboarding.modelsTitle": "Modeller yükleniyor",
+  "onboarding.modelsWaiting":
+    "Pegg'den modeller alınıyor. Bu birkaç saniye sürebilir.",
+  "onboarding.defaultsTitle": "Önerilen varsayılanlar",
+  "onboarding.defaultsLoading": "Önerilen varsayılanlar yükleniyor…",
+  "onboarding.defaultsSubtitle": "Pegg şu ayarları öneriyor:",
+  "onboarding.defaultsApply": "Önerilen varsayılanları uygula",
+  "onboarding.defaultsSkip": "Şimdilik atla",
+  "onboarding.defaultsSkipped": "Atlandı (sağlayıcı veya model yok):",
   "common.loading": "Yükleniyor…",
   "subagent.history": "Alt ajan geçmişi",
   "subagent.back": "Sohbete dön",
@@ -680,13 +847,13 @@ const tr: Record<string, string> = {
   "chat.activityThoughts": "{count} düşünce",
   "ask.title": "Pegg soruyor",
   "ask.agentAsks": "{name} soruyor",
-  "ask.placeholder": "Cevabınızı yazın…",
+  "ask.placeholder": "Yanıtınızı yazın…",
   "ask.yes": "Evet",
   "ask.no": "Hayır",
   "ask.custom": "Özel…",
-  "ask.customPlaceholder": "Özel bir cevap yazın…",
-  "ask.customEmpty": "Özel bir cevap girin",
-  "ask.required": "Bu cevap gerekli",
+  "ask.customPlaceholder": "Özel bir yanıt yazın…",
+  "ask.customEmpty": "Özel bir yanıt girin",
+  "ask.required": "Bu alan zorunludur",
   "ask.back": "Geri",
   "ask.next": "İleri",
   "ask.review": "Gözden geçir",
@@ -696,7 +863,7 @@ const tr: Record<string, string> = {
   "ask.remove": "Kaldır",
   "ask.edit": "Düzenle",
   "ask.skipped": "Atlandı",
-  "ask.reviewTitle": "Cevaplarınızı gözden geçirin",
+  "ask.reviewTitle": "Yanıtlarınızı gözden geçirin",
   "ask.hintText":
     "Devam için Enter · Yeni satır için Shift+Enter · İptal için Esc",
   "ask.hintOptions":
@@ -706,7 +873,7 @@ const tr: Record<string, string> = {
   "update.download": "İndir",
   "update.downloading": "Pegg Desktop {version} indiriliyor… {progress}%",
   "update.ready": "Pegg Desktop {version} hazır",
-  "update.restart": "Güncellemek için yeniden başlat",
+  "update.restart": "Güncellemek için yeniden başlatın",
   "update.open": "İndirme sayfasını aç",
   "update.check": "Güncellemeleri kontrol et",
   "update.checking": "Güncellemeler kontrol ediliyor…",
@@ -715,18 +882,18 @@ const tr: Record<string, string> = {
   "update.title": "Pegg Desktop güncellemeleri",
   "update.error": "Güncelleme başarısız: {error}",
   "update.upToDate": "Güncelsiniz.",
-  "update.unsupported": "Güncelleme mevcut — indirme sayfasını açın",
-  "update.readyBoth": "Pegg Desktop {desktop} ve Pegg agent {agent} hazır",
+  "update.unsupported": "Güncelleme hazır — indirme sayfasını açın",
+  "update.readyBoth": "Pegg Desktop {desktop} ve Pegg ajanı {agent} hazır",
   "update.readyDesktop": "Pegg Desktop {version} hazır",
-  "update.readyAgent": "Pegg agent {version} hazır",
-  "update.availableBoth": "Pegg Desktop {desktop} ve Pegg agent {agent} mevcut",
-  "update.availableDesktop": "Pegg Desktop {version} mevcut",
-  "update.availableAgent": "Pegg agent {version} mevcut",
+  "update.readyAgent": "Pegg ajanı {version} hazır",
+  "update.availableBoth": "Pegg Desktop {desktop} ve Pegg ajanı {agent} hazır",
+  "update.availableDesktop": "Pegg Desktop {version} hazır",
+  "update.availableAgent": "Pegg ajanı {version} hazır",
   "update.downloadingAll": "Pegg güncellemeleri indiriliyor… {progress}%",
   "update.agentManaged":
-    "Pegg agent {version} mevcut — paket yöneticinizle güncelleyin",
+    "Pegg ajanı {version} hazır — paket yöneticinizle güncelleyin",
   "update.desktop": "Pegg Desktop",
-  "update.agent": "Pegg agent",
+  "update.agent": "Pegg ajanı",
 };
 
 const catalogs: Record<Lang, Record<string, string>> = { en, tr };

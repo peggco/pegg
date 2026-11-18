@@ -11,6 +11,10 @@
   composer. Older updates in the same message collapse into the last card, a
   new list in a later message appears as a new card, and the plan no longer
   follows you into new messages.
+- Prompt history: with an empty composer, Up recalls the previous prompt and
+  repeated Up/Down walk that session's prompts. Editing or moving the caret ends
+  browsing, and Down past the newest entry restores the draft. Mention/skill
+  menus keep the arrows.
 
 ## 0.2.4
 

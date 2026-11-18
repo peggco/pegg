@@ -85,7 +85,7 @@ func (m *Manager) Start() error {
 	if err := m.bus.Subscribe(event.TopicModelSelect, m.handleModelSelect); err != nil {
 		return fmt.Errorf("llm manager: subscribe %s: %w", event.TopicModelSelect, err)
 	}
-	m.log.Info("llm manager started")
+	m.log.Debug("llm manager started")
 	return nil
 }
 
@@ -123,7 +123,7 @@ func (m *Manager) runSyncAsync(cfgs []config.LLMConfig) {
 	}
 	m.wg.Wait()
 	m.markReady()
-	m.log.Info("llm: all providers synced")
+	m.log.Debug("llm: all providers synced")
 }
 
 func (m *Manager) markReady() {
@@ -175,7 +175,7 @@ func (m *Manager) EnsurePricesCached(ctx context.Context) error {
 	}
 	m.pricesOnce = sync.Once{}
 	m.prices = prices
-	m.log.Finfo("llm: cached %d model price entries", len(prices))
+	m.log.DebugFields("llm: model prices cached", map[string]any{"entries": len(prices)})
 	return nil
 }
 
@@ -307,7 +307,7 @@ func (m *Manager) handleProviderRemoved(name string) {
 	if m.cacheStore != nil {
 		_ = m.cacheStore.Delete(name)
 	}
-	m.log.Finfo("llm: provider %q removed", name)
+	m.log.Fdebug("llm: provider %q removed", name)
 }
 
 func (m *Manager) loadProvider(ctx context.Context, cfg config.LLMConfig) {
@@ -322,7 +322,7 @@ func (m *Manager) loadProvider(ctx context.Context, cfg config.LLMConfig) {
 		return
 	}
 
-	m.log.Finfo("llm: provider %q loaded %d models", name, len(models))
+	m.log.DebugFields(fmt.Sprintf("llm: provider %q loaded", name), map[string]any{"provider": name, "models": len(models)})
 	m.publishModelsLoaded(name, len(models), nil)
 }
 

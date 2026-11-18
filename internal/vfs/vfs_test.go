@@ -494,6 +494,53 @@ func TestHooks(t *testing.T) {
 	}
 }
 
+func TestMutationHooks(t *testing.T) {
+	root := t.TempDir()
+	fs, err := New(root, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var after []FileMutation
+	fs.OnAfterMutation(func(ev FileMutation) {
+		after = append(after, ev)
+	})
+
+	if _, err := fs.Write("a.txt", []byte("one")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fs.Write("a.txt", []byte("two")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fs.Edit("a.txt", "two", "three", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := fs.Delete("a.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(after) != 4 {
+		t.Fatalf("mutations = %d, want 4", len(after))
+	}
+	if after[0].Op != MutationAdd || after[0].Path != "a.txt" || string(after[0].After) != "one" {
+		t.Fatalf("add mutation = %+v", after[0])
+	}
+	if after[1].Op != MutationModify || string(after[1].Before) != "one" || string(after[1].After) != "two" {
+		t.Fatalf("modify mutation = %+v", after[1])
+	}
+	if after[2].Op != MutationModify || string(after[2].Before) != "two" || string(after[2].After) != "three" {
+		t.Fatalf("edit mutation = %+v", after[2])
+	}
+	if after[3].Op != MutationDelete || string(after[3].Before) != "three" || len(after[3].After) != 0 {
+		t.Fatalf("delete mutation = %+v", after[3])
+	}
+	for _, ev := range after {
+		if ev.AfterHash == "" && ev.Op != MutationDelete {
+			t.Fatalf("missing after hash for %+v", ev)
+		}
+	}
+}
+
 func TestHooksCarryDiagnostics(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package a\n"), 0o644); err != nil {

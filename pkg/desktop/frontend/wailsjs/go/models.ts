@@ -182,6 +182,7 @@ export namespace acpclient {
 	    additions: number;
 	    deletions: number;
 	    status: string;
+	    reason?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new RevertFileChange(source);
@@ -193,6 +194,7 @@ export namespace acpclient {
 	        this.additions = source["additions"];
 	        this.deletions = source["deletions"];
 	        this.status = source["status"];
+	        this.reason = source["reason"];
 	    }
 	}
 	export class SessionRevertResult {

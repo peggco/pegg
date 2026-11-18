@@ -1,6 +1,12 @@
 package i18n
 
-import "testing"
+import (
+	"regexp"
+	"strings"
+	"testing"
+)
+
+var formatVerb = regexp.MustCompile(`%[-+ 0-9.#]*[a-zA-Z%]`)
 
 func TestSetAndCurrent(t *testing.T) {
 	t.Cleanup(func() { Set(English) })
@@ -92,6 +98,33 @@ func TestCatalogsHaveSameKeys(t *testing.T) {
 	for key := range tr {
 		if _, ok := en[key]; !ok {
 			t.Errorf("en is missing key %q", key)
+		}
+	}
+}
+
+func TestCatalogsHaveNoEmptyValues(t *testing.T) {
+	for _, catalog := range []struct {
+		lang  string
+		table map[string]string
+	}{{English, en}, {Turkish, tr}} {
+		for key, value := range catalog.table {
+			if strings.TrimSpace(value) == "" {
+				t.Errorf("%s catalog has an empty value for %q", catalog.lang, key)
+			}
+		}
+	}
+}
+
+func TestCatalogsHaveMatchingFormatVerbs(t *testing.T) {
+	for key, enValue := range en {
+		trValue, ok := tr[key]
+		if !ok {
+			continue
+		}
+		want := formatVerb.FindAllString(enValue, -1)
+		got := formatVerb.FindAllString(trValue, -1)
+		if strings.Join(want, ",") != strings.Join(got, ",") {
+			t.Errorf("%q format verbs = %v, want %v (en: %q, tr: %q)", key, got, want, enValue, trValue)
 		}
 	}
 }

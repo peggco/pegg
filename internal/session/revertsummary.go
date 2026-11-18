@@ -19,6 +19,7 @@ type RevertFileChange struct {
 	Additions int    `json:"additions"`
 	Deletions int    `json:"deletions"`
 	Status    string `json:"status"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 type RevertSummary struct {

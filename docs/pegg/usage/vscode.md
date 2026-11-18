@@ -107,6 +107,7 @@ The sidebar chat supports:
 | Settings | Sliders icon left of the mic |
 | Send | Enter or the send arrow |
 | New line | Shift+Enter |
+| Recall a prompt | Up when the composer is empty |
 | Stop | Stop button while the agent is running |
 
 `@` mentions and `/` skills are inline, with keyboard navigation:
@@ -118,6 +119,11 @@ The sidebar chat supports:
 Reverting a user message shows a summary above the composer with the file count,
 green/red line totals, per-file statuses, and an **Undo** button. The composer
 keeps focus, so you can keep typing while the summary is visible.
+
+With an empty composer, Up recalls the previous prompt and repeated Up/Down
+walk the session's prompts. Editing or moving the caret ends browsing; Down past
+the newest entry restores the draft. The mention and command menus keep the
+arrows while open.
 
 ## Modes
 

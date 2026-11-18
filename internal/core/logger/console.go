@@ -21,11 +21,7 @@ func NewConsoleHandler(cfg config.LoggerConfig) *ConsoleHandler {
 }
 
 func (c *ConsoleHandler) Write(rec Record) error {
-	fmt.Printf("[%s] [%-5s] %s\n",
-		rec.Timestamp.Format("2006-01-02 15:04:05"),
-		rec.Level.String(),
-		rec.Message,
-	)
+	fmt.Println(FormatRecord(rec))
 	return nil
 }
 

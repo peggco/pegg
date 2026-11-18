@@ -121,6 +121,7 @@ const App = GoApp as unknown as {
   AddMCPServer(input: MCPServerInput): Promise<void>;
   RemoveMCPServer(name: string): Promise<void>;
   SaveGeneralSettings(g: GeneralSettings): Promise<void>;
+  SaveLanguage(language: string): Promise<void>;
   SaveCompactionSettings(c: CompactionSettings): Promise<void>;
   SavePermissionSettings(p: PermissionsSettings): Promise<void>;
   SaveMemorySettings(m: MemorySettings): Promise<void>;

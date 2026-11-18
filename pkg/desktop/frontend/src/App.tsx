@@ -57,6 +57,7 @@ export function App() {
   const providerSetup = useStore((s) => s.providerSetup);
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const prefs = useStore((s) => s.prefs);
+  const language = useStore((s) => s.language);
   const subagentView = useStore((s) => s.subagentView);
   const asks = useStore((s) => s.chat.asks);
   const platform = useStore((s) => s.boot?.platform ?? 'linux');
@@ -72,6 +73,10 @@ export function App() {
   useEffect(() => {
     document.documentElement.dir = prefs.direction;
   }, [prefs.direction]);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   useEffect(() => {
     void bootstrap();
@@ -253,7 +258,7 @@ export function App() {
                   <Composer compact placeholder={desktopView?.placeholder} />
                   <ViewLines lines={desktopView?.footer} className="view-footer" />
                   <div className="composer-hint">
-                    Type @ for files · / for commands · Pegg can run commands and edit files.
+                    Type @ for files · / for commands · ↑ recalls history when empty · Pegg can run commands and edit files.
                   </div>
                 </div>
               </div>

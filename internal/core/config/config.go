@@ -38,8 +38,11 @@ type ModelRef struct {
 	Model    string `json:"model,omitempty"`
 }
 
+const DefaultLoggerLevel = "info"
+
 type LoggerConfig struct {
 	Driver      string `json:"driver"`
+	Level       string `json:"level,omitempty"`
 	MaxLogCount int    `json:"max_log_count"`
 }
 
@@ -356,6 +359,7 @@ type Config struct {
 	Scheduler       *SchedulerConfig                `json:"scheduler,omitempty"`
 	Plugins         PluginConfig                    `json:"plugins,omitempty"`
 	Hooks           *HooksConfig                    `json:"hooks,omitempty"`
+	ChangeJournal   *ChangeJournalConfig            `json:"changejournal,omitempty"`
 	Connect         *ConnectConfig                  `json:"connect,omitempty"`
 	STT             *STTConfig                      `json:"stt,omitempty"`
 	MCPServers      map[string]MCPServerConfig      `json:"mcp_servers,omitempty"`
@@ -373,6 +377,44 @@ func (h *HooksConfig) Active() bool {
 		return true
 	}
 	return h.Enabled == nil || *h.Enabled
+}
+
+const (
+	DefaultChangeJournalMaxFileSize = 1 << 20
+	DefaultChangeJournalBudget      = 64 << 20
+	DefaultChangeJournalRetention   = 30
+)
+
+type ChangeJournalConfig struct {
+	Enabled       *bool `json:"enabled,omitempty"`
+	MaxFileSize   int64 `json:"max_file_size,omitempty"`
+	Budget        int64 `json:"budget,omitempty"`
+	RetentionDays int   `json:"retention_days,omitempty"`
+}
+
+func (c *ChangeJournalConfig) Active() bool {
+	if c == nil {
+		return true
+	}
+	return c.Enabled == nil || *c.Enabled
+}
+
+func normalizeChangeJournal(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.ChangeJournal == nil {
+		cfg.ChangeJournal = &ChangeJournalConfig{}
+	}
+	if cfg.ChangeJournal.MaxFileSize <= 0 {
+		cfg.ChangeJournal.MaxFileSize = DefaultChangeJournalMaxFileSize
+	}
+	if cfg.ChangeJournal.Budget <= 0 {
+		cfg.ChangeJournal.Budget = DefaultChangeJournalBudget
+	}
+	if cfg.ChangeJournal.RetentionDays <= 0 {
+		cfg.ChangeJournal.RetentionDays = DefaultChangeJournalRetention
+	}
 }
 
 func normalizeHooks(cfg *Config) {
@@ -396,6 +438,7 @@ func DefaultConfig() *Config {
 		Onboarding: &OnboardingConfig{},
 		Logger: LoggerConfig{
 			Driver:      "sqlite",
+			Level:       DefaultLoggerLevel,
 			MaxLogCount: 1000,
 		},
 		Cache: CacheConfig{
@@ -445,6 +488,11 @@ func DefaultConfig() *Config {
 		},
 		Hooks: &HooksConfig{
 			TimeoutSeconds: 5,
+		},
+		ChangeJournal: &ChangeJournalConfig{
+			MaxFileSize:   DefaultChangeJournalMaxFileSize,
+			Budget:        DefaultChangeJournalBudget,
+			RetentionDays: DefaultChangeJournalRetention,
 		},
 		Connect: &ConnectConfig{
 			Enabled:        false,
@@ -577,6 +625,7 @@ func Load() (*Config, error) {
 
 	normalizeSTTDrivers(config)
 	normalizeHooks(config)
+	normalizeChangeJournal(config)
 
 	return config, nil
 }

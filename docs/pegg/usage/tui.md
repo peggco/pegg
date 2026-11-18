@@ -77,7 +77,7 @@ warning.
 | ++enter++ | Submit |
 | ++shift+enter++ | Insert newline |
 | ++left++ / ++right++ | Move the cursor (word-wrap aware) |
-| ++up++ / ++down++ | Move the cursor between lines |
+| ++up++ / ++down++ | Recall history when the input is empty, otherwise move between lines |
 | ++alt+up++ / ++alt+down++ | Recall the previous / next message |
 | ++ctrl+j++ | Jump to the last line and insert a newline |
 | ++home++ / ++end++ | Start / end of line |
@@ -103,10 +103,12 @@ Sent messages are kept in an in-memory history (the last 200, with consecutive
 duplicates skipped). Loading a session seeds the history from its stored user
 messages, so the shortcuts also work after resuming a session. In the input:
 
-- ++alt+up++ recalls the previous message; ++alt+down++ recalls the next
-  message. Shift+Up/Down continues to extend the selection.
-- While browsing history, the message you were typing is saved as a draft and
-  restored when you move past the newest entry.
+- ++up++ recalls the previous message when the input is empty; ++down++ walks
+  forward again, and Down past the newest entry restores the draft.
+- While browsing history, ++up++/++down++ keep walking when the caret stays at
+  the end of the input. Editing or moving the caret ends browsing. Shift+Up/Down
+  continues to extend the selection.
+- ++alt+up++/++alt+down++ also recall history from a non-empty draft.
 - Recalled messages scroll into view automatically, so multi-line messages stay
   visible with the cursor at the end.
 - ++ctrl+j++ moves the cursor to the end of the input and starts a new line,
@@ -179,10 +181,13 @@ input modality.
 | User message | Boxed card, with attachment chips |
 | Assistant message | Rendered markdown (headings, lists, quotes, inline styles) |
 | Thinking | Collapsible; animated while active, raw reasoning when expanded |
-| Tool call | Card with name, enriched target (`read:path`, `bash:cmd`, ...), duration, expandable output |
+| Tool call | Card with name, enriched target (`read:path`, `bash:cmd`, `websearch:query`, ...), duration, expandable output |
 | Task | Boxed card with subagent name, type, prompt, status, live activity, output preview, usage, and a **History** action |
 | Subagent | Card for fork-launched subagents: status, live activity line, output preview, usage, and a **History** action |
 | Error | Bold red `✖ error: ...` |
+
+While a tool runs, its live activity is shown instead of the target: `websearch`
+renders `Searching <query>` and `webfetch` renders `Fetching <url>`.
 
 ### Selecting and copying text
 
@@ -248,6 +253,15 @@ Haskell, CSS, HTML, JSON, YAML, Markdown, SQL, R, Lua, and Dart.
 | ++up++ / ++down++ | Scroll one line |
 | ++pgup++ / ++pgdn++ | Scroll one page |
 | ++home++ / ++end++ | Jump to top / bottom |
+| ++shift+left++ / ++shift+right++ | Scroll a wide markdown table horizontally (when the prompt is empty) |
+
+When a table is wider than the viewport it is kept unwrapped, and a hint at the
+bottom of the chat shows that more columns exist. With the prompt empty,
+++shift+left++/++shift+right++ reveal the hidden columns and snap between table
+columns; typing in the prompt keeps those keys for text selection. With the
+pointer over a table row, the mouse wheel scrolls the table left/right first;
+once it reaches an edge, scrolling continues vertically. The horizontal wheel
+works the same way, and the `←`/`→` markers in the hint are clickable.
 
 ## Subagents
 
@@ -271,7 +285,7 @@ to choose it, click the field to place the cursor, or click outside to go back.
 
 | Tab | Contents |
 |---|---|
-| **General** | Provider (add or reconfigure), Model (searchable list), STT provider, STT model, Theme, Reasoning effort |
+| **General** | Provider (add or reconfigure), Model (searchable list), STT provider, STT model, Theme, Language, Reasoning effort |
 | **Session** | Load/New/Delete session, Change title, Compaction settings |
 | **MCP** | Connected MCP servers (stdio, SSE, Streamable HTTP) and their tools |
 | **Skills** | Loaded skills with descriptions |
@@ -296,6 +310,9 @@ to choose it, click the field to place the cursor, or click outside to go back.
   models show a muted **stream** label on the right; choosing one makes Pegg use
   streaming automatically. Selecting a model enables voice input.
 - **Reasoning** — available only for models that advertise reasoning options.
+- **Language** — switch between English and Turkish. The choice is saved as the
+  shared `language` value and also applies to Pegg Desktop; see
+  [Localization](../localization.md).
 - **Session → Load** — sessions from the current directory, newest first. Loading
   restores the last 50 messages; scrolling to the top loads older messages in
   batches of 50.

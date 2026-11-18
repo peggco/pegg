@@ -282,7 +282,7 @@ func (m *Manager) startServer(srv *Server, path string) {
 	srv.mu.Unlock()
 
 	if m.log != nil {
-		m.log.Finfo("lsp: server %q started (root %s)", srv.name, root)
+		m.log.Fdebug("lsp: server %q started (root %s)", srv.name, root)
 	}
 	m.openPending(srv, path)
 }

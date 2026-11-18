@@ -708,6 +708,7 @@ func (a *Agent) runTool(ctx context.Context, state *runState, call llm.ToolCall)
 
 	sink := tool.NewAttachmentSink()
 	toolCtx := tool.WithAttachmentSink(ctx, sink)
+	toolCtx = tool.WithCallID(toolCtx, call.ID)
 	outputSink := tool.NewOutputSink(func(stream, chunk string) {
 		a.publish(TopicAgentToolOutput, AgentToolOutput{
 			AgentID:   a.ID,

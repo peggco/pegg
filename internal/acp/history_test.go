@@ -7,6 +7,7 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/peggco/pegg/internal/changejournal"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
 )
@@ -273,5 +274,57 @@ func TestSessionUndoRevertErrors(t *testing.T) {
 	}
 	if _, err := srv.handleSessionUndoRevert(context.Background(), json.RawMessage(`{"sessionId":"acp-1"}`)); err == nil {
 		t.Fatal("expected an error for a missing snapshot id")
+	}
+}
+
+func TestApplyJournalSummaryMapsStatuses(t *testing.T) {
+	srv := &Server{journalResults: map[string]changejournal.Result{
+		"pegg-1": {
+			SessionID: "pegg-1",
+			RevertID:  "snap-1",
+			Files: []changejournal.Change{
+				{Path: "a.go", Status: changejournal.StatusConflict, Reason: "file changed locally"},
+				{Path: "b.go", Status: changejournal.StatusSkipped},
+				{Path: "c.go", Status: changejournal.StatusDeleted},
+			},
+		},
+	}}
+	summary := session.RevertSummary{Files: []session.RevertFileChange{
+		{Path: "a.go", Additions: 2, Deletions: 1, Status: session.RevertStatusReverted},
+		{Path: "z.go", Additions: 4, Status: session.RevertStatusReverted},
+	}}
+
+	got := srv.applyJournalSummary("pegg-1", "snap-1", summary)
+
+	byPath := make(map[string]session.RevertFileChange, len(got.Files))
+	for _, file := range got.Files {
+		byPath[file.Path] = file
+	}
+	if file := byPath["a.go"]; file.Status != session.RevertStatusConflict || file.Reason != "file changed locally" {
+		t.Fatalf("a.go = %+v", file)
+	}
+	if file := byPath["b.go"]; file.Status != session.RevertStatusSkipped {
+		t.Fatalf("b.go = %+v", file)
+	}
+	if file := byPath["c.go"]; file.Status != session.RevertStatusReverted {
+		t.Fatalf("c.go = %+v", file)
+	}
+	if file := byPath["z.go"]; file.Status != session.RevertStatusReverted || file.Additions != 4 {
+		t.Fatalf("z.go = %+v", file)
+	}
+}
+
+func TestApplyJournalSummaryIgnoresStaleRevert(t *testing.T) {
+	srv := &Server{journalResults: map[string]changejournal.Result{
+		"pegg-1": {SessionID: "pegg-1", RevertID: "other-snap", Files: []changejournal.Change{
+			{Path: "a.go", Status: changejournal.StatusConflict},
+		}},
+	}}
+	summary := session.RevertSummary{Files: []session.RevertFileChange{
+		{Path: "a.go", Status: session.RevertStatusReverted},
+	}}
+	got := srv.applyJournalSummary("pegg-1", "snap-1", summary)
+	if got.Files[0].Status != session.RevertStatusReverted {
+		t.Fatalf("stale journal result was applied: %+v", got.Files[0])
 	}
 }

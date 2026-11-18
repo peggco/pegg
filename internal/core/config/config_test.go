@@ -21,6 +21,13 @@ func TestDefaultConfigHasNoProviders(t *testing.T) {
 	}
 }
 
+func TestDefaultConfigHasLoggerLevel(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Logger.Level != DefaultLoggerLevel {
+		t.Fatalf("logger level = %q, want %q", cfg.Logger.Level, DefaultLoggerLevel)
+	}
+}
+
 func TestDefaultConfigHasStallEnabled(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.Stall == nil {

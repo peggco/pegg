@@ -28,6 +28,15 @@ func (h *Hook[T]) Reset() {
 	h.filters = nil
 }
 
+func (h *Hook[T]) Has() bool {
+	if h == nil {
+		return false
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.filters) > 0
+}
+
 func (h *Hook[T]) Apply(value T) T {
 	h.mu.RLock()
 	fns := make([]func(T) T, len(h.filters))

@@ -125,6 +125,7 @@ export interface RevertFileChange {
   additions: number;
   deletions: number;
   status?: RevertFileStatus;
+  reason?: string;
 }
 
 export interface RevertSummary {

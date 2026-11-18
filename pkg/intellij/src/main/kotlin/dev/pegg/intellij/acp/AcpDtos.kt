@@ -324,6 +324,7 @@ data class RevertFileChange(
     val additions: Int = 0,
     val deletions: Int = 0,
     val status: String = "reverted",
+    val reason: String? = null,
 )
 
 @Serializable

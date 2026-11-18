@@ -10,6 +10,14 @@ import {
 } from '../state';
 import type { AttachmentInfo, PlanEntry } from '../types';
 import { filterTodoTools, isTodoTool, planEntriesFromInput } from '../plan';
+import {
+  createPromptHistory,
+  handleHistoryKey,
+  promptHistoryEntries,
+  rememberPrompt,
+  resetPromptHistory,
+  type PromptHistory,
+} from '../history';
 import { renderMarkdown } from './markdown';
 import { host } from './host';
 import { DiffView } from './DiffView';
@@ -178,6 +186,10 @@ export function App() {
   const [revert, setRevert] = useState<RevertSummaryView | null>(null);
   const sessionRef = useRef<string | undefined>(undefined);
   const inlinePickers = (window as unknown as { __peggInlinePickers?: boolean }).__peggInlinePickers === true;
+  const promptHistory = useRef<PromptHistory>(createPromptHistory());
+  const historySession = useRef<string | null>(null);
+  const historySeen = useRef(0);
+  const historyFirst = useRef('');
 
   const openMessageMenu = useCallback((item: ChatItem, rect: DOMRect) => {
     setMenu((current) => (current?.item.id === item.id ? null : { item, rect }));
@@ -215,10 +227,36 @@ export function App() {
   }, [state.items, agentView]);
 
   const sessionKey = `${state.acpSessionId ?? ''}:${state.peggSessionId ?? ''}:${agentView?.id ?? ''}`;
+  const historyKey = `${state.acpSessionId ?? ''}:${state.peggSessionId ?? ''}`;
   const { scrollerRef, atBottom, onScroll, scrollToBottom, follow } = useAnchoredScroll(
     sessionKey,
     visibleItems,
   );
+
+  useEffect(() => {
+    const entries = promptHistoryEntries(state.items);
+    const first = entries[0] ?? '';
+    if (historySession.current !== historyKey) {
+      historySession.current = historyKey;
+      promptHistory.current = createPromptHistory(entries);
+      historySeen.current = entries.length;
+      historyFirst.current = first;
+      return;
+    }
+    if (entries.length < historySeen.current || first !== historyFirst.current) {
+      promptHistory.current = createPromptHistory(entries);
+      historySeen.current = entries.length;
+      historyFirst.current = first;
+      return;
+    }
+    if (entries.length > historySeen.current) {
+      let next = promptHistory.current;
+      for (const prompt of entries.slice(historySeen.current)) next = rememberPrompt(next, prompt);
+      promptHistory.current = next;
+      historySeen.current = entries.length;
+      historyFirst.current = first;
+    }
+  }, [historyKey, state.items]);
 
   const historyFlags = useRef({ hasMore: false, loading: false, agent: false, cursor: 0 });
   const olderCooldown = useRef(0);
@@ -458,6 +496,7 @@ export function App() {
     if (state.running) return;
     const value = text.trim();
     if (!value && state.composerAttachments.length === 0) return;
+    if (value) promptHistory.current = rememberPrompt(promptHistory.current, value);
     host.postMessage({ type: 'send', text: value });
     setText('');
     textRef.current = '';
@@ -516,6 +555,37 @@ export function App() {
       setPopup(null);
       return;
     }
+    if (
+      promptHistory.current.index < promptHistory.current.entries.length &&
+      ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)
+    ) {
+      promptHistory.current = resetPromptHistory(promptHistory.current);
+    }
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      const el = textarea.current;
+      const current = textRef.current;
+      const outcome = handleHistoryKey(
+        {
+          history: promptHistory.current,
+          value: current,
+          selectionCollapsed: !el || el.selectionStart === el.selectionEnd,
+          caretAtEnd: !el || el.selectionEnd === current.length,
+          popupOpen: Boolean(popup),
+        },
+        event.key,
+      );
+      promptHistory.current = outcome.history;
+      if (outcome.handled) {
+        event.preventDefault();
+        if (outcome.text !== current) {
+          textRef.current = outcome.text;
+          setText(outcome.text);
+          el?.setSelectionRange(outcome.text.length, outcome.text.length);
+          setCaret(outcome.text.length);
+        }
+        return;
+      }
+    }
     if (event.key === 'Enter' && !event.shiftKey) {
       const shouldSend =
         settings.sendOnEnter === 'enter' ? !event.ctrlKey && !event.metaKey : event.ctrlKey || event.metaKey;
@@ -528,6 +598,7 @@ export function App() {
 
   function onChange(value: string) {
     const previous = textRef.current;
+    promptHistory.current = resetPromptHistory(promptHistory.current);
     textRef.current = value;
     setText(value);
     const caret = textarea.current?.selectionStart ?? value.length;
@@ -556,6 +627,16 @@ export function App() {
       }
     }
     setPopup(next);
+  }
+
+  function onSelect() {
+    const current = promptHistory.current;
+    if (current.index >= current.entries.length) return;
+    const el = textarea.current;
+    if (!el) return;
+    if (el.selectionStart !== el.selectionEnd || el.selectionEnd !== textRef.current.length) {
+      promptHistory.current = resetPromptHistory(current);
+    }
   }
 
   function toggleRecording() {
@@ -647,7 +728,14 @@ export function App() {
             </div>
             <div className="suggestions">
               {startSuggestions.map(([label, value]) => (
-                <button key={label} className="suggestion" onClick={() => setText(value)}>
+                <button
+                  key={label}
+                  className="suggestion"
+                  onClick={() => {
+                    promptHistory.current = resetPromptHistory(promptHistory.current);
+                    setText(value);
+                  }}
+                >
                   {label}
                 </button>
               ))}
@@ -702,6 +790,7 @@ export function App() {
             : (
                 <>
                   Tip: Type <code>/</code> for skills and <code>@</code> to mention files or folders.
+                  {' '}Up recalls a previous prompt when the composer is empty.
                 </>
               )}
         </div>
@@ -774,6 +863,7 @@ export function App() {
             disabled={Boolean(agentView)}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={onKeyDown}
+            onSelect={onSelect}
             onPaste={onPaste}
           />
           <div className="composer-toolbar">

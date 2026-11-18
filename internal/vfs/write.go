@@ -25,12 +25,39 @@ func (v *VFS) WriteCtx(ctx context.Context, vpath string, data []byte) (string, 
 	if err != nil {
 		return "", err
 	}
+	track := v.wantsMutations()
+	before := mutationState{}
+	if track {
+		before = v.captureMutation(phys)
+	}
+	ev := FileMutation{
+		Ctx:        ctx,
+		Op:         MutationAdd,
+		Path:       rel,
+		Before:     before.data,
+		BeforeHash: before.hash,
+		BeforeSize: before.size,
+		Truncated:  before.truncated,
+	}
+	if before.exists {
+		ev.Op = MutationModify
+	}
+	if track {
+		v.hooks.beforeMutation.Apply(ev)
+	}
 	if err := v.atomicWrite(phys, data); err != nil {
 		return "", err
 	}
 	hash := hashBytes(data)
 	v.setSnapshot(rel, hash)
 	v.debug("vfs: wrote %s (%d bytes)", rel, len(data))
+
+	ev.After = data
+	ev.AfterHash = hash
+	ev.AfterSize = int64(len(data))
+	if track {
+		v.hooks.afterMutation.Apply(ev)
+	}
 
 	out := ""
 	tc := v.hooks.afterWrite.Apply(TransformContext{Path: rel, Content: out})
@@ -79,13 +106,33 @@ func (v *VFS) EditCtx(ctx context.Context, vpath, oldString, newString string, r
 	if !changed {
 		return "", ErrNoMatch
 	}
+	track := v.wantsMutations()
+	ev := FileMutation{
+		Ctx:        ctx,
+		Op:         MutationModify,
+		Path:       rel,
+		Before:     data,
+		BeforeHash: snapshot,
+		BeforeSize: int64(len(data)),
+	}
+	if track {
+		v.hooks.beforeMutation.Apply(ev)
+	}
 	if err := v.atomicWrite(phys, []byte(content)); err != nil {
 		return "", err
 	}
 
-	hash := hashBytes([]byte(content))
+	after := []byte(content)
+	hash := hashBytes(after)
 	v.setSnapshot(rel, hash)
 	v.debug("vfs: edited %s", rel)
+
+	ev.After = after
+	ev.AfterHash = hash
+	ev.AfterSize = int64(len(after))
+	if track {
+		v.hooks.afterMutation.Apply(ev)
+	}
 
 	out := ""
 	tc := v.hooks.afterWrite.Apply(TransformContext{Path: rel, Content: out})
@@ -110,12 +157,67 @@ func (v *VFS) DeleteCtx(ctx context.Context, vpath string) error {
 		}
 	}
 
+	track := v.wantsMutations()
+	before := mutationState{}
+	if track {
+		before = v.captureMutation(phys)
+	}
+	mutation := FileMutation{
+		Ctx:        ctx,
+		Op:         MutationDelete,
+		Path:       rel,
+		Before:     before.data,
+		BeforeHash: before.hash,
+		BeforeSize: before.size,
+		Truncated:  before.truncated,
+	}
+	if track {
+		v.hooks.beforeMutation.Apply(mutation)
+	}
+
 	if err := os.Remove(phys); err != nil {
 		return err
 	}
 	v.snapshots.delete(rel)
 	v.debug("vfs: deleted %s", rel)
+
+	if track {
+		v.hooks.afterMutation.Apply(mutation)
+	}
 	return nil
+}
+
+const mutationCaptureLimit = 8 << 20
+
+type mutationState struct {
+	exists    bool
+	data      []byte
+	hash      string
+	size      int64
+	truncated bool
+}
+
+func (v *VFS) captureMutation(phys string) mutationState {
+	st := mutationState{}
+	fi, err := os.Stat(phys)
+	if err != nil || fi.IsDir() {
+		return st
+	}
+	st.exists = true
+	st.size = fi.Size()
+	if fi.Size() > mutationCaptureLimit {
+		st.truncated = true
+		return st
+	}
+	data, err := os.ReadFile(phys)
+	if err != nil {
+		st.truncated = true
+		return st
+	}
+	st.data = data
+	st.hash = hashBytes(data)
+	st.size = int64(len(data))
+	return st
 }
 
 func (v *VFS) atomicWrite(phys string, data []byte) error {
