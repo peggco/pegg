@@ -43,13 +43,31 @@ Auth is opt-in through `server.required_headers` in
 ```
 
 - A missing header returns `401 {"error": "missing required header: Authorization"}`.
-- A configured value is compared case-insensitively; a mismatch returns
-  `401 {"error": "invalid header: Authorization"}`.
+- A configured value is compared exactly (case-sensitive) in constant time; a mismatch
+  returns `401 {"error": "invalid header: Authorization"}`.
 - An empty configured value only requires the header to be present.
 
-CORS is always enabled: `Access-Control-Allow-Origin: *`, methods
-`GET, POST, PUT, DELETE, OPTIONS`, and headers `Content-Type, Authorization` (plus
-any custom `server.headers`). `OPTIONS` requests receive `204 No Content`.
+CORS is disabled by default. No browser origin may read API responses unless it is
+explicitly allowed through `server.cors_origins`:
+
+```json
+{
+  "server": {
+    "cors_origins": ["http://localhost:5173"]
+  }
+}
+```
+
+- An explicit origin is echoed in `Access-Control-Allow-Origin` only when the request
+  `Origin` matches, and the response includes `Vary: Origin`.
+- `["*"]` is an explicit opt-in to the old wildcard behavior. Avoid it when auth is
+  disabled or the server is reachable from other machines.
+- Allowed methods are `GET, POST, PUT, DELETE, OPTIONS`. Allowed request headers are
+  `Content-Type` plus the names in `server.required_headers`; `Authorization` is only
+  advertised when it is configured there.
+- Preflight `OPTIONS` requests receive `204 No Content` when CORS is enabled and the
+  origin is allowed.
+- Custom `server.headers` are still added to every response even when CORS is disabled.
 
 ## Response format
 

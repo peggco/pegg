@@ -1,7 +1,9 @@
 package server
 
 import (
+	"crypto/subtle"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -18,23 +20,78 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 }
 
 func (s *Server) corsMiddleware(next http.Handler) http.Handler {
+	origins := s.cfg.Server.CORSOrigins
+	wildcard := false
+	for _, origin := range origins {
+		if origin == "*" {
+			wildcard = true
+			break
+		}
+	}
+	corsEnabled := len(origins) > 0
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		w.Header().Set("Access-Control-Max-Age", "86400")
+		allowed := false
+		switch {
+		case wildcard:
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			allowed = true
+		case corsEnabled:
+			if origin := r.Header.Get("Origin"); origin != "" && originAllowed(origin, origins) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Add("Vary", "Origin")
+				allowed = true
+			}
+		}
+
+		if allowed {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", s.allowedRequestHeaders())
+			w.Header().Set("Access-Control-Max-Age", "86400")
+		}
 
 		for k, v := range s.cfg.Server.Headers {
 			w.Header().Set(k, v)
 		}
 
-		if r.Method == http.MethodOptions {
+		if allowed && r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) allowedRequestHeaders() string {
+	headers := []string{"Content-Type"}
+	seen := map[string]bool{"content-type": true}
+
+	names := make([]string, 0, len(s.cfg.Server.RequiredHeaders))
+	for name := range s.cfg.Server.RequiredHeaders {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		key := strings.ToLower(name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		headers = append(headers, http.CanonicalHeaderKey(name))
+	}
+
+	return strings.Join(headers, ", ")
+}
+
+func originAllowed(origin string, allowed []string) bool {
+	for _, candidate := range allowed {
+		if candidate == "*" || strings.EqualFold(origin, candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
@@ -50,7 +107,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 				writeError(w, http.StatusUnauthorized, "missing required header: "+key)
 				return
 			}
-			if expected != "" && !strings.EqualFold(got, expected) {
+			if expected != "" && subtle.ConstantTimeCompare([]byte(got), []byte(expected)) != 1 {
 				writeError(w, http.StatusUnauthorized, "invalid header: "+key)
 				return
 			}

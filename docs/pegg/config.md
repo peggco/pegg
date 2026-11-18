@@ -181,8 +181,9 @@ Used by `pegg serve`. See [HTTP](usage/http.md) and [ACP](usage/acp.md).
 |---|---|---|---|
 | `host` | string | `"127.0.0.1"` | Bind address |
 | `port` | int | `8080` | Listen port |
-| `required_headers` | object | — | Required request headers for auth. A non-empty value must match (case-insensitively); an empty value only checks presence |
+| `required_headers` | object | — | Required request headers for auth. A non-empty value must match exactly (case-sensitive, constant-time); an empty value only checks presence |
 | `headers` | object | — | Extra headers added to every HTTP API response |
+| `cors_origins` | string[] | `[]` | Browser origins allowed to read API responses. Empty disables CORS. Use `["*"]` to opt in to wildcard CORS |
 
 ### `theme`
 
@@ -526,7 +527,8 @@ Map of server name to [language server config](configurations/lsp.md).
     "host": "127.0.0.1",
     "port": 8080,
     "required_headers": { "Authorization": "Bearer secret" },
-    "headers": { "X-Served-By": "pegg" }
+    "headers": { "X-Served-By": "pegg" },
+    "cors_origins": ["http://localhost:5173"]
   },
   "theme": "dark",
   "permission": {
