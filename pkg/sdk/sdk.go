@@ -11,6 +11,7 @@ import (
 
 	"github.com/peggco/pegg/internal/agent/wake"
 	"github.com/peggco/pegg/internal/builtin"
+	"github.com/peggco/pegg/internal/changejournal"
 	"github.com/peggco/pegg/internal/core/cache"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
@@ -64,6 +65,7 @@ type Engine struct {
 	sched            *schedule.Manager
 	stopSessionWatch func()
 	fs               *VFS
+	journal          *changejournal.Manager
 	store            cache.Cache
 	mu               sync.Mutex
 	closed           bool
@@ -177,6 +179,29 @@ func (e *Engine) init() error {
 	}
 	e.fs = fs
 
+	journalCfg := config.ChangeJournalConfig{}
+	if cfg.ChangeJournal != nil {
+		journalCfg = *cfg.ChangeJournal
+	}
+	journalDir, err := changejournal.DirIn(e.configDir(), e.workspaceRoot())
+	if err != nil {
+		return fmt.Errorf("sdk: resolve change journal dir: %w", err)
+	}
+	e.journal, err = changejournal.New(changejournal.Deps{
+		Config:   journalCfg,
+		FS:       fs,
+		Sessions: e.sessions,
+		Bus:      e.bus,
+		Log:      e.log,
+		Dir:      journalDir,
+	})
+	if err != nil {
+		return fmt.Errorf("sdk: init change journal: %w", err)
+	}
+	if err := e.journal.Start(); err != nil {
+		return fmt.Errorf("sdk: start change journal: %w", err)
+	}
+
 	sched, err := schedule.New(schedule.Deps{
 		Config:           cfg,
 		Bus:              e.bus,
@@ -226,6 +251,9 @@ func (e *Engine) cleanup() {
 	if e.rec != nil {
 		_ = e.rec.Stop(e.bus)
 	}
+	if e.journal != nil {
+		_ = e.journal.Close()
+	}
 	if e.sched != nil {
 		e.sched.Stop()
 	}
@@ -271,6 +299,10 @@ func (e *Engine) Config() *Config {
 
 func (e *Engine) Workspace() *VFS {
 	return e.fs
+}
+
+func (e *Engine) ChangeJournal() *changejournal.Manager {
+	return e.journal
 }
 
 func (e *Engine) Bus() event.Bus {

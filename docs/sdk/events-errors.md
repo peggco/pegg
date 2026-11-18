@@ -47,6 +47,10 @@ Available topics:
   `TopicSessionMessageAdded`, `TopicSessionForked`, `TopicSessionReverted`,
   `TopicSessionRestored`, `TopicSessionCurrentChanged`, `TopicSessionResume`,
   `TopicSessionAttached`.
+- **Change journal**: `TopicChangeJournal` fires for every revert and undo with
+  a `ChangeJournalResult`; `TopicChangeJournalReverted` and
+  `TopicChangeJournalRestored` are the action-specific variants. The result
+  lists per-file `restored`, `deleted`, `conflict`, and `not_tracked` statuses.
 - **Engine**: `app.mounted` is published at `Open` with the resolved config.
 
 `ChatStream` already maps the same events into `ChatEvent`s, so prefer it when you

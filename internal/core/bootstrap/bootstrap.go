@@ -11,6 +11,7 @@ import (
 	_ "github.com/peggco/pegg/internal/builtin/agents"
 	_ "github.com/peggco/pegg/internal/builtin/lsps"
 	"github.com/peggco/pegg/internal/builtin/tools/subagent"
+	"github.com/peggco/pegg/internal/changejournal"
 	"github.com/peggco/pegg/internal/cli"
 	"github.com/peggco/pegg/internal/core/cache"
 	"github.com/peggco/pegg/internal/core/config"
@@ -170,6 +171,18 @@ func Run(args []string) error {
 	if err != nil {
 		return fmt.Errorf("bootstrap: init vfs: %w", err)
 	}
+	journalCfg := config.ChangeJournalConfig{}
+	if cfg.ChangeJournal != nil {
+		journalCfg = *cfg.ChangeJournal
+	}
+	journal, err := changejournal.ChangeJournalModule(journalCfg, fs, sess, bus, log)
+	if err != nil {
+		return fmt.Errorf("bootstrap: init change journal: %w", err)
+	}
+	if err := journal.Start(); err != nil {
+		return fmt.Errorf("bootstrap: start change journal: %w", err)
+	}
+	defer journal.Close()
 	if err := skill.SkillModule(log); err != nil {
 		return fmt.Errorf("bootstrap: skill module: %w", err)
 	}

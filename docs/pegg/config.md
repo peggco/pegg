@@ -139,6 +139,30 @@ Rules:
 |---|---|---|---|
 | `driver` | string | `"sqlite"` | `"sqlite"` uses `~/.pegg/sessions.db`; `"json"` stores one file per session under `~/.pegg/sessions/` |
 
+### `changejournal`
+
+Per-message file tracking. The journal records every file the agent adds,
+modifies, or deletes so that reverting a chat message also restores the
+workspace, and undoing the revert re-applies the changes. Files edited by the
+user after the agent are never overwritten. Backups live under
+`~/.pegg/changejournal/<workspace-hash>/`.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Track file mutations and roll them back on revert |
+| `max_file_size` | int | `1048576` | Largest file, in bytes, that is backed up; larger files are reported as not tracked |
+| `budget` | int | `67108864` | Total backup budget, in bytes, per session |
+| `retention_days` | int | `30` | Journal data older than this is pruned on startup |
+
+```json
+"changejournal": {
+  "enabled": true,
+  "max_file_size": 1048576,
+  "budget": 67108864,
+  "retention_days": 30
+}
+```
+
 ### `notification`
 
 Desktop notifications while the app is in the background. See
@@ -558,6 +582,12 @@ Map of server name to [language server config](configurations/lsp.md).
     "enabled": true,
     "disabled": ["llm.stream.chunk"],
     "timeout_seconds": 5
+  },
+  "changejournal": {
+    "enabled": true,
+    "max_file_size": 1048576,
+    "budget": 67108864,
+    "retention_days": 30
   },
   "mcp_servers": {
     "db": {
