@@ -107,6 +107,7 @@ The sidebar chat supports:
 | Settings | Sliders icon left of the mic |
 | Send | Enter or the send arrow |
 | New line | Shift+Enter |
+| Recall a prompt | Up when the composer is empty |
 | Stop | Stop button while the agent is running |
 
 `@` mentions and `/` skills are inline, with keyboard navigation:
@@ -114,6 +115,11 @@ The sidebar chat supports:
 - Up/Down — move the selection.
 - Enter/Tab — accept.
 - Esc — dismiss.
+
+With an empty composer, Up recalls the previous prompt and repeated Up/Down
+walk the session's prompts. Editing or moving the caret ends browsing; Down past
+the newest entry restores the draft. The mention and command menus keep the
+arrows while open.
 
 ## Modes
 

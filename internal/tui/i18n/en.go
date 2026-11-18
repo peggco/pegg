@@ -226,6 +226,7 @@ var en = map[string]string{
 	"chat.files.sent":           "Sent %d file(s)",
 	"chat.files.copyHint":       "click: open · Enter: copy path",
 	"chat.moreDown":             " ↓ %d ",
+	"chat.table.scroll":         "wheel / Shift+←/→",
 
 	"ask.placeholder":        "Type your answer…",
 	"ask.yes":                "Yes",

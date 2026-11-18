@@ -288,6 +288,7 @@ func TestResolveBinaryFallsBackToDefaultInstall(t *testing.T) {
 	srcDir := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("GOBIN", binDir)
+	t.Setenv("GOPATH", t.TempDir())
 	t.Setenv("PATH", "/usr/bin:/bin")
 
 	src := filepath.Join(srcDir, "my-gopls")

@@ -117,6 +117,34 @@ func LineFromSegments(segs []Segment, width int) Line {
 	return out
 }
 
+func WindowLine(l Line, offset, width int) Line {
+	if width <= 0 {
+		return nil
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var out Line
+	col := 0
+	for _, c := range l {
+		cw := cellWidth(c.R)
+		if col+cw <= offset {
+			col += cw
+			continue
+		}
+		if col < offset {
+			col += cw
+			continue
+		}
+		if col-offset+cw > width {
+			break
+		}
+		out = append(out, c)
+		col += cw
+	}
+	return out
+}
+
 func WrapText(text string, style tcell.Style, width int) []Line {
 	if width <= 0 {
 		return nil

@@ -314,6 +314,10 @@ export function SaveGeneralSettings(arg1) {
   return window['go']['main']['App']['SaveGeneralSettings'](arg1);
 }
 
+export function SaveLanguage(arg1) {
+  return window['go']['main']['App']['SaveLanguage'](arg1);
+}
+
 export function SaveMemorySettings(arg1) {
   return window['go']['main']['App']['SaveMemorySettings'](arg1);
 }

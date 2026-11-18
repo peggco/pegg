@@ -1,6 +1,7 @@
 package components
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/peggco/pegg/internal/tui/styles"
@@ -64,6 +65,53 @@ func TestRenderMarkdownHr(t *testing.T) {
 	lines := RenderMarkdown("---")
 	if len(lines) != 1 || !lines[0].Hr {
 		t.Errorf("expected hr, got %+v", lines)
+	}
+}
+
+func TestRenderMarkdownTableUsesDisplayWidth(t *testing.T) {
+	src := "| N | S |\n| --- | --- |\n| 名前 | 🚀 |\n| ab | cd |"
+	lines := RenderMarkdown(src)
+
+	var table []MdLine
+	for _, ln := range lines {
+		if ln.Table {
+			table = append(table, ln)
+		}
+	}
+	if len(table) != 4 {
+		t.Fatalf("table lines = %d, want 4: %+v", len(table), lines)
+	}
+	want := DisplayWidth(table[0].Text())
+	for i, ln := range table {
+		got := DisplayWidth(ln.Text())
+		if got != want {
+			t.Errorf("table line %d display width = %d, want %d: %q", i, got, want, ln.Text())
+		}
+	}
+	if !strings.Contains(table[3].Text(), "ab  ") {
+		t.Errorf("ASCII cell not padded by display width: %q", table[3].Text())
+	}
+}
+
+func TestMdToLinesPreservesWideTable(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+
+	src := "| A | B | C |\n| --- | --- | --- |\n| alpha | beta | gamma |"
+	lines := MdToLines(src, 12, styles.Current())
+
+	found := false
+	for _, ln := range lines {
+		text := lineText(ln)
+		if strings.Contains(text, "gamma") {
+			found = true
+			if ln.Width() <= 12 {
+				t.Fatalf("wide table row clipped to %d cells: %q", ln.Width(), text)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("table content missing from rendered lines")
 	}
 }
 

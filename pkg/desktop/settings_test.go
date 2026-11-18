@@ -18,6 +18,61 @@ func TestProviderDriversIncludesBuiltins(t *testing.T) {
 	}
 }
 
+func TestSaveLanguage(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	a := &App{}
+	if err := a.SaveLanguage("tr"); err != nil {
+		t.Fatalf("save language: %v", err)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.Language != "tr" {
+		t.Fatalf("language = %q, want tr", cfg.Language)
+	}
+	if err := a.SaveLanguage("klingon"); err == nil {
+		t.Fatal("SaveLanguage accepted an unsupported language")
+	}
+	if err := a.SaveLanguage(""); err == nil {
+		t.Fatal("SaveLanguage accepted an empty language")
+	}
+}
+
+func TestSaveGeneralSettingsPersistsLanguage(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	a := &App{}
+	if err := a.SaveGeneralSettings(GeneralSettings{Language: "tr"}); err != nil {
+		t.Fatalf("save general settings: %v", err)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.Language != "tr" {
+		t.Fatalf("language = %q, want tr", cfg.Language)
+	}
+	if err := a.SaveGeneralSettings(GeneralSettings{Language: "klingon"}); err == nil {
+		t.Fatal("SaveGeneralSettings accepted an unsupported language")
+	}
+}
+
+func TestCurrentLanguageUnset(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	if got := currentLanguage(); got != "" {
+		t.Fatalf("currentLanguage() = %q, want empty", got)
+	}
+	if err := config.SaveLanguage("tr"); err != nil {
+		t.Fatalf("save language: %v", err)
+	}
+	if got := currentLanguage(); got != "tr" {
+		t.Fatalf("currentLanguage() = %q, want tr", got)
+	}
+}
+
 func TestAddCustomProvider(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 

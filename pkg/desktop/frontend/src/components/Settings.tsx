@@ -39,7 +39,7 @@ import {
   toggleSettings,
 } from '../state/actions';
 import { store, useStore } from '../state/store';
-import { useT } from '../lib/i18n';
+import { setLanguage, useT } from '../lib/i18n';
 import { updateDownloads, updateSummary, updateUnsupportedAgent, updateUnsupportedDesktop } from '../lib/update';
 import type {
   ForeverStatus,
@@ -439,8 +439,10 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
   const reasoning = useStore((s) => s.chat.reasoningEffort);
   const [draft, setDraft] = useState(snap.general);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [addProviderOpen, setAddProviderOpen] = useState(false);
   const [addSttOpen, setAddSttOpen] = useState(false);
+  const languageSave = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => setDraft(snap.general), [snap.general]);
 
@@ -476,28 +478,45 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
 
   const save = async () => {
     setSaving(true);
+    setSaveError('');
     try {
       await api.SaveGeneralSettings(draft);
-      store.set({ language: draft.language });
-      document.documentElement.lang = draft.language;
+      setLanguage(draft.language);
       await refresh();
-      store.toast('success', 'General settings saved');
+      store.toast('success', t('settings.generalSaved'));
     } catch (err) {
-      store.toast('error', errorText(err));
+      const message = errorText(err);
+      setSaveError(message);
+      store.toast('error', message);
     } finally {
       setSaving(false);
     }
+  };
+
+  const changeLanguage = (language: string) => {
+    setDraft((current) => ({ ...current, language }));
+    setLanguage(language);
+    setSaveError('');
+    languageSave.current = languageSave.current
+      .catch(() => undefined)
+      .then(() => api.SaveLanguage(language))
+      .catch((err) => {
+        const message = errorText(err);
+        setSaveError(message);
+        store.toast('error', t('settings.languageSaveFailed', { error: message }));
+      });
   };
 
   return (
     <>
       <PageHead
         title={t('settings.general')}
-        description="Model, language, and voice input. Model changes apply to the current session immediately."
+        description={t('settings.generalDesc')}
       />
-      <Card title="Model">
+      {saveError ? <div className="notice error">{saveError}</div> : null}
+      <Card title={t('settings.modelTitle')}>
         <div className="settings-grid">
-          <Field label="Provider">
+          <Field label={t('settings.provider')}>
             <select
               className="select"
               value={currentProvider}
@@ -510,13 +529,13 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
                 if (model) void changeModel(provider, model);
               }}
             >
-              {providerNames.length ? null : <option value="">No providers configured</option>}
+              {providerNames.length ? null : <option value="">{t('settings.noProviders')}</option>}
               {providerNames.map((provider) => (
                 <option key={provider} value={provider}>{provider}</option>
               ))}
             </select>
           </Field>
-          <Field label="Model">
+          <Field label={t('settings.model')}>
             <select
               className="select"
               value={currentModel}
@@ -526,18 +545,18 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
                 void changeModel(currentProvider, model);
               }}
             >
-              {providerModels.length ? null : <option value="">Provider default</option>}
+              {providerModels.length ? null : <option value="">{t('settings.providerDefault')}</option>}
               {providerModels.map((model) => (
                 <option key={model.id} value={model.id}>{model.name || model.id}</option>
               ))}
             </select>
           </Field>
           <Field
-            label="Reasoning effort"
+            label={t('settings.reasoningEffort')}
             hint={
               effortOptions.length
-                ? 'Provider-supported effort levels for this model.'
-                : 'This model does not declare reasoning effort options.'
+                ? t('settings.reasoningEffortHint')
+                : t('settings.reasoningEffortUnsupported')
             }
           >
             <select
@@ -545,17 +564,18 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
               value={reasoning ?? ''}
               onChange={(event) => void changeReasoning(event.target.value)}
             >
-              <option value="">Default</option>
+              <option value="">{t('settings.default')}</option>
               {effortOptions.map((effort) => (
                 <option key={effort} value={effort}>{effort}</option>
               ))}
             </select>
           </Field>
-          <Field label="Language">
+          <Field label={t('settings.language')} hint={t('settings.languageDesc')}>
             <select
               className="select"
+              aria-label={t('settings.language')}
               value={draft.language}
-              onChange={(event) => setDraft((current) => ({ ...current, language: event.target.value }))}
+              onChange={(event) => changeLanguage(event.target.value)}
             >
               {draft.languages.map((language) => (
                 <option key={language.code} value={language.code}>{language.label}</option>
@@ -566,11 +586,11 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
       </Card>
 
       <Card
-        title={`Providers · ${snap.general.providers.length}`}
+        title={`${t('settings.providersTitle')} · ${snap.general.providers.length}`}
         actions={
           <button className="btn small" onClick={() => setAddProviderOpen(true)}>
             <KeyRound size={13} />
-            Add provider
+            {t('settings.addProvider')}
           </button>
         }
       >
@@ -585,21 +605,27 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
                     {(() => {
                       const live = models.filter((entry) => entry.provider === provider.name).length;
                       const count = live || provider.models.length;
-                      return `${count} model${count === 1 ? '' : 's'}`;
+                      return t(
+                        count === 1 ? 'settings.modelCount' : 'settings.modelCountPlural',
+                        { count },
+                      );
                     })()}
                   </div>
                 </div>
                 <div className="row-side">
                   <button
                     className="btn small ghost"
-                    title={`Remove ${provider.name}`}
+                    title={t('settings.removeProvider', { name: provider.name })}
                     onClick={() => {
                       void api
                         .RemoveProvider(provider.name)
                         .then(async () => {
                           await refresh();
                           void loadModels();
-                          store.toast('success', `Removed ${provider.name}`);
+                          store.toast(
+                            'success',
+                            t('settings.providerRemoved', { name: provider.name }),
+                          );
                         })
                         .catch((err) => store.toast('error', errorText(err)));
                     }}
@@ -611,16 +637,16 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
             ))}
           </div>
         ) : (
-          <div className="empty-state">No providers configured. Add one to start a session.</div>
+          <div className="empty-state">{t('settings.noProvidersHint')}</div>
         )}
       </Card>
 
       <Card
-        title={`Speech-to-text providers · ${snap.general.stt.entries.length}`}
+        title={`${t('settings.sttTitle')} · ${snap.general.stt.entries.length}`}
         actions={
           <button className="btn small" onClick={() => setAddSttOpen(true)}>
             <KeyRound size={13} />
-            Add STT provider
+            {t('settings.addSttProvider')}
           </button>
         }
       >
@@ -631,23 +657,33 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
                 <div className="row-main">
                   <div className="row-name">{entry.name}</div>
                   <div className="row-desc">
-                    {entry.models.length} model{entry.models.length === 1 ? '' : 's'}
+                    {t(
+                      entry.models.length === 1
+                        ? 'settings.modelCount'
+                        : 'settings.modelCountPlural',
+                      { count: entry.models.length },
+                    )}
                   </div>
                 </div>
                 <div className="row-side">
                   <span className={`badge${entry.configured ? ' accent' : ''}`}>
-                    {entry.configured ? 'configured' : 'not configured'}
+                    {entry.configured
+                      ? t('settings.configured')
+                      : t('settings.notConfigured')}
                   </span>
                   {entry.configured ? (
                     <button
                       className="btn small ghost"
-                      title={`Remove ${entry.name}`}
+                      title={t('settings.removeProvider', { name: entry.name })}
                       onClick={() => {
                         void api
                           .RemoveSTTProvider(entry.name)
                           .then(async () => {
                             await refresh();
-                            store.toast('success', `Removed ${entry.name}`);
+                            store.toast(
+                              'success',
+                              t('settings.providerRemoved', { name: entry.name }),
+                            );
                           })
                           .catch((err) => store.toast('error', errorText(err)));
                       }}
@@ -660,13 +696,13 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
             ))}
           </div>
         ) : (
-          <div className="empty-state">No speech-to-text providers found.</div>
+          <div className="empty-state">{t('settings.sttEmpty')}</div>
         )}
       </Card>
 
-      <Card title="Voice input">
+      <Card title={t('settings.voiceInput')}>
         <div className="settings-grid">
-          <Field label="Speech-to-text provider">
+          <Field label={t('settings.sttProvider')}>
             <select
               className="select"
               value={draft.stt.provider}
@@ -684,13 +720,13 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
                 }));
               }}
             >
-              <option value="">Not configured</option>
+              <option value="">{t('settings.sttNotConfigured')}</option>
               {draft.stt.configured.map((provider) => (
                 <option key={provider} value={provider}>{provider}</option>
               ))}
             </select>
           </Field>
-          <Field label="Speech-to-text model">
+          <Field label={t('settings.sttModel')}>
             <select
               className="select"
               value={draft.stt.model}
@@ -701,17 +737,20 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
                 }))
               }
             >
-              <option value="">Provider default</option>
+              <option value="">{t('settings.providerDefault')}</option>
               {draft.stt.models.map((model) => (
                 <option key={model} value={model}>{model}</option>
               ))}
             </select>
           </Field>
-          <Field label="Record command" hint="Optional custom recorder. Leave empty to use the platform default.">
+          <Field
+            label={t('settings.recordCommand')}
+            hint={t('settings.recordCommandHint')}
+          >
             <input
               className="input"
               value={draft.stt.recordCommand}
-              placeholder="e.g. arecord -q -f S16_LE -r 16000 -c 1 -t wav"
+              placeholder={t('settings.recordCommandPlaceholder')}
               onChange={(event) =>
                 setDraft((current) => ({
                   ...current,
@@ -720,7 +759,10 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
               }
             />
           </Field>
-          <Field label="Max recording duration" hint="Seconds before the microphone stops.">
+          <Field
+            label={t('settings.maxDuration')}
+            hint={t('settings.maxDurationHint')}
+          >
             <input
               className="input"
               type="number"
@@ -738,12 +780,12 @@ function GeneralPanel({ snap, refresh }: { snap: SettingsSnapshot; refresh: () =
         <div className="settings-save-bar">
           <span className="settings-footnote">
             {draft.stt.providers.length
-              ? 'STT credentials are managed by the Pegg CLI/config.'
-              : 'No speech-to-text provider is configured. Run `pegg login` or set stt in ~/.pegg/pegg.json.'}
+              ? t('settings.sttCredentialsNote')
+              : t('settings.sttNoProvider')}
           </span>
           <span className="spacer" />
           <button className="btn primary" disabled={saving} onClick={() => void save()}>
-            {saving ? 'Saving…' : 'Save changes'}
+            {saving ? t('common.saving') : t('common.save')}
           </button>
         </div>
       </Card>

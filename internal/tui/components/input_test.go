@@ -795,6 +795,62 @@ func TestInputHistoryPrevNextRestoresDraft(t *testing.T) {
 	}
 }
 
+func TestInputPlainUpRecallsHistoryWhenEmpty(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.AddHistory("first")
+	in.AddHistory("second")
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "second" {
+		t.Fatalf("value = %q, want second", got)
+	}
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "first" {
+		t.Fatalf("value = %q, want first", got)
+	}
+	in.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
+	if got := in.Value(); got != "second" {
+		t.Fatalf("value = %q, want second", got)
+	}
+	in.HandleKey(tcell.NewEventKey(tcell.KeyDown, 0, 0))
+	if got := in.Value(); got != "" {
+		t.Fatalf("value = %q, want the empty draft", got)
+	}
+}
+
+func TestInputPlainUpMovesCaretWhenDraftPresent(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.SetInnerWidth(20)
+	in.AddHistory("older")
+	in.SetValue("line1\nline2")
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "line1\nline2" {
+		t.Fatalf("plain Up should keep the draft, got %q", got)
+	}
+	if in.Row() != 0 {
+		t.Fatalf("row = %d, want 0 after plain Up", in.Row())
+	}
+}
+
+func TestInputPlainHistoryStopsAfterEdit(t *testing.T) {
+	in := NewInput()
+	in.Focus()
+	in.AddHistory("previous")
+
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	in.HandleKey(tcell.NewEventKey(tcell.KeyRune, 'x', 0))
+	if got := in.Value(); got != "previousx" {
+		t.Fatalf("value = %q, want previousx", got)
+	}
+	in.HandleKey(tcell.NewEventKey(tcell.KeyUp, 0, 0))
+	if got := in.Value(); got != "previousx" {
+		t.Fatalf("plain Up after edit should not recall, got %q", got)
+	}
+}
+
 func TestInputHistoryKeysAtEdges(t *testing.T) {
 	in := NewInput()
 	in.Focus()

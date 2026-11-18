@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Shared Pegg chat renderer for VS Code and JetBrains hosts",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "dompurify": "^3.2.4",
@@ -17,6 +18,9 @@
   "devDependencies": {
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8",
+    "@testing-library/react": "^16.2.0",
+    "jsdom": "^26.0.0"
   }
 }

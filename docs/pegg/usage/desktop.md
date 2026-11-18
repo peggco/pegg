@@ -113,6 +113,10 @@ The screen appears after the agent binary is available. Choose explicitly to con
 - **Voice** — the mic button uses the ACP STT configuration from the Pegg settings.
 - **Modes** — Auto, Plan, Build.
 - **Models** — the model menu is populated from `_pegg/models`.
+- **Prompt history** — with an empty composer, press `↑` to recall the previous
+  prompt; keep pressing `↑`/`↓` to walk the session's prompts. Editing the text
+  or moving the caret exits browsing, and `↓` past the newest entry restores the
+  draft. Mention and command menus keep the arrows while they are open.
 - **Stop** — the send button becomes a stop button while a run is active.
 
 ## Agent questions
@@ -154,9 +158,9 @@ The desktop settings page mirrors the TUI settings layout, backed by the same `~
 - **Plugin pages** — plugins that expose a TUI page (for example Kanban and Notify) appear as their own sidebar entries. Each page renders the plugin's sections, status badges, and actions; actions with fields open a form, and destructive actions ask for confirmation. Pages are loaded through the same generic hook the TUI uses, so no plugin-specific desktop code is required.
 - **System** — desktop/agent versions, binary resolution and updates, runtime paths, and logs.
 
-Theme and model changes apply immediately; section edits have an explicit save action so presets can be reviewed before writing.
+Theme, model, and language changes apply immediately; the remaining section edits have an explicit save action so presets can be reviewed before writing.
 
-The desktop interface supports English (default) and Turkish. Choose the language in Settings → General; the same `language` value is stored in `~/.pegg/pegg.json` and shared with the TUI.
+The desktop interface supports English (default) and Turkish. Choose the language in Settings → General; the whole interface updates as soon as you pick one, and the choice is written to `~/.pegg/pegg.json` without pressing **Save changes**. The desktop also caches the language locally so it is restored before the config loads on the next start, while the shared `language` value stays in sync with the TUI. Both catalogs follow the same terminology and address style, documented in [Localization](../localization.md).
 
 ## Tool cards
 

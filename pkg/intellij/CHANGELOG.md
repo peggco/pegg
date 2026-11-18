@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- Prompt history: with an empty composer, Up recalls the previous prompt and
+  repeated Up/Down walk that session's prompts. Editing or moving the caret ends
+  browsing, and Down past the newest entry restores the draft. Mention/skill
+  menus keep the arrows.
+
 ### Changed
 
 - Todo/plan updates now render as an inline plan card at the latest
