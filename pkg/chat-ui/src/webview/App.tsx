@@ -553,7 +553,6 @@ export function App() {
           selectionCollapsed: !el || el.selectionStart === el.selectionEnd,
           caretAtEnd: !el || el.selectionEnd === current.length,
           popupOpen: Boolean(popup),
-          allowNonEmpty: event.altKey,
         },
         event.key,
       );

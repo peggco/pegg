@@ -116,8 +116,7 @@ The screen appears after the agent binary is available. Choose explicitly to con
 - **Prompt history** — with an empty composer, press `↑` to recall the previous
   prompt; keep pressing `↑`/`↓` to walk the session's prompts. Editing the text
   or moving the caret exits browsing, and `↓` past the newest entry restores the
-  draft. `Alt`+`↑`/`↓` recalls history from a non-empty draft as well. Mention
-  and command menus keep the arrows while they are open.
+  draft. Mention and command menus keep the arrows while they are open.
 - **Stop** — the send button becomes a stop button while a run is active.
 
 ## Agent questions

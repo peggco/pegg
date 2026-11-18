@@ -217,18 +217,6 @@ describe('Composer prompt history', () => {
     expect(editorText(editor)).toBe('');
   });
 
-  it('restores the draft with Down past the newest entry', () => {
-    seedHistory('previous');
-    const { editor } = mount();
-
-    act(() => type(editor, 'my draft'));
-    fireEvent.keyDown(editor, { key: 'ArrowUp', altKey: true });
-    expect(editorText(editor)).toBe('previous');
-
-    fireEvent.keyDown(editor, { key: 'ArrowDown', altKey: true });
-    expect(editorText(editor)).toBe('my draft');
-  });
-
   it('seeds prompts that finish loading after mount', () => {
     setup();
     const { editor } = mount();
