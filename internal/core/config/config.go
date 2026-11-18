@@ -85,6 +85,7 @@ type ServerConfig struct {
 	Port            int               `json:"port,omitempty"`
 	RequiredHeaders map[string]string `json:"required_headers,omitempty"`
 	Headers         map[string]string `json:"headers,omitempty"`
+	CORSOrigins     []string          `json:"cors_origins,omitempty"`
 }
 
 type PermissionConfig struct {

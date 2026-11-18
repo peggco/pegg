@@ -92,7 +92,7 @@ func TestAuthMiddlewareValidHeader(t *testing.T) {
 	}
 }
 
-func TestAuthMiddlewareCaseInsensitive(t *testing.T) {
+func TestAuthMiddlewareCaseSensitive(t *testing.T) {
 	srv := newTestServer(t)
 	srv.cfg.Server.RequiredHeaders = map[string]string{"Authorization": "Bearer secret"}
 
@@ -106,8 +106,27 @@ func TestAuthMiddlewareCaseInsensitive(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 with case-insensitive match, got %d", w.Code)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 with case-mismatched value, got %d", w.Code)
+	}
+}
+
+func TestAuthMiddlewareDifferingLengthRejected(t *testing.T) {
+	srv := newTestServer(t)
+	srv.cfg.Server.RequiredHeaders = map[string]string{"X-Token": "AbCdEf"}
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := srv.authMiddleware(next)
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-Token", "AbCdE")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 with shorter value, got %d", w.Code)
 	}
 }
 
@@ -181,7 +200,7 @@ func TestAuthMiddlewareWithEmptyValue(t *testing.T) {
 	}
 }
 
-func TestCorsMiddleware(t *testing.T) {
+func TestCorsMiddlewareDisabledByDefault(t *testing.T) {
 	srv := newTestServer(t)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -190,11 +209,37 @@ func TestCorsMiddleware(t *testing.T) {
 	handler := srv.corsMiddleware(next)
 
 	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "http://evil.example")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
-		t.Errorf("expected Access-Control-Allow-Origin *, got %s", w.Header().Get("Access-Control-Allow-Origin"))
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("expected no Access-Control-Allow-Origin by default, got %s", got)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Methods"); got != "" {
+		t.Errorf("expected no Access-Control-Allow-Methods by default, got %s", got)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Headers"); got != "" {
+		t.Errorf("expected no Access-Control-Allow-Headers by default, got %s", got)
+	}
+}
+
+func TestCorsMiddlewareWildcardOptIn(t *testing.T) {
+	srv := newTestServer(t)
+	srv.cfg.Server.CORSOrigins = []string{"*"}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := srv.corsMiddleware(next)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "http://anywhere.example")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("expected Access-Control-Allow-Origin *, got %s", got)
 	}
 	if w.Header().Get("Access-Control-Allow-Methods") == "" {
 		t.Error("expected Access-Control-Allow-Methods to be set")
@@ -204,10 +249,56 @@ func TestCorsMiddleware(t *testing.T) {
 	}
 }
 
-func TestCorsMiddlewareOptions(t *testing.T) {
+func TestCorsMiddlewareAllowedOrigin(t *testing.T) {
 	srv := newTestServer(t)
+	srv.cfg.Server.CORSOrigins = []string{"http://localhost:5173"}
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("next handler should not be called for OPTIONS")
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := srv.corsMiddleware(next)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
+		t.Errorf("expected matched origin, got %s", got)
+	}
+	if got := w.Header().Get("Vary"); !strings.Contains(got, "Origin") {
+		t.Errorf("expected Vary to include Origin, got %s", got)
+	}
+}
+
+func TestCorsMiddlewareDisallowedOrigin(t *testing.T) {
+	srv := newTestServer(t)
+	srv.cfg.Server.CORSOrigins = []string{"http://localhost:5173"}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := srv.corsMiddleware(next)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "http://evil.example")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("expected no Access-Control-Allow-Origin for disallowed origin, got %s", got)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Headers"); got != "" {
+		t.Errorf("expected no Access-Control-Allow-Headers for disallowed origin, got %s", got)
+	}
+}
+
+func TestCorsMiddlewareOptionsDisabled(t *testing.T) {
+	srv := newTestServer(t)
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	})
 
 	handler := srv.corsMiddleware(next)
@@ -215,8 +306,73 @@ func TestCorsMiddlewareOptions(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
+	if !called {
+		t.Error("expected next handler to be called for OPTIONS when CORS is disabled")
+	}
+	if w.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Error("expected no CORS headers when CORS is disabled")
+	}
+}
+
+func TestCorsMiddlewareOptionsAllowedOrigin(t *testing.T) {
+	srv := newTestServer(t)
+	srv.cfg.Server.CORSOrigins = []string{"http://localhost:5173"}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("next handler should not be called for allowed preflight")
+	})
+
+	handler := srv.corsMiddleware(next)
+	req := httptest.NewRequest("OPTIONS", "/test", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
 	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204 for OPTIONS, got %d", w.Code)
+		t.Errorf("expected 204 for preflight, got %d", w.Code)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
+		t.Errorf("expected matched origin, got %s", got)
+	}
+}
+
+func TestCorsMiddlewareAllowedHeadersIncludeRequired(t *testing.T) {
+	srv := newTestServer(t)
+	srv.cfg.Server.CORSOrigins = []string{"*"}
+	srv.cfg.Server.RequiredHeaders = map[string]string{
+		"X-Token":       "secret",
+		"Authorization": "Bearer secret",
+	}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := srv.corsMiddleware(next)
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	allowed := w.Header().Get("Access-Control-Allow-Headers")
+	for _, name := range []string{"Content-Type", "X-Token", "Authorization"} {
+		if !strings.Contains(allowed, name) {
+			t.Errorf("expected Access-Control-Allow-Headers to contain %s, got %s", name, allowed)
+		}
+	}
+}
+
+func TestCorsMiddlewareDoesNotAdvertiseAuthorizationByDefault(t *testing.T) {
+	srv := newTestServer(t)
+	srv.cfg.Server.CORSOrigins = []string{"*"}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := srv.corsMiddleware(next)
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Access-Control-Allow-Headers"); strings.Contains(got, "Authorization") {
+		t.Errorf("expected Authorization not to be advertised without required headers, got %s", got)
 	}
 }
 
@@ -290,6 +446,7 @@ func TestMiddlewareChain(t *testing.T) {
 	srv := newTestServer(t)
 	srv.cfg.Server.RequiredHeaders = map[string]string{"Authorization": "Bearer test"}
 	srv.cfg.Server.Headers = map[string]string{"X-Custom": "value"}
+	srv.cfg.Server.CORSOrigins = []string{"*"}
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
