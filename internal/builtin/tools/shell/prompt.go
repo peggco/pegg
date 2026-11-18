@@ -31,8 +31,8 @@ func bashToolPromptBuilder() *prompt.Prompt {
 			prompt.Heading(3, "Usage Notes"),
 			prompt.List(
 				prompt.ListItem("The command argument is required."),
-				prompt.ListItem("You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes)."),
-				prompt.ListItem("If the output exceeds 30000 characters, output will be truncated before being returned to you."),
+				prompt.ListItem("You can specify an optional timeout in seconds (1-600). Values outside this range are clamped. If not specified, commands time out after 40 seconds."),
+				prompt.ListItem("stdout and stderr are each capped at 64 KiB. Longer output is truncated with an explicit marker showing how many bytes were omitted."),
 				prompt.ListItem("VERY IMPORTANT: You MUST avoid using search commands like `find` and `grep`. Instead use Grep, Glob, or Task to search. You MUST avoid read tools like `cat`, `head`, `tail`, and `ls`, and use Read and List to read files."),
 				prompt.ListItem("If you _still_ need to run `grep`, STOP. ALWAYS USE ripgrep at `rg` (or /usr/bin/rg) first, which all opencode users have pre-installed."),
 				prompt.ListItem("When issuing multiple commands, use the `;` or `&&` operator to separate them. DO NOT use newlines (newlines are ok in quoted strings)."),
