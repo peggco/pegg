@@ -688,3 +688,61 @@ func TestHomeShiftArrowsKeepInputSelection(t *testing.T) {
 		t.Fatalf("table offset = %d, want 0 while the input has text", off)
 	}
 }
+
+func TestHomeChatWheelScrollsWideTable(t *testing.T) {
+	p := drawWideTablePage(t)
+	region := p.chatBounds(layout.Region{Left: 0, Top: 0, Width: 100, Height: 30})
+	y := region.Top
+
+	if !p.HandleChatWheel(50, y, 100, 30, 1) {
+		t.Fatal("wheel down over the table not consumed")
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off == 0 {
+		t.Fatal("wheel down did not scroll the table")
+	}
+
+	for p.HandleChatWheel(50, y, 100, 30, 1) {
+	}
+	off, maxOff, ok := p.Chat().TableScrollState()
+	if !ok || off != maxOff {
+		t.Fatalf("table offset at right edge = %d, want %d", off, maxOff)
+	}
+	if p.HandleChatWheel(50, y, 100, 30, 1) {
+		t.Fatal("wheel down at the right edge should fall through to vertical scrolling")
+	}
+
+	if !p.HandleMouse(50, y, 100, 30, tcell.WheelLeft) {
+		t.Fatal("WheelLeft over the table not consumed")
+	}
+	for p.HandleChatWheel(50, y, 100, 30, -1) {
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off != 0 {
+		t.Fatalf("table offset after scrolling back = %d, want 0", off)
+	}
+	if p.HandleChatWheel(50, y, 100, 30, -1) {
+		t.Fatal("wheel up at the left edge should fall through to vertical scrolling")
+	}
+}
+
+func TestHomeChatWheelOverProseDoesNotScrollTable(t *testing.T) {
+	p := drawWideTablePage(t)
+	region := p.chatBounds(layout.Region{Left: 0, Top: 0, Width: 100, Height: 30})
+
+	if p.HandleChatWheel(50, region.Top+4, 100, 30, 1) {
+		t.Fatal("wheel over a non-table line should not scroll the table")
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off != 0 {
+		t.Fatalf("table offset = %d, want 0", off)
+	}
+}
+
+func TestHomeChatWheelOutsideChatIgnored(t *testing.T) {
+	p := drawWideTablePage(t)
+
+	if p.HandleChatWheel(50, 29, 100, 30, 1) {
+		t.Fatal("wheel outside the chat should be ignored")
+	}
+	if off, _, _ := p.Chat().TableScrollState(); off != 0 {
+		t.Fatalf("table offset = %d, want 0 when the pointer is outside the chat", off)
+	}
+}
