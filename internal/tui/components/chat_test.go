@@ -3,6 +3,7 @@ package components
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 
@@ -550,6 +551,109 @@ func TestParseTodoItemsPreservesOrderAndFields(t *testing.T) {
 	if items[1].deps != "todo-3, todo-2" {
 		t.Errorf("item 1 deps = %q, want %q", items[1].deps, "todo-3, todo-2")
 	}
+}
+
+func TestWebsearchToolRendering(t *testing.T) {
+	styles.RegisterDefaults()
+	styles.Set("dark")
+	th := styles.Current()
+	query := "golang testing best practices"
+
+	styleAt := func(l Line, text string, needle string) tcell.Style {
+		t.Helper()
+		idx := strings.Index(text, needle)
+		if idx < 0 {
+			t.Fatalf("rendered line %q is missing %q", text, needle)
+		}
+		return l[idx].S
+	}
+
+	t.Run("completed matches webfetch treatment", func(t *testing.T) {
+		c := NewChat()
+		it := &ChatItem{
+			Kind:     ItemTool,
+			ToolName: "websearch:" + query,
+			Activity: "Searching " + query,
+			ToolDone: true,
+			Duration: 1500 * time.Millisecond,
+		}
+		lines := c.toolLines(it, 100)
+		if len(lines) != 1 {
+			t.Fatalf("lines = %d, want 1", len(lines))
+		}
+		text := lineText(lines[0])
+		for _, want := range []string{"Websearch:", query, "✔"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("line %q is missing %q", text, want)
+			}
+		}
+		if fg, _, _ := styleAt(lines[0], text, "Websearch").Decompose(); fg != th.Success {
+			t.Errorf("Websearch prefix color = %v, want success green %v", fg, th.Success)
+		}
+		if fg, _, _ := styleAt(lines[0], text, query).Decompose(); fg != th.Foreground {
+			t.Errorf("query color = %v, want foreground %v", fg, th.Foreground)
+		}
+	})
+
+	t.Run("running shows the query", func(t *testing.T) {
+		c := NewChat()
+		it := &ChatItem{
+			Kind:     ItemTool,
+			ToolName: "websearch:" + query,
+			Activity: "Searching " + query,
+		}
+		lines := c.toolLines(it, 100)
+		if len(lines) != 1 {
+			t.Fatalf("lines = %d, want 1", len(lines))
+		}
+		text := lineText(lines[0])
+		if !strings.Contains(text, "Searching "+query) {
+			t.Errorf("running line %q is missing the search activity", text)
+		}
+	})
+
+	t.Run("error keeps the query and red prefix", func(t *testing.T) {
+		c := NewChat()
+		it := &ChatItem{
+			Kind:     ItemTool,
+			ToolName: "websearch:" + query,
+			ToolDone: true,
+			ToolErr:  "search failed",
+			Duration: time.Second,
+			Expanded: true,
+		}
+		lines := c.toolLines(it, 100)
+		if len(lines) == 0 {
+			t.Fatal("no lines rendered")
+		}
+		text := lineText(lines[0])
+		for _, want := range []string{"Websearch:", query, "✖"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("error line %q is missing %q", text, want)
+			}
+		}
+		if fg, _, _ := styleAt(lines[0], text, "Websearch").Decompose(); fg != th.Error {
+			t.Errorf("Websearch prefix color = %v, want error red %v", fg, th.Error)
+		}
+	})
+
+	t.Run("query stays visible when expanded", func(t *testing.T) {
+		c := NewChat()
+		it := &ChatItem{
+			Kind:     ItemTool,
+			ToolName: "websearch:" + query,
+			ToolDone: true,
+			Expanded: true,
+			Duration: time.Second,
+		}
+		lines := c.toolLines(it, 100)
+		if len(lines) != 1 {
+			t.Fatalf("lines = %d, want 1", len(lines))
+		}
+		if text := lineText(lines[0]); !strings.Contains(text, query) {
+			t.Errorf("expanded line %q is missing the query", text)
+		}
+	})
 }
 
 func drawTableChat(t *testing.T, innerW int, table string) (*Chat, tcell.SimulationScreen, int, int) {

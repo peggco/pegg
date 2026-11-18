@@ -744,3 +744,34 @@ func TestTUIDrawsLiveBashOutput(t *testing.T) {
 		t.Fatalf("screen does not show live bash output:\n%s", b.String())
 	}
 }
+
+func TestFormatActivityWebsearch(t *testing.T) {
+	call := llm.ToolCall{Function: llm.Function{
+		Name:      "websearch",
+		Arguments: `{"query":"golang testing"}`,
+	}}
+	if got := formatActivity(call); got != "Searching golang testing" {
+		t.Errorf("formatActivity(websearch) = %q, want %q", got, "Searching golang testing")
+	}
+}
+
+func TestEnrichToolItemWebsearch(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+		want string
+	}{
+		{name: "query", args: `{"query":"golang testing"}`, want: "websearch:golang testing"},
+		{name: "empty query", args: `{"query":""}`, want: "websearch"},
+		{name: "malformed args", args: `{`, want: "websearch"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			it := &components.ChatItem{Kind: components.ItemTool, ToolName: "websearch", ToolArgs: tt.args}
+			enrichToolItem(it)
+			if it.ToolName != tt.want {
+				t.Errorf("ToolName = %q, want %q", it.ToolName, tt.want)
+			}
+		})
+	}
+}

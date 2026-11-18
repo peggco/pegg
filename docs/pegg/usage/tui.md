@@ -181,10 +181,13 @@ input modality.
 | User message | Boxed card, with attachment chips |
 | Assistant message | Rendered markdown (headings, lists, quotes, inline styles) |
 | Thinking | Collapsible; animated while active, raw reasoning when expanded |
-| Tool call | Card with name, enriched target (`read:path`, `bash:cmd`, ...), duration, expandable output |
+| Tool call | Card with name, enriched target (`read:path`, `bash:cmd`, `websearch:query`, ...), duration, expandable output |
 | Task | Boxed card with subagent name, type, prompt, status, live activity, output preview, usage, and a **History** action |
 | Subagent | Card for fork-launched subagents: status, live activity line, output preview, usage, and a **History** action |
 | Error | Bold red `✖ error: ...` |
+
+While a tool runs, its live activity is shown instead of the target: `websearch`
+renders `Searching <query>` and `webfetch` renders `Fetching <url>`.
 
 ### Selecting and copying text
 
