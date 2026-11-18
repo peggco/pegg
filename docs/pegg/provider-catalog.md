@@ -4,10 +4,12 @@ icon: lucide/boxes
 
 # Provider catalog
 
-Pegg ships 237 providers out of the box. Each one is a dedicated package
-under `internal/llm/providers/`. Credentials are supplied per provider in
-your config (`api_key`). The API key env column lists the conventional
-variable name used by the upstream SDK, for reference.
+Pegg ships 237 providers out of the box. Most are declared as rows in the
+spec table in `internal/llm/providers/registry.go`; providers that need custom
+wiring (subscriptions, extra headers, request rewriting, or static model lists)
+keep a dedicated package under `internal/llm/providers/`. Credentials are
+supplied per provider in your config (`api_key`). The API key env column lists
+the conventional variable name used by the upstream SDK, for reference.
 
 The first-party `pegg-forever` provider points at `https://forever.pegg.dev/v1`.
 Add it with an API key or sign in through the browser with `pegg login-pegg`;
