@@ -3,9 +3,12 @@ package shell
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
+	"sync"
 	"time"
 
 	json "github.com/goccy/go-json"
@@ -14,6 +17,99 @@ import (
 	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/vfs"
 )
+
+const (
+	defaultBashTimeout    = 40 * time.Second
+	maxBashTimeout        = 600 * time.Second
+	maxBashTimeoutSeconds = int(maxBashTimeout / time.Second)
+	maxOutputStreamBytes  = 64 << 10
+)
+
+var ErrCommandTimeout = errors.New("bash: command timed out")
+
+type cappedBuffer struct {
+	mu      sync.Mutex
+	buf     bytes.Buffer
+	limit   int
+	omitted int
+}
+
+func newCappedBuffer(limit int) *cappedBuffer {
+	return &cappedBuffer{limit: limit}
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	n := len(p)
+	remaining := b.limit - b.buf.Len()
+	if remaining <= 0 {
+		b.omitted += n
+		return n, nil
+	}
+	if n > remaining {
+		_, _ = b.buf.Write(p[:remaining])
+		b.omitted += n - remaining
+		return n, nil
+	}
+	_, _ = b.buf.Write(p)
+	return n, nil
+}
+
+func (b *cappedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	out := b.buf.String()
+	if b.omitted == 0 {
+		return out
+	}
+	return out + truncationMarker(b.omitted)
+}
+
+func truncationMarker(omitted int) string {
+	return fmt.Sprintf("\n[output truncated, %d bytes omitted]\n", omitted)
+}
+
+func truncateOutput(s string) string {
+	if len(s) <= maxOutputStreamBytes {
+		return s
+	}
+	return s[:maxOutputStreamBytes] + truncationMarker(len(s)-maxOutputStreamBytes)
+}
+
+func normalizeTimeout(seconds int) time.Duration {
+	if seconds <= 0 {
+		return defaultBashTimeout
+	}
+	if seconds >= maxBashTimeoutSeconds {
+		return maxBashTimeout
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func formatBashResult(exitCode int, stdout, stderr string) string {
+	result := fmt.Sprintf("Exit code: %d\n", exitCode)
+	if stdout != "" {
+		result += fmt.Sprintf("stdout:\n%s\n", stdout)
+	}
+	if stderr != "" {
+		result += fmt.Sprintf("stderr:\n%s\n", stderr)
+	}
+	return result
+}
+
+func formatPartialOutput(stdout, stderr string) string {
+	var b strings.Builder
+	if stdout != "" {
+		fmt.Fprintf(&b, "\nstdout:\n%s", stdout)
+	}
+	if stderr != "" {
+		fmt.Fprintf(&b, "\nstderr:\n%s", stderr)
+	}
+	return b.String()
+}
 
 type TerminalRunner interface {
 	RunTerminal(ctx context.Context, command string, timeout time.Duration) (output string, handled bool, err error)
@@ -57,7 +153,9 @@ func bashTool(fs *vfs.VFS) tool.Tool {
 				},
 				"timeout": map[string]any{
 					"type":        "integer",
-					"description": "Timeout in seconds. Defaults to 40. Use a larger value for long-running commands (e.g. builds, test suites), a smaller one for quick checks.",
+					"description": "Timeout in seconds (1-600). Defaults to 40. Use a larger value for long-running commands (e.g. builds, test suites), a smaller one for quick checks.",
+					"minimum":     1,
+					"maximum":     600,
 				},
 				"description": map[string]any{
 					"type":        "string",
@@ -81,17 +179,14 @@ func bashTool(fs *vfs.VFS) tool.Tool {
 			if params.Description == "" {
 				return "", fmt.Errorf("bash: description is required")
 			}
-			timeout := 40 * time.Second
-			if params.Timeout > 0 {
-				timeout = time.Duration(params.Timeout) * time.Second
-			}
+			timeout := normalizeTimeout(params.Timeout)
 
 			if runner := terminalRunnerFrom(ctx); runner != nil {
 				if out, handled, err := runner.RunTerminal(ctx, params.Command, timeout); handled {
 					if err != nil {
 						return "", err
 					}
-					return out, nil
+					return truncateOutput(out), nil
 				}
 			}
 
@@ -104,9 +199,10 @@ func bashTool(fs *vfs.VFS) tool.Tool {
 			cmd.Dir = workdir
 			setProcessGroup(cmd)
 
-			var stdout, stderr bytes.Buffer
-			cmd.Stdout = io.MultiWriter(&stdout, tool.OutputWriter(ctx, "stdout"))
-			cmd.Stderr = io.MultiWriter(&stderr, tool.OutputWriter(ctx, "stderr"))
+			stdout := newCappedBuffer(maxOutputStreamBytes)
+			stderr := newCappedBuffer(maxOutputStreamBytes)
+			cmd.Stdout = io.MultiWriter(stdout, tool.OutputWriter(ctx, "stdout"))
+			cmd.Stderr = io.MultiWriter(stderr, tool.OutputWriter(ctx, "stderr"))
 
 			if err := cmd.Start(); err != nil {
 				return "", fmt.Errorf("bash: %w", err)
@@ -115,17 +211,25 @@ func bashTool(fs *vfs.VFS) tool.Tool {
 			done := make(chan error, 1)
 			go func() { done <- cmd.Wait() }()
 
-			var timedOut bool
 			var err error
+			var interrupted bool
 			select {
 			case <-ctx.Done():
-				timedOut = true
+				interrupted = true
 				killProcessGroup(cmd)
+				select {
+				case err = <-done:
+				case <-time.After(2 * time.Second):
+				}
 			case err = <-done:
 			}
 
-			if timedOut {
-				return fmt.Sprintf("Command timed out after %s.\nstdout:\n%s\nstderr:\n%s\n", timeout, stdout.String(), stderr.String()), nil
+			if interrupted {
+				partial := formatPartialOutput(stdout.String(), stderr.String())
+				if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+					return "", fmt.Errorf("%w after %s: %w%s", ErrCommandTimeout, timeout, context.DeadlineExceeded, partial)
+				}
+				return "", fmt.Errorf("bash: command canceled: %w%s", context.Canceled, partial)
 			}
 
 			exitCode := 0
@@ -137,14 +241,7 @@ func bashTool(fs *vfs.VFS) tool.Tool {
 				}
 			}
 
-			result := fmt.Sprintf("Exit code: %d\n", exitCode)
-			if stdout.Len() > 0 {
-				result += fmt.Sprintf("stdout:\n%s\n", stdout.String())
-			}
-			if stderr.Len() > 0 {
-				result += fmt.Sprintf("stderr:\n%s\n", stderr.String())
-			}
-			return result, nil
+			return formatBashResult(exitCode, stdout.String(), stderr.String()), nil
 		},
 	)
 }

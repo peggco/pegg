@@ -1,6 +1,8 @@
 package shell
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -106,15 +108,133 @@ func TestBashToolTimeout(t *testing.T) {
 	tool := bashTool(fs)
 
 	start := time.Now()
-	out, err := tool.Execute(t.Context(), `{"command": "sleep 5", "description": "test timeout", "timeout": 1}`)
-	if err != nil {
-		t.Fatal(err)
+	out, err := tool.Execute(t.Context(), `{"command": "echo before timeout; sleep 5", "description": "test timeout", "timeout": 1}`)
+	if err == nil {
+		t.Fatal("expected timeout error")
 	}
 	if elapsed := time.Since(start); elapsed > 3*time.Second {
 		t.Errorf("command ran too long: %v", elapsed)
 	}
-	if !contains(t, out, "timed out after 1s") {
-		t.Errorf("expected timeout message, got:\n%s", out)
+	if out != "" {
+		t.Errorf("expected empty output with timeout error, got:\n%s", out)
+	}
+	if !errors.Is(err, ErrCommandTimeout) {
+		t.Errorf("expected ErrCommandTimeout, got: %v", err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected DeadlineExceeded classification, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "timed out after 1s") {
+		t.Errorf("expected timeout message, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "before timeout") {
+		t.Errorf("expected partial output in timeout error, got: %v", err)
+	}
+}
+
+func TestBashToolTruncatesOutput(t *testing.T) {
+	fs := setupTestFS(t)
+	tool := bashTool(fs)
+
+	out, err := tool.Execute(t.Context(), `{"command": "awk 'BEGIN { for (i = 0; i < 100000; i++) printf \"x\" }'", "description": "large output"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Exit code: 0") {
+		t.Errorf("expected exit code, got:\n%s", out)
+	}
+	if !strings.Contains(out, "[output truncated,") {
+		t.Errorf("expected truncation marker, got %d bytes", len(out))
+	}
+	if !strings.Contains(out, "bytes omitted]") {
+		t.Errorf("expected omitted byte count, got:\n%s", out)
+	}
+	if len(out) > maxOutputStreamBytes+1024 {
+		t.Errorf("output not bounded: %d bytes", len(out))
+	}
+}
+
+func TestBashToolTruncatesTerminalRunnerOutput(t *testing.T) {
+	fs := setupTestFS(t)
+	tool := bashTool(fs)
+	ctx := WithTerminalRunner(t.Context(), largeTerminalRunner{})
+
+	out, err := tool.Execute(ctx, `{"command": "ignored", "description": "runner output"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "[output truncated,") {
+		t.Errorf("expected truncation marker, got %d bytes", len(out))
+	}
+	if len(out) > maxOutputStreamBytes+1024 {
+		t.Errorf("output not bounded: %d bytes", len(out))
+	}
+}
+
+type largeTerminalRunner struct{}
+
+func (largeTerminalRunner) RunTerminal(context.Context, string, time.Duration) (string, bool, error) {
+	return strings.Repeat("y", maxOutputStreamBytes+10), true, nil
+}
+
+func TestBashToolClampsTimeoutForRunner(t *testing.T) {
+	fs := setupTestFS(t)
+	tool := bashTool(fs)
+	runner := &recordingTerminalRunner{}
+	ctx := WithTerminalRunner(t.Context(), runner)
+
+	_, err := tool.Execute(ctx, `{"command": "ignored", "description": "record timeout", "timeout": 1000000000}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runner.timeout != maxBashTimeout {
+		t.Errorf("runner timeout = %v, want %v", runner.timeout, maxBashTimeout)
+	}
+}
+
+type recordingTerminalRunner struct {
+	timeout time.Duration
+}
+
+func (r *recordingTerminalRunner) RunTerminal(_ context.Context, _ string, timeout time.Duration) (string, bool, error) {
+	r.timeout = timeout
+	return "ok", true, nil
+}
+
+func TestNormalizeTimeout(t *testing.T) {
+	tests := []struct {
+		name    string
+		seconds int
+		want    time.Duration
+	}{
+		{"zero uses default", 0, defaultBashTimeout},
+		{"negative uses default", -5, defaultBashTimeout},
+		{"one second", 1, time.Second},
+		{"max", 600, maxBashTimeout},
+		{"above max is clamped", 601, maxBashTimeout},
+		{"huge value is clamped", 1_000_000_000, maxBashTimeout},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeTimeout(tt.seconds); got != tt.want {
+				t.Errorf("normalizeTimeout(%d) = %v, want %v", tt.seconds, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCappedBuffer(t *testing.T) {
+	b := newCappedBuffer(4)
+	n, err := b.Write([]byte("abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 6 {
+		t.Errorf("Write returned %d, want 6", n)
+	}
+	want := "abcd\n[output truncated, 2 bytes omitted]\n"
+	if got := b.String(); got != want {
+		t.Errorf("String() = %q, want %q", got, want)
 	}
 }
 

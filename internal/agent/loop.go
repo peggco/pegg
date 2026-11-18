@@ -741,7 +741,7 @@ func (a *Agent) runTool(ctx context.Context, state *runState, call llm.ToolCall)
 	})
 	if toolErr != nil {
 		res.output = fmt.Sprintf("Error: %v", toolErr)
-		res.toolErr = fmt.Errorf("%w: %s: %v", ErrToolExecutionFailed, t.Name(), toolErr)
+		res.toolErr = fmt.Errorf("%w: %s: %w", ErrToolExecutionFailed, t.Name(), toolErr)
 	} else {
 		res.output = output
 		res.attachments = sink.Attachments()
