@@ -39,6 +39,11 @@ and settings.
 Host and port come from `--host` / `--port` or the `server` config block. The ACP
 handler does not apply the HTTP API's auth or CORS middleware.
 
+ACP-over-HTTP refuses to bind to a non-loopback address (for example `--host
+0.0.0.0`) unless `--insecure` is passed or `server.allow_unauthenticated` is set,
+because it has no authentication of its own. With the opt-in, the server logs a
+startup warning. Stdio ACP is unaffected.
+
 !!! note
 
     The background [scheduler](../features/scheduling.md) runs while the ACP server is

@@ -183,6 +183,7 @@ Used by `pegg serve`. See [HTTP](usage/http.md) and [ACP](usage/acp.md).
 | `port` | int | `8080` | Listen port |
 | `required_headers` | object | — | Required request headers for auth. A non-empty value must match (case-insensitively); an empty value only checks presence |
 | `headers` | object | — | Extra headers added to every HTTP API response |
+| `allow_unauthenticated` | bool | `false` | Allow a non-loopback bind without authentication. Non-loopback binds are refused when this is `false` and `required_headers` is empty. The `pegg serve --insecure` flag sets it for one run |
 
 ### `theme`
 

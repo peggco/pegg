@@ -73,6 +73,10 @@ func New(
 }
 
 func (s *Server) ListenAndServe() error {
+	if err := ValidateHTTPServerConfig(s.cfg.Server); err != nil {
+		return err
+	}
+	WarnInsecureBind(s.log, s.cfg.Server, "HTTP API")
 	s.log.Finfo("http server listening on %s", s.httpSrv.Addr)
 	err := s.httpSrv.ListenAndServe()
 	if err == http.ErrServerClosed {

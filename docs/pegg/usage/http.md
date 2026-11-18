@@ -18,6 +18,7 @@ pegg serve
 |---|---|---|
 | `--host` | `server.host` | `127.0.0.1` |
 | `--port` | `server.port` | `8080` |
+| `--insecure` | `server.allow_unauthenticated` | `false` |
 
 ```bash
 pegg serve --host 0.0.0.0 --port 9000
@@ -26,6 +27,32 @@ pegg serve --host 0.0.0.0 --port 9000
 The server shuts down gracefully on ++ctrl+c++ / SIGTERM with a 5 second timeout.
 Read timeout is 30s, idle timeout 120s; the write timeout is disabled so SSE
 connections can stay open.
+
+## Binding and exposure
+
+The API can run the agent, read files, and execute tools on the host. To prevent
+accidental network exposure, `pegg serve` refuses to bind to a non-loopback
+address (including `0.0.0.0`, `::`, or an empty host) unless one of these is true:
+
+- `server.required_headers` is configured, or
+- `--insecure` is passed (or `server.allow_unauthenticated` is `true`).
+
+```bash
+# Refused: non-loopback bind without authentication
+pegg serve --host 0.0.0.0
+# serve: refusing to bind HTTP API to non-loopback address "0.0.0.0" without
+# authentication: configure server.required_headers, or pass --insecure
+# (server.allow_unauthenticated = true)
+
+# Allowed: explicit opt-in, with a startup warning
+pegg serve --host 0.0.0.0 --insecure
+```
+
+Only `localhost`, loopback IPs (`127.0.0.0/8`, `::1`), and the default
+`127.0.0.1` bind are considered safe. When the opt-in is used on a non-loopback
+address, the server logs a warning at startup. Prefer configuring
+`required_headers` or putting the server behind an authenticating reverse proxy.
+
 
 ## Authentication and CORS
 

@@ -22,6 +22,7 @@ func (c *CLI) newServeCommand() *cobra.Command {
 	var host string
 	var acpMode bool
 	var stdioMode bool
+	var insecure bool
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -40,6 +41,9 @@ With --acp --stdio starts the ACP server over stdio (stdin/stdout).`,
 			if host != "" {
 				cfg.Server.Host = host
 			}
+			if insecure {
+				cfg.Server.AllowUnauthenticated = true
+			}
 
 			if acpMode {
 				return c.runACPServe(stdioMode)
@@ -52,6 +56,7 @@ With --acp --stdio starts the ACP server over stdio (stdin/stdout).`,
 	cmd.Flags().StringVar(&host, "host", "", "host to bind to (overrides config)")
 	cmd.Flags().BoolVar(&acpMode, "acp", false, "start ACP server instead of HTTP API")
 	cmd.Flags().BoolVar(&stdioMode, "stdio", false, "use stdio transport (only with --acp)")
+	cmd.Flags().BoolVar(&insecure, "insecure", false, "allow a non-loopback bind without authentication")
 
 	return cmd
 }
@@ -76,6 +81,12 @@ func (c *CLI) runHTTPServe() error {
 }
 
 func (c *CLI) runACPServe(stdio bool) error {
+	if !stdio {
+		if err := server.ValidateACPServerConfig(c.cfg.Server); err != nil {
+			return err
+		}
+		server.WarnInsecureBind(c.log, c.cfg.Server, "ACP server")
+	}
 	srv := acp.New(c.cfg, c.bus, c.log, c.fs, c.sessions, c.llmMgr, c.runCoord, c.liveHub)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
