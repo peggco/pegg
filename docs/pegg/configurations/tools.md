@@ -313,7 +313,7 @@ built-in defaults:
 | Tool | Default mode |
 |---|---|
 | `read`, `write`, `edit`, `delete`, `list`, `glob`, `grep` | `semi-ask` |
-| `bash` | `semi-judge` (whitelisted bare commands run directly) |
+| `bash` | `semi-judge` (only read-only allowlisted commands with safe arguments run directly) |
 | `sendfile` | `semi-ask`/`semi-judge` (always gated before the files are shared) |
 | `todoread`, `todowrite` | `allow` |
 | `task`, `taskstatus` | `allow` |

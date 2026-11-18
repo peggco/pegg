@@ -7,12 +7,10 @@ import (
 )
 
 var commandWhitelist = map[string]bool{
-	"go": true, "npm": true, "npx": true, "node": true,
-	"yarn": true, "pnpm": true, "git": true, "ls": true,
-	"pwd": true, "cat": true, "grep": true, "find": true,
-	"mkdir": true, "touch": true, "echo": true, "tail": true,
-	"head": true, "tree": true,
-	"dir": true, "type": true, "findstr": true,
+	"ls": true, "pwd": true, "cat": true, "grep": true,
+	"find": true, "head": true, "tail": true, "tree": true,
+	"echo": true, "type": true,
+	"dir": true, "findstr": true,
 }
 
 var commandBlacklist = map[string]bool{
@@ -37,6 +35,15 @@ var dangerousArgs = []string{
 	".ssh", ".gnupg",
 	"c:\\windows", "\\system32", "\\syswow64",
 	"hklm\\", "hkcu\\",
+}
+
+var unsafeArgs = []string{
+	"-exec", "-execdir", "-ok", "-okdir", "-delete",
+	"-fprint", "-fprint0", "-fprintf", "-fls",
+	"-c", "--exec", "--exec-path",
+	"--pager", "--paginate", "--open-files-in-pager",
+	"--output", "--ext-diff", "--textconv",
+	"--upload-pack", "--receive-pack",
 }
 
 func bashAllowed(args string) bool {
@@ -85,11 +92,33 @@ func bashAllowed(args string) bool {
 		return false
 	}
 
+	for _, arg := range tokens[1:] {
+		if isUnsafeArg(arg) {
+			return false
+		}
+		if baseCmd == "tree" && strings.EqualFold(arg, "-o") {
+			return false
+		}
+	}
+
 	return true
 }
 
 func hasShellMetachar(s string) bool {
 	return strings.ContainsAny(s, ";|&><$`\n\r(){}\\")
+}
+
+func isUnsafeArg(arg string) bool {
+	name := strings.ToLower(arg)
+	if i := strings.IndexByte(name, '='); i >= 0 {
+		name = name[:i]
+	}
+	for _, unsafe := range unsafeArgs {
+		if name == unsafe {
+			return true
+		}
+	}
+	return false
 }
 
 func hasDangerousArgs(args []string) bool {

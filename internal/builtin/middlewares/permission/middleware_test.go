@@ -374,10 +374,24 @@ func TestBashSemiModeWhitelist(t *testing.T) {
 		t.Fatalf("whitelisted: asks=%d runs=%d", asks, runs)
 	}
 
+	if _, err := m.InvokeTool(ctx, llm.ToolCall{Function: llm.Function{Name: "bash", Arguments: `{"command": "node -e 'console.log(1)'"}`}}, next); err != nil {
+		t.Fatalf("interpreter command should run after approval: %v", err)
+	}
+	if asks != 1 || runs != 2 {
+		t.Fatalf("interpreter: asks=%d runs=%d", asks, runs)
+	}
+
+	if _, err := m.InvokeTool(ctx, llm.ToolCall{Function: llm.Function{Name: "bash", Arguments: `{"command": "find . -name x -exec id +"}`}}, next); err != nil {
+		t.Fatalf("find exec command should run after approval: %v", err)
+	}
+	if asks != 2 || runs != 3 {
+		t.Fatalf("find exec: asks=%d runs=%d", asks, runs)
+	}
+
 	if _, err := m.InvokeTool(ctx, llm.ToolCall{Function: llm.Function{Name: "bash", Arguments: `{"command": "cat /etc/passwd"}`}}, next); err != nil {
 		t.Fatalf("asked command should run after approval: %v", err)
 	}
-	if asks != 1 || runs != 2 {
+	if asks != 3 || runs != 4 {
 		t.Fatalf("asked: asks=%d runs=%d", asks, runs)
 	}
 }
