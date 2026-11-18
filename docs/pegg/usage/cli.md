@@ -459,6 +459,35 @@ pegg logs --search "mcp" --size 100
 With the SQLite logger (default) logs come from `~/.pegg/logs.db`. With the
 console logger, only the current process's in-memory buffer is available.
 
+### Log level
+
+`logger.level` in `~/.peggco/pegg.json` sets the minimum level. The default is
+`info`, which keeps logs short and user-facing.
+
+| Level | What belongs there |
+|---|---|
+| `debug` | Provider sync, model and price cache bookkeeping, reasoning-option counts, plugin lifecycle, LSP/MCP server start-up, HTTP traces, and other infrastructure detail |
+| `info` | User-visible progress and results: the startup summary, provider/login changes, servers listening, scheduled work, and completed CLI actions |
+| `warn` | Conditions that did not stop Pegg but need attention, such as a provider that failed to load or an MCP server that could not connect |
+| `error` | Actionable failures |
+
+`PEGG_DEBUG=1` forces `debug` for one run and wins over the configured level.
+`PEGG_LOG_LEVEL` overrides `logger.level` without editing the file.
+
+```bash
+PEGG_DEBUG=1 pegg
+PEGG_LOG_LEVEL=warn pegg
+```
+
+Messages follow `<component>: <short message>` (`llm: provider loaded`,
+`plugin: loaded`). Records also carry structured fields, which are stored as
+JSON and included in `--search`, so internal counts remain queryable without
+appearing at `info`:
+
+```text
+[2026-11-16 09:00:00] [INFO ] pegg: ready providers=2 plugins=1 version=0.2.6 workspace=/repo
+```
+
 ## `pegg cache`
 
 ```bash

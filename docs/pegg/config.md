@@ -124,6 +124,7 @@ Rules:
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `driver` | string | `"sqlite"` | `"sqlite"` writes `~/.pegg/logs.db`; `"console"` keeps an in-memory buffer printed to stdout |
+| `level` | string | `"info"` | Minimum level to record: `debug`, `info`, `warn`, or `error`. `PEGG_DEBUG=1` forces `debug`; `PEGG_LOG_LEVEL` overrides this value |
 | `max_log_count` | int | `1000` | Maximum retained log records |
 
 ### `cache`
@@ -494,7 +495,7 @@ Map of server name to [language server config](configurations/lsp.md).
       "api_key": "ollama"
     }
   ],
-  "logger": { "driver": "sqlite", "max_log_count": 1000 },
+  "logger": { "driver": "sqlite", "level": "info", "max_log_count": 1000 },
   "cache": { "driver": "sqlite" },
   "session": { "driver": "sqlite" },
   "server": {

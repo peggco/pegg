@@ -165,3 +165,41 @@ func TestSQLiteHandlerConcurrentReadWrite(t *testing.T) {
 
 	<-done
 }
+
+func TestSQLiteHandlerFieldsRoundTrip(t *testing.T) {
+	h := newTestSQLiteHandler(t)
+
+	if err := h.Write(Record{
+		Timestamp: time.Now(),
+		Level:     LevelDebug,
+		Message:   "llm: model prices cached",
+		Fields:    map[string]any{"provider": "openai", "entries": "12"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	recs, total, err := h.Query(query.Query{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(recs) != 1 {
+		t.Fatalf("records = %d, want 1", len(recs))
+	}
+	if got := recs[0].Fields["provider"]; got != "openai" {
+		t.Errorf("provider field = %v, want openai", got)
+	}
+	if got := recs[0].Fields["entries"]; got != "12" {
+		t.Errorf("entries field = %v, want 12", got)
+	}
+
+	recs, total, err = h.Query(query.Query{
+		Search:        "openai",
+		SearchColumns: []string{"fields"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(recs) != 1 {
+		t.Fatalf("search records = %d, want 1", len(recs))
+	}
+}

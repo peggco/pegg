@@ -165,7 +165,7 @@ func (m *Manager) connect(name string, cfg config.MCPServerConfig, parent contex
 	m.clients[name] = client
 	m.mu.Unlock()
 
-	m.log.Finfo("mcp: server %q connected (%d tools)", name, len(specs))
+	m.log.DebugFields("mcp: server connected", map[string]any{"server": name, "tools": len(specs)})
 }
 
 func (m *Manager) connectError(name string, parent context.Context, format string, err error) {

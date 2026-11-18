@@ -64,7 +64,7 @@ type logWriter struct {
 }
 
 func (w *logWriter) Write(p []byte) (int, error) {
-	w.log.Finfo("plugin: %s", strings.TrimSpace(string(p)))
+	w.log.Fdebug("plugin: %s", strings.TrimSpace(string(p)))
 	return len(p), nil
 }
 
@@ -163,7 +163,7 @@ func (m *Manager) LoadPlugins() error {
 		return fmt.Errorf("scan plugins: %w", err)
 	}
 
-	m.log.Finfo("plugin: found %d plugins in %s", len(pluginPaths), pluginDir)
+	m.log.Fdebug("plugin: found %d plugins in %s", len(pluginPaths), pluginDir)
 
 	results := make([]pluginLoadResult, len(pluginPaths))
 	sem := make(chan struct{}, pluginLoadWorkers)
@@ -213,11 +213,11 @@ func (m *Manager) pluginExcluded(name string) bool {
 func (m *Manager) connectPlugin(path string) (*PluginInstance, error) {
 	name := filepath.Base(path)
 	if m.pluginExcluded(name) {
-		m.log.Finfo("plugin: skipping excluded plugin %s", name)
+		m.log.Fdebug("plugin: skipping excluded plugin %s", name)
 		return nil, errPluginSkipped
 	}
 
-	m.log.Finfo("plugin: loading %s", name)
+	m.log.Fdebug("plugin: loading %s", name)
 	start := time.Now()
 
 	client := goplugin.NewClient(&goplugin.ClientConfig{
@@ -264,7 +264,7 @@ func (m *Manager) connectPlugin(path string) (*PluginInstance, error) {
 	}
 	if m.pluginExcluded(instance.Name) {
 		client.Kill()
-		m.log.Finfo("plugin: skipping excluded plugin %s", instance.Name)
+		m.log.Fdebug("plugin: skipping excluded plugin %s", instance.Name)
 		return nil, errPluginSkipped
 	}
 
@@ -293,7 +293,7 @@ func (m *Manager) connectPlugin(path string) (*PluginInstance, error) {
 	}
 
 	m.fetchCapabilities(instance)
-	m.log.Finfo("plugin: %s ready in %s", instance.Name, time.Since(start).Round(time.Millisecond))
+	m.log.Fdebug("plugin: %s ready in %s", instance.Name, time.Since(start).Round(time.Millisecond))
 	return instance, nil
 }
 
@@ -330,7 +330,10 @@ func (m *Manager) registerPlugin(instance *PluginInstance) error {
 		ext.Register(func() []pkgplugin.TUIPage { return m.tuiPagesFor(instance.Name) })
 	}
 
-	m.log.Finfo("plugin: loaded %s v%s (%s)", instance.Name, instance.Version, instance.Description)
+	m.log.DebugFields("plugin: loaded", map[string]any{
+		"plugin":  instance.Name,
+		"version": instance.Version,
+	})
 	return nil
 }
 
@@ -454,7 +457,7 @@ func (m *Manager) registerEventSubscriptions(instance *PluginInstance) {
 		m.eventUnsubs = append(m.eventUnsubs, func() error {
 			return m.bus.Unsubscribe(topic, handler)
 		})
-		m.log.Finfo("plugin: %s subscribed to event %s", instance.Name, topic)
+		m.log.Fdebug("plugin: %s subscribed to event %s", instance.Name, topic)
 	}
 }
 
@@ -1012,7 +1015,7 @@ func (m *Manager) Close() {
 	}
 
 	for name, client := range m.clients {
-		m.log.Finfo("plugin: shutting down %s", name)
+		m.log.Fdebug("plugin: shutting down %s", name)
 		client.Kill()
 	}
 
