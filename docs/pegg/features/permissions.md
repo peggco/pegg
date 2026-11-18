@@ -68,16 +68,23 @@ judge approves a path, the call is re-run with that specific path permitted. An
 
 ## Bash policy
 
-`bash` uses `semi-judge`, but simple, safe commands never reach the judge:
+`bash` uses `semi-judge`, but only strictly read-only commands that cannot
+launch another program skip the judge. Auto-approval applies when all of the
+following hold:
 
-- The command starts with a **bare** whitelisted binary — `go`, `npm`, `ls`, `pwd`,
-  `node`, or `git` — **and**
-- Contains no shell metacharacters (`;`, `|`, `&`, `>`, `<`, `$`, whitespace
-  control chars, `&&`, `||`).
+- The command starts with a **bare** allowlisted read-only binary — `ls`, `pwd`,
+  `cat`, `grep`, `find`, `head`, `tail`, `tree`, `echo`, `type`, `dir`, or
+  `findstr`.
+- Contains no shell metacharacters (`;`, `|`, `&`, `>`, `<`, `$`, backticks,
+  parentheses, braces, backslashes, or newline/carriage-return control chars).
+- Uses no execution or write flags, including `-exec`, `-execdir`, `-ok`,
+  `-okdir`, `-delete`, `-fprint*`, `-fls`, `-c`, `--exec`, `--pager`,
+  `--output`, `--ext-diff`, and `--textconv`.
 
-Path-qualified commands (`/bin/ls`, `./tool`) are never allowed. Everything else is
-gated. Interactive shells or destructive commands therefore trigger a judge or
-prompt, while `git status` and `npm run build` run directly.
+Path-qualified commands (`/bin/ls`, `./tool`) are never allowed. Interpreters
+and package managers (`node`, `npx`, `npm`, `yarn`, `pnpm`, `go`), VCS commands
+(`git`), and mutating commands (`mkdir`, `touch`) are always gated because they
+can execute arbitrary code or scripts. Everything else is gated as well.
 
 ## The prompt flow
 
