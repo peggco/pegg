@@ -269,6 +269,17 @@ func (p *Page) HandleScroll(delta int) bool {
 	return true
 }
 
+func (p *Page) HandleChatWheel(x, y, w, h, delta int) bool {
+	if !p.chat.HasItems() {
+		return false
+	}
+	chatRegion := p.chatBounds(layout.Region{Left: 0, Top: 0, Width: w, Height: h})
+	if x < chatRegion.Left || x >= chatRegion.Right() || y < chatRegion.Top || y >= chatRegion.Bottom() {
+		return false
+	}
+	return p.chat.HandleWheel(x, y, chatRegion.Top, chatRegion.Left, delta)
+}
+
 func (p *Page) HandleClick(x, y, w, h int) bool {
 	if !p.chat.HasItems() {
 		return false
@@ -294,7 +305,8 @@ func (p *Page) HandleMouse(x, y, w, h int, buttons tcell.ButtonMask) bool {
 	}
 	chatRegion := p.chatBounds(layout.Region{Left: 0, Top: 0, Width: w, Height: h})
 	inside := x >= chatRegion.Left && x < chatRegion.Right() && y >= chatRegion.Top && y < chatRegion.Bottom()
-	if !inside && buttons&tcell.ButtonPrimary != 0 {
+	horizontalWheel := buttons&(tcell.WheelLeft|tcell.WheelRight) != 0
+	if !inside && (buttons&tcell.ButtonPrimary != 0 || horizontalWheel) {
 		return false
 	}
 	return p.chat.HandleMouse(x, y, chatRegion.Top, chatRegion.Left, buttons)

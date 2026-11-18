@@ -631,17 +631,29 @@ func (a *App) loop() error {
 			if a.home == nil {
 				break
 			}
+			w, h := a.screen.Size()
 			switch {
 			case btns&tcell.WheelUp != 0:
-				if a.home.HandleScroll(-3) {
+				if a.home.HandleChatWheel(x, y, w, h, -1) {
+					a.draw()
+				} else if a.home.HandleScroll(-3) {
 					a.draw()
 				}
 			case btns&tcell.WheelDown != 0:
-				if a.home.HandleScroll(3) {
+				if a.home.HandleChatWheel(x, y, w, h, 1) {
+					a.draw()
+				} else if a.home.HandleScroll(3) {
+					a.draw()
+				}
+			case btns&tcell.WheelLeft != 0:
+				if a.home.HandleChatWheel(x, y, w, h, -1) {
+					a.draw()
+				}
+			case btns&tcell.WheelRight != 0:
+				if a.home.HandleChatWheel(x, y, w, h, 1) {
 					a.draw()
 				}
 			default:
-				w, h := a.screen.Size()
 				if a.home.HandleMouse(x, y, w, h, btns) {
 					a.draw()
 				}

@@ -127,6 +127,14 @@ type Chat struct {
 	itemMaxWidth    map[*ChatItem]int
 	itemTableBounds map[*ChatItem][]int
 	tableHintOn     bool
+	tableLeftX0     int
+	tableLeftX1     int
+	tableLeftY      int
+	tableLeftOn     bool
+	tableRightX0    int
+	tableRightX1    int
+	tableRightY     int
+	tableRightOn    bool
 }
 
 type selPos struct {
@@ -165,6 +173,8 @@ func (c *Chat) resetTableScroll() {
 	c.itemMaxWidth = map[*ChatItem]int{}
 	c.itemTableBounds = map[*ChatItem][]int{}
 	c.tableHintOn = false
+	c.tableLeftOn = false
+	c.tableRightOn = false
 }
 
 func (c *Chat) sel() int {
@@ -436,11 +446,11 @@ func (c *Chat) activeWideItem() *ChatItem {
 }
 
 func (c *Chat) ScrollTableHorizontal(delta int) bool {
-	if delta == 0 {
-		return false
-	}
-	it := c.activeWideItem()
-	if it == nil {
+	return c.scrollTableForItem(c.activeWideItem(), delta)
+}
+
+func (c *Chat) scrollTableForItem(it *ChatItem, delta int) bool {
+	if it == nil || delta == 0 {
 		return false
 	}
 	maxOff := c.maxHScrollForItem(it)
@@ -458,6 +468,20 @@ func (c *Chat) ScrollTableHorizontal(delta int) bool {
 	c.hscroll[it] = next
 	c.dirty = true
 	return true
+}
+
+func (c *Chat) HandleWheel(x, y, top, left, delta int) bool {
+	if len(c.flat) == 0 || delta == 0 {
+		return false
+	}
+	idx := y - top + c.scroll
+	if c.backVisible {
+		idx--
+	}
+	if idx < 0 || idx >= len(c.flat) || !isTableLine(c.flat[idx]) {
+		return false
+	}
+	return c.scrollTableForItem(c.itemAtFlat(idx), delta)
 }
 
 func (c *Chat) snapTableOffset(it *ChatItem, cur, delta, maxOff int) int {
@@ -495,11 +519,15 @@ func (c *Chat) TableScrollState() (offset, max int, ok bool) {
 
 func (c *Chat) TableHintVisible() bool { return c.tableHintOn }
 
+func isTableLine(ln Line) bool {
+	return len(ln) >= 2 && ln[0].R == '│' && ln[1].R == ' ' && ln[len(ln)-1].R == '│'
+}
+
 func tableColumnBounds(lines []Line) []int {
 	seen := map[int]bool{}
 	var bounds []int
 	for _, ln := range lines {
-		if len(ln) < 2 || ln[0].R != '│' || ln[1].R != ' ' || ln[len(ln)-1].R != '│' {
+		if !isTableLine(ln) {
 			continue
 		}
 		col := 0
@@ -537,6 +565,14 @@ func (c *Chat) HandleClick(x, y, top int) bool {
 		return false
 	}
 
+	if c.tableLeftOn && y == c.tableLeftY && x >= c.tableLeftX0 && x <= c.tableLeftX1 {
+		c.ScrollTableHorizontal(-1)
+		return true
+	}
+	if c.tableRightOn && y == c.tableRightY && x >= c.tableRightX0 && x <= c.tableRightX1 {
+		c.ScrollTableHorizontal(1)
+		return true
+	}
 	if c.indicatorVisible && y == c.indicatorY && x >= c.indicatorX0 && x <= c.indicatorX1 {
 		c.follow = true
 		return true
@@ -626,6 +662,12 @@ func (c *Chat) setSelection(a, b selPos) {
 }
 
 func (c *Chat) HandleMouse(x, y, top, left int, buttons tcell.ButtonMask) bool {
+	if buttons&tcell.WheelLeft != 0 {
+		return c.ScrollTableHorizontal(-1)
+	}
+	if buttons&tcell.WheelRight != 0 {
+		return c.ScrollTableHorizontal(1)
+	}
 	pos, ok := c.posAt(x, y, top, left)
 	pressed := buttons&tcell.ButtonPrimary != 0
 
@@ -853,22 +895,6 @@ func (c *Chat) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 		DrawLineBounded(s, x+1, y, bounds.Left+bounds.Width, line)
 	}
 
-	if tableMax > 0 {
-		left, right := "", ""
-		if tableOff > 0 {
-			left = "← "
-		}
-		if tableOff < tableMax {
-			right = " →"
-		}
-		label := left + i18n.T("chat.table.scroll") + right
-		labelCells := LineFromSegments([]Segment{
-			{Text: " " + label + " ", Style: th.Base().Foreground(th.Accent).Background(th.Surface)},
-		}, DisplayWidth(label)+2)
-		DrawLineBounded(s, bounds.Left+1, bounds.Bottom()-1, bounds.Right(), labelCells)
-		c.tableHintOn = true
-	}
-
 	c.indicatorVisible = false
 	below := total - (offset + visible)
 	if below > 0 {
@@ -881,6 +907,39 @@ func (c *Chat) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 		DrawLine(s, lx, ly, labelCells)
 		c.indicatorX0, c.indicatorX1, c.indicatorY = lx, lx+len(label)-1, ly
 		c.indicatorVisible = true
+	}
+
+	c.tableLeftOn, c.tableRightOn = false, false
+	if tableMax > 0 {
+		style := th.Base().Foreground(th.Accent).Background(th.Surface)
+		x := bounds.Left + 1
+		y := bounds.Bottom() - 1
+		drawSpan := func(text string) {
+			w := DisplayWidth(text)
+			if w <= 0 {
+				return
+			}
+			cells := LineFromSegments([]Segment{{Text: text, Style: style}}, w)
+			DrawLineBounded(s, x, y, bounds.Right(), cells)
+			x += w
+		}
+
+		drawSpan(" ")
+		if tableOff > 0 {
+			c.tableLeftX0, c.tableLeftX1, c.tableLeftY = x, x, y
+			c.tableLeftOn = true
+			drawSpan("←")
+			drawSpan(" ")
+		}
+		drawSpan(i18n.T("chat.table.scroll"))
+		if tableOff < tableMax {
+			drawSpan(" ")
+			c.tableRightX0, c.tableRightX1, c.tableRightY = x, x, y
+			c.tableRightOn = true
+			drawSpan("→")
+		}
+		drawSpan(" ")
+		c.tableHintOn = true
 	}
 }
 

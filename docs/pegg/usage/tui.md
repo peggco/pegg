@@ -250,7 +250,10 @@ Haskell, CSS, HTML, JSON, YAML, Markdown, SQL, R, Lua, and Dart.
 When a table is wider than the viewport it is kept unwrapped, and a hint at the
 bottom of the chat shows that more columns exist. With the prompt empty,
 ++shift+left++/++shift+right++ reveal the hidden columns and snap between table
-columns; typing in the prompt keeps those keys for text selection.
+columns; typing in the prompt keeps those keys for text selection. With the
+pointer over a table row, the mouse wheel scrolls the table left/right first;
+once it reaches an edge, scrolling continues vertically. The horizontal wheel
+works the same way, and the `←`/`→` markers in the hint are clickable.
 
 ## Subagents
 
