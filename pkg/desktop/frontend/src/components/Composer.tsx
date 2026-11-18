@@ -493,7 +493,6 @@ export function Composer({
           selectionCollapsed: selectionCollapsed(),
           caretAtEnd: caretAt === null || caretAt === value.length,
           popupOpen,
-          allowNonEmpty: event.altKey,
         },
         event.key,
       );

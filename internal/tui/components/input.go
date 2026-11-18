@@ -1172,6 +1172,13 @@ func (in *Input) resetHistoryNav() {
 	in.historyDraft = ""
 }
 
+func (in *Input) atInputEnd() bool {
+	if len(in.lines) == 0 {
+		return true
+	}
+	return in.row == len(in.lines)-1 && in.col == len([]rune(in.lines[in.row]))
+}
+
 func (in *Input) historyPrev() bool {
 	if len(in.history) == 0 || in.anchor != nil {
 		return false
@@ -1385,6 +1392,14 @@ func (in *Input) HandleKey(ev *tcell.EventKey) bool {
 		}
 	}
 
+	if in.historyPos < len(in.history) {
+		switch key {
+		case tcell.KeyRune, tcell.KeyBackspace, tcell.KeyBackspace2, tcell.KeyDelete,
+			tcell.KeyLeft, tcell.KeyRight, tcell.KeyHome, tcell.KeyEnd, tcell.KeyTab, tcell.KeyCtrlJ:
+			in.resetHistoryNav()
+		}
+	}
+
 	switch key {
 	case tcell.KeyEnter:
 		if shift {
@@ -1419,17 +1434,33 @@ func (in *Input) HandleKey(ev *tcell.EventKey) bool {
 		return true
 	case tcell.KeyUp:
 		if shift {
+			in.resetHistoryNav()
 			in.ShiftUp()
-		} else {
-			in.MoveUp()
+			return true
 		}
+		if in.historyPos < len(in.history) && in.atInputEnd() {
+			in.historyPrev()
+			return true
+		}
+		if strings.TrimSpace(in.Value()) == "" {
+			in.historyPrev()
+			return true
+		}
+		in.resetHistoryNav()
+		in.MoveUp()
 		return true
 	case tcell.KeyDown:
 		if shift {
+			in.resetHistoryNav()
 			in.ShiftDown()
-		} else {
-			in.MoveDown()
+			return true
 		}
+		if in.historyPos < len(in.history) && in.atInputEnd() {
+			in.historyNext()
+			return true
+		}
+		in.resetHistoryNav()
+		in.MoveDown()
 		return true
 	case tcell.KeyHome:
 		if shift {

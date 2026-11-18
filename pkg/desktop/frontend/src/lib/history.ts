@@ -12,7 +12,6 @@ export interface HistoryKeyState {
   selectionCollapsed: boolean;
   caretAtEnd: boolean;
   popupOpen: boolean;
-  allowNonEmpty?: boolean;
 }
 
 export interface HistoryKeyOutcome {
@@ -93,10 +92,7 @@ export function handleHistoryKey(state: HistoryKeyState, key: string): HistoryKe
   }
 
   if (key === 'ArrowUp') {
-    if (
-      !browsing &&
-      (!state.selectionCollapsed || (state.value.trim() !== '' && !state.allowNonEmpty))
-    ) {
+    if (!browsing && (!state.selectionCollapsed || state.value.trim() !== '')) {
       return { handled: false, history, text: state.value };
     }
     const previous = historyPrevious(history, state.value);

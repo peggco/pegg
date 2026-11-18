@@ -44,10 +44,7 @@ describe('desktop prompt history', () => {
   });
 
   it('navigates, restores the draft, and keeps multiline text', () => {
-    let state = {
-      ...keyState(createPromptHistory(['first', 'line one\nline two']), 'draft'),
-      allowNonEmpty: true,
-    };
+    let state = keyState(createPromptHistory(['first', 'line one\nline two']), '');
     let outcome = handleHistoryKey(state, 'ArrowUp');
     expect(outcome.text).toBe('line one\nline two');
     state = { ...state, ...outcome };
@@ -62,8 +59,15 @@ describe('desktop prompt history', () => {
     expect(outcome.text).toBe('line one\nline two');
     state = { ...state, ...outcome };
     outcome = handleHistoryKey(state, 'ArrowDown');
-    expect(outcome.text).toBe('draft');
+    expect(outcome.text).toBe('');
     expect(handleHistoryKey({ ...state, ...outcome }, 'ArrowDown').handled).toBe(false);
+  });
+
+  it('restores a saved draft when leaving history', () => {
+    const history = createPromptHistory(['previous']);
+    const recalled = historyPrevious(history, 'my draft')!;
+    expect(recalled.text).toBe('previous');
+    expect(historyNext(recalled.history)?.text).toBe('my draft');
   });
 
   it('recalls only from an empty composer when not browsing', () => {
@@ -78,7 +82,7 @@ describe('desktop prompt history', () => {
   });
 
   it('exits browsing when the caret moved', () => {
-    const state = { ...keyState(createPromptHistory(['previous']), ''), allowNonEmpty: true };
+    const state = keyState(createPromptHistory(['previous']), '');
     const recalled = { ...state, ...handleHistoryKey(state, 'ArrowUp') };
     const moved = { ...recalled, value: recalled.text, caretAtEnd: false };
     const outcome = handleHistoryKey(moved, 'ArrowDown');

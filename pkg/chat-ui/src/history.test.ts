@@ -106,10 +106,10 @@ describe('history key handling', () => {
 
   it('navigates and restores the draft', () => {
     let history = createPromptHistory(['one', 'two']);
-    let value = 'draft';
+    let value = '';
     const press = (key: string) => {
       const outcome = handleHistoryKey(
-        { history, value, selectionCollapsed: true, caretAtEnd: true, popupOpen: false, allowNonEmpty: true },
+        { history, value, selectionCollapsed: true, caretAtEnd: true, popupOpen: false },
         key,
       );
       history = outcome.history;
@@ -120,9 +120,9 @@ describe('history key handling', () => {
     expect(press('ArrowUp').text).toBe('two');
     expect(press('ArrowUp').text).toBe('one');
     expect(press('ArrowDown').text).toBe('two');
-    expect(press('ArrowDown').text).toBe('draft');
+    expect(press('ArrowDown').text).toBe('');
     expect(press('ArrowDown').handled).toBe(false);
-    expect(value).toBe('draft');
+    expect(value).toBe('');
   });
 
   it('does not recall while a popup is open', () => {
@@ -131,7 +131,7 @@ describe('history key handling', () => {
   });
 
   it('leaves browsing when the caret moved and keeps the text', () => {
-    const browsing = { ...state(createPromptHistory(['one']), ''), allowNonEmpty: true };
+    const browsing = state(createPromptHistory(['one']), '');
     const recalled = handleHistoryKey(browsing, 'ArrowUp');
     const moved = {
       ...browsing,

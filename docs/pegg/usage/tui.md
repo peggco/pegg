@@ -77,7 +77,7 @@ warning.
 | ++enter++ | Submit |
 | ++shift+enter++ | Insert newline |
 | ++left++ / ++right++ | Move the cursor (word-wrap aware) |
-| ++up++ / ++down++ | Move the cursor between lines |
+| ++up++ / ++down++ | Recall history when the input is empty, otherwise move between lines |
 | ++alt+up++ / ++alt+down++ | Recall the previous / next message |
 | ++ctrl+j++ | Jump to the last line and insert a newline |
 | ++home++ / ++end++ | Start / end of line |
@@ -103,10 +103,12 @@ Sent messages are kept in an in-memory history (the last 200, with consecutive
 duplicates skipped). Loading a session seeds the history from its stored user
 messages, so the shortcuts also work after resuming a session. In the input:
 
-- ++alt+up++ recalls the previous message; ++alt+down++ recalls the next
-  message. Shift+Up/Down continues to extend the selection.
-- While browsing history, the message you were typing is saved as a draft and
-  restored when you move past the newest entry.
+- ++up++ recalls the previous message when the input is empty; ++down++ walks
+  forward again, and Down past the newest entry restores the draft.
+- While browsing history, ++up++/++down++ keep walking when the caret stays at
+  the end of the input. Editing or moving the caret ends browsing. Shift+Up/Down
+  continues to extend the selection.
+- ++alt+up++/++alt+down++ also recall history from a non-empty draft.
 - Recalled messages scroll into view automatically, so multi-line messages stay
   visible with the cursor at the end.
 - ++ctrl+j++ moves the cursor to the end of the input and starts a new line,
