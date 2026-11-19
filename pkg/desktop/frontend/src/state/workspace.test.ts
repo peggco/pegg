@@ -35,7 +35,8 @@ import { store, initialState } from './store';
 import type { SessionListItem } from '../types';
 
 function session(id: string, projectDir: string): SessionListItem {
-  return { id, title: id, updatedAt: '2026-01-01T00:00:00Z', projectDir };
+  const at = '2026-01-01T00:00:00Z';
+  return { id, title: id, createdAt: at, updatedAt: at, projectDir };
 }
 
 beforeEach(() => {
