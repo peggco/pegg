@@ -1,0 +1,40 @@
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>CFBundlePackageType</key>
+        <string>APPL</string>
+        <key>CFBundleName</key>
+        <string>{{.Info.ProductName}}</string>
+        <key>CFBundleExecutable</key>
+        <string>{{.OutputFilename}}</string>
+        <key>CFBundleIdentifier</key>
+        <string>com.wails.{{safeBundleID .Name}}</string>
+        <key>CFBundleVersion</key>
+        <string>{{.Info.ProductVersion}}</string>
+        <key>CFBundleGetInfoString</key>
+        <string>{{.Info.Comments}}</string>
+        <key>CFBundleShortVersionString</key>
+        <string>{{.Info.ProductVersion}}</string>
+        <key>CFBundleIconFile</key>
+        <string>iconfile</string>
+        <key>LSMinimumSystemVersion</key>
+        <string>10.13.0</string>
+        <key>NSHighResolutionCapable</key>
+        <string>true</string>
+        <key>NSHumanReadableCopyright</key>
+        <string>{{.Info.Copyright}}</string>
+        <key>NSDocumentsFolderUsageDescription</key>
+        <string>Pegg needs access to Documents only when the project you open lives there. It reads and edits files inside that project folder.</string>
+        <key>NSDesktopFolderUsageDescription</key>
+        <string>Pegg needs access to Desktop only when the project you open lives there. It reads and edits files inside that project folder.</string>
+        <key>NSDownloadsFolderUsageDescription</key>
+        <string>Pegg needs access to Downloads only when the project you open, or a file you attach to a message, lives there.</string>
+        <key>NSPhotoLibraryUsageDescription</key>
+        <string>Pegg needs access to your photo library only when you attach an image from it to a message.</string>
+        <key>NSAppTransportSecurity</key>
+        <dict>
+            <key>NSAllowsLocalNetworking</key>
+            <true/>
+        </dict>
+    </dict>
+</plist>

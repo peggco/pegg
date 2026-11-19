@@ -1,6 +1,9 @@
 package prefs
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestDefaults(t *testing.T) {
 	p := Defaults()
@@ -81,5 +84,51 @@ func TestMergeSidebarWidth(t *testing.T) {
 	}
 	if got := merge(Prefs{SidebarWidth: 9999}).SidebarWidth; got != DefaultSidebarWidth {
 		t.Fatalf("out-of-range width = %d, want %d", got, DefaultSidebarWidth)
+	}
+}
+
+func TestRemoveRecent(t *testing.T) {
+	s := &Store{path: filepath.Join(t.TempDir(), "prefs.json"), data: Defaults()}
+	if err := s.TouchWorkspace("/a", "a"); err != nil {
+		t.Fatalf("touch /a: %v", err)
+	}
+	if err := s.TouchWorkspace("/b", "b"); err != nil {
+		t.Fatalf("touch /b: %v", err)
+	}
+
+	if err := s.RemoveRecent("/a"); err != nil {
+		t.Fatalf("remove /a: %v", err)
+	}
+	p := s.Get()
+	if len(p.Recents) != 1 || p.Recents[0].Path != "/b" {
+		t.Fatalf("recents after removing /a = %+v", p.Recents)
+	}
+	if p.Workspace != "/b" {
+		t.Fatalf("workspace = %q, want /b", p.Workspace)
+	}
+
+	if err := s.RemoveRecent("/b"); err != nil {
+		t.Fatalf("remove /b: %v", err)
+	}
+	p = s.Get()
+	if len(p.Recents) != 0 {
+		t.Fatalf("recents after removing the open project = %+v", p.Recents)
+	}
+	if p.Workspace != "" || p.LastSession != "" {
+		t.Fatalf("open project not cleared: workspace=%q lastSession=%q", p.Workspace, p.LastSession)
+	}
+}
+
+func TestRemoveRecentUnknownPathKeepsList(t *testing.T) {
+	s := &Store{path: filepath.Join(t.TempDir(), "prefs.json"), data: Defaults()}
+	if err := s.TouchWorkspace("/a", "a"); err != nil {
+		t.Fatalf("touch /a: %v", err)
+	}
+	if err := s.RemoveRecent("/missing"); err != nil {
+		t.Fatalf("remove /missing: %v", err)
+	}
+	p := s.Get()
+	if len(p.Recents) != 1 || p.Workspace != "/a" {
+		t.Fatalf("unexpected prefs = %+v", p)
 	}
 }

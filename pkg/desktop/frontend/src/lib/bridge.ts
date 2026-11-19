@@ -158,6 +158,7 @@ const App = GoApp as unknown as {
   ApplyWindowTheme(dark: boolean): Promise<void>;
   Themes(): Promise<Theme[]>;
   Recents(): Promise<Recent[]>;
+  RemoveRecent(path: string): Promise<Recent[]>;
   WindowMinimise(): Promise<void>;
   WindowToggleMaximise(): Promise<void>;
   WindowClose(): Promise<void>;

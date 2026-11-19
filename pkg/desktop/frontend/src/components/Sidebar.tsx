@@ -23,8 +23,8 @@ import {
 } from '../lib/sidebar';
 import { useT } from '../lib/i18n';
 import {
-  chooseWorkspace,
   deleteSession,
+  refreshRecents,
   focusComposer,
   loadMoreSessions,
   openSession,
@@ -38,6 +38,7 @@ import {
   toggleSettings,
 } from '../state/actions';
 import { useStore } from '../state/store';
+import { ProjectMenu } from './ProjectMenu';
 import type { SessionListItem } from '../types';
 import darkLogo from '../../../assets/dark-logo.png';
 import lightLogo from '../../../assets/light-logo.png';
@@ -52,6 +53,8 @@ export function Sidebar() {
   const theme = useStore((s) => s.theme);
   const t = useT();
   const logo = theme && !theme.dark ? lightLogo : darkLogo;
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [footerOpen, setFooterOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -184,13 +187,24 @@ export function Sidebar() {
             {t('nav.chats')}
             <span className="shortcut">⌘K</span>
           </button>
-          <button className="nav-item" onClick={() => void chooseWorkspace()}>
-            <FolderOpen size={15} />
-            {t('nav.projects')}
-            <span className="shortcut" title={workspace}>
-              {workspace ? baseName(workspace).slice(0, 12) : ''}
-            </span>
-          </button>
+          <div className="nav-item-wrap">
+            <button
+              className={`nav-item${projectsOpen ? ' active' : ''}`}
+              aria-haspopup="menu"
+              aria-expanded={projectsOpen}
+              onClick={() => {
+                if (!projectsOpen) void refreshRecents();
+                setProjectsOpen(!projectsOpen);
+              }}
+            >
+              <FolderOpen size={15} />
+              {t('nav.projects')}
+              <span className="shortcut" title={workspace}>
+                {workspace ? baseName(workspace).slice(0, 12) : ''}
+              </span>
+            </button>
+            {projectsOpen ? <ProjectMenu onClose={() => setProjectsOpen(false)} /> : null}
+          </div>
           <button className="nav-item" onClick={() => toggleCatalog(true)}>
             <Boxes size={15} />
             {t('nav.catalog')}
@@ -312,14 +326,27 @@ export function Sidebar() {
             {theme?.dark ? t('nav.lightAppearance') : t('nav.darkAppearance')}
             <span className={`switch${theme && !theme.dark ? ' on' : ''}`} aria-hidden="true" />
           </button>
-          <button className="account" onClick={() => void chooseWorkspace()}>
-            <span className="avatar">{workspace ? (baseName(workspace)[0] ?? 'P').toUpperCase() : 'P'}</span>
-            <span className="account-text">
-              <span className="account-name">{t('nav.localWorkspace')}</span>
-              <span className="account-sub">{workspace ? shortPath(workspace, 28) : t('nav.noProject')}</span>
-            </span>
-            <GitBranch size={14} />
-          </button>
+          <div className="nav-item-wrap">
+            <button
+              className="account"
+              aria-haspopup="menu"
+              aria-expanded={footerOpen}
+              onClick={() => {
+                if (!footerOpen) void refreshRecents();
+                setFooterOpen(!footerOpen);
+              }}
+            >
+              <span className="avatar">{workspace ? (baseName(workspace)[0] ?? 'P').toUpperCase() : 'P'}</span>
+              <span className="account-text">
+                <span className="account-name">{t('nav.localWorkspace')}</span>
+                <span className="account-sub">{workspace ? shortPath(workspace, 28) : t('nav.noProject')}</span>
+              </span>
+              <GitBranch size={14} />
+            </button>
+            {footerOpen ? (
+              <ProjectMenu placement="up" onClose={() => setFooterOpen(false)} />
+            ) : null}
+          </div>
         </div>
       </div>
       <div

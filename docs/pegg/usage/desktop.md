@@ -30,6 +30,14 @@ make desktop-test       # frontend typecheck/tests + Go tests with the gui tag
 
 The production binary is written to `pkg/desktop/build/bin/pegg-desktop`.
 
+`pkg/desktop/build/` is generated and not tracked, so the bundle metadata lives in
+`pkg/desktop/assets/`: `make desktop-icon` copies the app icon and
+`make desktop-plist` copies `assets/darwin/Info.plist` and `Info.dev.plist` into
+`build/darwin/` before Wails packages the `.app`. `desktop-dev` and
+`desktop-build` depend on both; the release workflow stages the same files on
+macOS runners. Edit the plists in `assets/darwin/` — anything written straight
+into `build/` is lost on the next clean.
+
 On Linux the build uses `-tags "gui webkit2_41"` because Wails v2 defaults to WebKitGTK 4.0. The `gui` tag keeps the Wails entrypoint out of the normal `go test ./...` / `go vet ./...` runs. macOS and Windows use `-tags gui`.
 
 ## Appearance
@@ -73,6 +81,25 @@ Settings → Appearance also controls the shell:
 Assistant replies and user messages stay visible in both modes. Task and subagent cards remain standalone and full. Switching modes applies immediately and the choice is stored with the desktop preferences.
 
 Opening a session restores the last 200 messages. Scrolling to the top loads older messages in batches of 200. The viewport stays anchored on the message you are reading — loading a page never jumps to the bottom, and live replies only auto-follow while you are already at the bottom.
+
+## Projects
+
+**Projects** in the sidebar (and the project row in the sidebar footer) opens the
+project menu: every local project the desktop has opened, most recent first, with
+a check on the one that is open. Selecting a row switches to that project;
+**Open a project…** picks a new folder.
+
+Each row has a three-dot menu with **Remove Local Project**. It only forgets the
+project in the desktop's own list — nothing on disk is deleted and no sessions
+are removed. Removing the project that is open leaves the app with no project
+selected, so pick another one before starting a session.
+
+Switching projects tears down everything scoped to the previous one: the agent is
+restarted in the new directory (it is launched with the project as its working
+directory), and the chat, session list, and slash commands are cleared before the
+new project's are loaded. A session page that arrives late — because you switched
+again while it was loading — is dropped instead of restoring the previous
+project's list.
 
 ## Agent binary
 
@@ -243,6 +270,29 @@ for the same tag; re-run the other jobs instead.
 
 The desktop binary receives the release version through `-X github.com/peggco/pegg/internal/core/config.AppVersion=...`, so the GUI and agent versions stay in sync.
 
+## macOS folder permissions
+
+macOS gates `~/Documents`, `~/Desktop`, `~/Downloads` and the photo library behind
+a TCC consent prompt: the system asks the first time the app touches one of them.
+Two things keep those prompts from appearing for no reason on first launch:
+
+- **The file index stays out of protected folders.** With no project selected the
+  desktop falls back to the home directory, and the `@` mention index used to walk
+  it end to end — which hit every protected folder and triggered the prompts. The
+  home directory is now never indexed (it is not a project), and when the open
+  project sits above them, `Documents`, `Desktop`, `Downloads`, `Pictures`,
+  `Movies`, `Music`, `Library`, `Applications`, `Public` and `Creative Cloud
+  Files` directly under home are skipped. See `pkg/desktop/files.go`.
+- **The bundle explains itself.** `assets/darwin/Info.plist` ships
+  `NSDocumentsFolderUsageDescription`, `NSDesktopFolderUsageDescription`,
+  `NSDownloadsFolderUsageDescription` and `NSPhotoLibraryUsageDescription`, so a
+  prompt that is genuinely needed says why instead of showing macOS's generic text.
+
+A prompt is still expected — and correct — when you open a project that lives
+inside one of those folders, or attach a file from one: the agent has to read
+files there. Approvals are per app bundle and can be reviewed in System Settings →
+Privacy & Security → Files and Folders.
+
 ## Window behavior
 
 - On Linux the app uses native window decorations by default. KDE/KWin and several GTK decoration modules re-add server-side decorations even for frameless GtkWindows, so native chrome is the reliable option.
@@ -276,4 +326,5 @@ Streaming updates are coalesced in Go (16 ms) and delivered to the UI as one `ac
 - **"Could not load sessions"** — check ~/.config/pegg/desktop.log. Session usage costs are decoded as numbers; older builds that expected an object fail here.
 - **No models** — configure a provider with `pegg login` or the Pegg config, then reopen the model menu.
 - **Blank window on Linux** — confirm WebKitGTK 4.1 is installed and rebuild with `-tags webkit2_41`.
+- **macOS keeps asking for Documents/Desktop/Downloads access** — this is expected when the open project lives in one of those folders. If it happens with no project selected, check that the build includes `assets/darwin/Info.plist` (`make desktop-plist`) and that the `@` mention index is not pointed at the home directory.
 - **KDE window stays on top** — window rules from an earlier session can persist. Remove the rule for `pegg-desktop` in System Settings → Window Management → Window Rules; the app itself never sets always-on-top.

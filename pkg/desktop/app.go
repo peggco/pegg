@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -366,12 +367,65 @@ func (a *App) OpenWorkspace(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	previous := a.prefs.Get().Workspace
 	resetFileIndex()
 	if err := a.prefs.TouchWorkspace(abs, workspace.Name(abs)); err != nil {
 		return "", err
 	}
+	if previous != abs {
+		a.resetWorkspaceState()
+	}
 	a.syncConnectWorkspace(abs)
 	return abs, nil
+}
+
+// resetWorkspaceState drops everything scoped to the project that was open
+// before. The ACP agent is started with the workspace as its working
+// directory, so a switch has to stop it; otherwise the next session, command
+// list, and skill list still come from the previous project.
+func (a *App) resetWorkspaceState() {
+	a.mu.Lock()
+	client := a.client
+	a.client = nil
+	a.clientAt = ""
+	a.initRes = nil
+	a.mu.Unlock()
+	if client != nil {
+		client.Close()
+	}
+
+	a.sessionsMu.Lock()
+	a.sessions = map[string]*SessionInfo{}
+	a.current = ""
+	a.pending = map[string]pendingRequest{}
+	a.sessionsMu.Unlock()
+
+	a.updatesMu.Lock()
+	a.updates = nil
+	a.updatesMu.Unlock()
+
+	a.emit("acp:pending-clear", nil)
+	a.resetPluginManager()
+}
+
+// RemoveRecent forgets a local project. Only the desktop's own list is
+// touched — nothing on disk is deleted.
+func (a *App) RemoveRecent(path string) ([]prefs.Recent, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return a.prefs.Get().Recents, errors.New("no project path given")
+	}
+	active := a.prefs.Get().Workspace == path
+	if err := a.prefs.RemoveRecent(path); err != nil {
+		return a.prefs.Get().Recents, err
+	}
+	if active {
+		resetFileIndex()
+		a.resetWorkspaceState()
+		a.syncConnectWorkspace(a.currentWorkspace())
+	}
+	a.refreshDesktopView()
+	return a.prefs.Get().Recents, nil
 }
 
 func (a *App) currentWorkspace() string {
