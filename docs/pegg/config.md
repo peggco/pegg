@@ -181,9 +181,9 @@ Used by `pegg serve`. See [HTTP](usage/http.md) and [ACP](usage/acp.md).
 |---|---|---|---|
 | `host` | string | `"127.0.0.1"` | Bind address |
 | `port` | int | `8080` | Listen port |
-| `required_headers` | object | — | Required request headers for auth. A non-empty value must match exactly (case-sensitive, constant-time); an empty value only checks presence |
-| `headers` | object | — | Extra headers added to every HTTP API response |
-| `cors_origins` | string[] | `[]` | Browser origins allowed to read API responses. Empty disables CORS. Use `["*"]` to opt in to wildcard CORS |
+| `required_headers` | object | — | Required request headers for auth. Values are compared in constant time; `Authorization` schemes are case-insensitive, all other values must match exactly. An empty value only checks presence |
+| `headers` | object | — | Extra headers added to every HTTP API response. `Vary` and `Access-Control-*` are reserved for CORS and ignored here |
+| `cors_origins` | string[] | `[]` | Browser origins allowed to read API responses. Entries are trimmed of whitespace and trailing slashes and matched exactly. Empty disables CORS. Use `["*"]` to opt in to wildcard CORS |
 
 ### `theme`
 
