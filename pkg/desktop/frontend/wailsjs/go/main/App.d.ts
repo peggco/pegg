@@ -136,6 +136,8 @@ export function RemoveMCPServer(arg1:string):Promise<void>;
 
 export function RemoveProvider(arg1:string):Promise<void>;
 
+export function RemoveRecent(arg1:string):Promise<Array<prefs.Recent>>;
+
 export function RemoveSTTProvider(arg1:string):Promise<void>;
 
 export function RenameSession(arg1:string,arg2:string):Promise<void>;

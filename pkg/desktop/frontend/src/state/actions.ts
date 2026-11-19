@@ -105,6 +105,9 @@ export async function loadSessions(): Promise<void> {
   void api.Log(`loadSessions workspace=${workspace}`).catch(() => undefined);
   try {
     const res = await api.LoadSessionsPage(workspace, true, "");
+    // The project may have changed again while this page was in flight; a late
+    // answer must not put the previous project's sessions back on screen.
+    if (store.get().workspace !== workspace) return;
     store.set({
       sessions: res.sessions ?? [],
       sessionsLoading: false,
@@ -230,18 +233,47 @@ export async function chooseWorkspace(): Promise<void> {
 export async function setWorkspace(path: string): Promise<void> {
   try {
     const abs = await api.OpenWorkspace(path);
-    store.set({
-      workspace: abs,
-      view: "welcome",
-      subagentView: null,
-      chat: emptyChat(),
-    });
+    clearProjectState({ workspace: abs });
     await refreshRecents();
     await loadSessions();
     await loadCommandsCatalog();
     const prefs = await api.SavePrefs({ ...store.get().prefs, workspace: abs });
     store.set({ prefs });
     store.toast("success", `Workspace: ${abs}`);
+  } catch (err) {
+    store.toast("error", errorText(err));
+  }
+}
+
+// clearProjectState drops everything that belongs to the project that was open
+// before, so switching projects never leaves the previous one's chat, session
+// list, or slash commands on screen while the new one loads.
+function clearProjectState(patch: { workspace: string }): void {
+  store.set({
+    workspace: patch.workspace,
+    view: "welcome",
+    subagentView: null,
+    chat: emptyChat(),
+    sessions: [],
+    sessionsNextCursor: undefined,
+    sessionsLoading: false,
+    loadingSession: undefined,
+    commandsCatalog: [],
+  });
+}
+
+// removeRecent forgets a local project. Nothing on disk is touched; if the
+// removed project is the open one, the app falls back to having none.
+export async function removeRecent(path: string): Promise<void> {
+  const active = store.get().workspace === path;
+  try {
+    const recents = await api.RemoveRecent(path);
+    store.set({ recents: recents ?? [] });
+    if (!active) return;
+    clearProjectState({ workspace: "" });
+    await loadSessions();
+    await loadCommandsCatalog();
+    store.set({ prefs: { ...store.get().prefs, workspace: "" } });
   } catch (err) {
     store.toast("error", errorText(err));
   }

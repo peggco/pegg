@@ -258,6 +258,10 @@ export function RemoveProvider(arg1) {
   return window['go']['main']['App']['RemoveProvider'](arg1);
 }
 
+export function RemoveRecent(arg1) {
+  return window['go']['main']['App']['RemoveRecent'](arg1);
+}
+
 export function RemoveSTTProvider(arg1) {
   return window['go']['main']['App']['RemoveSTTProvider'](arg1);
 }

@@ -233,6 +233,25 @@ func (s *Store) TouchWorkspace(path, name string) error {
 	})
 }
 
+// RemoveRecent drops a project from the recents list. When the project is the
+// one currently open, the active workspace is cleared too so the app does not
+// keep showing a project the user removed.
+func (s *Store) RemoveRecent(path string) error {
+	return s.Update(func(p *Prefs) {
+		kept := make([]Recent, 0, len(p.Recents))
+		for _, r := range p.Recents {
+			if r.Path != path {
+				kept = append(kept, r)
+			}
+		}
+		p.Recents = kept
+		if p.Workspace == path {
+			p.Workspace = ""
+			p.LastSession = ""
+		}
+	})
+}
+
 func (s *Store) SetWindow(w Window) error {
 	return s.Update(func(p *Prefs) { p.Window = w })
 }
