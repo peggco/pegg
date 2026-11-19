@@ -23,6 +23,16 @@ type askOutput struct {
 	Answers map[string]string `json:"answers"`
 }
 
+func fitCardText(s string, max int) string {
+	if max < 1 {
+		max = 1
+	}
+	if DisplayWidth(s) <= max {
+		return s
+	}
+	return truncateToDisplayWidth(s, max-1) + "\u2026"
+}
+
 func (c *Chat) askCardLines(it *ChatItem, width int) []Line {
 	th := styles.Current()
 	if width < 12 {
@@ -64,10 +74,7 @@ func (c *Chat) askCardLines(it *ChatItem, width int) []Line {
 	lines = append(lines, top)
 
 	for _, q := range qs {
-		qtext := q.Question
-		if len(qtext) > width-6 {
-			qtext = qtext[:width-7] + "\u2026"
-		}
+		qtext := fitCardText(q.Question, width-6)
 		qLine := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
 		for _, r := range "Q: " + qtext {
 			qLine = append(qLine, Cell{R: r, S: accent})
@@ -82,10 +89,7 @@ func (c *Chat) askCardLines(it *ChatItem, width int) []Line {
 		if a == "" {
 			a = i18n.T("chat.ask.unanswered")
 		}
-		atext := a
-		if len(atext) > width-6 {
-			atext = atext[:width-7] + "\u2026"
-		}
+		atext := fitCardText(a, width-7)
 		aLine := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}, {R: ' ', S: th.Base()}}
 		for _, r := range "A: " + atext {
 			aLine = append(aLine, Cell{R: r, S: dim})
@@ -97,12 +101,7 @@ func (c *Chat) askCardLines(it *ChatItem, width int) []Line {
 		lines = append(lines, aLine)
 	}
 
-	sep := Line{{R: '├', S: border}}
-	for i := 0; i < width-2; i++ {
-		sep = append(sep, Cell{R: '─', S: border})
-	}
-	sep = append(sep, Cell{R: '┤', S: border})
-	lines = append(lines, sep)
+	lines = append(lines, cardSep(border, width))
 
 	nAnswered := 0
 	for _, q := range qs {
@@ -110,23 +109,9 @@ func (c *Chat) askCardLines(it *ChatItem, width int) []Line {
 			nAnswered++
 		}
 	}
-	footer := Line{{R: '│', S: border}, {R: ' ', S: th.Base()}}
-	summary := i18n.Tf("chat.ask.answered", nAnswered, len(qs))
-	for _, r := range summary {
-		footer = append(footer, Cell{R: r, S: dim})
-	}
-	for footer.Width() < width-1 {
-		footer = append(footer, Cell{R: ' ', S: th.Base()})
-	}
-	footer = append(footer, Cell{R: '│', S: border})
-	lines = append(lines, footer)
-
-	bot := Line{{R: '╰', S: border}}
-	for i := 0; i < width-2; i++ {
-		bot = append(bot, Cell{R: '─', S: border})
-	}
-	bot = append(bot, Cell{R: '╯', S: border})
-	lines = append(lines, bot)
+	summary := fitCardText(i18n.Tf("chat.ask.answered", nAnswered, len(qs)), width-3)
+	lines = append(lines, cardFooter(border, dim, th.Base(), width, summary))
+	lines = append(lines, bottomEdge(border, width))
 
 	return lines
 }
