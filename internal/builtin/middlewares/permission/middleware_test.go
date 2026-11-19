@@ -388,10 +388,17 @@ func TestBashSemiModeWhitelist(t *testing.T) {
 		t.Fatalf("find exec: asks=%d runs=%d", asks, runs)
 	}
 
+	if _, err := m.InvokeTool(ctx, llm.ToolCall{Function: llm.Function{Name: "bash", Arguments: `{"command": "find . -name x '-delete'"}`}}, next); err != nil {
+		t.Fatalf("quoted find delete should run after approval: %v", err)
+	}
+	if asks != 3 || runs != 4 {
+		t.Fatalf("quoted find delete: asks=%d runs=%d", asks, runs)
+	}
+
 	if _, err := m.InvokeTool(ctx, llm.ToolCall{Function: llm.Function{Name: "bash", Arguments: `{"command": "cat /etc/passwd"}`}}, next); err != nil {
 		t.Fatalf("asked command should run after approval: %v", err)
 	}
-	if asks != 3 || runs != 4 {
+	if asks != 4 || runs != 5 {
 		t.Fatalf("asked: asks=%d runs=%d", asks, runs)
 	}
 }
