@@ -272,6 +272,13 @@ Task/subagent updates also carry `com.pegg/taskName` (the unique `task` name) an
 The `session/prompt` result includes `_meta["com.pegg/runId"]` so clients can ignore
 a stale prompt completion when a background continuation run is active.
 
+A client only receives mirrored updates for runs it did not start itself: the
+server tracks the runs each connection prompted (the last 32 per session) and
+filters their events out of the follow stream, which already delivered them live.
+The history is kept after a run finishes because the run journal is written
+asynchronously — events can surface after the run's finish — so a finished run's
+late events are never replayed into the client that produced them.
+
 ### `_pegg/update`
 
 Pegg-only session events are delivered on the `_pegg/update` extension notification
