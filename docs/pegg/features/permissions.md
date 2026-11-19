@@ -78,8 +78,13 @@ following hold:
 - Contains no shell metacharacters (`;`, `|`, `&`, `>`, `<`, `$`, backticks,
   parentheses, braces, backslashes, or newline/carriage-return control chars).
 - Uses no execution or write flags, including `-exec`, `-execdir`, `-ok`,
-  `-okdir`, `-delete`, `-fprint*`, `-fls`, `-c`, `--exec`, `--pager`,
-  `--output`, `--ext-diff`, and `--textconv`.
+  `-okdir`, `-delete`, `-fprint*`, `-fls`, and tree's `-o`/`--output`.
+- Uses no unquoted glob (`*`, `?`, `[`) with `find` or `tree`, which could
+  expand to an option-like argument from a hostile filename.
+
+Arguments are tokenized the way a POSIX shell would, so quoting does not hide a
+flag: `find . '-delete'` and `find . "-exec" sh x * +` are gated exactly like
+their unquoted forms.
 
 Path-qualified commands (`/bin/ls`, `./tool`) are never allowed. Interpreters
 and package managers (`node`, `npx`, `npm`, `yarn`, `pnpm`, `go`), VCS commands

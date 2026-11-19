@@ -40,10 +40,7 @@ var dangerousArgs = []string{
 var unsafeArgs = []string{
 	"-exec", "-execdir", "-ok", "-okdir", "-delete",
 	"-fprint", "-fprint0", "-fprintf", "-fls",
-	"-c", "--exec", "--exec-path",
-	"--pager", "--paginate", "--open-files-in-pager",
-	"--output", "--ext-diff", "--textconv",
-	"--upload-pack", "--receive-pack",
+	"--output",
 }
 
 func bashAllowed(args string) bool {
@@ -63,8 +60,8 @@ func bashAllowed(args string) bool {
 		return false
 	}
 
-	tokens := strings.Fields(cmd)
-	if len(tokens) == 0 {
+	tokens, hasGlob, ok := splitShellWords(cmd)
+	if !ok || len(tokens) == 0 {
 		return false
 	}
 
@@ -88,6 +85,10 @@ func bashAllowed(args string) bool {
 		return false
 	}
 
+	if (baseCmd == "find" || baseCmd == "tree") && hasGlob {
+		return false
+	}
+
 	if hasDangerousArgs(tokens[1:]) {
 		return false
 	}
@@ -106,6 +107,73 @@ func bashAllowed(args string) bool {
 
 func hasShellMetachar(s string) bool {
 	return strings.ContainsAny(s, ";|&><$`\n\r(){}\\")
+}
+
+func splitShellWords(s string) (tokens []string, hasGlob bool, ok bool) {
+	var word strings.Builder
+	inWord := false
+	var quote byte
+
+	flush := func() {
+		if inWord {
+			tokens = append(tokens, word.String())
+			word.Reset()
+			inWord = false
+		}
+	}
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch quote {
+		case '\'':
+			if c == '\'' {
+				quote = 0
+			} else {
+				word.WriteByte(c)
+			}
+		case '"':
+			if c == '"' {
+				quote = 0
+				continue
+			}
+			if c == '\\' && i+1 < len(s) {
+				switch next := s[i+1]; next {
+				case '"', '\\', '$', '`':
+					word.WriteByte(next)
+					i++
+					continue
+				}
+			}
+			word.WriteByte(c)
+		default:
+			switch c {
+			case '\'', '"':
+				quote = c
+				inWord = true
+			case '\\':
+				if i+1 < len(s) {
+					word.WriteByte(s[i+1])
+					i++
+					inWord = true
+				}
+			case ' ', '\t':
+				flush()
+			case '*', '?', '[':
+				hasGlob = true
+				word.WriteByte(c)
+				inWord = true
+			default:
+				word.WriteByte(c)
+				inWord = true
+			}
+		}
+	}
+
+	if quote != 0 {
+		return nil, false, false
+	}
+	flush()
+	return tokens, hasGlob, true
 }
 
 func isUnsafeArg(arg string) bool {
