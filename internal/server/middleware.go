@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"net/http"
 	"sort"
@@ -20,7 +21,7 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 }
 
 func (s *Server) corsMiddleware(next http.Handler) http.Handler {
-	origins := s.cfg.Server.CORSOrigins
+	origins := normalizeOrigins(s.cfg.Server.CORSOrigins)
 	wildcard := false
 	for _, origin := range origins {
 		if origin == "*" {
@@ -30,7 +31,19 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	}
 	corsEnabled := len(origins) > 0
 
+	userHeaders := make(map[string]string, len(s.cfg.Server.Headers))
+	for k, v := range s.cfg.Server.Headers {
+		if isCORSManagedHeader(k) {
+			continue
+		}
+		userHeaders[k] = v
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if corsEnabled && !wildcard {
+			w.Header().Add("Vary", "Origin")
+		}
+
 		allowed := false
 		switch {
 		case wildcard:
@@ -39,7 +52,6 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 		case corsEnabled:
 			if origin := r.Header.Get("Origin"); origin != "" && originAllowed(origin, origins) {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Add("Vary", "Origin")
 				allowed = true
 			}
 		}
@@ -50,17 +62,42 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Max-Age", "86400")
 		}
 
-		for k, v := range s.cfg.Server.Headers {
+		for k, v := range userHeaders {
 			w.Header().Set(k, v)
 		}
 
-		if allowed && r.Method == http.MethodOptions {
+		if allowed && isPreflight(r) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func normalizeOrigins(origins []string) []string {
+	normalized := make([]string, 0, len(origins))
+	seen := make(map[string]bool, len(origins))
+	for _, origin := range origins {
+		origin = strings.TrimRight(strings.TrimSpace(origin), "/")
+		if origin == "" || seen[origin] {
+			continue
+		}
+		seen[origin] = true
+		normalized = append(normalized, origin)
+	}
+	return normalized
+}
+
+func isPreflight(r *http.Request) bool {
+	return r.Method == http.MethodOptions &&
+		r.Header.Get("Origin") != "" &&
+		r.Header.Get("Access-Control-Request-Method") != ""
+}
+
+func isCORSManagedHeader(name string) bool {
+	lower := strings.ToLower(name)
+	return lower == "vary" || strings.HasPrefix(lower, "access-control-")
 }
 
 func (s *Server) allowedRequestHeaders() string {
@@ -94,6 +131,26 @@ func originAllowed(origin string, allowed []string) bool {
 	return false
 }
 
+func headerValueMatches(key, got, expected string) bool {
+	if expected == "" {
+		return true
+	}
+	if strings.EqualFold(key, "Authorization") {
+		gotScheme, gotToken, gotOK := strings.Cut(got, " ")
+		expectedScheme, expectedToken, expectedOK := strings.Cut(expected, " ")
+		if gotOK && expectedOK {
+			return strings.EqualFold(gotScheme, expectedScheme) && secureEqual(gotToken, expectedToken)
+		}
+	}
+	return secureEqual(got, expected)
+}
+
+func secureEqual(a, b string) bool {
+	aHash := sha256.Sum256([]byte(a))
+	bHash := sha256.Sum256([]byte(b))
+	return subtle.ConstantTimeCompare(aHash[:], bHash[:]) == 1
+}
+
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	required := s.cfg.Server.RequiredHeaders
 	if len(required) == 0 {
@@ -107,7 +164,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 				writeError(w, http.StatusUnauthorized, "missing required header: "+key)
 				return
 			}
-			if expected != "" && subtle.ConstantTimeCompare([]byte(got), []byte(expected)) != 1 {
+			if !headerValueMatches(key, got, expected) {
 				writeError(w, http.StatusUnauthorized, "invalid header: "+key)
 				return
 			}

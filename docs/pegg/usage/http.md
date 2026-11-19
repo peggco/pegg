@@ -43,8 +43,11 @@ Auth is opt-in through `server.required_headers` in
 ```
 
 - A missing header returns `401 {"error": "missing required header: Authorization"}`.
-- A configured value is compared exactly (case-sensitive) in constant time; a mismatch
-  returns `401 {"error": "invalid header: Authorization"}`.
+- A configured value is compared in constant time; a mismatch returns
+  `401 {"error": "invalid header: Authorization"}`.
+- `Authorization` is compared as an RFC 7235 credential: the scheme (`Bearer`) is
+  case-insensitive, while the token after the first space must match exactly. Other
+  header values must match exactly.
 - An empty configured value only requires the header to be present.
 
 CORS is disabled by default. No browser origin may read API responses unless it is
@@ -58,16 +61,33 @@ explicitly allowed through `server.cors_origins`:
 }
 ```
 
+- Configured origins are trimmed of surrounding whitespace and any trailing slash, then
+  compared to the request `Origin` case-insensitively; apart from case they must match
+  exactly. Default ports are not inferred, so list `https://example.com` and
+  `https://example.com:443` separately if both are needed.
 - An explicit origin is echoed in `Access-Control-Allow-Origin` only when the request
-  `Origin` matches, and the response includes `Vary: Origin`.
+  `Origin` matches. Whenever explicit origins are configured, every response carries
+  `Vary: Origin` so caches do not reuse a CORS decision for another origin.
 - `["*"]` is an explicit opt-in to the old wildcard behavior. Avoid it when auth is
   disabled or the server is reachable from other machines.
 - Allowed methods are `GET, POST, PUT, DELETE, OPTIONS`. Allowed request headers are
   `Content-Type` plus the names in `server.required_headers`; `Authorization` is only
-  advertised when it is configured there.
-- Preflight `OPTIONS` requests receive `204 No Content` when CORS is enabled and the
-  origin is allowed.
-- Custom `server.headers` are still added to every response even when CORS is disabled.
+  advertised when it is configured there. Other request headers fail preflight.
+- Only real preflight requests are short-circuited: `OPTIONS` with both `Origin` and
+  `Access-Control-Request-Method`. They receive `204 No Content` when CORS is enabled
+  and the origin is allowed, and are answered before authentication, so they need no
+  credentials. Other `OPTIONS` requests reach the router.
+- CORS runs before auth, so `401` responses still carry the CORS headers and the browser
+  can read the error.
+- CORS-managed headers (`Vary` and `Access-Control-*`) in `server.headers` are ignored;
+  other custom `server.headers` are still added to every response even when CORS is
+  disabled.
+
+!!! warning "Upgrading from wildcard CORS"
+
+    CORS used to be always enabled with `Access-Control-Allow-Origin: *`. If a browser
+    client relied on that, add `"cors_origins": ["*"]` to `server` (or list the specific
+    origins) after upgrading.
 
 ## Response format
 

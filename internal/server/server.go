@@ -63,7 +63,7 @@ func New(
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	s.httpSrv = &http.Server{
 		Addr:         addr,
-		Handler:      s.authMiddleware(s.corsMiddleware(s.loggingMiddleware(mux))),
+		Handler:      s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(mux))),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 0,
 		IdleTimeout:  120 * time.Second,
