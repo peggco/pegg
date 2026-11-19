@@ -699,8 +699,8 @@ func TestRegistry_LoadInterruptsRunning(t *testing.T) {
 }
 
 func TestRegistry_ResumeAfterReloadNotifiesNewParent(t *testing.T) {
-	oldParent := agent.New("old-parent", agent.WithBus(testBus))
-	r := newRegistry()
+	r, oldParent, sessionID := scopedRegistry(t)
+	oldParent.Bus = testBus
 	sa, err := r.spawn("resume-reload-1", "sub-agent", nil, true, oldParent)
 	if err != nil {
 		t.Fatalf("spawn: %v", err)
@@ -708,11 +708,8 @@ func TestRegistry_ResumeAfterReloadNotifiesNewParent(t *testing.T) {
 	r.start(sa)
 	r.finish(sa, "first", nil)
 
-	loaded := newRegistry()
-	if err := loaded.init(); err != nil {
-		t.Fatalf("load: %v", err)
-	}
 	newParent := agent.New("new-parent", agent.WithBus(testBus))
+	loaded := reloadRegistry(t, newParent, sessionID)
 	resumed, err := loaded.resume("resume-reload-1", newParent)
 	if err != nil {
 		t.Fatalf("resume: %v", err)
