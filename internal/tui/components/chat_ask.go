@@ -23,16 +23,6 @@ type askOutput struct {
 	Answers map[string]string `json:"answers"`
 }
 
-func fitCardText(s string, max int) string {
-	if max < 1 {
-		max = 1
-	}
-	if DisplayWidth(s) <= max {
-		return s
-	}
-	return truncateToDisplayWidth(s, max-1) + "\u2026"
-}
-
 func (c *Chat) askCardLines(it *ChatItem, width int) []Line {
 	th := styles.Current()
 	if width < 12 {
