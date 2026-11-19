@@ -74,6 +74,25 @@ Assistant replies and user messages stay visible in both modes. Task and subagen
 
 Opening a session restores the last 200 messages. Scrolling to the top loads older messages in batches of 200. The viewport stays anchored on the message you are reading — loading a page never jumps to the bottom, and live replies only auto-follow while you are already at the bottom.
 
+## Projects
+
+**Projects** in the sidebar (and the project row in the sidebar footer) opens the
+project menu: every local project the desktop has opened, most recent first, with
+a check on the one that is open. Selecting a row switches to that project;
+**Open a project…** picks a new folder.
+
+Each row has a three-dot menu with **Remove Local Project**. It only forgets the
+project in the desktop's own list — nothing on disk is deleted and no sessions
+are removed. Removing the project that is open leaves the app with no project
+selected, so pick another one before starting a session.
+
+Switching projects tears down everything scoped to the previous one: the agent is
+restarted in the new directory (it is launched with the project as its working
+directory), and the chat, session list, and slash commands are cleared before the
+new project's are loaded. A session page that arrives late — because you switched
+again while it was loading — is dropped instead of restoring the previous
+project's list.
+
 ## Agent binary
 
 Resolution order:

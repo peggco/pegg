@@ -24,17 +24,24 @@ const (
 )
 
 func (a *App) ensureClient() (*acpclient.Client, error) {
+	want := a.agentCwd()
+
 	a.mu.Lock()
-	if a.client != nil && a.client.Running() {
+	if a.client != nil && a.client.Running() && a.clientAt == want {
 		c := a.client
 		a.mu.Unlock()
 		return c, nil
 	}
+	stale := a.client != nil && a.clientAt != want
 	a.mu.Unlock()
+	if stale {
+		a.logf("acp: workspace changed, restarting agent")
+		a.resetWorkspaceState()
+	}
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.client != nil && a.client.Running() {
+	if a.client != nil && a.client.Running() && a.clientAt == want {
 		return a.client, nil
 	}
 	if a.closing {
@@ -49,10 +56,7 @@ func (a *App) ensureClient() (*acpclient.Client, error) {
 	if !st.Found {
 		return nil, fmt.Errorf("pegg binary not found: %s", st.Error)
 	}
-	cwd := a.currentWorkspace()
-	if _, err := workspace.Valid(cwd); err != nil {
-		cwd, _ = os.UserHomeDir()
-	}
+	cwd := want
 	client := acpclient.New(acpclient.Options{
 		Binary:  st.Path,
 		Cwd:     cwd,
@@ -103,6 +107,16 @@ func (a *App) ensureClient() (*acpclient.Client, error) {
 	a.initRes = &initRes
 	a.logf("acp initialized: %+v", initRes.AgentInfo)
 	return client, nil
+}
+
+// agentCwd is the directory the ACP agent is started in: the open project, or
+// the home directory when no valid project is selected.
+func (a *App) agentCwd() string {
+	cwd := a.currentWorkspace()
+	if _, err := workspace.Valid(cwd); err != nil {
+		cwd, _ = os.UserHomeDir()
+	}
+	return cwd
 }
 
 func (a *App) Capabilities() *acpclient.PeggCapabilities {
