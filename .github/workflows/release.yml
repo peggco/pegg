@@ -240,6 +240,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
         working-directory: pkg/desktop/frontend
+      - name: Stage macOS bundle metadata
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p pkg/desktop/build/darwin
+          cp pkg/desktop/assets/darwin/Info.plist pkg/desktop/assets/darwin/Info.dev.plist \
+            pkg/desktop/build/darwin/
       - name: Build desktop app
         shell: bash
         env:

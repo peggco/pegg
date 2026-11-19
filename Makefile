@@ -34,10 +34,14 @@ desktop-icon:
 	mkdir -p pkg/desktop/build
 	cp pkg/desktop/assets/appicon.png pkg/desktop/build/appicon.png
 
-desktop-dev: desktop-deps desktop-icon
+desktop-plist:
+	mkdir -p pkg/desktop/build/darwin
+	cp pkg/desktop/assets/darwin/Info.plist pkg/desktop/assets/darwin/Info.dev.plist pkg/desktop/build/darwin/
+
+desktop-dev: desktop-deps desktop-icon desktop-plist
 	cd pkg/desktop && GOFLAGS="-tags=gui" $(WAILS) dev -tags "$(DESKTOP_TAGS)"
 
-desktop-build: desktop-deps desktop-icon
+desktop-build: desktop-deps desktop-icon desktop-plist
 	cd pkg/desktop && GOFLAGS="-tags=gui" $(WAILS) build -tags "$(DESKTOP_TAGS)"
 
 desktop-test: desktop-frontend
@@ -58,4 +62,4 @@ desktop-install: desktop-build
 	@command -v kbuildsycoca6 >/dev/null 2>&1 && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 	@command -v kbuildsycoca5 >/dev/null 2>&1 && kbuildsycoca5 --noincremental >/dev/null 2>&1 || true
 
-.PHONY: vet fmt lint test build run clean desktop-deps desktop-frontend desktop-icon desktop-dev desktop-build desktop-test desktop-install
+.PHONY: vet fmt lint test build run clean desktop-deps desktop-frontend desktop-icon desktop-plist desktop-dev desktop-build desktop-test desktop-install
