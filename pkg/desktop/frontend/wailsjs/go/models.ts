@@ -177,10 +177,33 @@ export namespace acpclient {
 	        this.stopReason = source["stopReason"];
 	    }
 	}
+	export class RevertFileChange {
+	    path: string;
+	    additions: number;
+	    deletions: number;
+	    status: string;
+	    reason?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RevertFileChange(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.additions = source["additions"];
+	        this.deletions = source["deletions"];
+	        this.status = source["status"];
+	        this.reason = source["reason"];
+	    }
+	}
 	export class SessionRevertResult {
 	    _meta?: Record<string, any>;
 	    removed: number;
 	    snapshotId?: string;
+	    files?: RevertFileChange[];
+	    totalAdditions: number;
+	    totalDeletions: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionRevertResult(source);
@@ -191,7 +214,26 @@ export namespace acpclient {
 	        this._meta = source["_meta"];
 	        this.removed = source["removed"];
 	        this.snapshotId = source["snapshotId"];
+	        this.files = this.convertValues(source["files"], RevertFileChange);
+	        this.totalAdditions = source["totalAdditions"];
+	        this.totalDeletions = source["totalDeletions"];
 	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    }
+		    if (asMap) {
+		        return Object.keys(a).reduce((obj: Record<string, any>, k) => {
+		            obj[k] = new classs(a[k]);
+		            return obj;
+		        }, {});
+		    }
+		    return new classs(a);
+		}
 	}
 	export class SlashCommand {
 	    _meta?: Record<string, any>;

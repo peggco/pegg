@@ -1079,6 +1079,177 @@ button {
   font-family: var(--vscode-editor-font-family);
 }
 
+.revert-summary {
+  --revert-add: var(--vscode-testing-iconPassed, #3fb950);
+  --revert-del: var(--vscode-testing-iconFailed, #f85149);
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 7px;
+  background: var(--vscode-editorWidget-background, var(--vscode-input-background));
+  font-size: 11px;
+  color: var(--vscode-foreground);
+}
+
+.revert-summary.restored {
+  border-color: var(--vscode-testing-iconPassed, #3fb950);
+}
+
+.revert-summary.error {
+  border-color: var(--vscode-testing-iconFailed, #f85149);
+}
+
+.revert-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+}
+
+.revert-summary-icon {
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+.revert-summary.restored .revert-summary-icon {
+  color: var(--revert-add);
+}
+
+.revert-summary-title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.revert-summary-spacer {
+  flex: 1;
+}
+
+.revert-summary-stat {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.revert-summary-stat .add {
+  color: var(--revert-add);
+}
+
+.revert-summary-stat .del {
+  color: var(--revert-del);
+}
+
+.revert-summary-iconbtn,
+.revert-summary-undo {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font: inherit;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.revert-summary-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+
+.revert-summary-undo {
+  padding: 2px 9px;
+  border-color: var(--vscode-button-border, var(--vscode-panel-border));
+  background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.revert-summary-iconbtn:hover,
+.revert-summary-undo:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+}
+
+.revert-summary-undo:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.revert-summary-iconbtn:focus-visible,
+.revert-summary-undo:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.revert-summary-files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.revert-summary-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10px;
+}
+
+.revert-summary-file.conflict {
+  color: var(--vscode-editorWarning-foreground, #d29922);
+}
+
+.revert-summary-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.revert-summary-badge {
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-descriptionForeground);
+  font-size: 9px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.revert-summary-badge.conflict {
+  border-color: var(--vscode-editorWarning-foreground, #d29922);
+  color: var(--vscode-editorWarning-foreground, #d29922);
+}
+
+.revert-summary-badge.skipped {
+  opacity: 0.75;
+}
+
+.revert-summary-note,
+.revert-summary-restored {
+  margin-top: 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.revert-summary-restored {
+  color: var(--revert-add);
+}
+
+.revert-summary-error {
+  margin-top: 4px;
+  color: var(--revert-del);
+  font-size: 10px;
+}
+
 .composer {
   position: relative;
   margin-top: 9px;

@@ -118,6 +118,10 @@ The screen appears after the agent binary is available. Choose explicitly to con
   or moving the caret exits browsing, and `↓` past the newest entry restores the
   draft. Mention and command menus keep the arrows while they are open.
 - **Stop** — the send button becomes a stop button while a run is active.
+- **Revert summary** — after you revert a user message, a compact row appears
+  above the composer with the reverted file count, green/red line totals, and an
+  expandable per-file list. Conflicts are marked. **Undo** restores the reverted
+  messages without moving focus away from the composer.
 
 ## Agent questions
 

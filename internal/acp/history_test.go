@@ -7,6 +7,7 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/peggco/pegg/internal/changejournal"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/session"
 )
@@ -187,4 +188,143 @@ func TestSessionMessageRefErrors(t *testing.T) {
 			t.Fatal("expected an error while a prompt is running")
 		}
 	})
+}
+
+func TestSessionRevertReturnsFileSummary(t *testing.T) {
+	srv := newTestServer(t)
+	sess, err := srv.sessions.Create(session.CreateOptions{Title: "S", ProjectDir: "/tmp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.sessions.AppendMessage(sess.ID, llm.UserMessage("edit files")); err != nil {
+		t.Fatal(err)
+	}
+	assistant := llm.Message{
+		Role: llm.RoleAssistant,
+		ToolCalls: []llm.ToolCall{{
+			Function: llm.Function{
+				Name:      "edit",
+				Arguments: `{"filePath":"src/app.go","oldString":"a","newString":"a\nb"}`,
+			},
+		}},
+	}
+	if _, err := srv.sessions.AppendMessage(sess.ID, assistant); err != nil {
+		t.Fatal(err)
+	}
+	srv.addSession(&ACPSession{ID: "acp-summary", Cwd: "/tmp", PeggSessionID: sess.ID})
+
+	index := 0
+	params, _ := json.Marshal(SessionMessageRef{SessionId: "acp-summary", UserMessageIndex: &index})
+	raw, err := srv.handleSessionRevert(context.Background(), json.RawMessage(params))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := raw.(SessionRevertResult)
+	if len(result.Files) != 1 || result.Files[0].Path != "src/app.go" {
+		t.Fatalf("files = %+v", result.Files)
+	}
+	if result.Files[0].Additions != 1 || result.Files[0].Deletions != 0 {
+		t.Fatalf("file counts = %+v", result.Files[0])
+	}
+	if result.TotalAdditions != 1 || result.TotalDeletions != 0 {
+		t.Fatalf("totals = +%d -%d", result.TotalAdditions, result.TotalDeletions)
+	}
+}
+
+func TestSessionUndoRevertRestoresMessages(t *testing.T) {
+	srv := newTestServer(t)
+	sessionID, _ := seedHistorySession(t, srv)
+
+	index := 1
+	params, _ := json.Marshal(SessionMessageRef{SessionId: "acp-1", UserMessageIndex: &index})
+	raw, err := srv.handleSessionRevert(context.Background(), json.RawMessage(params))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := raw.(SessionRevertResult)
+	if result.SnapshotId == "" {
+		t.Fatal("revert did not return a snapshot id")
+	}
+
+	undoParams, _ := json.Marshal(SessionUndoRevertParams{SessionId: "acp-1", SnapshotId: result.SnapshotId})
+	undoRaw, err := srv.handleSessionUndoRevert(context.Background(), json.RawMessage(undoParams))
+	if err != nil {
+		t.Fatal(err)
+	}
+	undo := undoRaw.(SessionUndoRevertResult)
+	if !undo.Restored {
+		t.Fatal("undo did not report restored")
+	}
+	messages, err := srv.sessions.Messages(sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 4 {
+		t.Fatalf("messages after undo = %d, want 4", len(messages))
+	}
+}
+
+func TestSessionUndoRevertErrors(t *testing.T) {
+	srv := newTestServer(t)
+	seedHistorySession(t, srv)
+
+	_, err := srv.handleSessionUndoRevert(context.Background(), json.RawMessage(`{"sessionId":"acp-1","snapshotId":"missing"}`))
+	if err == nil {
+		t.Fatal("expected an error for an unknown snapshot")
+	}
+	if _, err := srv.handleSessionUndoRevert(context.Background(), json.RawMessage(`{"sessionId":"acp-1"}`)); err == nil {
+		t.Fatal("expected an error for a missing snapshot id")
+	}
+}
+
+func TestApplyJournalSummaryMapsStatuses(t *testing.T) {
+	srv := &Server{journalResults: map[string]changejournal.Result{
+		"pegg-1": {
+			SessionID: "pegg-1",
+			RevertID:  "snap-1",
+			Files: []changejournal.Change{
+				{Path: "a.go", Status: changejournal.StatusConflict, Reason: "file changed locally"},
+				{Path: "b.go", Status: changejournal.StatusSkipped},
+				{Path: "c.go", Status: changejournal.StatusDeleted},
+			},
+		},
+	}}
+	summary := session.RevertSummary{Files: []session.RevertFileChange{
+		{Path: "a.go", Additions: 2, Deletions: 1, Status: session.RevertStatusReverted},
+		{Path: "z.go", Additions: 4, Status: session.RevertStatusReverted},
+	}}
+
+	got := srv.applyJournalSummary("pegg-1", "snap-1", summary)
+
+	byPath := make(map[string]session.RevertFileChange, len(got.Files))
+	for _, file := range got.Files {
+		byPath[file.Path] = file
+	}
+	if file := byPath["a.go"]; file.Status != session.RevertStatusConflict || file.Reason != "file changed locally" {
+		t.Fatalf("a.go = %+v", file)
+	}
+	if file := byPath["b.go"]; file.Status != session.RevertStatusSkipped {
+		t.Fatalf("b.go = %+v", file)
+	}
+	if file := byPath["c.go"]; file.Status != session.RevertStatusReverted {
+		t.Fatalf("c.go = %+v", file)
+	}
+	if file := byPath["z.go"]; file.Status != session.RevertStatusReverted || file.Additions != 4 {
+		t.Fatalf("z.go = %+v", file)
+	}
+}
+
+func TestApplyJournalSummaryIgnoresStaleRevert(t *testing.T) {
+	srv := &Server{journalResults: map[string]changejournal.Result{
+		"pegg-1": {SessionID: "pegg-1", RevertID: "other-snap", Files: []changejournal.Change{
+			{Path: "a.go", Status: changejournal.StatusConflict},
+		}},
+	}}
+	summary := session.RevertSummary{Files: []session.RevertFileChange{
+		{Path: "a.go", Status: session.RevertStatusReverted},
+	}}
+	got := srv.applyJournalSummary("pegg-1", "snap-1", summary)
+	if got.Files[0].Status != session.RevertStatusReverted {
+		t.Fatalf("stale journal result was applied: %+v", got.Files[0])
+	}
 }

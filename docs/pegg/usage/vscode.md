@@ -116,6 +116,10 @@ The sidebar chat supports:
 - Enter/Tab — accept.
 - Esc — dismiss.
 
+Reverting a user message shows a summary above the composer with the file count,
+green/red line totals, per-file statuses, and an **Undo** button. The composer
+keeps focus, so you can keep typing while the summary is visible.
+
 With an empty composer, Up recalls the previous prompt and repeated Up/Down
 walk the session's prompts. Editing or moving the caret ends browsing; Down past
 the newest entry restores the draft. The mention and command menus keep the

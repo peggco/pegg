@@ -19,6 +19,7 @@ import {
   SessionMode,
   SessionForkResult,
   SessionHistoryResult,
+  SessionRevertResult,
   SessionNewResult,
   SessionStateResult,
   SessionUpdate,
@@ -462,12 +463,45 @@ export class ChatController extends EventEmitter {
     if (!this.peggCaps()?.history) {
       throw new Error('This Pegg binary does not support reverting. Update it first.');
     }
-    await this.client!.request('_pegg/session/revert', this.messageRef(itemId), 60000);
+    const result = await this.client!.request<SessionRevertResult>(
+      '_pegg/session/revert',
+      this.messageRef(itemId),
+      60000,
+    );
     this.state = truncateFrom(this.state, itemId);
     this.state = { ...this.state, usage: { used: 0, size: 0 }, plan: [] };
     this.emitState();
     this.emit('session', this.state);
     this.emit('composerText', item.text);
+    this.emit('revertSummary', {
+      removed: result.removed,
+      snapshotId: result.snapshotId,
+      files: result.files ?? [],
+      totalAdditions: result.totalAdditions ?? 0,
+      totalDeletions: result.totalDeletions ?? 0,
+      status: 'reverted',
+    });
+  }
+
+  async undoRevert(snapshotId: string): Promise<void> {
+    await this.ensureSession();
+    if (this.state.running) throw new Error('Wait for Pegg to finish before undoing.');
+    if (!snapshotId) throw new Error('Nothing to undo.');
+    const peggId = this.state.peggSessionId;
+    await this.client!.request(
+      '_pegg/session/undo_revert',
+      { sessionId: this.state.acpSessionId ?? '', snapshotId },
+      60000,
+    );
+    if (peggId) await this.resumeSession(peggId);
+    this.emit('revertSummary', {
+      removed: 0,
+      snapshotId,
+      files: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+      status: 'restored',
+    });
   }
 
   private messageRef(itemId: string): { sessionId: string; messageId?: string; userMessageIndex?: number } {

@@ -26,6 +26,7 @@ import dev.pegg.intellij.acp.ChatSettings
 import dev.pegg.intellij.acp.ChatState
 import dev.pegg.intellij.acp.HubSkill
 import dev.pegg.intellij.acp.ModelEntry
+import dev.pegg.intellij.acp.RevertSummary
 import dev.pegg.intellij.acp.SkillInstallResult
 import dev.pegg.intellij.chat.Attachments
 import dev.pegg.intellij.chat.ContextBuilder
@@ -51,6 +52,7 @@ import java.awt.BorderLayout
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 import javax.swing.JComponent
 import javax.swing.JLabel
@@ -70,6 +72,7 @@ class ChatWebView(
     private val stateVersion = AtomicLong()
     private val stateListener: (ChatState) -> Unit = { scheduleState() }
     private val composerListener: (String) -> Unit = { postComposerText(it) }
+    private val revertSummaryListener: (RevertSummary) -> Unit = { postRevertSummary(it) }
     private val lafListener = LafManagerListener { applyTheme() }
     private val lafConnection = ApplicationManager.getApplication().messageBus.connect(this)
     private val settingsListener: () -> Unit = { scheduleState() }
@@ -80,6 +83,7 @@ class ChatWebView(
         component = createComponent()
         controller.addStateListener(stateListener)
         controller.addComposerTextListener(composerListener)
+        controller.addRevertSummaryListener(revertSummaryListener)
         lafConnection.subscribe(LafManagerListener.TOPIC, lafListener)
         PeggSettings.getInstance().addListener(settingsListener)
     }
@@ -104,7 +108,11 @@ class ChatWebView(
                     "settings",
                     ACP_JSON.encodeToJsonElement(
                         ChatSettings.serializer(),
-                        ChatSettings(settings.sendOnEnter, settings.defaultMode),
+                        ChatSettings(
+                            settings.sendOnEnter,
+                            settings.defaultMode,
+                            Locale.getDefault().language,
+                        ),
                     ),
                 )
             }
@@ -127,6 +135,14 @@ class ChatWebView(
         val payload = buildJsonObject {
             put("type", "composerText")
             put("text", text)
+        }
+        postJson(payload.toString())
+    }
+
+    fun postRevertSummary(summary: RevertSummary) {
+        val payload = buildJsonObject {
+            put("type", "revertSummary")
+            put("summary", ACP_JSON.encodeToJsonElement(RevertSummary.serializer(), summary))
         }
         postJson(payload.toString())
     }
@@ -257,6 +273,22 @@ class ChatWebView(
             "revertMessage" -> {
                 val id = obj["id"]?.jsonPrimitive?.contentOrNull ?: return
                 service.scope.launch { runCatching { controller.revertMessage(id) }.onFailure { showError(it) } }
+            }
+            "undoRevert" -> {
+                val snapshotId = obj["snapshotId"]?.jsonPrimitive?.contentOrNull ?: return
+                service.scope.launch {
+                    runCatching { controller.undoRevert(snapshotId) }
+                        .onFailure {
+                            showError(it)
+                            postRevertSummary(
+                                RevertSummary(
+                                    snapshotId = snapshotId,
+                                    status = "error",
+                                    error = it.message ?: it.javaClass.simpleName,
+                                ),
+                            )
+                        }
+                }
             }
             "newSession" -> service.scope.launch { runCatching { controller.newSession() }.onFailure { showError(it) } }
             "loadOlderMessages" -> service.scope.launch {
@@ -547,6 +579,7 @@ class ChatWebView(
         stateTimer.stop()
         controller.removeStateListener(stateListener)
         controller.removeComposerTextListener(composerListener)
+        controller.removeRevertSummaryListener(revertSummaryListener)
         runCatching { lafConnection.disconnect() }
         runCatching { PeggSettings.getInstance().removeListener(settingsListener) }
         runCatching { browser?.dispose() }

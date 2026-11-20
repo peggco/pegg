@@ -521,6 +521,19 @@ export async function revertMessage(ref: MessageRef): Promise<void> {
       const item = store.get().sessions.find((s) => s.id === current.peggId);
       if (item) await openSession(item);
     }
+    if (res.snapshotId) {
+      store.setChat((c) => ({
+        ...c,
+        revert: {
+          removed: res.removed,
+          snapshotId: res.snapshotId,
+          files: res.files ?? [],
+          totalAdditions: res.totalAdditions ?? 0,
+          totalDeletions: res.totalDeletions ?? 0,
+          status: "reverted",
+        },
+      }));
+    }
     if (ref.text) {
       window.dispatchEvent(
         new CustomEvent("pegg:composer-text", { detail: ref.text }),
@@ -532,6 +545,38 @@ export async function revertMessage(ref: MessageRef): Promise<void> {
     );
   } catch (err) {
     store.toast("error", errorText(err));
+  }
+}
+
+export async function undoRevert(): Promise<void> {
+  const chat = store.get().chat;
+  const summary = chat.revert;
+  if (!chat.acpId || !summary?.snapshotId) return;
+  if (chat.running) {
+    store.toast("warn", "Wait for Pegg to finish before undoing.");
+    return;
+  }
+  const snapshotId = summary.snapshotId;
+  store.setChat((c) => ({
+    ...c,
+    revert: summary ? { ...summary, status: "undoing", error: undefined } : undefined,
+  }));
+  try {
+    await api.UndoRevertSession(chat.acpId, snapshotId);
+    const item = store.get().sessions.find((s) => s.id === chat.peggId);
+    if (item) await openSession(item);
+    store.setChat((c) => ({
+      ...c,
+      revert: { ...summary, status: "restored", error: undefined },
+    }));
+    store.toast("success", "Changes restored");
+  } catch (err) {
+    const message = errorText(err);
+    store.setChat((c) => ({
+      ...c,
+      revert: { ...summary, status: "error", error: message },
+    }));
+    store.toast("error", message);
   }
 }
 

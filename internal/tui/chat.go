@@ -21,6 +21,7 @@ import (
 	"github.com/peggco/pegg/internal/session"
 	"github.com/peggco/pegg/internal/tui/components"
 	"github.com/peggco/pegg/internal/tui/i18n"
+	"github.com/peggco/pegg/internal/tui/page/home"
 	"github.com/peggco/pegg/internal/tui/page/settings"
 	pkgplugin "github.com/peggco/pegg/pkg/plugin"
 )
@@ -964,6 +965,7 @@ func (a *App) submitMessage(input string) {
 		a.chatMu.Unlock()
 		return
 	}
+	a.clearRevertNotice()
 	a.home.AttachmentBar().Clear()
 	a.refreshMentionItemsLocked()
 	a.refreshHomeLocked()
@@ -1376,7 +1378,8 @@ func (a *App) doRevert(sid, mid string, it *components.ChatItem) {
 	if a.deps.Sessions == nil {
 		return
 	}
-	if _, _, err := a.deps.Sessions.RevertFrom(sid, mid); err != nil {
+	snapshotID, removed, err := a.deps.Sessions.RevertFrom(sid, mid)
+	if err != nil {
 		a.showError(i18n.Tf("chat.error.revert", err.Error()))
 		return
 	}
@@ -1386,6 +1389,64 @@ func (a *App) doRevert(sid, mid string, it *components.ChatItem) {
 	}
 	a.activateSession(info)
 	a.restoreToInput(it)
+	a.revertSnapshotID = snapshotID
+	a.revertSessionID = sid
+	if a.home != nil && snapshotID != "" {
+		summary := session.SummarizeRevert(removed)
+		a.home.SetRevertNotice(&home.RevertNotice{
+			Title:     revertNoticeTitle(len(summary.Files)),
+			Additions: summary.TotalAdditions,
+			Deletions: summary.TotalDeletions,
+			UndoHint:  i18n.T("chat.revert.undoHint"),
+		})
+		a.requestRedraw()
+	}
+}
+
+func (a *App) undoRevert() {
+	if a.deps.Sessions == nil || a.revertSnapshotID == "" || a.revertSessionID == "" {
+		return
+	}
+	if a.running {
+		a.showError(i18n.T("chat.revert.wait"))
+		return
+	}
+	sessionID := a.revertSessionID
+	if err := a.deps.Sessions.UndoRevert(sessionID, a.revertSnapshotID); err != nil {
+		a.showError(i18n.Tf("chat.revert.undoError", err.Error()))
+		return
+	}
+	a.revertSnapshotID = ""
+	a.revertSessionID = ""
+	if info, ok := a.sessionInfoFor(sessionID); ok {
+		a.activateSession(info)
+	}
+	if a.home != nil {
+		a.home.SetRevertNotice(&home.RevertNotice{
+			Title:    i18n.T("chat.revert.restored"),
+			Restored: true,
+		})
+	}
+	a.requestRedraw()
+}
+
+func (a *App) clearRevertNotice() {
+	a.revertSnapshotID = ""
+	a.revertSessionID = ""
+	if a.home != nil {
+		a.home.ClearRevertNotice()
+	}
+}
+
+func revertNoticeTitle(files int) string {
+	switch files {
+	case 0:
+		return i18n.T("chat.revert.none")
+	case 1:
+		return i18n.Tf("chat.revert.summaryOne", files)
+	default:
+		return i18n.Tf("chat.revert.summaryMany", files)
+	}
 }
 
 func (a *App) forkMessage(sid, mid string, it *components.ChatItem) {

@@ -117,6 +117,27 @@ export interface PendingAsk {
   answers: Record<string, string>;
 }
 
+export type RevertFileStatus = 'reverted' | 'conflict' | 'skipped';
+export type RevertViewStatus = 'reverted' | 'undoing' | 'restored' | 'error';
+
+export interface RevertFileChange {
+  path: string;
+  additions: number;
+  deletions: number;
+  status?: RevertFileStatus;
+  reason?: string;
+}
+
+export interface RevertSummary {
+  removed: number;
+  snapshotId?: string;
+  files: RevertFileChange[];
+  totalAdditions: number;
+  totalDeletions: number;
+  status: RevertViewStatus;
+  error?: string;
+}
+
 export interface ChatState {
   acpId?: string;
   peggId?: string;
@@ -143,6 +164,7 @@ export interface ChatState {
   historyLoading: boolean;
   historyRequestId: number;
   stickToBottom: boolean;
+  revert?: RevertSummary;
 }
 
 export function emptyChat(): ChatState {

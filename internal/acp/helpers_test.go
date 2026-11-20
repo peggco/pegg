@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -18,14 +19,16 @@ import (
 )
 
 type mockStore struct {
-	sessions map[string]*session.Session
-	messages map[string][]session.Message
+	sessions  map[string]*session.Session
+	messages  map[string][]session.Message
+	snapshots map[string]session.Snapshot
 }
 
 func newMockStore() *mockStore {
 	return &mockStore{
-		sessions: make(map[string]*session.Session),
-		messages: make(map[string][]session.Message),
+		sessions:  make(map[string]*session.Session),
+		messages:  make(map[string][]session.Message),
+		snapshots: make(map[string]session.Snapshot),
 	}
 }
 
@@ -132,14 +135,46 @@ func (m *mockStore) TruncateFrom(sessionID, messageID string) ([]session.Message
 	return nil, session.ErrMessageNotFound
 }
 
-func (m *mockStore) SaveSnapshot(s session.Snapshot) error { return nil }
+func (m *mockStore) SaveSnapshot(s session.Snapshot) error {
+	m.snapshots[s.ID] = s
+	return nil
+}
+
 func (m *mockStore) Snapshots(sessionID string) ([]session.Snapshot, error) {
-	return nil, nil
+	var out []session.Snapshot
+	for _, snap := range m.snapshots {
+		if snap.SessionID == sessionID {
+			out = append(out, snap)
+		}
+	}
+	return out, nil
 }
+
 func (m *mockStore) GetSnapshot(id string) (*session.Snapshot, error) {
-	return nil, session.ErrSnapshotNotFound
+	snap, ok := m.snapshots[id]
+	if !ok {
+		return nil, session.ErrSnapshotNotFound
+	}
+	return &snap, nil
 }
+
 func (m *mockStore) RestoreSnapshot(sessionID string, messages []session.Message) error {
+	current := append([]session.Message(nil), m.messages[sessionID]...)
+	for _, restored := range messages {
+		replaced := false
+		for i := range current {
+			if current[i].ID == restored.ID {
+				current[i] = restored
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			current = append(current, restored)
+		}
+	}
+	sort.Slice(current, func(i, j int) bool { return current[i].Seq < current[j].Seq })
+	m.messages[sessionID] = current
 	return nil
 }
 func (m *mockStore) CompactionChildren(sessionID string) ([]session.Session, error) {

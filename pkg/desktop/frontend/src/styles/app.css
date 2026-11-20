@@ -547,6 +547,178 @@ body.sidebar-resizing {
   margin: 0 auto;
 }
 
+.composer-dock .revert-summary {
+  max-width: 820px;
+  margin: 0 auto 8px;
+}
+
+.revert-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 6px 9px;
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius-sm);
+  background: var(--pg-surface-2);
+  color: var(--pg-text-2);
+  font-size: 12px;
+  box-shadow: var(--pg-shadow-sm);
+}
+
+.revert-summary.restored {
+  border-color: var(--pg-success);
+}
+
+.revert-summary.error {
+  border-color: var(--pg-danger);
+}
+
+.revert-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 22px;
+}
+
+.revert-summary-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--pg-muted);
+}
+
+.revert-summary.restored .revert-summary-icon {
+  color: var(--pg-success);
+}
+
+.revert-summary-title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.revert-summary-spacer {
+  flex: 1;
+}
+
+.revert-summary-stat {
+  font-family: var(--pg-font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.revert-summary-stat .add {
+  color: var(--pg-success);
+}
+
+.revert-summary-stat .del {
+  color: var(--pg-danger);
+}
+
+.revert-summary-iconbtn,
+.revert-summary-undo {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--pg-text-2);
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--pg-radius-sm);
+}
+
+.revert-summary-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+
+.revert-summary-undo {
+  padding: 2px 9px;
+  border-color: var(--pg-border);
+  background: var(--pg-hover);
+  color: var(--pg-text);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.revert-summary-iconbtn:hover,
+.revert-summary-undo:hover {
+  background: var(--pg-hover);
+}
+
+.revert-summary-undo:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.revert-summary-files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid var(--pg-border);
+}
+
+.revert-summary-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--pg-font-mono);
+  font-size: 10.5px;
+}
+
+.revert-summary-file.conflict {
+  color: var(--pg-warning);
+}
+
+.revert-summary-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.revert-summary-badge {
+  padding: 0 6px;
+  border: 1px solid var(--pg-border);
+  border-radius: 999px;
+  color: var(--pg-muted);
+  font-size: 9px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.revert-summary-badge.conflict {
+  border-color: var(--pg-warning);
+  color: var(--pg-warning);
+}
+
+.revert-summary-badge.skipped {
+  opacity: 0.75;
+}
+
+.revert-summary-note,
+.revert-summary-restored {
+  margin-top: 4px;
+  color: var(--pg-muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.revert-summary-restored {
+  color: var(--pg-success);
+}
+
+.revert-summary-error {
+  margin-top: 4px;
+  color: var(--pg-danger);
+  font-size: 10.5px;
+}
+
 .composer-dock .composer-hint {
   max-width: 820px;
   margin: 0 auto;

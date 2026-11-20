@@ -20,6 +20,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     controller.setUiVisible(() => this.view?.visible === true);
     controller.on('state', () => this.scheduleState());
     controller.on('composerText', (text: string) => this.postComposerText(text));
+    controller.on('revertSummary', (summary: unknown) => this.postRevertSummary(summary));
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -90,6 +91,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private async undoRevert(snapshotId: string): Promise<void> {
+    try {
+      await this.controller.undoRevert(snapshotId);
+    } catch (err) {
+      this.showActionError(err);
+      this.postRevertSummary({ status: 'error', error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
   private showActionError(err: unknown): void {
     const message = err instanceof Error ? err.message : String(err);
     this.log.warn('Message action failed', err);
@@ -99,6 +109,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private postComposerText(text: string): void {
     if (!this.view) return;
     void this.view.webview.postMessage({ type: 'composerText', text });
+  }
+
+  private postRevertSummary(summary: unknown): void {
+    if (!this.view) return;
+    void this.view.webview.postMessage({ type: 'revertSummary', summary });
   }
 
   private scheduleState(): void {
@@ -118,6 +133,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       settings: {
         sendOnEnter: cfg.sendOnEnter,
         defaultMode: cfg.defaultMode,
+        language: vscode.env.language,
       },
     });
   }
@@ -149,6 +165,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           return;
         case 'revertMessage':
           await this.revertMessage(String(message.id ?? ''));
+          return;
+        case 'undoRevert':
+          await this.undoRevert(String(message.snapshotId ?? ''));
           return;
         case 'newSession':
           await this.controller.newSession();

@@ -294,6 +294,10 @@ export function RevertSession(arg1, arg2, arg3) {
   return window['go']['main']['App']['RevertSession'](arg1, arg2, arg3);
 }
 
+export function UndoRevertSession(arg1, arg2) {
+  return window['go']['main']['App']['UndoRevertSession'](arg1, arg2);
+}
+
 export function RunViewCommand(arg1) {
   return window['go']['main']['App']['RunViewCommand'](arg1);
 }

@@ -153,6 +153,7 @@ export function RestartToUpdate():Promise<void>;
 export function RevealPath(arg1:string):Promise<void>;
 
 export function RevertSession(arg1:string,arg2:string,arg3:number):Promise<acpclient.SessionRevertResult>;
+export function UndoRevertSession(arg1:string,arg2:string):Promise<void>;
 
 export function RunViewCommand(arg1:string):Promise<void>;
 

@@ -108,6 +108,9 @@ type App struct {
 	ctrlCHint bool
 	errorMsg  string
 
+	revertSnapshotID string
+	revertSessionID  string
+
 	hubMu    sync.Mutex
 	hubSeq   int
 	hubQuery string
@@ -745,6 +748,11 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 		return true
 	}
 
+	if a.revertSnapshotID != "" && isUndoRevertKey(kev) {
+		a.undoRevert()
+		return true
+	}
+
 	if resolveGlobal(kev) == ActionVoiceToggle {
 		a.toggleVoice()
 		return true
@@ -788,6 +796,16 @@ func (a *App) handleKey(ev *tcell.EventKey) bool {
 		return true
 	}
 	return false
+}
+
+func isUndoRevertKey(ev *tcell.EventKey) bool {
+	if ev.Modifiers()&tcell.ModCtrl == 0 || ev.Modifiers()&tcell.ModShift == 0 {
+		return false
+	}
+	if ev.Key() == tcell.KeyCtrlZ {
+		return true
+	}
+	return ev.Key() == tcell.KeyRune && (ev.Rune() == 'z' || ev.Rune() == 'Z')
 }
 
 func (a *App) copySelection() bool {

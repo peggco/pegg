@@ -212,6 +212,11 @@ session; a snapshot of the removed messages is saved so it can be undone.
 Attachments on the message are restored into the attachment bar along with the
 text.
 
+After a revert, a one-line summary appears just above the input: the reverted
+file count, green `+`/red `−` line totals, and a `Ctrl+Shift+Z` undo hint. The
+summary never takes focus, so you can keep typing immediately. `Ctrl+Shift+Z`
+restores the reverted messages while text undo in the input stays on `Ctrl+Z`.
+
 ### Specialized tool cards
 
 - **BASH** — command header, live stdout/stderr while the command runs,

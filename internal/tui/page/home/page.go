@@ -33,6 +33,14 @@ const (
 	pickHub
 )
 
+type RevertNotice struct {
+	Title     string
+	Additions int
+	Deletions int
+	UndoHint  string
+	Restored  bool
+}
+
 type Page struct {
 	logo          *components.Logo
 	input         *components.Input
@@ -68,6 +76,8 @@ type Page struct {
 	voicePreview  string
 	voiceHit      layout.Region
 	onVoiceToggle func()
+
+	revert *RevertNotice
 }
 
 func New() *Page {
@@ -101,6 +111,12 @@ func (p *Page) SetSkills(items []components.ListItem) {
 }
 
 func (p *Page) SetOnHubSearch(fn func(query string)) { p.onHubSearch = fn }
+
+func (p *Page) SetRevertNotice(notice *RevertNotice) { p.revert = notice }
+
+func (p *Page) ClearRevertNotice() { p.revert = nil }
+
+func (p *Page) RevertNotice() *RevertNotice { return p.revert }
 
 func (p *Page) StatusBar() *components.StatusBar { return p.status }
 
@@ -331,6 +347,9 @@ func (p *Page) chatBounds(bounds layout.Region) layout.Region {
 	chatBottom := inputRegion.Top - 1
 	if attachH > 0 {
 		chatBottom = inputRegion.Top - attachH - 2
+	}
+	if p.revert != nil {
+		chatBottom--
 	}
 
 	return layout.Region{
@@ -698,10 +717,15 @@ func (p *Page) Draw(s tcell.Screen, bounds layout.Region, focused bool) {
 		}.Clamp(bounds)
 	}
 
+	noticeH := 0
+	if p.revert != nil {
+		noticeH = 1
+	}
 	chatBottom := inputRegion.Top - 1
 	if attachH > 0 {
 		chatBottom = attachRegion.Top - 1
 	}
+	chatBottom -= noticeH
 
 	topArea := layout.Region{
 		Left:   bounds.Left,
@@ -816,13 +840,50 @@ func (p *Page) drawVoiceButton(s tcell.Screen, inputRegion layout.Region) {
 	}
 }
 
+func (p *Page) drawRevertNotice(s tcell.Screen, bounds, inputRegion layout.Region, attachH int) {
+	if p.revert == nil {
+		return
+	}
+	y := inputRegion.Top - 1 - attachH
+	if y < bounds.Top || y >= bounds.Bottom() {
+		return
+	}
+	th := styles.Current()
+	right := inputRegion.Left + inputRegion.Width
+	x := inputRegion.Left + 1
+	draw := func(text string, style tcell.Style) {
+		if text == "" || x >= right {
+			return
+		}
+		text = components.TruncateTo(text, right-x)
+		components.DrawText(s, x, y, text, style)
+		x += components.DisplayWidth(text)
+	}
+	base := th.Base()
+	icon := "\u21ba "
+	iconStyle := base.Foreground(th.Muted)
+	if p.revert.Restored {
+		icon = "\u2713 "
+		iconStyle = base.Foreground(th.Success)
+	}
+	draw(icon, iconStyle)
+	draw(p.revert.Title, base)
+	if !p.revert.Restored {
+		draw(fmt.Sprintf("  +%d", p.revert.Additions), base.Foreground(th.Success))
+		draw(fmt.Sprintf("  \u2212%d", p.revert.Deletions), base.Foreground(th.Error))
+		if p.revert.UndoHint != "" {
+			draw("  "+p.revert.UndoHint, base.Foreground(th.Muted))
+		}
+	}
+}
+
 func (p *Page) drawHint(s tcell.Screen, bounds, inputRegion layout.Region) {
 	hint := p.hint
 	if p.footerHint != "" {
 		hint = p.footerHint
 	}
 	p.drawFooterLines(s, bounds, inputRegion)
-	if hint == "" || !p.input.Empty() || p.chat.HasItems() || p.attachmentBar.Count() > 0 || p.askPicker.Active() {
+	if p.revert != nil || hint == "" || !p.input.Empty() || p.chat.HasItems() || p.attachmentBar.Count() > 0 || p.askPicker.Active() {
 		return
 	}
 	y := inputRegion.Top - 1
@@ -846,6 +907,9 @@ func (p *Page) drawFooterLines(s tcell.Screen, bounds, inputRegion layout.Region
 	}
 	height := len(p.footerLines)
 	y := inputRegion.Top - 1 - height
+	if p.revert != nil {
+		y--
+	}
 	if y < bounds.Top {
 		return
 	}

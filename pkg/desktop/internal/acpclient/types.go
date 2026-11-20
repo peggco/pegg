@@ -322,10 +322,21 @@ type SessionForkResult struct {
 	ParentID  string `json:"parentId,omitempty"`
 }
 
+type RevertFileChange struct {
+	Path      string `json:"path"`
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+	Status    string `json:"status"`
+	Reason    string `json:"reason,omitempty"`
+}
+
 type SessionRevertResult struct {
-	Meta       Meta   `json:"_meta,omitempty"`
-	Removed    int    `json:"removed"`
-	SnapshotID string `json:"snapshotId,omitempty"`
+	Meta           Meta               `json:"_meta,omitempty"`
+	Removed        int                `json:"removed"`
+	SnapshotID     string             `json:"snapshotId,omitempty"`
+	Files          []RevertFileChange `json:"files,omitempty"`
+	TotalAdditions int                `json:"totalAdditions"`
+	TotalDeletions int                `json:"totalDeletions"`
 }
 
 type SessionSetModeParams struct {

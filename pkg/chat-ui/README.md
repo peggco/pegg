@@ -20,7 +20,10 @@ Hosts only need to provide:
 2. A backend that produces `ChatState` JSON and handles the existing message
    protocol (`send`, `stop`, `setMode`, `setModel`, `pickModel`, permissions,
    questions, attachments, voice, open file/diff, save a copy of delivered files,
-   and so on).
+   and so on). Revert flows post `{ type: 'revertSummary', summary }` to the
+   webview and receive `{ type: 'undoRevert', snapshotId }` back; the summary
+   carries `files`, `totalAdditions`, `totalDeletions`, `snapshotId` and a
+   `status` of `reverted`, `undoing`, `restored` or `error`.
 3. Theme CSS variables and any optional feature flags:
    `window.__peggHideReady` and `window.__peggInlinePickers`.
 
