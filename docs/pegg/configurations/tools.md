@@ -103,15 +103,18 @@ to connected clients; the final tool result is unchanged.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `command` | string | yes | Shell command |
-| `workdir` | string | no | Directory relative to the workspace root |
-| `timeout` | integer | no | Timeout in seconds, clamped to 1–600; defaults to 40 |
+| `timeout` | integer | no | Timeout in seconds (minimum 1, maximum 600); defaults to 40 |
 | `description` | string | no | Short explanation of the command |
 
 - The process runs in its own process group and is killed (SIGKILL) on timeout.
 - Non-zero exit codes are reported in the output, not as tool errors.
 - On timeout the tool returns a typed error (classifiable as `ErrCommandTimeout` or
-  `context.DeadlineExceeded`) that includes the partial stdout/stderr.
-- stdout and stderr are each capped at 64 KiB. Longer streams are truncated with an
+  `context.DeadlineExceeded`) that includes the partial stdout/stderr. This applies to
+  local execution and ACP terminal runners.
+- A parent context cancellation or deadline is reported as `context.Canceled` or
+  `context.DeadlineExceeded` and is not classified as a command timeout.
+- Local execution caps stdout and stderr at 64 KiB each (about 128 KiB combined); ACP
+  terminal output is capped at 64 KiB in total. Longer output is truncated with an
   explicit `[output truncated, N bytes omitted]` marker.
 
 ## Web
@@ -333,7 +336,8 @@ MCP tools default to the configured `permission.default`.
 Some tools bound their result before returning it to the model, independent of UI
 truncation:
 
-- `bash` keeps 64 KiB per stream and adds an omitted-bytes marker.
+- `bash` keeps 64 KiB per stream (about 128 KiB combined) for local execution and
+  64 KiB in total for ACP terminal runners, and adds an omitted-bytes marker.
 - `read` returns at most 2000 lines by default.
 - `grep` returns at most 100 matches.
 - `webfetch` reads at most 10 MB.

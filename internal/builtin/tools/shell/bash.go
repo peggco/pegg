@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	json "github.com/goccy/go-json"
 
@@ -25,7 +26,7 @@ const (
 	maxOutputStreamBytes  = 64 << 10
 )
 
-var ErrCommandTimeout = errors.New("bash: command timed out")
+var ErrCommandTimeout = tool.ErrCommandTimeout
 
 type cappedBuffer struct {
 	mu      sync.Mutex
@@ -65,7 +66,22 @@ func (b *cappedBuffer) String() string {
 	if b.omitted == 0 {
 		return out
 	}
+	if cut := validUTF8Prefix(out); cut < len(out) {
+		b.omitted += len(out) - cut
+		out = out[:cut]
+	}
 	return out + truncationMarker(b.omitted)
+}
+
+func validUTF8Prefix(s string) int {
+	for len(s) > 0 {
+		r, size := utf8.DecodeLastRuneInString(s)
+		if r != utf8.RuneError || size > 1 {
+			return len(s)
+		}
+		s = s[:len(s)-1]
+	}
+	return 0
 }
 
 func truncationMarker(omitted int) string {
@@ -76,7 +92,8 @@ func truncateOutput(s string) string {
 	if len(s) <= maxOutputStreamBytes {
 		return s
 	}
-	return s[:maxOutputStreamBytes] + truncationMarker(len(s)-maxOutputStreamBytes)
+	cut := validUTF8Prefix(s[:maxOutputStreamBytes])
+	return s[:cut] + truncationMarker(len(s)-cut)
 }
 
 func normalizeTimeout(seconds int) time.Duration {
@@ -109,6 +126,14 @@ func formatPartialOutput(stdout, stderr string) string {
 		fmt.Fprintf(&b, "\nstderr:\n%s", stderr)
 	}
 	return b.String()
+}
+
+func withPartialOutput(err error, out string) error {
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return err
+	}
+	return fmt.Errorf("%w\n%s", err, truncateOutput(out))
 }
 
 type TerminalRunner interface {
@@ -184,15 +209,16 @@ func bashTool(fs *vfs.VFS) tool.Tool {
 			if runner := terminalRunnerFrom(ctx); runner != nil {
 				if out, handled, err := runner.RunTerminal(ctx, params.Command, timeout); handled {
 					if err != nil {
-						return "", err
+						return "", withPartialOutput(err, out)
 					}
 					return truncateOutput(out), nil
 				}
 			}
 
 			workdir := fs.Root()
+			parentCtx := ctx
 
-			ctx, cancel := context.WithTimeout(ctx, timeout)
+			ctx, cancel := context.WithTimeout(parentCtx, timeout)
 			defer cancel()
 
 			cmd := exec.Command("sh", "-c", params.Command)
@@ -226,8 +252,11 @@ func bashTool(fs *vfs.VFS) tool.Tool {
 
 			if interrupted {
 				partial := formatPartialOutput(stdout.String(), stderr.String())
+				if parentCtx.Err() != nil {
+					return "", fmt.Errorf("bash: command interrupted: %w%s", parentCtx.Err(), partial)
+				}
 				if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-					return "", fmt.Errorf("%w after %s: %w%s", ErrCommandTimeout, timeout, context.DeadlineExceeded, partial)
+					return "", fmt.Errorf("bash: %w after %s: %w%s", ErrCommandTimeout, timeout, context.DeadlineExceeded, partial)
 				}
 				return "", fmt.Errorf("bash: command canceled: %w%s", context.Canceled, partial)
 			}
