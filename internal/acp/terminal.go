@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -130,8 +131,10 @@ func (r *acpTerminalRunner) RunTerminal(ctx context.Context, command string, tim
 		_ = r.server.TerminalRelease(context.Background(), r.sessionID, termID)
 	}()
 
-	waitCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+	waitCtx, cancelWait := context.WithCancel(ctx)
+	defer cancelWait()
+	timeoutCtx, cancelTimeout := context.WithTimeout(ctx, timeout)
+	defer cancelTimeout()
 	done := make(chan *TerminalExitStatus, 1)
 	go func() {
 		st, _ := r.server.TerminalWaitForExit(waitCtx, r.sessionID, termID)
@@ -159,6 +162,7 @@ func (r *acpTerminalRunner) RunTerminal(ctx context.Context, command string, tim
 	defer ticker.Stop()
 
 	var exit *TerminalExitStatus
+	var waitErr error
 	finished := false
 	for !finished {
 		select {
@@ -166,17 +170,28 @@ func (r *acpTerminalRunner) RunTerminal(ctx context.Context, command string, tim
 			finished = true
 		case <-ticker.C:
 			stream()
-		case <-waitCtx.Done():
+		case <-timeoutCtx.Done():
+			if ctx.Err() == nil && errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
+				waitErr = fmt.Errorf("%w after %s: %w", tool.ErrCommandTimeout, timeout, context.DeadlineExceeded)
+			} else if waitErr = timeoutCtx.Err(); waitErr == nil {
+				waitErr = context.Canceled
+			}
 			_ = r.server.TerminalKill(context.Background(), r.sessionID, termID)
-			exit = <-done
+			select {
+			case exit = <-done:
+			case <-time.After(2 * time.Second):
+			}
 			finished = true
 		}
 	}
 	stream()
 
-	out, err := r.server.TerminalOutput(context.Background(), r.sessionID, termID)
-	if err != nil {
-		return "", true, err
+	out, outErr := r.server.TerminalOutput(context.Background(), r.sessionID, termID)
+	if outErr != nil {
+		if waitErr != nil {
+			return "", true, waitErr
+		}
+		return "", true, outErr
 	}
 	result := ""
 	if exit != nil && exit.ExitCode != nil {
@@ -184,6 +199,9 @@ func (r *acpTerminalRunner) RunTerminal(ctx context.Context, command string, tim
 	}
 	if out != nil && out.Output != "" {
 		result += "stdout:\n" + out.Output + "\n"
+	}
+	if waitErr != nil {
+		return result, true, waitErr
 	}
 	return result, true, nil
 }

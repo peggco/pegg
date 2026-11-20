@@ -1669,6 +1669,24 @@ func TestRunToolSemantics(t *testing.T) {
 	}
 }
 
+func TestRunToolPreservesUnderlyingErrorChain(t *testing.T) {
+	timeoutTool := tool.NewSpec("timeout", "", nil, func(context.Context, string) (string, error) {
+		return "", fmt.Errorf("wrapped: %w", context.DeadlineExceeded)
+	})
+	a, _ := newTestAgent(t, WithTool(timeoutTool))
+
+	res := a.runTool(context.Background(), &runState{}, toolCall("c1", "timeout", "{}"))
+	if !errors.Is(res.toolErr, ErrToolExecutionFailed) {
+		t.Fatalf("toolErr = %v, want errors.Is(ErrToolExecutionFailed)", res.toolErr)
+	}
+	if !errors.Is(res.toolErr, context.DeadlineExceeded) {
+		t.Fatalf("toolErr = %v, want errors.Is(context.DeadlineExceeded)", res.toolErr)
+	}
+	if !strings.Contains(res.output, "wrapped: context deadline exceeded") {
+		t.Fatalf("output = %q, want wrapped tool error", res.output)
+	}
+}
+
 func TestRunToolStreamsOutput(t *testing.T) {
 	streaming := tool.NewSpec("streaming", "", nil, func(ctx context.Context, args string) (string, error) {
 		_, _ = tool.OutputWriter(ctx, "stdout").Write([]byte("hello\n"))
