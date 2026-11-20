@@ -497,6 +497,7 @@ Map of server name to [language server config](configurations/lsp.md).
 | `install` | string | Shell command to install the server when the command is not found |
 | `version` | string | Informational version |
 | `enabled` | bool | `false` removes a server inherited from a lower-priority layer |
+| `idleMessages` | int | Stop the server after this many agent messages with no matching file access (default `5`) |
 
 ## Complete example
 

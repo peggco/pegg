@@ -69,15 +69,25 @@ type MCPServerConfig struct {
 }
 
 type LanguageServerConfig struct {
-	Command     string            `json:"command,omitempty"`
-	Args        []string          `json:"args,omitempty"`
-	Env         map[string]string `json:"env,omitempty"`
-	FileTypes   []string          `json:"filetypes,omitempty"`
-	RootMarkers []string          `json:"rootMarkers,omitempty"`
-	Download    string            `json:"download,omitempty"`
-	Install     string            `json:"install,omitempty"`
-	Version     string            `json:"version,omitempty"`
-	Enabled     *bool             `json:"enabled,omitempty"`
+	Command      string            `json:"command,omitempty"`
+	Args         []string          `json:"args,omitempty"`
+	Env          map[string]string `json:"env,omitempty"`
+	FileTypes    []string          `json:"filetypes,omitempty"`
+	RootMarkers  []string          `json:"rootMarkers,omitempty"`
+	Download     string            `json:"download,omitempty"`
+	Install      string            `json:"install,omitempty"`
+	Version      string            `json:"version,omitempty"`
+	Enabled      *bool             `json:"enabled,omitempty"`
+	IdleMessages int               `json:"idleMessages,omitempty"`
+}
+
+const DefaultIdleMessages = 5
+
+func (c LanguageServerConfig) IdleMessagesValue() int {
+	if c.IdleMessages <= 0 {
+		return DefaultIdleMessages
+	}
+	return c.IdleMessages
 }
 
 type ServerConfig struct {

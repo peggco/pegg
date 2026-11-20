@@ -27,7 +27,11 @@ right where it can act on them.
   sent, so stale pre-edit diagnostics are never shown. If the server does not
   publish in time, no diagnostics are returned. When a file is deleted, its
   diagnostics are dropped.
-- Idle servers are stopped after **10 minutes** to save resources.
+- Idle servers are stopped after **5 agent messages** with no matching file
+  access (configurable with `idleMessages`). The next matching file access
+  restarts the server lazily and diagnostics continue to work.
+- As a fallback and upper bound, servers that stay unused for **10 minutes** are
+  also stopped, even if the message threshold has not been reached.
 
 This requires a language server that matches the file type. Without one, reads and
 writes behave normally.
@@ -44,7 +48,8 @@ writes behave normally.
         "gopls": {
           "command": "gopls",
           "filetypes": ["go"],
-          "rootMarkers": ["go.mod"]
+          "rootMarkers": ["go.mod"],
+          "idleMessages": 5
         }
       }
     }
@@ -75,6 +80,21 @@ writes behave normally.
 | `install` | string | Shell command to install the server when missing |
 | `version` | string | Informational version |
 | `enabled` | bool | `false` removes a server inherited from a lower-priority layer |
+| `idleMessages` | int | Stop the server after this many agent messages with no matching file access (default `5`; `0` or omitted uses the default) |
+
+### Idle shutdown
+
+Each completed agent message counts as one idle step for every running language
+server. Reading or writing a file that matches a server resets that server's
+counter. When the counter reaches `idleMessages`, Pegg gracefully shuts the
+server down (LSP `shutdown`/`exit`, then the process fallback) and logs
+`lsp: <name> stopped after <n> idle messages` at debug level. The next matching
+file access starts it again automatically.
+
+The 10-minute time-based reaper still runs as a fallback and upper bound, so a
+server is also stopped when it has been unused for 10 minutes even if the
+message threshold has not been reached. Servers that are still initializing or
+handling a request are never stopped by the message check.
 
 ### Precedence
 
