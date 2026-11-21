@@ -40,7 +40,14 @@ type ACPSession struct {
 	attachRunID  string
 	promptRunID  string
 	ownRuns      map[string]bool
+	ownRunOrder  []string
 }
+
+// ownRunHistory is how many of a session's own runs stay remembered. A run's
+// journal events are written asynchronously, so they can reach the follow path
+// after the run has finished; the ids are kept so those late events are still
+// recognised as the client's own instead of being replayed back to it.
+const ownRunHistory = 32
 
 func (s *ACPSession) SetCancel(cancel context.CancelFunc, reqID any) {
 	s.mu.Lock()
@@ -82,7 +89,14 @@ func (s *ACPSession) SetPromptRun(runID string) {
 	if s.ownRuns == nil {
 		s.ownRuns = make(map[string]bool)
 	}
-	s.ownRuns[runID] = true
+	if !s.ownRuns[runID] {
+		s.ownRuns[runID] = true
+		s.ownRunOrder = append(s.ownRunOrder, runID)
+		for len(s.ownRunOrder) > ownRunHistory {
+			delete(s.ownRuns, s.ownRunOrder[0])
+			s.ownRunOrder = s.ownRunOrder[1:]
+		}
+	}
 }
 
 func (s *ACPSession) IsOwnRun(runID string) bool {
@@ -91,10 +105,12 @@ func (s *ACPSession) IsOwnRun(runID string) bool {
 	return runID != "" && s.ownRuns[runID]
 }
 
+// ForgetOwnRun releases a finished run as the session's current prompt run. The
+// run stays in the own-run history (see ownRunHistory), so events the journal
+// flushes after the finish are not mistaken for another client's run.
 func (s *ACPSession) ForgetOwnRun(runID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.ownRuns, runID)
 	if s.promptRunID == runID {
 		s.promptRunID = ""
 	}

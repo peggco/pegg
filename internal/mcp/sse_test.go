@@ -45,7 +45,7 @@ func (s *sseTestServer) handle(conn net.Conn) {
 	headers := parseHeaders(head)
 
 	if s.authCheck != "" && headers["authorization"] != s.authCheck {
-		conn.Write([]byte("HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n"))
+		conn.Write([]byte("HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
 		return
 	}
 
@@ -56,7 +56,10 @@ func (s *sseTestServer) handle(conn net.Conn) {
 		body := readRequestBody(r, headers)
 		resp := makeResponse(body)
 		s.responses <- resp
-		conn.Write([]byte("HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n"))
+		// handle serves one request per connection and closes it on return, so
+		// the response must say so: otherwise the client pools the connection
+		// and the next POST races the close, failing with a connection reset.
+		conn.Write([]byte("HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
 		return
 	}
 

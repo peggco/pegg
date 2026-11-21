@@ -175,23 +175,40 @@ func TestHubDoesNotDuplicateEvents(t *testing.T) {
 	lease.Finish(session.RunStateDone, "")
 
 	counts := map[string]int{}
-	deadline := time.After(3 * time.Second)
-	for {
+	count := func(e Event) {
+		switch e.Type {
+		case EventRunEvent:
+			counts[e.Journal.Type]++
+		case EventRunFinished:
+			counts["finish"]++
+		}
+	}
+
+	// The journal is written asynchronously, so a run's events can arrive after
+	// its finish event: wait for all three instead of asserting at the finish.
+	deadline := time.After(5 * time.Second)
+	for counts[session.AgentEventInput] == 0 || counts[session.AgentEventToken] == 0 || counts["finish"] == 0 {
 		select {
 		case e := <-sub.C:
-			if e.Type == EventRunEvent {
-				counts[e.Journal.Type]++
-			}
-			if e.Type == EventRunFinished {
-				counts["finish"]++
-				if counts[session.AgentEventInput] != 1 || counts[session.AgentEventToken] != 1 || counts["finish"] != 1 {
-					t.Fatalf("duplicate events: %+v", counts)
-				}
-				return
-			}
+			count(e)
 		case <-deadline:
 			t.Fatalf("timed out: %+v", counts)
 		}
+	}
+
+	// A duplicate follows its original closely, so let the stream settle.
+	settle := time.After(250 * time.Millisecond)
+	for draining := true; draining; {
+		select {
+		case e := <-sub.C:
+			count(e)
+		case <-settle:
+			draining = false
+		}
+	}
+
+	if counts[session.AgentEventInput] != 1 || counts[session.AgentEventToken] != 1 || counts["finish"] != 1 {
+		t.Fatalf("duplicate events: %+v", counts)
 	}
 }
 

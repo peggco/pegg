@@ -211,6 +211,19 @@ func (t *StreamableHTTPTransport) Close() error {
 		}
 		t.setHeaders(req, "")
 		resp, err := t.client.Do(req)
+		if err != nil && ctx.Err() == nil && errors.Is(err, context.Canceled) {
+			// Cancelling the stream above can leave its pooled connection in a
+			// cancelled state; a DELETE that picks it up fails with the
+			// stream's cancellation even though this request's own context is
+			// still live. Retry once on a connection of its own.
+			retry, buildErr := http.NewRequestWithContext(ctx, http.MethodDelete, t.url, nil)
+			if buildErr != nil {
+				return
+			}
+			t.setHeaders(retry, "")
+			retry.Close = true
+			resp, err = t.client.Do(retry)
+		}
 		if err != nil {
 			return
 		}

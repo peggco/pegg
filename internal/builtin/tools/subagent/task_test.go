@@ -613,28 +613,55 @@ func TestSubAgentTool_ConcurrentParents(t *testing.T) {
 	}
 }
 
-func TestRegistry_PersistAndLoad(t *testing.T) {
+// scopedRegistry gives a test a registry and parent whose subagents persist to
+// a session file of their own. Every test in this package shares one project
+// config dir, and the package-level store plus other tests' background writers
+// also save to subagents/default.json, so a test that persists there can have
+// its file rewritten before it reads it back.
+func scopedRegistry(t *testing.T) (*registry, *agent.Agent, string) {
+	t.Helper()
 	r := newRegistry()
-	sa, err := r.spawn("persist-1", "sub-agent", []string{"todo-9"}, false, nil)
+	parent := agent.New("parent-" + t.Name())
+	sessionID := "session-" + t.Name()
+	r.mu.Lock()
+	r.agentSessions[parent.ID] = sessionID
+	r.mu.Unlock()
+	return r, parent, sessionID
+}
+
+// reloadRegistry reads the session file back the way a restart would, with the
+// same parent bound to the same session.
+func reloadRegistry(t *testing.T, parent *agent.Agent, sessionID string) *registry {
+	t.Helper()
+	loaded := newRegistry()
+	loaded.mu.Lock()
+	loaded.agentSessions[parent.ID] = sessionID
+	loaded.mu.Unlock()
+	if err := loaded.init(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	return loaded
+}
+
+func TestRegistry_PersistAndLoad(t *testing.T) {
+	r, parent, sessionID := scopedRegistry(t)
+	sa, err := r.spawn("persist-1", "sub-agent", []string{"todo-9"}, false, parent)
 	if err != nil {
 		t.Fatalf("spawn: %v", err)
 	}
 	r.start(sa)
 	r.finish(sa, "persisted output", nil)
 
-	file, err := config.GetProjectConfigPath("subagents", "default.json")
+	file, err := config.GetProjectConfigPath("subagents", sessionID+".json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(file); err != nil {
-		t.Fatalf("subagents default.json not written: %v", err)
+		t.Fatalf("subagents %s.json not written: %v", sessionID, err)
 	}
 
-	loaded := newRegistry()
-	if err := loaded.init(); err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	got, ok := loaded.get("persist-1", nil)
+	loaded := reloadRegistry(t, parent, sessionID)
+	got, ok := loaded.get("persist-1", parent)
 	if !ok {
 		t.Fatal("persisted subagent not loaded")
 	}
@@ -651,18 +678,15 @@ func TestRegistry_PersistAndLoad(t *testing.T) {
 }
 
 func TestRegistry_LoadInterruptsRunning(t *testing.T) {
-	r := newRegistry()
-	sa, err := r.spawn("interrupt-1", "sub-agent", nil, true, nil)
+	r, parent, sessionID := scopedRegistry(t)
+	sa, err := r.spawn("interrupt-1", "sub-agent", nil, true, parent)
 	if err != nil {
 		t.Fatalf("spawn: %v", err)
 	}
 	r.start(sa)
 
-	loaded := newRegistry()
-	if err := loaded.init(); err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	got, ok := loaded.get("interrupt-1", nil)
+	loaded := reloadRegistry(t, parent, sessionID)
+	got, ok := loaded.get("interrupt-1", parent)
 	if !ok {
 		t.Fatal("running subagent not loaded")
 	}
@@ -675,8 +699,8 @@ func TestRegistry_LoadInterruptsRunning(t *testing.T) {
 }
 
 func TestRegistry_ResumeAfterReloadNotifiesNewParent(t *testing.T) {
-	oldParent := agent.New("old-parent", agent.WithBus(testBus))
-	r := newRegistry()
+	r, oldParent, sessionID := scopedRegistry(t)
+	oldParent.Bus = testBus
 	sa, err := r.spawn("resume-reload-1", "sub-agent", nil, true, oldParent)
 	if err != nil {
 		t.Fatalf("spawn: %v", err)
@@ -684,11 +708,8 @@ func TestRegistry_ResumeAfterReloadNotifiesNewParent(t *testing.T) {
 	r.start(sa)
 	r.finish(sa, "first", nil)
 
-	loaded := newRegistry()
-	if err := loaded.init(); err != nil {
-		t.Fatalf("load: %v", err)
-	}
 	newParent := agent.New("new-parent", agent.WithBus(testBus))
+	loaded := reloadRegistry(t, newParent, sessionID)
 	resumed, err := loaded.resume("resume-reload-1", newParent)
 	if err != nil {
 		t.Fatalf("resume: %v", err)
