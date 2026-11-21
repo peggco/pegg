@@ -199,6 +199,11 @@ export interface Recent {
   openedAt: string;
 }
 
+export interface RemoveRecentResult {
+  recents: Recent[];
+  workspace: string;
+}
+
 export type SidebarMode = "sidebar" | "inset" | "floating";
 export type LayoutMode = "default" | "compact" | "full";
 export type Direction = "ltr" | "rtl";

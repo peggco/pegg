@@ -74,6 +74,28 @@ beforeEach(() => {
   store.set({ language: 'en' });
 });
 
+describe('bootstrap workspace', () => {
+  it('keeps an empty workspace empty instead of adopting the default', async () => {
+    bootstrapInfo.mockResolvedValue(
+      bootInfo({ workspace: '', defaultWorkspace: '/home/me' }),
+    );
+
+    await bootstrap();
+
+    expect(store.get().workspace).toBe('');
+  });
+
+  it('adopts the stored workspace when present', async () => {
+    bootstrapInfo.mockResolvedValue(
+      bootInfo({ workspace: '/project', defaultWorkspace: '/home/me' }),
+    );
+
+    await bootstrap();
+
+    expect(store.get().workspace).toBe('/project');
+  });
+});
+
 describe('bootstrap language', () => {
   it('uses the cached language when the config has none', async () => {
     window.localStorage.setItem(LANGUAGE_STORAGE, 'tr');

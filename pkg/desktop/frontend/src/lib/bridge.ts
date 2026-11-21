@@ -14,6 +14,7 @@ import type {
   PromptAttachment,
   PromptResult,
   Recent,
+  RemoveRecentResult,
   SessionInfo,
   SessionListResult,
   SettingsSnapshot,
@@ -158,7 +159,7 @@ const App = GoApp as unknown as {
   ApplyWindowTheme(dark: boolean): Promise<void>;
   Themes(): Promise<Theme[]>;
   Recents(): Promise<Recent[]>;
-  RemoveRecent(path: string): Promise<Recent[]>;
+  RemoveRecent(path: string): Promise<RemoveRecentResult>;
   WindowMinimise(): Promise<void>;
   WindowToggleMaximise(): Promise<void>;
   WindowClose(): Promise<void>;

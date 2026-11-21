@@ -607,6 +607,38 @@ func (a *App) listSessions(cwd string, all bool, cursor string) (SessionListResu
 	return out, nil
 }
 
+func (a *App) mostRecentSessionProject(exclude string) string {
+	cursor := ""
+	for page := 0; page < 10; page++ {
+		res, err := a.listSessions("", true, cursor)
+		if err != nil {
+			a.logf("remove project: list sessions: %v", err)
+			return ""
+		}
+		if dir := pickProjectDir(res.Sessions, exclude); dir != "" {
+			return dir
+		}
+		if res.NextCursor == "" {
+			break
+		}
+		cursor = res.NextCursor
+	}
+	return ""
+}
+
+func pickProjectDir(items []SessionListItem, exclude string) string {
+	for _, item := range items {
+		dir := strings.TrimSpace(item.ProjectDir)
+		if dir == "" || dir == exclude {
+			continue
+		}
+		if abs, err := workspace.Valid(dir); err == nil {
+			return abs
+		}
+	}
+	return ""
+}
+
 func desktopSessionItem(item acpclient.SessionInfo) SessionListItem {
 	usage := SessionUsage{}
 	if raw, ok := item.Meta["com.pegg/usage"]; ok && raw != nil {

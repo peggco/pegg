@@ -44,7 +44,7 @@ beforeEach(() => {
   store.set({ ...initialState });
   savePrefs.mockImplementation(async (p) => p);
   loadSessionsPage.mockResolvedValue({ sessions: [], nextCursor: '' });
-  removeRecentFn.mockResolvedValue([]);
+  removeRecentFn.mockResolvedValue({ recents: [], workspace: '' });
 });
 
 describe('setWorkspace', () => {
@@ -147,7 +147,10 @@ describe('session pages', () => {
 describe('removeRecent', () => {
   it('forgets the project and keeps the open one when it is another', async () => {
     store.set({ workspace: '/keep', sessions: [session('a', '/keep')] });
-    removeRecentFn.mockResolvedValue([{ path: '/keep', name: 'keep', openedAt: '' }]);
+    removeRecentFn.mockResolvedValue({
+      recents: [{ path: '/keep', name: 'keep', openedAt: '' }],
+      workspace: '/keep',
+    });
 
     await removeRecent('/gone');
 
@@ -157,20 +160,64 @@ describe('removeRecent', () => {
     expect(store.get().sessions).toHaveLength(1);
   });
 
-  it('clears the open project when it is the one removed', async () => {
+  it('selects the fallback project when the open one is removed', async () => {
     store.set({
       workspace: '/gone',
       view: 'chat',
       sessions: [session('a', '/gone')],
-      prefs: { ...initialState.prefs, workspace: '/gone' },
+      prefs: { ...initialState.prefs, workspace: '/gone', lastSession: 'a' },
+    });
+    removeRecentFn.mockResolvedValue({
+      recents: [{ path: '/next', name: 'next', openedAt: '' }],
+      workspace: '/next',
     });
 
     await removeRecent('/gone');
 
+    expect(loadSessionsPage).toHaveBeenLastCalledWith('/next', false, '');
+    const state = store.get();
+    expect(state.workspace).toBe('/next');
+    expect(state.prefs.workspace).toBe('/next');
+    expect(state.view).toBe('welcome');
+    expect(state.sessions).toEqual([]);
+  });
+
+  it('leaves no project selected when nothing can be selected', async () => {
+    store.set({
+      workspace: '/gone',
+      view: 'chat',
+      sessions: [session('a', '/gone')],
+      prefs: { ...initialState.prefs, workspace: '/gone', lastSession: 'a' },
+    });
+    removeRecentFn.mockResolvedValue({ recents: [], workspace: '' });
+
+    await removeRecent('/gone');
+
+    expect(loadSessionsPage).not.toHaveBeenCalled();
     const state = store.get();
     expect(state.workspace).toBe('');
     expect(state.prefs.workspace).toBe('');
-    expect(state.view).toBe('welcome');
+    expect(state.prefs.lastSession).toBe('');
     expect(state.sessions).toEqual([]);
+  });
+
+  it('does not wipe a project opened while the removal was in flight', async () => {
+    store.set({
+      workspace: '/gone',
+      sessions: [session('a', '/gone')],
+      prefs: { ...initialState.prefs, workspace: '/gone' },
+    });
+    let resolve: (value: { recents: []; workspace: string }) => void = () => undefined;
+    removeRecentFn.mockImplementation(
+      () => new Promise((done) => { resolve = done; }),
+    );
+
+    const pending = removeRecent('/gone');
+    store.set({ workspace: '/new' });
+    resolve({ recents: [], workspace: '/next' });
+    await pending;
+
+    expect(store.get().workspace).toBe('/new');
+    expect(store.get().sessions).toHaveLength(1);
   });
 });
