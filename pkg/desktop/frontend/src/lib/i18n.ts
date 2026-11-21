@@ -151,7 +151,7 @@ export const en: Record<string, string> = {
   "date.previous7": "Previous 7 days",
   "date.earlier": "Earlier",
   "nav.noSessions":
-    "No sessions yet. Start a chat and your work will appear here.",
+    "No sessions in this project yet. Start a chat and your work will appear here.",
   "nav.loadingMore": "Loading…",
   "nav.commandPalette": "Command palette",
   "nav.lightAppearance": "Light appearance",
@@ -561,7 +561,7 @@ export const tr: Record<string, string> = {
   "date.previous7": "Son 7 gün",
   "date.earlier": "Daha eski",
   "nav.noSessions":
-    "Henüz oturum yok. Bir sohbet başlatın; çalışmalarınız burada görünsün.",
+    "Bu projede henüz oturum yok. Bir sohbet başlatın; çalışmalarınız burada görünsün.",
   "nav.loadingMore": "Yükleniyor…",
   "nav.commandPalette": "Komut paleti",
   "nav.lightAppearance": "Açık görünüm",

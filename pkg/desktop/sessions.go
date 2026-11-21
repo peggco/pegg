@@ -574,6 +574,10 @@ func (a *App) LoadSessionsPage(cwd string, all bool, cursor string) (SessionList
 }
 
 func (a *App) listSessions(cwd string, all bool, cursor string) (SessionListResult, error) {
+	cwd = strings.TrimSpace(cwd)
+	if !all && cwd == "" {
+		return SessionListResult{Sessions: []SessionListItem{}}, nil
+	}
 	client, err := a.ensureClient()
 	if err != nil {
 		return SessionListResult{}, err

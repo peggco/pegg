@@ -30,7 +30,7 @@ vi.mock('../lib/bridge', () => ({
   },
 }));
 
-import { removeRecent, setWorkspace } from './actions';
+import { loadMoreSessions, loadSessions, removeRecent, setWorkspace } from './actions';
 import { store, initialState } from './store';
 import type { SessionListItem } from '../types';
 
@@ -81,6 +81,66 @@ describe('setWorkspace', () => {
     await setWorkspace('/new');
 
     expect(store.get().sessions).toEqual([]);
+  });
+});
+
+describe('session pages', () => {
+  it('does not list anything without an open project', async () => {
+    store.set({ workspace: '', sessions: [session('a', '/old')] });
+
+    await loadSessions();
+
+    expect(loadSessionsPage).not.toHaveBeenCalled();
+    expect(store.get().sessions).toEqual([]);
+    expect(store.get().sessionsLoading).toBe(false);
+  });
+
+  it('loads the first page for the open project only', async () => {
+    store.set({ workspace: '/p' });
+    loadSessionsPage.mockResolvedValue({
+      sessions: [session('a', '/p')],
+      nextCursor: 'c1',
+    });
+
+    await loadSessions();
+
+    expect(loadSessionsPage).toHaveBeenCalledWith('/p', false, '');
+    expect(store.get().sessions.map((item) => item.id)).toEqual(['a']);
+    expect(store.get().sessionsNextCursor).toBe('c1');
+  });
+
+  it('appends the next page for the same project', async () => {
+    store.set({
+      workspace: '/p',
+      sessions: [session('a', '/p')],
+      sessionsNextCursor: 'c1',
+    });
+    loadSessionsPage.mockResolvedValue({
+      sessions: [session('a', '/p'), session('b', '/p')],
+      nextCursor: 'c2',
+    });
+
+    await loadMoreSessions();
+
+    expect(loadSessionsPage).toHaveBeenCalledWith('/p', false, 'c1');
+    expect(store.get().sessions.map((item) => item.id)).toEqual(['a', 'b']);
+    expect(store.get().sessionsNextCursor).toBe('c2');
+  });
+
+  it('drops a page that arrives after another switch', async () => {
+    store.set({
+      workspace: '/p',
+      sessions: [session('a', '/p')],
+      sessionsNextCursor: 'c1',
+    });
+    loadSessionsPage.mockImplementation(async () => {
+      store.set({ workspace: '/other' });
+      return { sessions: [session('b', '/p')], nextCursor: 'c2' };
+    });
+
+    await loadMoreSessions();
+
+    expect(store.get().sessions.map((item) => item.id)).toEqual(['a']);
   });
 });
 

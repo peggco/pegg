@@ -275,9 +275,6 @@ export function Sidebar() {
                   ) : (
                     <>
                       <span className="session-title">{item.title || 'Untitled session'}</span>
-                      {item.projectDir && item.projectDir !== workspace ? (
-                        <span className="project-tag">{baseName(item.projectDir)}</span>
-                      ) : null}
                       <span className="session-time">{relativeTime(item.updatedAt)}</span>
                       <span className="row-actions" onClick={(event) => event.stopPropagation()}>
                         {confirming === item.id ? (

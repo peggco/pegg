@@ -101,10 +101,18 @@ export async function bootstrap(): Promise<void> {
 
 export async function loadSessions(): Promise<void> {
   const { workspace } = store.get();
+  if (!workspace.trim()) {
+    store.set({
+      sessions: [],
+      sessionsNextCursor: undefined,
+      sessionsLoading: false,
+    });
+    return;
+  }
   store.set({ sessionsLoading: true });
   void api.Log(`loadSessions workspace=${workspace}`).catch(() => undefined);
   try {
-    const res = await api.LoadSessionsPage(workspace, true, "");
+    const res = await api.LoadSessionsPage(workspace, false, "");
     // The project may have changed again while this page was in flight; a late
     // answer must not put the previous project's sessions back on screen.
     if (store.get().workspace !== workspace) return;
@@ -124,14 +132,22 @@ export async function loadSessions(): Promise<void> {
 
 export async function loadMoreSessions(): Promise<void> {
   const state = store.get();
-  if (state.sessionsLoading || !state.sessionsNextCursor) return;
+  const workspace = state.workspace;
+  if (
+    !workspace.trim() ||
+    state.sessionsLoading ||
+    !state.sessionsNextCursor
+  ) {
+    return;
+  }
   store.set({ sessionsLoading: true });
   try {
     const res = await api.LoadSessionsPage(
-      state.workspace,
-      true,
+      workspace,
+      false,
       state.sessionsNextCursor,
     );
+    if (store.get().workspace !== workspace) return;
     store.set((current) => {
       const seen = new Set(current.sessions.map((item) => item.id));
       const extra = (res.sessions ?? []).filter((item) => !seen.has(item.id));
