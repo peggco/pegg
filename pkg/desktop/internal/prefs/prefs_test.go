@@ -5,6 +5,13 @@ import (
 	"testing"
 )
 
+func TestGetReturnsEmptyRecentsSlice(t *testing.T) {
+	s := &Store{data: Defaults()}
+	if got := s.Get().Recents; got == nil || len(got) != 0 {
+		t.Fatalf("recents = %#v, want non-nil empty slice", got)
+	}
+}
+
 func TestDefaults(t *testing.T) {
 	p := Defaults()
 	if p.Theme != "dark" {
