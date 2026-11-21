@@ -319,6 +319,18 @@ func TestSQLiteStoreList(t *testing.T) {
 		}
 	})
 
+	t.Run("filter by project dir", func(t *testing.T) {
+		got, total, err := s.List(query.Query{
+			Filters: []query.Filter{{Column: "project_dir", Operator: query.OpEqual, Value: "/proj/b"}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if total != 1 || len(got) != 1 || got[0].ID != "b" {
+			t.Fatalf("got = %+v, total = %d", got, total)
+		}
+	})
+
 	t.Run("page", func(t *testing.T) {
 		got, total, err := s.List(query.Query{Page: query.Page{Number: 2, Size: 2}})
 		if err != nil {
