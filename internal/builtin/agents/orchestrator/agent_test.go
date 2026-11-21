@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/builtin/tools/subagent"
 	"github.com/peggco/pegg/internal/builtin/tools/todo"
 	"github.com/peggco/pegg/internal/vfs"
@@ -36,7 +36,7 @@ func TestOrchestratorAgentTools(t *testing.T) {
 		if !slices.Contains(a.ToolNames, name) {
 			t.Fatalf("orchestrator missing tool name %q", name)
 		}
-		if _, ok := tools.Get(name); !ok {
+		if _, ok := tool.Default().Get(name); !ok {
 			t.Fatalf("tool %q not registered in global registry", name)
 		}
 	}

@@ -13,7 +13,6 @@ import (
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/prompt"
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/builtin/tools/subagent"
 	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
@@ -73,7 +72,7 @@ func LoadSkillTool(fs *vfs.VFS, sess *session.Manager) {
 	if sess != nil {
 		sessions.subscribe(sess.Bus())
 	}
-	tools.Register(loadSkillTool(fs, sess, catalog.NewClient()))
+	tool.Default().Register(loadSkillTool(fs, sess, catalog.NewClient()))
 }
 
 func loadSkillTool(fs *vfs.VFS, sess *session.Manager, hub *catalog.Client) tool.Tool {

@@ -5,6 +5,14 @@ import (
 	"sync"
 )
 
+var defaultRegistry = NewMiddlewareRegistry()
+
+// Default returns the process-wide middleware catalogue populated by built-ins
+// and the SDK. Agents resolve named middleware from it at run start.
+func Default() *Registry {
+	return defaultRegistry
+}
+
 type NamedMiddleware struct {
 	Name       string
 	Middleware Middleware

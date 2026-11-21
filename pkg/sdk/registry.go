@@ -2,8 +2,8 @@ package sdk
 
 import (
 	"github.com/peggco/pegg/internal/agent/agents"
-	"github.com/peggco/pegg/internal/agent/middlewares"
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/middleware"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/skill"
 )
@@ -12,26 +12,26 @@ func (e *Engine) RegisterTool(t Tool) error {
 	if err := e.checkOpen(); err != nil {
 		return err
 	}
-	return tools.Register(t)
+	return tool.Default().Register(t)
 }
 
 func (e *Engine) UnregisterTool(name string) bool {
-	return tools.Unregister(name)
+	return tool.Default().Unregister(name)
 }
 
 func (e *Engine) Tools() []Tool {
-	return tools.List()
+	return tool.Default().List()
 }
 
 func (e *Engine) RegisterMiddleware(name string, m Middleware) error {
 	if err := e.checkOpen(); err != nil {
 		return err
 	}
-	return middlewares.Register(name, m)
+	return middleware.Default().Register(name, m)
 }
 
 func (e *Engine) UnregisterMiddleware(name string) bool {
-	return middlewares.Unregister(name)
+	return middleware.Default().Unregister(name)
 }
 
 func (e *Engine) RegisterAgent(f AgentFactory) error {

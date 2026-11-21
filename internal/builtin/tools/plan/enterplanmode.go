@@ -8,7 +8,6 @@ import (
 	"github.com/peggco/pegg/internal/agent/prompt"
 	"github.com/peggco/pegg/internal/agent/reminder"
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/vfs"
 )
 
@@ -21,8 +20,8 @@ const (
 )
 
 func PlanTools(fs *vfs.VFS) {
-	tools.Register(enterplanmodeTool(fs))
-	tools.Register(exitplanmodeTool(fs))
+	tool.Default().Register(enterplanmodeTool(fs))
+	tool.Default().Register(exitplanmodeTool(fs))
 }
 
 func enterplanmodeToolPrompt() (string, error) {

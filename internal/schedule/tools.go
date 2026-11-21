@@ -9,7 +9,6 @@ import (
 
 	"github.com/peggco/pegg/internal/agent/prompt"
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 )
 
 var manager *Manager
@@ -18,7 +17,7 @@ func ScheduleTools(mgr *Manager) {
 	if mgr != nil {
 		manager = mgr
 	}
-	_ = tools.Register(scheduleTool())
+	_ = tool.Default().Register(scheduleTool())
 }
 
 func generateScheduleToolPrompt() (string, error) {

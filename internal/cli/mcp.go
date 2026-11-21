@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/mcp"
@@ -379,7 +379,7 @@ func (c *CLI) runMCPTools(out io.Writer, server string) error {
 		name   string
 	}
 	var rows []row
-	for _, t := range tools.List() {
+	for _, t := range tool.Default().List() {
 		mt, ok := t.(*mcp.MCPTool)
 		if !ok {
 			continue

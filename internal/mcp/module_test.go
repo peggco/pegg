@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/logger"
 )
@@ -219,8 +219,8 @@ func TestToolNameCollisionPrevention(t *testing.T) {
 }
 
 func TestManagerCloseWhileConnecting(t *testing.T) {
-	for _, name := range tools.Names() {
-		tools.Unregister(name)
+	for _, name := range tool.Default().Names() {
+		tool.Default().Unregister(name)
 	}
 
 	srv := newSSETestServer("")
@@ -246,14 +246,14 @@ func TestManagerCloseWhileConnecting(t *testing.T) {
 	}
 	mgr.Wait()
 
-	if _, ok := tools.Get("slow-srv__weather"); ok {
+	if _, ok := tool.Default().Get("slow-srv__weather"); ok {
 		t.Fatal("tool must not remain registered after manager close")
 	}
 }
 
 func TestManagerStartsAndRegistersTools(t *testing.T) {
-	for _, name := range tools.Names() {
-		tools.Unregister(name)
+	for _, name := range tool.Default().Names() {
+		tool.Default().Unregister(name)
 	}
 
 	srv := newSSETestServer("")
@@ -272,7 +272,7 @@ func TestManagerStartsAndRegistersTools(t *testing.T) {
 
 	deadline := time.After(5 * time.Second)
 	for {
-		names := tools.Names()
+		names := tool.Default().Names()
 		found := false
 		for _, n := range names {
 			if n == "sse-srv__weather" {
@@ -284,13 +284,13 @@ func TestManagerStartsAndRegistersTools(t *testing.T) {
 		}
 		select {
 		case <-deadline:
-			t.Fatalf("tool never registered; names = %v", tools.Names())
+			t.Fatalf("tool never registered; names = %v", tool.Default().Names())
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
 
 	mgr.Close()
-	if _, ok := tools.Get("sse-srv__weather"); ok {
+	if _, ok := tool.Default().Get("sse-srv__weather"); ok {
 		t.Fatal("tool should be unregistered after close")
 	}
 }

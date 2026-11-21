@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 )
 
 type dynamicTestTool struct {
@@ -19,7 +18,7 @@ func TestAgentSyncsDynamicTools(t *testing.T) {
 	spec := tool.NewSpec(name, "dynamic test tool", nil, func(context.Context, string) (string, error) {
 		return "ok", nil
 	})
-	if err := tools.Register(dynamicTestTool{spec}); err != nil {
+	if err := tool.Default().Register(dynamicTestTool{spec}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -31,7 +30,7 @@ func TestAgentSyncsDynamicTools(t *testing.T) {
 		t.Fatal("dynamic tool was not added to the agent")
 	}
 
-	tools.Unregister(name)
+	tool.Default().Unregister(name)
 	if err := a.resolveToolNames(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -42,12 +41,12 @@ func TestAgentSyncsDynamicTools(t *testing.T) {
 
 func TestAgentDoesNotSyncStaticTools(t *testing.T) {
 	const name = "test-static-tool"
-	if err := tools.Register(tool.NewSpec(name, "static test tool", nil, func(context.Context, string) (string, error) {
+	if err := tool.Default().Register(tool.NewSpec(name, "static test tool", nil, func(context.Context, string) (string, error) {
 		return "ok", nil
 	})); err != nil {
 		t.Fatal(err)
 	}
-	defer tools.Unregister(name)
+	defer tool.Default().Unregister(name)
 
 	a := New("test")
 	if err := a.resolveToolNames(context.Background()); err != nil {
@@ -60,11 +59,11 @@ func TestAgentDoesNotSyncStaticTools(t *testing.T) {
 
 func TestAgentWaitsForDynamicReady(t *testing.T) {
 	called := false
-	tools.SetDynamicReady(func(context.Context) error {
+	tool.SetDynamicReady(func(context.Context) error {
 		called = true
 		return nil
 	})
-	defer tools.SetDynamicReady(nil)
+	defer tool.SetDynamicReady(nil)
 
 	a := New("test")
 	if err := a.resolveToolNames(context.Background()); err != nil {
@@ -99,10 +98,10 @@ func TestAgentSyncsAllAgentScopedDynamicTools(t *testing.T) {
 	spec := tool.NewSpec(name, "scoped dynamic tool", nil, func(context.Context, string) (string, error) {
 		return "ok", nil
 	})
-	if err := tools.Register(scopedDynamicTestTool{Spec: spec}); err != nil {
+	if err := tool.Default().Register(scopedDynamicTestTool{Spec: spec}); err != nil {
 		t.Fatal(err)
 	}
-	defer tools.Unregister(name)
+	defer tool.Default().Unregister(name)
 
 	a := New("developer")
 	if err := a.resolveToolNames(context.Background()); err != nil {
@@ -118,10 +117,10 @@ func TestAgentScopesDynamicToolsByAgentName(t *testing.T) {
 	spec := tool.NewSpec(name, "orchestrator-only tool", nil, func(context.Context, string) (string, error) {
 		return "ok", nil
 	})
-	if err := tools.Register(scopedDynamicTestTool{Spec: spec, agents: []string{"orchestrator"}}); err != nil {
+	if err := tool.Default().Register(scopedDynamicTestTool{Spec: spec, agents: []string{"orchestrator"}}); err != nil {
 		t.Fatal(err)
 	}
-	defer tools.Unregister(name)
+	defer tool.Default().Unregister(name)
 
 	orchestrator := New("orchestrator")
 	if err := orchestrator.resolveToolNames(context.Background()); err != nil {
@@ -145,10 +144,10 @@ func TestAgentRemovesInheritedScopedDynamicTool(t *testing.T) {
 	spec := tool.NewSpec(name, "orchestrator-only tool", nil, func(context.Context, string) (string, error) {
 		return "ok", nil
 	})
-	if err := tools.Register(scopedDynamicTestTool{Spec: spec, agents: []string{"orchestrator"}}); err != nil {
+	if err := tool.Default().Register(scopedDynamicTestTool{Spec: spec, agents: []string{"orchestrator"}}); err != nil {
 		t.Fatal(err)
 	}
-	defer tools.Unregister(name)
+	defer tool.Default().Unregister(name)
 
 	orchestrator := New("orchestrator")
 	if err := orchestrator.resolveToolNames(context.Background()); err != nil {

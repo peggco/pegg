@@ -11,7 +11,7 @@ import (
 	pkgplugin "github.com/peggco/pegg/pkg/plugin"
 
 	"github.com/peggco/pegg/internal/agent"
-	agenttools "github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/core/config"
 	corehook "github.com/peggco/pegg/internal/core/hook"
 	"github.com/peggco/pegg/internal/core/logger"
@@ -363,7 +363,7 @@ func TestPluginToolsAreBundleOnly(t *testing.T) {
 
 	mgr.registerToolSpecs(instance)
 
-	if _, ok := agenttools.Get("demo_echo"); ok {
+	if _, ok := tool.Default().Get("demo_echo"); ok {
 		t.Fatal("plugin tool was registered in the global tool registry")
 	}
 	if !contains(bundle.Names(), "demo-bundle") {
@@ -416,8 +416,8 @@ func TestPluginToolAlwaysAvailableScopes(t *testing.T) {
 
 func TestAlwaysAvailablePluginToolIsRegisteredGlobally(t *testing.T) {
 	const name = "demo_always_available"
-	agenttools.Unregister(name)
-	t.Cleanup(func() { agenttools.Unregister(name) })
+	tool.Default().Unregister(name)
+	t.Cleanup(func() { tool.Default().Unregister(name) })
 
 	mgr := NewManager(logger.New(logger.LevelError), config.DefaultConfig(), nil, nil, nil, nil, nil, nil, nil)
 	instance := &PluginInstance{
@@ -431,7 +431,7 @@ func TestAlwaysAvailablePluginToolIsRegisteredGlobally(t *testing.T) {
 		}},
 	}
 	mgr.registerToolSpecs(instance)
-	if _, ok := agenttools.Get(name); !ok {
+	if _, ok := tool.Default().Get(name); !ok {
 		t.Fatal("always-available plugin tool was not registered globally")
 	}
 }

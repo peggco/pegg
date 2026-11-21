@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/core/config"
 )
 
@@ -31,18 +31,18 @@ func TestManagerReloadRemovesServerTools(t *testing.T) {
 	defer m.Close()
 
 	const server = "test-reload"
-	tool := NewTool(server, ToolSpec{Name: "echo", Description: "echo"}, nil)
-	if err := tools.Register(tool); err != nil {
+	mt := NewTool(server, ToolSpec{Name: "echo", Description: "echo"}, nil)
+	if err := tool.Default().Register(mt); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { tools.Unregister(tool.Name()) })
+	t.Cleanup(func() { tool.Default().Unregister(mt.Name()) })
 
 	m.Reload(map[string]config.MCPServerConfig{
 		server: {Type: "stdio", Command: "/nonexistent-pegg-test-binary"},
 	})
 	m.Reload(nil)
 
-	if _, ok := tools.Get(tool.Name()); ok {
+	if _, ok := tool.Default().Get(mt.Name()); ok {
 		t.Fatal("tool should be removed when its server is removed")
 	}
 }

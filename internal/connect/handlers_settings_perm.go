@@ -3,7 +3,7 @@ package connect
 import (
 	"context"
 
-	"github.com/peggco/pegg/internal/agent/middlewares"
+	"github.com/peggco/pegg/internal/agent/middleware"
 	"github.com/peggco/pegg/internal/builtin/middlewares/permission"
 	"github.com/peggco/pegg/internal/core/config"
 )
@@ -121,7 +121,7 @@ func (c *Connector) handlePermissionPresets(_ context.Context, _ *Request) (any,
 }
 
 func applyPermissionConfig(perm *config.PermissionConfig) {
-	if m, ok := middlewares.Get("permission"); ok {
+	if m, ok := middleware.Default().Get("permission"); ok {
 		if p, ok := m.(*permission.Middleware); ok {
 			p.UpdateConfig(perm)
 		}

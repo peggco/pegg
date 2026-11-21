@@ -12,7 +12,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/peggco/pegg/internal/agent"
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/session"
@@ -52,8 +52,8 @@ var store = &todoStore{
 
 func TodoTools(fs *vfs.VFS, bus event.Bus) {
 	store.subscribe(bus)
-	tools.Register(todoreadTool(fs))
-	tools.Register(todowriteTool(fs))
+	tool.Default().Register(todoreadTool(fs))
+	tool.Default().Register(todowriteTool(fs))
 }
 
 func (s *todoStore) subscribe(bus event.Bus) {

@@ -7,6 +7,15 @@ import (
 	"github.com/peggco/pegg/internal/llm"
 )
 
+var defaultRegistry = NewRegistry()
+
+// Default returns the process-wide tool catalogue populated by built-ins,
+// plugins, MCP, and the SDK. Agents copy entries from it into their own
+// per-agent registry at run start.
+func Default() *Registry {
+	return defaultRegistry
+}
+
 type Registry struct {
 	mu    sync.RWMutex
 	tools map[string]Tool

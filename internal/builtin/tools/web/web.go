@@ -1,11 +1,11 @@
 package web
 
 import (
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/vfs"
 )
 
 func WebTools(fs *vfs.VFS) {
-	tools.Register(webfetchTool(fs))
-	tools.Register(websearchTool(fs))
+	tool.Default().Register(webfetchTool(fs))
+	tool.Default().Register(websearchTool(fs))
 }

@@ -15,7 +15,6 @@ import (
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/agents"
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 	builtinmw "github.com/peggco/pegg/internal/builtin/middlewares"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/event"
@@ -53,7 +52,7 @@ func TestMain(m *testing.M) {
 	})
 	SubAgentTools(testMgr)
 	builtinmw.Create(nil, builtinmw.Deps{})
-	tools.Register(tool.NewSpec("now", "stub", map[string]any{}, func(ctx context.Context, args string) (string, error) {
+	tool.Default().Register(tool.NewSpec("now", "stub", map[string]any{}, func(ctx context.Context, args string) (string, error) {
 		return "now", nil
 	}))
 	os.Exit(m.Run())
@@ -121,14 +120,14 @@ func batchArgs(t *testing.T, bg bool, specs ...map[string]any) string {
 
 func TestSubAgentToolsRegistered(t *testing.T) {
 	for _, name := range []string{"task", "taskstatus"} {
-		if _, ok := tools.Get(name); !ok {
+		if _, ok := tool.Default().Get(name); !ok {
 			t.Errorf("tool %q not registered", name)
 		}
 	}
 }
 
 func TestSubAgentTool_Schema_AgentEnum(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 	var schema map[string]any
 	if err := json.Unmarshal([]byte(mustJSON(t, tt.Parameters())), &schema); err != nil {
 		t.Fatalf("unmarshal schema: %v", err)
@@ -167,7 +166,7 @@ func TestSubAgentTool_Schema_AgentEnum(t *testing.T) {
 }
 
 func TestSubAgentTool_Validation(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 	ctx := parentCtx(t)
 
 	cases := []struct {
@@ -189,14 +188,14 @@ func TestSubAgentTool_Validation(t *testing.T) {
 }
 
 func TestSubAgentTool_NoParent(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 	if _, err := tt.Execute(context.Background(), `{"name": "a-1", "subagent_type": "sub-agent", "prompt": "do x"}`); err == nil {
 		t.Error("expected error without parent agent in context")
 	}
 }
 
 func TestSubAgentTool_Foreground(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 	ctx := parentCtx(t)
 	args := singleArgs(t, spec("fg-1", "sub-agent", "do x", map[string]any{"task_id": []string{"todo-1"}}))
 	out, err := tt.Execute(ctx, args)
@@ -219,7 +218,7 @@ func TestSubAgentTool_Foreground(t *testing.T) {
 }
 
 func TestSubAgentTool_DuplicateName(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 	ctx := parentCtx(t)
 	if _, err := tt.Execute(ctx, singleArgs(t, spec("dup-1", "sub-agent", "first"))); err != nil {
 		t.Fatalf("first run: %v", err)
@@ -241,7 +240,7 @@ func TestSubAgentTool_DuplicateName(t *testing.T) {
 }
 
 func TestSubAgentTool_MultipleForeground(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 	ctx := parentCtx(t)
 
 	for i := 1; i <= 3; i++ {
@@ -265,7 +264,7 @@ func TestSubAgentTool_MultipleForeground(t *testing.T) {
 }
 
 func TestSubAgentTool_BackgroundWithNotification(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 	ctx := parentCtx(t)
 
 	parent := agent.New("notify-parent", agent.WithBus(testBus))
@@ -304,7 +303,7 @@ func TestSubAgentTool_BackgroundWithNotification(t *testing.T) {
 }
 
 func TestSubAgentTool_PublishesNotificationEvent(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 
 	parent := agent.New("notify-event-parent", agent.WithBus(testBus))
 	parent.Provider = stubProvider{}
@@ -343,7 +342,7 @@ func TestSubAgentTool_PublishesNotificationEvent(t *testing.T) {
 }
 
 func TestSubAgentTool_BackgroundAndWait(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 	ctx := parentCtx(t)
 
 	args := singleArgs(t, spec("bg-1", "sub-agent", "do x", map[string]any{"background": true}))
@@ -454,7 +453,7 @@ func TestSubagentSessionFollowsResume(t *testing.T) {
 }
 
 func TestSubAgentTool_BackgroundAttachesStandingReminder(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 
 	parent := agent.New("reminder-parent", agent.WithBus(testBus))
 	parent.Provider = stubProvider{}
@@ -498,7 +497,7 @@ func TestSubAgentTool_BackgroundAttachesStandingReminder(t *testing.T) {
 }
 
 func TestSubAgentTool_ForegroundDoesNotAttachReminder(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 
 	parent := agent.New("fg-reminder-parent", agent.WithBus(testBus))
 	parent.Provider = stubProvider{}
@@ -533,8 +532,8 @@ func TestIsSubagentSession(t *testing.T) {
 }
 
 func TestSubAgentsStatus(t *testing.T) {
-	tt, _ := tools.Get("task")
-	status, _ := tools.Get("taskstatus")
+	tt, _ := tool.Default().Get("task")
+	status, _ := tool.Default().Get("taskstatus")
 	ctx := parentCtx(t)
 
 	if _, err := tt.Execute(ctx, singleArgs(t, spec("stat-1", "sub-agent", "do x"))); err != nil {
@@ -562,8 +561,8 @@ func TestSubAgentsStatus(t *testing.T) {
 }
 
 func TestSubAgentTool_ConcurrentParents(t *testing.T) {
-	tt, _ := tools.Get("task")
-	status, _ := tools.Get("taskstatus")
+	tt, _ := tool.Default().Get("task")
+	status, _ := tool.Default().Get("taskstatus")
 
 	const parents = 8
 	var wg sync.WaitGroup
@@ -732,7 +731,7 @@ func TestAgentOutput(t *testing.T) {
 var errSentinel = errors.New("boom")
 
 func TestSubAgentTool_EventDrivenForeground(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 
 	parent := agent.New("event-parent", agent.WithBus(testBus))
 	parent.Provider = stubProvider{}
@@ -759,7 +758,7 @@ func TestSubAgentTool_EventDrivenForeground(t *testing.T) {
 }
 
 func TestSubAgentTool_EventDrivenBackground(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 
 	parent := agent.New("event-parent-2", agent.WithBus(testBus))
 	parent.Provider = stubProvider{}
@@ -845,7 +844,7 @@ func (panicProvider) Chat(context.Context, *llm.Request) (*llm.Response, error) 
 }
 
 func TestSubAgentTool_PanicDoesNotHang(t *testing.T) {
-	tt, _ := tools.Get("task")
+	tt, _ := tool.Default().Get("task")
 	parent := agent.New("panic-parent")
 	parent.Provider = panicProvider{}
 	parent.Model = llm.Model{ID: "panic-model"}

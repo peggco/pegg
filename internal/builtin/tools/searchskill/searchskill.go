@@ -10,7 +10,6 @@ import (
 
 	"github.com/peggco/pegg/internal/agent/prompt"
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/catalog"
 )
 
@@ -30,7 +29,7 @@ func generateSearchSkillToolPrompt() (string, error) {
 }
 
 func SearchSkillTool() {
-	tools.Register(searchSkillTool(catalog.NewClient()))
+	tool.Default().Register(searchSkillTool(catalog.NewClient()))
 }
 
 func searchSkillTool(client *catalog.Client) tool.Tool {

@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/logger"
 )
@@ -157,7 +157,7 @@ func (m *Manager) connect(name string, cfg config.MCPServerConfig, parent contex
 	}
 	for _, spec := range specs {
 		t := NewTool(name, spec, client)
-		if err := tools.Register(t); err != nil {
+		if err := tool.Default().Register(t); err != nil {
 			m.log.Fdebug("mcp: server %q: register tool %q: %v", name, t.Name(), err)
 			continue
 		}
@@ -177,12 +177,12 @@ func (m *Manager) connectError(name string, parent context.Context, format strin
 }
 
 func (m *Manager) unregisterServerTools(server string) {
-	for _, t := range tools.List() {
+	for _, t := range tool.Default().List() {
 		mt, ok := t.(*MCPTool)
 		if !ok || mt.Server() != server {
 			continue
 		}
-		tools.Unregister(t.Name())
+		tool.Default().Unregister(t.Name())
 	}
 }
 
@@ -250,7 +250,7 @@ func (m *Manager) Close() error {
 	m.configs = make(map[string]config.MCPServerConfig)
 	m.mu.Unlock()
 
-	tools.SetDynamicReady(nil)
+	tool.SetDynamicReady(nil)
 	for _, name := range names {
 		m.unregisterServerTools(name)
 	}
