@@ -100,6 +100,24 @@ npm ci
 - **TUI** (`internal/tui/`): tcell-based interface with chat viewport, command palette, agent graph view
 - **Desktop** (`pkg/desktop/`): Wails v2 GUI with a Go ACP client, TUI-generated themes, and a React design system
 
+### Tool & middleware registries
+
+Registration uses two tiers:
+
+- `internal/agent/tool` holds the `Tool` interface, the `Registry` type, and
+  `tool.Default()` — the process-wide catalogue that built-ins, plugins, MCP,
+  and the SDK register into.
+- `internal/agent/middleware` holds the `Middleware` interface, the `Registry`
+  type, and `middleware.Default()` — the process-wide middleware catalogue.
+- Each `Agent` copies the tools it may use from `tool.Default()` into its own
+  `Agent.Tools` registry at run start (`syncDynamicTools`); middleware is
+  resolved by name from `middleware.Default()`.
+
+Register new tools with `tool.Default().Register(...)` (or the SDK's
+`RegisterTool`) and middleware with `middleware.Default().Register(...)` (or
+`RegisterMiddleware`). Registering into a different `*Registry` compiles but the
+entry stays invisible at run time.
+
 ## Testing Strategy
 
 - **Unit Tests**: `go test -v ./...` (all packages)

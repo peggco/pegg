@@ -10,7 +10,6 @@ import (
 	"github.com/peggco/pegg/internal/agent"
 	"github.com/peggco/pegg/internal/agent/prompt"
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 )
 
 func generateAskToolPrompt() (string, error) {
@@ -28,7 +27,7 @@ func AskTool() {
 		panic(fmt.Sprintf("failed to generate ask tool prompt: %v", err))
 	}
 
-	tools.Register(tool.NewSpec(
+	tool.Default().Register(tool.NewSpec(
 		"askuserquestion",
 		prompt,
 		map[string]any{

@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/vfs"
 )
 
@@ -14,7 +13,7 @@ func isScopeError(err error) bool {
 
 func FileTools(fs *vfs.VFS) {
 	for _, t := range Tools(fs) {
-		tools.Register(t)
+		tool.Default().Register(t)
 	}
 }
 

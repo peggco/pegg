@@ -9,10 +9,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/peggco/pegg/internal/agent/middleware"
-	"github.com/peggco/pegg/internal/agent/middlewares"
 	"github.com/peggco/pegg/internal/agent/reminder"
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/llm"
@@ -477,7 +475,7 @@ func (a *Agent) debugf(format string, args ...any) {
 func (a *Agent) resolveToolNames(ctx context.Context) error {
 	if ctx != nil {
 		waitCtx, cancel := context.WithTimeout(ctx, dynamicToolWait)
-		_ = tools.WaitDynamicReady(waitCtx)
+		_ = tool.WaitDynamicReady(waitCtx)
 		cancel()
 	}
 	for _, name := range a.ToolNames {
@@ -487,7 +485,7 @@ func (a *Agent) resolveToolNames(ctx context.Context) error {
 		if _, ok := a.Tools.Get(name); ok {
 			continue
 		}
-		t, ok := tools.Get(name)
+		t, ok := tool.Default().Get(name)
 		if !ok {
 			return fmt.Errorf("%w: %q", tool.ErrNotFound, name)
 		}
@@ -499,7 +497,7 @@ func (a *Agent) resolveToolNames(ctx context.Context) error {
 
 func (a *Agent) syncDynamicTools() {
 	active := make(map[string]bool)
-	for _, t := range tools.List() {
+	for _, t := range tool.Default().List() {
 		dynamic, ok := t.(tool.Dynamic)
 		if !ok || !dynamic.IsDynamic() {
 			continue
@@ -527,7 +525,7 @@ func (a *Agent) resolveMiddlewareNames() error {
 		return nil
 	}
 	for _, name := range a.middlewareNames {
-		m, ok := middlewares.Get(name)
+		m, ok := middleware.Default().Get(name)
 		if !ok {
 			return fmt.Errorf("%w: %q", middleware.ErrNotFound, name)
 		}

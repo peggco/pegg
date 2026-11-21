@@ -10,10 +10,8 @@ import (
 	"time"
 
 	"github.com/peggco/pegg/internal/agent/middleware"
-	"github.com/peggco/pegg/internal/agent/middlewares"
 	"github.com/peggco/pegg/internal/agent/reminder"
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/llm"
@@ -138,10 +136,10 @@ func (m *countingMiddleware) BeforeRun(_ context.Context, _, _ string) error {
 func TestMiddlewareNamesResolvedOnce(t *testing.T) {
 	count := 0
 	name := fmt.Sprintf("counting-%d", time.Now().UnixNano())
-	if err := middlewares.Register(name, &countingMiddleware{count: &count}); err != nil {
+	if err := middleware.Default().Register(name, &countingMiddleware{count: &count}); err != nil {
 		t.Fatal(err)
 	}
-	defer middlewares.Unregister(name)
+	defer middleware.Default().Unregister(name)
 
 	a, prov := newTestAgent(t, WithMiddlewareNames(name))
 	prov.responses = []mockResponse{{content: "one"}, {content: "two"}}
@@ -161,10 +159,10 @@ func TestMiddlewareNamesResolvedOnce(t *testing.T) {
 }
 
 func TestRunToolNameResolution(t *testing.T) {
-	tools.Register(tool.NewSpec("resolved-tool", "resolves by name", nil, func(context.Context, string) (string, error) {
+	tool.Default().Register(tool.NewSpec("resolved-tool", "resolves by name", nil, func(context.Context, string) (string, error) {
 		return "ok", nil
 	}))
-	defer tools.Unregister("resolved-tool")
+	defer tool.Default().Unregister("resolved-tool")
 
 	a, prov := newTestAgent(t, WithToolNames("resolved-tool"))
 	prov.responses = []mockResponse{{content: "done"}}

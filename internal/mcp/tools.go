@@ -7,11 +7,10 @@ import (
 
 	json "github.com/goccy/go-json"
 
-	agenttool "github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 )
 
-var _ agenttool.Dynamic = (*MCPTool)(nil)
+var _ tool.Dynamic = (*MCPTool)(nil)
 
 const ToolNameSeparator = "__"
 
@@ -22,7 +21,7 @@ type ServerTool struct {
 
 func ToolsForServer(server string) []ServerTool {
 	var out []ServerTool
-	for _, t := range tools.List() {
+	for _, t := range tool.Default().List() {
 		mt, ok := t.(*MCPTool)
 		if !ok || mt.Server() != server {
 			continue

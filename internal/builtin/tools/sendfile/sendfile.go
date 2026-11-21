@@ -11,7 +11,6 @@ import (
 	"github.com/peggco/pegg/internal/agent/attach"
 	"github.com/peggco/pegg/internal/agent/prompt"
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/vfs"
 )
@@ -45,7 +44,7 @@ func generateSendFileToolPrompt() (string, error) {
 
 func SendFileTools(fs *vfs.VFS) {
 	if sent := sendFileTool(fs); sent != nil {
-		tools.Register(sent)
+		tool.Default().Register(sent)
 	}
 }
 

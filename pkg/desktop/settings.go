@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	agenttools "github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/llm"
 	"github.com/peggco/pegg/internal/llm/subscription"
@@ -466,7 +466,7 @@ func buildPermissionSettings(cfg *config.Config, manager *plugin.Manager) Permis
 			seenTools[name] = true
 		}
 	}
-	for _, registered := range agenttools.List() {
+	for _, registered := range tool.Default().List() {
 		name := registered.Name()
 		if seenTools[name] {
 			continue

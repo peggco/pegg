@@ -1,7 +1,7 @@
 package subagent
 
 import (
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/core/event"
 	"github.com/peggco/pegg/internal/session"
 )
@@ -18,6 +18,6 @@ func SubAgentTools(reader HistoryReader) {
 	if reader != nil {
 		store.subscribe(reader.Bus())
 	}
-	tools.Register(subAgentTool())
-	tools.Register(subAgentsStatusTool())
+	tool.Default().Register(subAgentTool())
+	tool.Default().Register(subAgentsStatusTool())
 }

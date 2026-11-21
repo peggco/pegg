@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/peggco/pegg/internal/agent"
-	agenttools "github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/core/logger"
 	"github.com/peggco/pegg/internal/plugin/bundle"
@@ -156,7 +156,7 @@ func TestComputerUsePluginIntegration(t *testing.T) {
 	if s, ok := skill.Get("computer-use"); !ok || len(s.ToolBundles) != 1 || s.ToolBundles[0] != "computer" {
 		t.Fatalf("computer-use skill missing or invalid: %#v", s)
 	}
-	if _, ok := agenttools.Get("computer_screenshot"); ok {
+	if _, ok := tool.Default().Get("computer_screenshot"); ok {
 		t.Fatal("plugin tool was registered in the global registry")
 	}
 	if got := mgr.cfg.Permission.Rules["computer_click"]; got != "semi-judge" {

@@ -9,7 +9,6 @@ import (
 
 	"github.com/peggco/pegg/internal/agent/prompt"
 	"github.com/peggco/pegg/internal/agent/tool"
-	agenttools "github.com/peggco/pegg/internal/agent/tools"
 )
 
 func generateSearchToolPrompt() (string, error) {
@@ -31,7 +30,7 @@ func MemoryTools(m *Manager) []tool.Tool {
 
 func RegisterTools(m *Manager) error {
 	for _, t := range MemoryTools(m) {
-		if err := agenttools.Register(t); err != nil {
+		if err := tool.Default().Register(t); err != nil {
 			return err
 		}
 	}

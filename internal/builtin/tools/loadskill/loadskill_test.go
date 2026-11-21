@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/peggco/pegg/internal/agent"
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/builtin/tools/subagent"
 	"github.com/peggco/pegg/internal/catalog"
 	"github.com/peggco/pegg/internal/core/event"
@@ -83,7 +83,7 @@ func setupTestSkill(t *testing.T, name, content string) {
 }
 
 func TestLoadSkillRegistered(t *testing.T) {
-	if _, ok := tools.Get("loadskill"); !ok {
+	if _, ok := tool.Default().Get("loadskill"); !ok {
 		t.Error("loadskill tool not registered")
 	}
 }
@@ -97,7 +97,7 @@ description: A test skill
 This is a test.
 `)
 
-	tt, _ := tools.Get("loadskill")
+	tt, _ := tool.Default().Get("loadskill")
 	out, err := tt.Execute(context.Background(), `{"name": "test-skill"}`)
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +125,7 @@ arguments:
 Perform $action on $filename.
 `)
 
-	tt, _ := tools.Get("loadskill")
+	tt, _ := tool.Default().Get("loadskill")
 	out, err := tt.Execute(context.Background(), `{"name": "arg-skill", "arguments": {"filename": "main.go", "action": "refactor"}}`)
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +139,7 @@ Perform $action on $filename.
 }
 
 func TestLoadSkillMissingName(t *testing.T) {
-	tt, _ := tools.Get("loadskill")
+	tt, _ := tool.Default().Get("loadskill")
 	if _, err := tt.Execute(context.Background(), `{}`); err == nil {
 		t.Error("expected error for missing name")
 	}
@@ -162,7 +162,7 @@ when_to_use: Use when the user asks to deploy
 Deploy the application.
 `)
 
-	tt, _ := tools.Get("loadskill")
+	tt, _ := tool.Default().Get("loadskill")
 	out, err := tt.Execute(context.Background(), `{"name": "when-skill"}`)
 	if err != nil {
 		t.Fatal(err)
@@ -185,7 +185,7 @@ Do the work.
 
 	parent := agent.New("runtime-parent")
 	ctx := agent.WithAgent(context.Background(), parent)
-	tt, _ := tools.Get("loadskill")
+	tt, _ := tool.Default().Get("loadskill")
 	out, err := tt.Execute(ctx, `{"name": "runtime-skill"}`)
 	if err != nil {
 		t.Fatal(err)
@@ -216,7 +216,7 @@ arguments:
 Extra: $extra
 `)
 
-	tt, _ := tools.Get("loadskill")
+	tt, _ := tool.Default().Get("loadskill")
 	out, err := tt.Execute(context.Background(), `{"name": "partial-skill", "arguments": {"name": "world"}}`)
 	if err != nil {
 		t.Fatal(err)
@@ -230,7 +230,7 @@ Extra: $extra
 }
 
 func TestLoadSkillInvalidJSON(t *testing.T) {
-	tt, _ := tools.Get("loadskill")
+	tt, _ := tool.Default().Get("loadskill")
 	if _, err := tt.Execute(context.Background(), `not json`); err == nil {
 		t.Error("expected error for invalid json")
 	}
@@ -260,7 +260,7 @@ Do the forked work.
 	testBus.Publish(session.TopicSessionAttached, session.SessionAttached{AgentID: parent.ID, SessionID: s.ID})
 
 	ctx := agent.WithAgent(context.Background(), parent)
-	tt, _ := tools.Get("loadskill")
+	tt, _ := tool.Default().Get("loadskill")
 	out, err := tt.Execute(ctx, `{"name": "fork-skill"}`)
 	if err != nil {
 		t.Fatal(err)
@@ -295,7 +295,7 @@ context: fork
 Do the forked work.
 `)
 
-	tt, _ := tools.Get("loadskill")
+	tt, _ := tool.Default().Get("loadskill")
 	if _, err := tt.Execute(context.Background(), `{"name": "fork-noparent"}`); err == nil {
 		t.Error("expected error without parent agent in context")
 	}
@@ -316,7 +316,7 @@ Do the forked work.
 	parent.Bus = testBus
 
 	ctx := agent.WithAgent(context.Background(), parent)
-	tt, _ := tools.Get("loadskill")
+	tt, _ := tool.Default().Get("loadskill")
 	out, err := tt.Execute(ctx, `{"name": "fork-nosession"}`)
 	if err != nil {
 		t.Fatal(err)

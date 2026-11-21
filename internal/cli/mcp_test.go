@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/peggco/pegg/internal/agent/tool"
-	"github.com/peggco/pegg/internal/agent/tools"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/mcp"
 )
@@ -307,17 +306,17 @@ func TestMCPListTransportKinds(t *testing.T) {
 }
 
 func TestMCPTools(t *testing.T) {
-	for _, name := range tools.Names() {
-		tools.Unregister(name)
+	for _, name := range tool.Default().Names() {
+		tool.Default().Unregister(name)
 	}
-	_ = tools.Register(tool.NewSpec("plain-tool", "not mcp", nil, nil))
-	defer tools.Unregister("plain-tool")
+	_ = tool.Default().Register(tool.NewSpec("plain-tool", "not mcp", nil, nil))
+	defer tool.Default().Unregister("plain-tool")
 
 	mt := mcp.NewTool("db", mcp.ToolSpec{Name: "query", InputSchema: map[string]any{"type": "object"}}, nil)
-	if err := tools.Register(mt); err != nil {
+	if err := tool.Default().Register(mt); err != nil {
 		t.Fatal(err)
 	}
-	defer tools.Unregister(mt.Name())
+	defer tool.Default().Unregister(mt.Name())
 
 	c, _ := newTestCLI(t)
 	var buf bytes.Buffer

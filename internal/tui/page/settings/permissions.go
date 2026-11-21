@@ -8,8 +8,8 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 
-	"github.com/peggco/pegg/internal/agent/middlewares"
-	"github.com/peggco/pegg/internal/agent/tools"
+	"github.com/peggco/pegg/internal/agent/middleware"
+	"github.com/peggco/pegg/internal/agent/tool"
 	"github.com/peggco/pegg/internal/builtin/middlewares/permission"
 	"github.com/peggco/pegg/internal/core/config"
 	"github.com/peggco/pegg/internal/decision"
@@ -443,7 +443,7 @@ func (t *permissionsTab) Draw(screen tcell.Screen, bounds layout.Region, focused
 
 func (t *permissionsTab) loadTools() {
 	cfg := t.settings.deps.Config
-	names := tools.Names()
+	names := tool.Default().Names()
 	if t.settings.deps.Plugin != nil {
 		names = append(names, t.settings.deps.Plugin.ToolNames()...)
 	}
@@ -619,7 +619,7 @@ func (t *permissionsTab) saveThreshold() {
 	perm.JudgeThreshold = &thr
 	cfg.Permission = perm
 	_ = config.Save(cfg)
-	if m, ok := middlewares.Get("permission"); ok {
+	if m, ok := middleware.Default().Get("permission"); ok {
 		if p, ok := m.(*permission.Middleware); ok {
 			p.UpdateConfig(perm)
 		}
@@ -733,7 +733,7 @@ func (t *permissionsTab) setJudgeModel(provider, model string) {
 	t.settings.deps.Config = cfg
 	t.judgeProvider = provider
 	t.judgeModel = model
-	if m, ok := middlewares.Get("permission"); ok {
+	if m, ok := middleware.Default().Get("permission"); ok {
 		if p, ok := m.(*permission.Middleware); ok {
 			p.UpdateConfig(perm)
 		}
@@ -760,7 +760,7 @@ func (t *permissionsTab) applyLive() {
 	perm.Rules = rules
 	cfg.Permission = perm
 	_ = config.Save(cfg)
-	if m, ok := middlewares.Get("permission"); ok {
+	if m, ok := middleware.Default().Get("permission"); ok {
 		if p, ok := m.(*permission.Middleware); ok {
 			p.UpdateConfig(perm)
 		}
