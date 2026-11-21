@@ -47,10 +47,3 @@ type SessionHook struct {
 	Action    string `json:"action"`
 	SessionID string `json:"session_id"`
 }
-
-func normalizeBootstrapInfo(info BootstrapInfo) BootstrapInfo {
-	if info.Workspace == "" {
-		info.Workspace = info.DefaultWorkspace
-	}
-	return info
-}

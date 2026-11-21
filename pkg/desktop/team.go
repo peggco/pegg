@@ -422,6 +422,9 @@ func (a *App) syncConnectWorkspace(dir string) {
 			a.logf("connect: stop on workspace change: %v", err)
 			return
 		}
+		if dir == "" {
+			return
+		}
 		if _, err := a.ConnectStart(); err != nil {
 			a.logf("connect: restart on workspace change: %v", err)
 		}

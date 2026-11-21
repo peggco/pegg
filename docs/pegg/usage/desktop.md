@@ -85,8 +85,9 @@ check on the one that is open. Selecting a row switches to that project;
 
 Each row has a three-dot menu with **Remove Local Project**. It only forgets the
 project in the desktop's own list — nothing on disk is deleted and no sessions
-are removed. Removing the project that is open leaves the app with no project
-selected, so pick another one before starting a session.
+are removed. Removing the project that is open switches to the project of the
+most recent session; if there is none, the next recent project is selected, and
+otherwise the app is left with no project selected.
 
 Switching projects tears down everything scoped to the previous one: the agent is
 restarted in the new directory (it is launched with the project as its working

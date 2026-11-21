@@ -64,6 +64,11 @@ type BootstrapInfo struct {
 	ProviderSetup    ProviderSetupInfo `json:"providerSetup"`
 }
 
+type RemoveRecentResult struct {
+	Recents   []prefs.Recent `json:"recents"`
+	Workspace string         `json:"workspace"`
+}
+
 type pendingRequest struct {
 	ID     string
 	Method string
@@ -233,17 +238,20 @@ func (a *App) Bootstrap() (BootstrapInfo, error) {
 		p = a.prefs.Get()
 	}
 	home, _ := os.UserHomeDir()
-	ws := p.Workspace
-	if ws == "" {
-		ws = home
+	ws := ""
+	if p.Workspace != "" {
+		if abs, err := workspace.Valid(p.Workspace); err == nil {
+			ws = abs
+		}
 	}
-	if _, err := workspace.Valid(ws); err != nil {
-		ws = home
+	defaultWS := ws
+	if defaultWS == "" {
+		defaultWS = home
 	}
 	logPath, _ := prefs.Path()
 	logPath = filepath.Join(filepath.Dir(logPath), "desktop.log")
 	if !a.binary.Found {
-		a.binary = binary.Resolve(context.Background(), p.BinaryPath, ws)
+		a.binary = binary.Resolve(context.Background(), p.BinaryPath, defaultWS)
 	}
 	providerSetup, _ := a.ProviderSetup()
 	info := BootstrapInfo{
@@ -255,7 +263,7 @@ func (a *App) Bootstrap() (BootstrapInfo, error) {
 		Themes:           a.theme,
 		Binary:           a.binary,
 		SelfUpdate:       a.selfUpdateStatus(),
-		DefaultWorkspace: ws,
+		DefaultWorkspace: defaultWS,
 		Workspace:        ws,
 		LogPath:          logPath,
 		Language:         currentLanguage(),
@@ -275,7 +283,7 @@ func (a *App) Bootstrap() (BootstrapInfo, error) {
 			info.Language = hooked.Language
 		}
 	}
-	return normalizeBootstrapInfo(info), nil
+	return info, nil
 }
 
 func (a *App) Log(message string) {
@@ -408,24 +416,51 @@ func (a *App) resetWorkspaceState() {
 	a.resetPluginManager()
 }
 
-// RemoveRecent forgets a local project. Only the desktop's own list is
-// touched — nothing on disk is deleted.
-func (a *App) RemoveRecent(path string) ([]prefs.Recent, error) {
+// RemoveRecent forgets a local project. When the removed project is the open
+// one, the most recent session's project is selected instead.
+func (a *App) RemoveRecent(path string) (RemoveRecentResult, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return a.prefs.Get().Recents, errors.New("no project path given")
+		p := a.prefs.Get()
+		return RemoveRecentResult{Recents: p.Recents, Workspace: p.Workspace}, errors.New("no project path given")
 	}
 	active := a.prefs.Get().Workspace == path
+	next := ""
+	if active {
+		next = a.fallbackWorkspace(path)
+	}
 	if err := a.prefs.RemoveRecent(path); err != nil {
-		return a.prefs.Get().Recents, err
+		p := a.prefs.Get()
+		return RemoveRecentResult{Recents: p.Recents, Workspace: p.Workspace}, err
 	}
 	if active {
+		if next != "" {
+			if err := a.prefs.TouchWorkspace(next, workspace.Name(next)); err != nil {
+				a.logf("remove project: select %s: %v", next, err)
+			}
+		}
 		resetFileIndex()
 		a.resetWorkspaceState()
-		a.syncConnectWorkspace(a.currentWorkspace())
+		a.syncConnectWorkspace(next)
 	}
 	a.refreshDesktopView()
-	return a.prefs.Get().Recents, nil
+	p := a.prefs.Get()
+	return RemoveRecentResult{Recents: p.Recents, Workspace: p.Workspace}, nil
+}
+
+func (a *App) fallbackWorkspace(exclude string) string {
+	if dir := a.mostRecentSessionProject(exclude); dir != "" {
+		return dir
+	}
+	for _, recent := range a.prefs.Get().Recents {
+		if recent.Path == exclude {
+			continue
+		}
+		if abs, err := workspace.Valid(recent.Path); err == nil {
+			return abs
+		}
+	}
+	return ""
 }
 
 func (a *App) currentWorkspace() string {

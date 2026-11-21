@@ -77,7 +77,7 @@ export async function bootstrap(): Promise<void> {
       boot,
       themes,
       prefs,
-      workspace: boot.workspace || boot.defaultWorkspace,
+      workspace: boot.workspace,
       recents: prefs.recents ?? [],
       binary: boot.binary,
       selfUpdate: boot.selfUpdate,
@@ -278,18 +278,27 @@ function clearProjectState(patch: { workspace: string }): void {
   });
 }
 
-// removeRecent forgets a local project. Nothing on disk is touched; if the
-// removed project is the open one, the app falls back to having none.
+// removeRecent forgets a local project. Nothing on disk is touched; when the
+// removed project is the open one, the backend selects the project of the most
+// recent session instead.
 export async function removeRecent(path: string): Promise<void> {
-  const active = store.get().workspace === path;
+  const removedActive = store.get().workspace === path;
   try {
-    const recents = await api.RemoveRecent(path);
-    store.set({ recents: recents ?? [] });
-    if (!active) return;
-    clearProjectState({ workspace: "" });
-    await loadSessions();
-    await loadCommandsCatalog();
-    store.set({ prefs: { ...store.get().prefs, workspace: "" } });
+    const res = await api.RemoveRecent(path);
+    store.set({ recents: res.recents ?? [] });
+    if (!removedActive || store.get().workspace !== path) return;
+    clearProjectState({ workspace: res.workspace });
+    if (res.workspace) {
+      await loadSessions();
+      await loadCommandsCatalog();
+    }
+    store.set({
+      prefs: {
+        ...store.get().prefs,
+        workspace: res.workspace,
+        lastSession: res.workspace ? store.get().prefs.lastSession : "",
+      },
+    });
   } catch (err) {
     store.toast("error", errorText(err));
   }
