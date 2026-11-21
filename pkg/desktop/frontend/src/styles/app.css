@@ -672,7 +672,6 @@ body.sidebar-resizing {
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  min-width: 240px;
 }
 
 .project-menu.up {
@@ -683,6 +682,7 @@ body.sidebar-resizing {
 .project-row {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   border-radius: var(--pg-radius-sm);
@@ -747,13 +747,44 @@ body.sidebar-resizing {
   color: var(--pg-text);
 }
 
-.project-row-menu {
-  position: absolute;
-  top: calc(100% - 4px);
-  right: 4px;
-  left: auto;
-  z-index: 60;
-  min-width: 190px;
+.popover.project-menu {
+  min-width: 0;
+  max-width: none;
+}
+
+.popover.project-row-menu {
+  position: static;
+  flex: 1 0 100%;
+  min-width: 0;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  margin: 2px 4px 6px;
+  padding: 4px;
+  background: var(--pg-surface-2);
+  border: 1px solid var(--pg-border);
+  border-radius: var(--pg-radius-sm);
+  box-shadow: none;
+  animation: none;
+  z-index: auto;
+}
+
+.project-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 9px 8px;
+}
+
+.project-confirm-title {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--pg-text);
+}
+
+.project-confirm-detail {
+  font-size: 11px;
+  color: var(--pg-muted);
 }
 
 .popover-item.danger {

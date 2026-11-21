@@ -83,9 +83,9 @@ project menu: the twelve most recent local projects, most recent first, with a
 check on the one that is open. Selecting a row switches to that project;
 **Open a project…** picks a new folder.
 
-Each row has a three-dot menu with **Remove Local Project**. It only forgets the
-project in the desktop's own list — nothing on disk is deleted and no sessions
-are removed. Removing the project that is open switches to the project of the
+Each row has a three-dot menu with **Remove Local Project**. Removal asks for
+confirmation first, then only forgets the project in the desktop's own list —
+nothing on disk is deleted and no sessions are removed. Removing the project that is open switches to the project of the
 most recent session; if there is none, the next recent project is selected, and
 otherwise the app is left with no project selected.
 

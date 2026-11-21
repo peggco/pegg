@@ -59,6 +59,8 @@ export function Sidebar() {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const recentsRef = useRef<HTMLDivElement>(null);
+  const projectsAnchorRef = useRef<HTMLDivElement>(null);
+  const footerAnchorRef = useRef<HTMLDivElement>(null);
   const savedWidth = useStore((s) => s.prefs.sidebarWidth);
   const [width, setWidth] = useState(() => resolveSidebarWidth(savedWidth));
   const [resizing, setResizing] = useState(false);
@@ -187,14 +189,14 @@ export function Sidebar() {
             {t('nav.chats')}
             <span className="shortcut">⌘K</span>
           </button>
-          <div className="nav-item-wrap">
+          <div className="nav-item-wrap" ref={projectsAnchorRef}>
             <button
               className={`nav-item${projectsOpen ? ' active' : ''}`}
               aria-haspopup="menu"
               aria-expanded={projectsOpen}
               onClick={() => {
                 if (!projectsOpen) void refreshRecents();
-                setProjectsOpen(!projectsOpen);
+                setProjectsOpen((open) => !open);
               }}
             >
               <FolderOpen size={15} />
@@ -203,7 +205,12 @@ export function Sidebar() {
                 {workspace ? baseName(workspace).slice(0, 12) : ''}
               </span>
             </button>
-            {projectsOpen ? <ProjectMenu onClose={() => setProjectsOpen(false)} /> : null}
+            {projectsOpen ? (
+              <ProjectMenu
+                anchorRef={projectsAnchorRef}
+                onClose={() => setProjectsOpen(false)}
+              />
+            ) : null}
           </div>
           <button className="nav-item" onClick={() => toggleCatalog(true)}>
             <Boxes size={15} />
@@ -281,7 +288,7 @@ export function Sidebar() {
                           <>
                             <button
                               className="danger"
-                              title="Confirm delete"
+                              title={t('nav.delete')}
                               onClick={() => {
                                 setConfirming(null);
                                 void deleteSession(item);
@@ -289,7 +296,7 @@ export function Sidebar() {
                             >
                               <Trash2 size={12} />
                             </button>
-                            <button title="Cancel" onClick={() => setConfirming(null)}>
+                            <button title={t('common.cancel')} onClick={() => setConfirming(null)}>
                               <X size={12} />
                             </button>
                           </>
@@ -323,14 +330,14 @@ export function Sidebar() {
             {theme?.dark ? t('nav.lightAppearance') : t('nav.darkAppearance')}
             <span className={`switch${theme && !theme.dark ? ' on' : ''}`} aria-hidden="true" />
           </button>
-          <div className="nav-item-wrap">
+          <div className="nav-item-wrap" ref={footerAnchorRef}>
             <button
               className="account"
               aria-haspopup="menu"
               aria-expanded={footerOpen}
               onClick={() => {
                 if (!footerOpen) void refreshRecents();
-                setFooterOpen(!footerOpen);
+                setFooterOpen((open) => !open);
               }}
             >
               <span className="avatar">{workspace ? (baseName(workspace)[0] ?? 'P').toUpperCase() : 'P'}</span>
@@ -341,7 +348,11 @@ export function Sidebar() {
               <GitBranch size={14} />
             </button>
             {footerOpen ? (
-              <ProjectMenu placement="up" onClose={() => setFooterOpen(false)} />
+              <ProjectMenu
+                placement="up"
+                anchorRef={footerAnchorRef}
+                onClose={() => setFooterOpen(false)}
+              />
             ) : null}
           </div>
         </div>
