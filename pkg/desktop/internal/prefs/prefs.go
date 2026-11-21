@@ -175,7 +175,7 @@ func (s *Store) Get() Prefs {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := s.data
-	out.Recents = append([]Recent(nil), s.data.Recents...)
+	out.Recents = append([]Recent{}, s.data.Recents...)
 	return out
 }
 

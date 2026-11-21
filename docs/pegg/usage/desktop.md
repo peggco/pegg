@@ -79,8 +79,8 @@ Opening a session restores the last 200 messages. Scrolling to the top loads old
 ## Projects
 
 **Projects** in the sidebar (and the project row in the sidebar footer) opens the
-project menu: every local project the desktop has opened, most recent first, with
-a check on the one that is open. Selecting a row switches to that project;
+project menu: the twelve most recent local projects, most recent first, with a
+check on the one that is open. Selecting a row switches to that project;
 **Open a project…** picks a new folder.
 
 Each row has a three-dot menu with **Remove Local Project**. It only forgets the

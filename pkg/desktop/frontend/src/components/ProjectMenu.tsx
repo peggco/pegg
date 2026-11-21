@@ -51,7 +51,7 @@ export function ProjectMenu({
       aria-label={t('nav.projects')}
     >
       <div className="popover-label">{t('nav.projects')}</div>
-      {recents.length ? (
+      {recents?.length ? (
         recents.map((item) => {
           const active = item.path === workspace;
           return (

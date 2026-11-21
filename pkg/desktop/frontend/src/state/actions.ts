@@ -230,7 +230,7 @@ export async function restartToUpdate(): Promise<void> {
 
 export async function refreshRecents(): Promise<void> {
   try {
-    store.set({ recents: await api.Recents() });
+    store.set({ recents: (await api.Recents()) ?? [] });
   } catch {
     /* ignore */
   }
