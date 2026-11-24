@@ -90,6 +90,41 @@ uses the same config and session database as the CLI.
 
 ## Common problems
 
+??? question "`pegg: command not found` right after the install script"
+
+    The installer falls back to `~/.local/bin` when `/usr/local/bin` is not
+    writable, which is the common case on macOS. That directory is not on the
+    default `PATH`, so the binary is installed but unreachable.
+
+    The installer appends the export to your login shell's profile itself, but
+    the shell that ran it still needs to pick the change up:
+
+    ```bash
+    exec $SHELL -l
+    ```
+
+    For an older installer, or when `PEGG_NO_PATH` was set, add it by hand — use
+    `~/.zshrc` for zsh, `~/.bash_profile` on macOS bash, `~/.bashrc` on Linux
+    bash:
+
+    ```bash
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+    exec $SHELL -l
+    ```
+
+    On fish:
+
+    ```fish
+    fish_add_path ~/.local/bin
+    ```
+
+    Verify with `command -v pegg`. Installing to a directory that is already on
+    your `PATH` avoids the step entirely:
+
+    ```bash
+    PREFIX=/usr/local/bin curl -fsSL https://pegg.dev/install | sudo bash
+    ```
+
 ??? question "`cli: no providers configured` or an empty provider list"
 
     No provider has been added yet. Run `pegg login` or add an entry to the
