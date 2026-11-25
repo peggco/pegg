@@ -522,11 +522,19 @@ func TestStreamableCustomHeaders(t *testing.T) {
 	if err := tr.Close(); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case rec := <-records:
-		seen[rec.method] = rec
-	case <-time.After(2 * time.Second):
-		t.Fatal("DELETE not received")
+	// The stream can reconnect and record extra GETs, so drain until the
+	// DELETE shows up instead of assuming it is the next record.
+	deleteDeadline := time.After(5 * time.Second)
+	for {
+		if _, ok := seen[http.MethodDelete]; ok {
+			break
+		}
+		select {
+		case rec := <-records:
+			seen[rec.method] = rec
+		case <-deleteDeadline:
+			t.Fatalf("DELETE not received, got %v", seen)
+		}
 	}
 
 	for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {

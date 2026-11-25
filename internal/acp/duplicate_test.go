@@ -198,3 +198,55 @@ func TestFollowDeliversLocalNonPromptRun(t *testing.T) {
 	}
 	t.Fatal("local continuation run was not delivered to the ACP client")
 }
+
+// A run's journal events are written asynchronously, so the follow path can see
+// them after that run's finish event. Forgetting the run at finish made those
+// late events look like somebody else's run and replayed them into the client
+// that produced them.
+func TestFollowIgnoresLateEventsFromOwnFinishedRun(t *testing.T) {
+	bus := event.New()
+	log := logger.New(logger.LevelError)
+	srv := New(config.DefaultConfig(), bus, log, nil, nil, nil, nil, nil)
+	tr := newBufferTransport()
+	srv.transport = tr
+
+	acpSess := &ACPSession{ID: "sess-acp", PeggSessionID: "sess-1"}
+	acpSess.SetPromptRun("run-1")
+
+	st := &promptState{
+		sessionID:   acpSess.ID,
+		textIDs:     make(map[string]string),
+		thoughtID:   make(map[string]string),
+		oldFiles:    make(map[string]string),
+		toolPending: make(map[string]map[string]bool),
+	}
+
+	run := session.Run{ID: "run-1", SessionID: "sess-1", State: session.RunStateDone}
+	srv.handleFollowEvent(acpSess, st, live.Event{
+		Type:  live.EventRunFinished,
+		Run:   run,
+		State: session.RunStateDone,
+	})
+	srv.handleFollowEvent(acpSess, st, live.Event{
+		Type: live.EventRunEvent,
+		Run:  run,
+		Journal: session.RunEvent{
+			Seq:       1,
+			RunID:     run.ID,
+			SessionID: run.SessionID,
+			Type:      session.AgentEventToken,
+			AgentID:   "agent-1",
+			AgentName: "orchestrator",
+			Data:      json.RawMessage(`{"content":"hi"}`),
+		},
+	})
+
+	tr.mu.Lock()
+	raws := append([]string(nil), tr.sends...)
+	tr.mu.Unlock()
+	for _, raw := range raws {
+		if strings.Contains(raw, "agent_message_chunk") {
+			t.Fatalf("late event from own run replayed into its own client: %s", raw)
+		}
+	}
+}

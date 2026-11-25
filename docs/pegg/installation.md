@@ -25,8 +25,19 @@ are produced for Linux, macOS, and Windows on both `amd64` and `arm64`.
     curl -fsSL https://pegg.dev/install | bash
     ```
 
-    Downloads the latest release binary for your platform and installs it to a
-    directory on your `PATH`.
+    Downloads the latest release binary for your platform and installs it to
+    `/usr/local/bin` when that directory is writable, and to `~/.local/bin`
+    otherwise. When the install directory is not already on your `PATH`, the
+    installer appends an export to your login shell's profile (`~/.zshrc`,
+    `~/.bash_profile` on macOS, `~/.bashrc` on Linux, or a
+    `fish/conf.d/pegg.fish` snippet), so `pegg` resolves in new shells.
+
+    Pick the directory with `PREFIX`, pin a release with `VERSION`, or skip the
+    `PATH` update with `PEGG_NO_PATH`:
+
+    ```bash
+    PREFIX=$HOME/bin VERSION=v0.1.8 curl -fsSL https://pegg.dev/install | bash
+    ```
 
 === "Install script (Windows)"
 
